@@ -1,0 +1,176 @@
+/* Network Topology Module — Stylesheet */
+
+#nt-root {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 112px);
+    background: #f0f2f5;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────── */
+.nt-topbar {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.nt-topbar__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+}
+
+/* ── Canvas ──────────────────────────────────────────────── */
+.nt-canvas-wrap {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    background: linear-gradient(160deg, #eef2f7 0%, #e8edf5 40%, #dfe6f0 100%);
+}
+
+/* ── Loading spinner ─────────────────────────────────────── */
+.nt-loading {
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: rgba(240,242,245,0.85);
+    z-index: 10;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.nt-loading > div {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: nt-spin 0.8s linear infinite;
+}
+
+@keyframes nt-spin { to { transform: rotate(360deg); } }
+
+/* ── Detail panel ────────────────────────────────────────── */
+#nt-detail {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 220px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    z-index: 50;
+    padding: 12px 14px;
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    font-size: 12px;
+    font-family: sans-serif;
+}
+
+/* Firefox scrollbar */
+#nt-detail { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+/* WebKit scrollbar */
+#nt-detail::-webkit-scrollbar { width: 4px; }
+#nt-detail::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+/* ── SVG node label (paint-order for text outline) ───────── */
+.nt-lbl {
+    paint-order: stroke;
+    stroke: rgba(240,242,245,0.8);
+    stroke-width: 3px;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 900px) {
+    #nt-detail { width: 180px; }
+    .nt-topbar { padding: 4px 8px; }
+}
+
+/* ── Dark mode ───────────────────────────────────────────── */
+#nt-root.nt-dark {
+    background: #0d1117;
+    border-color: #30363d;
+}
+
+#nt-root.nt-dark .nt-topbar {
+    background: #161b22;
+    border-color: #30363d;
+}
+
+#nt-root.nt-dark .nt-canvas-wrap {
+    background: linear-gradient(160deg, #0d1117 0%, #0f1923 45%, #0a1628 100%);
+}
+
+#nt-root.nt-dark .nt-loading {
+    background: rgba(13,17,23,0.85);
+    color: #8b949e;
+}
+
+#nt-root.nt-dark .nt-loading > div {
+    border-color: #30363d;
+    border-top-color: #58a6ff;
+}
+
+#nt-root.nt-dark #nt-detail {
+    background: #161b22;
+    border-color: #30363d;
+    color: #e6edf3;
+    scrollbar-color: #30363d transparent;
+}
+
+#nt-root.nt-dark #nt-detail::-webkit-scrollbar-thumb {
+    background: #30363d;
+}
+
+#nt-root.nt-dark .nt-badge {
+    background: #161b22 !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
+}
+
+#nt-root.nt-dark .nt-legend {
+    background: #161b22 !important;
+    border-color: #30363d !important;
+    color: #e6edf3 !important;
+}
+
+#nt-root.nt-dark .nt-legend span[style*="color:#475569"] {
+    color: #8b949e !important;
+}
+
+#nt-root.nt-dark .nt-lbl {
+    fill: #e6edf3;
+    stroke: rgba(13,17,23,0.8);
+}
+
+/* Icons in dark mode */
+#nt-root.nt-dark .nt-node path[stroke="#475569"] {
+    stroke: #94a3b8;
+}
+
+/* Dead host skull — dark mode */
+#nt-root.nt-dark .nt-node path[fill="#cbd5e1"] {
+    fill: #334155;
+}
+#nt-root.nt-dark .nt-node rect[fill="#cbd5e1"] {
+    fill: #334155;
+}
+#nt-root.nt-dark .nt-node path[stroke="#94a3b8"],
+#nt-root.nt-dark .nt-node rect[stroke="#94a3b8"] {
+    stroke: #64748b;
+}
