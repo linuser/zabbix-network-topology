@@ -765,7 +765,22 @@ function render(wrap, nodes, edges, dataUrl) {
                     padding: 30
                 };
             }
-            // Kein gespeicherter Stand \u2192 normales automatisches Layout
+            // Kein gespeicherter Stand \u2192 Layout-Heuristik:
+            // Bei wenig Konnektivit\u00E4t (edges/nodes < 0.3) ist cose schlecht \u2014
+            // isolierte Knoten landen in einer Spalte. Concentric platziert sie
+            // gleichm\u00E4\u00DFig im Kreis um die verbundenen Hosts.
+            // Schwelle 0.3 = jeder dritte Knoten hat eine Edge im Schnitt.
+            var _edgeCount = (typeof edges === 'object' && edges) ? edges.length : 0;
+            var _connectivity = _nodeIds.length > 0 ? _edgeCount / _nodeIds.length : 0;
+            if (_connectivity < 0.3 && _nodeIds.length > 5) {
+                return {
+                    name: 'concentric', animate: true, animationDuration: 500,
+                    padding: 50, fit: true, minNodeSpacing: 60,
+                    // Verbundene Knoten ins Zentrum, isolierte au\u00DFen
+                    concentric: function(node) { return node.degree(); },
+                    levelWidth: function() { return 1; }
+                };
+            }
             return {
                 name:'cose',animate:true,animationDuration:500,randomize:true,padding:50,
                 nodeRepulsion:8000,idealEdgeLength:100,gravity:1,

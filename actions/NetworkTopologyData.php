@@ -187,8 +187,10 @@ class NetworkTopologyData extends CController {
         $host_traffic   = [];
         $lldp_raw       = [];
         $host_cpu       = [];
-        $host_mem_used  = [];   // bytes
-        $host_mem_total = [];   // bytes
+        $host_mem_used  = [];   // bytes (used)
+        $host_mem_total = [];   // bytes (total)
+        $host_mem_avail = [];   // bytes (available/free) \u2014 wenn used fehlt
+        $host_mem_pct   = [];   // direkter Prozent-Wert (Top-Prio)
         $host_ping      = [];
 
         // SNMP memory helper: hrStorage entries per host
@@ -236,7 +238,27 @@ class NetworkTopologyData extends CController {
             $val = (float) $item['lastvalue'];
 
             // ── CPU ──────────────────────────────────────────────────────
-            if ($key === 'system.cpu.util') {
+            // Prio: direkter Prozent-Wert > Aggregate.
+            // Erst gefundener Wert "gewinnt" (Templates können doppelt liefern).
+            if ($key === 'system.cpu.util' || $key === 'system.cpu.utilization') {
+                if (!isset($host_cpu[$hid])) $host_cpu[$hid] = round($val, 1);
+            } elseif (preg_match('/^system\.cpu\.util\[/', $key)) {
+                // system.cpu.util[,user] / system.cpu.util[all,idle] etc.
+                // Bei [*,idle]: 100 - val. Sonst direkter Wert.
+                if (!isset($host_cpu[$hid])) {
+                    $host_cpu[$hid] = (strpos($key, 'idle') !== false)
+                        ? round(max(0.0, 100.0 - $val), 1)
+                        : round($val, 1);
+                }
+            } elseif (preg_match('/proxmox\.[^.]*\.?cpu\.usage/', $key)) {
+                // Proxmox liefert CPU als 0..1 Float (z.B. 0.42 = 42%)
+                if (!isset($host_cpu[$hid])) {
+                    $cpu_pct = $val <= 1.0 ? $val * 100.0 : $val;
+                    $host_cpu[$hid] = round($cpu_pct, 1);
+                }
+            } elseif (strpos($key, 'perf_counter') === 0 && stripos($key, 'Processor') !== false
+                      && stripos($key, 'Processor Time') !== false) {
+                // Windows: perf_counter[\Processor(_Total)\% Processor Time]
                 if (!isset($host_cpu[$hid])) $host_cpu[$hid] = round($val, 1);
             } elseif (strpos($key, 'hrProcessorLoad') !== false) {
                 // HOST-RESOURCES-MIB: average across CPUs
@@ -253,11 +275,41 @@ class NetworkTopologyData extends CController {
                     $host_cpu[$hid] = round(max(0.0, 100.0 - $val * 0.01), 1);
                 }
 
-            // ── Memory Agent ──────────────────────────────────────────────
+            // ── Memory Agent (klassisch: used/total getrennt) ─────────────
             } elseif (strpos($key, 'vm.memory.size[used]') !== false) {
                 $host_mem_used[$hid] = $val;
             } elseif (strpos($key, 'vm.memory.size[total]') !== false) {
                 $host_mem_total[$hid] = $val;
+
+            // ── Memory: direkter Prozent-Wert (Top-Prio) ──────────────────
+            // vm.memory.size[pused], vm.memory.utilization \u2192 sofort fertig
+            } elseif (strpos($key, 'vm.memory.size[pused]') !== false
+                      || $key === 'vm.memory.utilization') {
+                $host_mem_pct[$hid] = round($val, 1);
+
+            // ── Memory: available/free statt used ─────────────────────────
+            // Wenn nur available + total verf\u00FCgbar sind, rechnen wir den
+            // used-Wert sp\u00E4ter aus (im Resolve-Schritt).
+            } elseif (strpos($key, 'vm.memory.size[available]') !== false
+                      || strpos($key, 'vm.memory.size[free]') !== false) {
+                $host_mem_avail[$hid] = $val;
+
+            // ── Memory: pavailable als direkter Prozent ───────────────────
+            } elseif (strpos($key, 'vm.memory.size[pavailable]') !== false) {
+                if (!isset($host_mem_pct[$hid])) {
+                    $host_mem_pct[$hid] = round(max(0.0, 100.0 - $val), 1);
+                }
+
+            // ── Memory: Proxmox-Template ──────────────────────────────────
+            } elseif (preg_match('/proxmox\.[^.]*\.?memory\.used/', $key)) {
+                $host_mem_used[$hid] = $val;
+            } elseif (preg_match('/proxmox\.[^.]*\.?memory\.total/', $key)) {
+                $host_mem_total[$hid] = $val;
+
+            // ── Memory: Windows perf_counter ──────────────────────────────
+            } elseif (strpos($key, 'perf_counter') === 0
+                      && stripos($key, 'Committed Bytes In Use') !== false) {
+                if (!isset($host_mem_pct[$hid])) $host_mem_pct[$hid] = round($val, 1);
 
             // ── Memory SNMP (hrStorage) ───────────────────────────────────
             // Key format: hrStorageUsed[index] / hrStorageSize[index] / hrStorageType[index]
@@ -321,9 +373,24 @@ class NetworkTopologyData extends CController {
             }
         }
 
-        // ── Memory % ─────────────────────────────────────────────────────
+        // ── Resolve available/free \u2192 used (wenn used fehlt, total da ist) ──
+        foreach ($host_mem_avail as $hid => $avail) {
+            if (isset($host_mem_used[$hid])) continue;
+            $total = $host_mem_total[$hid] ?? 0.0;
+            if ($total > 0.0 && $avail >= 0.0) {
+                $host_mem_used[$hid] = max(0.0, $total - $avail);
+            }
+        }
+
+        // ── Memory % \u2014 Prio: direkter pct > used/total ────────────────────
         $host_memory = [];
+        // 1. Direkte Prozent-Werte (vm.memory.utilization, perf_counter, ...)
+        foreach ($host_mem_pct as $hid => $pct) {
+            $host_memory[$hid] = (int) round(max(0.0, min(100.0, $pct)));
+        }
+        // 2. used/total \u2014 nur wenn nicht schon Prozent vorhanden
         foreach ($host_mem_used as $hid => $used) {
+            if (isset($host_memory[$hid])) continue;
             $total = $host_mem_total[$hid] ?? 0.0;
             if ($total > 0.0) {
                 $host_memory[$hid] = (int) round($used / $total * 100);
