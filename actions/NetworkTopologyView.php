@@ -23,7 +23,8 @@ class NetworkTopologyView extends CController {
     protected function checkInput(): bool {
         $fields = [
             'groupids' => 'array_id',
-            'groups'   => 'string'   // Komma-Liste von Gruppennamen für Bookmarks
+            'groups'   => 'string',  // Komma-Liste von Gruppennamen für Bookmarks
+            'internet' => 'string'   // Optionaler Provider-Label für Internet-Wolke (Hierarchie-Layout)
         ];
 
         $ret = $this->validateInput($fields);
@@ -70,6 +71,7 @@ class NetworkTopologyView extends CController {
         $response = new CControllerResponseData([
             'hostgroups'        => $hostgroups,
             'selected_groupids' => $selected_groupids,
+            'internet_label'    => trim($this->getInput('internet', '')),
             'user'              => [
                 'type'     => $this->getUserType(),
                 'can_edit' => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN

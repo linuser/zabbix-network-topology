@@ -166,6 +166,9 @@ window.NT_CONFIG = <?= json_encode([
     'data_url'   => $data_url,
     'can_edit'   => (bool) $data['user']['can_edit'],
     'csrf_token' => $nt_csrf_token,
+    // Optionaler Provider-Name für die Internet-Wolke im Hierarchie-Layout.
+    // Aus URL-Parameter ?internet=Vodafone gelesen; leer = "Internet" als Default.
+    'internet_label' => (string) ($data['internet_label'] ?? ''),
     // User-ID f\u00FCr Multi-User-Trennung der localStorage-Keys.
     // F\u00E4llt auf 0 zur\u00FCck, falls CWebUser nicht verf\u00FCgbar \u2014 dann teilt
     // sich der Browser wie fr\u00FCher die Daten (non-breaking Fallback).

@@ -41,6 +41,7 @@ class NetworkTopologyData extends CController {
             'selectInterfaces'      => ['ip', 'type', 'main'],
             'selectParentTemplates' => ['name'],
             'selectInventory'       => ['location_lat', 'location_lon', 'location'],
+            'selectTags'            => ['tag', 'value'],
             'monitored_hosts'       => true,
             'preservekeys'          => true
         ]);
@@ -127,6 +128,65 @@ class NetworkTopologyData extends CController {
             }
         }
 
+        // ── 2b. TAG-SCAN: nt:icon, nt:show ────────────────────────────────
+        // Per Host: 'nt:icon'-Tag (max 1) und 'nt:show'-Tags (n) sammeln.
+        // - nt:icon=router  → überschreibt die Auto-Erkennung in deviceType()
+        // - nt:show=<key>   → das Item wird in den Tooltip aufgenommen
+        $host_icon_override = [];   // hid => 'router'|'firewall'|...
+        $host_show_keys     = [];   // hid => ['system.cpu.util', 'vfs.fs.size[/,pused]', ...]
+        // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
+        $allowed_icons = ['firewall', 'router', 'switch', 'wireless',
+                          'server', 'storage', 'camera', 'printer',
+                          'hypervisor', 'linux', 'windows', 'macos',
+                          'webserver', 'container', 'mailserver',
+                          'monitoring', 'homeauto', 'ups', 'internet'];
+
+        foreach ($hosts as $hid => $h) {
+            foreach ($h['tags'] ?? [] as $tag) {
+                $name  = $tag['tag']   ?? '';
+                $value = $tag['value'] ?? '';
+                if ($name === 'nt:icon' && $value !== '') {
+                    $value = strtolower(trim($value));
+                    if (in_array($value, $allowed_icons, true)) {
+                        $host_icon_override[$hid] = $value;
+                    }
+                } elseif ($name === 'nt:show' && $value !== '') {
+                    if (!isset($host_show_keys[$hid])) $host_show_keys[$hid] = [];
+                    // Begrenzung pro Host: 4 (Tooltip-Platz). Weitere Tags ignorieren.
+                    if (count($host_show_keys[$hid]) < 4) {
+                        $host_show_keys[$hid][] = trim($value);
+                    }
+                }
+            }
+        }
+
+        // Items für nt:show-Tags holen. Nur wenn überhaupt jemand Tags gesetzt hat.
+        // Wir nutzen exakte Key-Match (nicht 'search' substring) und filtern
+        // pro Host, damit ein 'system.cpu.util'-Tag nicht versehentlich beim
+        // falschen Host landet.
+        $items_show = [];
+        $show_item_per_host = [];   // hid => [key => itemid]
+        if (!empty($host_show_keys)) {
+            $all_show_keys = [];
+            foreach ($host_show_keys as $keys) {
+                foreach ($keys as $k) $all_show_keys[$k] = true;
+            }
+            $hosts_with_show = array_keys($host_show_keys);
+            $items_show = API::Item()->get([
+                'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type', 'units'],
+                'hostids'      => $hosts_with_show,
+                'filter'       => ['key_' => array_keys($all_show_keys)],
+                'monitored'    => true,
+                'preservekeys' => true
+            ]);
+            // Pro Host die gefundenen Items nach Key indexieren
+            foreach ($items_show as $iid => $it) {
+                $hid = $it['hostid'];
+                if (!isset($show_item_per_host[$hid])) $show_item_per_host[$hid] = [];
+                $show_item_per_host[$hid][$it['key_']] = $iid;
+            }
+        }
+
         // ── 3. ITEMS — two calls covering Agent + SNMP ────────────────────
 
         // Call A: Traffic (Agent net.if + SNMP ifIn/ifOut/ifHC) + LLDP
@@ -178,7 +238,7 @@ class NetworkTopologyData extends CController {
         // mit UNION ALL von Subqueries. Jedes Subquery nutzt den Index (itemid, clock)
         // über ORDER BY clock DESC LIMIT 1 effizient.
         // Für 482 Items reduziert das 482 Queries auf ~25.
-        $all_items = $items_a + $items_b;
+        $all_items = $items_a + $items_b + $items_show;
         $last_values = [];
         $CHUNK = 20;
 
@@ -215,6 +275,10 @@ class NetworkTopologyData extends CController {
         }
         unset($item);
         foreach ($items_b as $iid => &$item) {
+            $item['lastvalue'] = $last_values[$iid] ?? null;
+        }
+        unset($item);
+        foreach ($items_show as $iid => &$item) {
             $item['lastvalue'] = $last_values[$iid] ?? null;
         }
         unset($item);
@@ -500,6 +564,34 @@ class NetworkTopologyData extends CController {
             $total = $host_ack_total[$hid] ?? 0;
             $acked = $host_ack_acked[$hid] ?? 0;
             $all_acked = $total > 0 && $acked === $total;
+
+            // Auto-Detection des Device-Type, ggf. überschrieben durch nt:icon-Tag
+            $detected_type = $this->deviceType($h['host'], $tpls);
+            $effective_type = $host_icon_override[$hid] ?? $detected_type;
+
+            // Extra-Items für nt:show-Tags zusammenstellen — in der Reihenfolge
+            // wie der User die Tags gesetzt hat.
+            $extra_items = [];
+            foreach ($host_show_keys[$hid] ?? [] as $key) {
+                $iid = $show_item_per_host[$hid][$key] ?? null;
+                if (!$iid) {
+                    // Tag gesetzt, aber Item nicht gefunden — als Hinweis im Tooltip
+                    $extra_items[] = [
+                        'name'  => $key,
+                        'value' => null,
+                        'units' => '',
+                        'error' => 'Item nicht gefunden'
+                    ];
+                    continue;
+                }
+                $item = $items_show[$iid];
+                $extra_items[] = [
+                    'name'  => $item['name']  ?: $item['key_'],
+                    'value' => $item['lastvalue'],
+                    'units' => $item['units'] ?? ''
+                ];
+            }
+
             $nodes[] = [
                 'id'          => $hid,
                 'label'       => $h['name'] !== '' ? $h['name'] : $h['host'],
@@ -511,7 +603,8 @@ class NetworkTopologyData extends CController {
                 'acknowledged'=> $all_acked,
                 // Type-loose: API liefert mal '1', mal 1
                 'maintenance' => (int) ($h['maintenance_status'] ?? 0) === 1,
-                'type'        => $this->deviceType($h['host'], $tpls),
+                'type'        => $effective_type,
+                'icon_override' => isset($host_icon_override[$hid]),  // Frontend-Hinweis
                 'groups'      => $host_group_names[$hid] ?? [],
                 'traffic'     => $host_traffic[$hid]  ?? ['in' => 0.0, 'out' => 0.0],
                 'cpu'         => $host_cpu[$hid]       ?? null,
@@ -524,6 +617,8 @@ class NetworkTopologyData extends CController {
                 'lon'         => isset($h['inventory']['location_lon']) && $h['inventory']['location_lon'] !== ''
                                  ? (float) $h['inventory']['location_lon'] : null,
                 'location'    => $h['inventory']['location'] ?? '',
+                // Extra-Items aus nt:show-Tags (Tooltip + Detail-Panel)
+                'extra_items' => $extra_items,
             ];
         }
 
