@@ -36,10 +36,11 @@ class NetworkTopologyData extends CController {
 
         // ── 1. HOSTS ──────────────────────────────────────────────────────
         $hosts = API::Host()->get([
-            'output'                => ['hostid', 'host', 'name', 'status'],
+            'output'                => ['hostid', 'host', 'name', 'status', 'maintenance_status', 'maintenanceid'],
             'groupids'              => $groupids,
             'selectInterfaces'      => ['ip', 'type', 'main'],
             'selectParentTemplates' => ['name'],
+            'selectInventory'       => ['location_lat', 'location_lon', 'location'],
             'monitored_hosts'       => true,
             'preservekeys'          => true
         ]);
@@ -67,9 +68,10 @@ class NetworkTopologyData extends CController {
             }
         }
 
-        // ── 2. SEVERITY ───────────────────────────────────────────────────
+        // ── 2. SEVERITY + ACKNOWLEDGED ────────────────────────────────────
+        // Trigger-API liefert die Severity (= worst-case pro Host).
         $triggers = API::Trigger()->get([
-            'output'       => ['priority'],
+            'output'       => ['triggerid', 'priority'],
             'hostids'      => $hostids,
             'monitored'    => true,
             'only_true'    => true,
@@ -88,6 +90,40 @@ class NetworkTopologyData extends CController {
                     $host_severity[$hid] = $sev;
                 }
                 $host_problems[$hid] = ($host_problems[$hid] ?? 0) + 1;
+            }
+        }
+
+        // Acknowledged-Status pro Host: ein Host gilt als "acked", wenn er
+        // mindestens ein Problem hat UND alle Probleme acknowledged sind.
+        // Problem-API liefert acknowledge-Flag direkt (anders als Trigger-API).
+        $host_ack_total  = [];   // hid => Anzahl Probleme
+        $host_ack_acked  = [];   // hid => Anzahl davon acknowledged
+        if ($host_problems) {
+            $problems = API::Problem()->get([
+                'output'       => ['eventid', 'objectid', 'acknowledged'],
+                'hostids'      => array_keys($host_problems),
+                'recent'       => false,
+                'preservekeys' => false
+            ]);
+            // Probleme haben keinen direkten hostid — der Weg geht über
+            // event.get oder über die schon geholten Trigger. Wir mappen
+            // triggerid → hosts aus dem Trigger-Result.
+            $trigger_hosts = [];
+            foreach ($triggers as $t) {
+                $trigger_hosts[$t['triggerid'] ?? ''] = array_column($t['hosts'], 'hostid');
+            }
+            foreach ($problems as $p) {
+                $tid = $p['objectid'] ?? '';
+                $hids = $trigger_hosts[$tid] ?? [];
+                // Type-loose-Vergleich: Zabbix-API liefert acknowledged je
+                // nach Version mal als String '1', mal als Integer 1.
+                $is_acked = (int) ($p['acknowledged'] ?? 0) === 1;
+                foreach ($hids as $hid) {
+                    $host_ack_total[$hid] = ($host_ack_total[$hid] ?? 0) + 1;
+                    if ($is_acked) {
+                        $host_ack_acked[$hid] = ($host_ack_acked[$hid] ?? 0) + 1;
+                    }
+                }
             }
         }
 
@@ -460,20 +496,34 @@ class NetworkTopologyData extends CController {
         foreach ($hosts as $hid => $h) {
             $tpls    = array_column($h['parentTemplates'] ?? [], 'name');
             $ifaces  = $h['interfaces'] ?? [];
+            // Ein Host gilt als "acknowledged", wenn alle Probleme acked sind.
+            $total = $host_ack_total[$hid] ?? 0;
+            $acked = $host_ack_acked[$hid] ?? 0;
+            $all_acked = $total > 0 && $acked === $total;
             $nodes[] = [
-                'id'       => $hid,
-                'label'    => $h['name'] !== '' ? $h['name'] : $h['host'],
-                'host'     => $h['host'],
-                'ip'       => $this->primaryIp($ifaces),
-                'iftype'   => $this->ifaceType($ifaces),
-                'severity' => $host_severity[$hid] ?? 0,
-                'problems' => $host_problems[$hid]  ?? 0,
-                'type'     => $this->deviceType($h['host'], $tpls),
-                'groups'   => $host_group_names[$hid] ?? [],
-                'traffic'  => $host_traffic[$hid]  ?? ['in' => 0.0, 'out' => 0.0],
-                'cpu'      => $host_cpu[$hid]       ?? null,
-                'memory'   => $host_memory[$hid]    ?? null,
-                'ping'     => $host_ping[$hid]      ?? null,
+                'id'          => $hid,
+                'label'       => $h['name'] !== '' ? $h['name'] : $h['host'],
+                'host'        => $h['host'],
+                'ip'          => $this->primaryIp($ifaces),
+                'iftype'      => $this->ifaceType($ifaces),
+                'severity'    => $host_severity[$hid] ?? 0,
+                'problems'    => $host_problems[$hid]  ?? 0,
+                'acknowledged'=> $all_acked,
+                // Type-loose: API liefert mal '1', mal 1
+                'maintenance' => (int) ($h['maintenance_status'] ?? 0) === 1,
+                'type'        => $this->deviceType($h['host'], $tpls),
+                'groups'      => $host_group_names[$hid] ?? [],
+                'traffic'     => $host_traffic[$hid]  ?? ['in' => 0.0, 'out' => 0.0],
+                'cpu'         => $host_cpu[$hid]       ?? null,
+                'memory'      => $host_memory[$hid]    ?? null,
+                'ping'        => $host_ping[$hid]      ?? null,
+                // Inventory-Geo: leere Strings -> null. Lat/Lon werden als
+                // Floats geliefert, Frontend nutzt nur Hosts mit beiden Werten.
+                'lat'         => isset($h['inventory']['location_lat']) && $h['inventory']['location_lat'] !== ''
+                                 ? (float) $h['inventory']['location_lat'] : null,
+                'lon'         => isset($h['inventory']['location_lon']) && $h['inventory']['location_lon'] !== ''
+                                 ? (float) $h['inventory']['location_lon'] : null,
+                'location'    => $h['inventory']['location'] ?? '',
             ];
         }
 

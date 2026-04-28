@@ -174,3 +174,19 @@
 #nt-root.nt-dark .nt-node rect[stroke="#94a3b8"] {
     stroke: #64748b;
 }
+
+/* ── Toolbar-Buttons: einheitliche einzeilige Höhe ─────────
+ * Zabbix' .btn-alt erlaubt standardmäßig Zeilenumbrüche bei
+ * längerem Text wie "Layout: Baum" oder "Auto: 30s", was die
+ * Buttons unterschiedlich hoch macht. Wir zwingen alle in die
+ * Einzeiligkeit damit die Toolbar visuell ruhig bleibt. */
+.nt-topbar__actions .btn-alt,
+.nt-topbar__actions .btn-small,
+.nt-topbar__actions button,
+.nt-topbar__actions select,
+.nt-topbar__actions input {
+    white-space: nowrap;
+    line-height: 1.4;
+    min-height: 26px;
+    box-sizing: border-box;
+}

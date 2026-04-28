@@ -132,9 +132,12 @@ $selected_data = array_map(
 
 <link rel="stylesheet" type="text/css"
       href="modules/network_topology_v6/assets/css/network-topology.css">
+<link rel="stylesheet" type="text/css"
+      href="modules/network_topology_v6/assets/js/leaflet/leaflet.css">
 <script src="modules/network_topology_v6/assets/js/cytoscape.min.js"></script>
 <script src="modules/network_topology_v6/assets/js/cola.min.js"></script>
 <script src="modules/network_topology_v6/assets/js/cytoscape-cola.min.js"></script>
+<script src="modules/network_topology_v6/assets/js/leaflet/leaflet.js"></script>
 
 
 <?php
@@ -184,7 +187,7 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
 }
 
 </script>
-<script src="modules/network_topology_v6/assets/js/network-topology.js"></script>
+<script type="module" src="modules/network_topology_v6/assets/js/network-topology.js"></script>
 <script>window.addEventListener("load", function(){
     var form = document.getElementById("nt-filter-form");
     if (form) {
