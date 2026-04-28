@@ -1,0 +1,342 @@
+// render-tech.js — Technische Cytoscape-Ansicht (Standard-Tab "Technisch").
+//
+// Größter Brocken im Modul-Set. Verantwortlich für:
+//   - Element-Aufbau (Nodes mit SVG-Icons, Edges mit Traffic-Labels)
+//   - Layout-Wahl (Preset bei gespeicherten Positionen, Concentric bei sparse,
+//     sonst Cose)
+//   - Cytoscape-Initialisierung mit Style-Definitionen
+//   - Event-Handler (Click → Detail+Highlight, Hover → Tooltip, Rechtsklick →
+//     Kontextmenü, Drag → Position speichern, Doppelklick → Group collapse)
+//   - Toolbar-Aufbau (delegiert an Callback ins Hauptmodul)
+//   - Pin/Note-Wiederherstellung aus localStorage
+//   - Auto-Refresh-Loop alle 30s
+//
+// State (Modul-privat):
+//   _posSaveTimer — debounce-Timer für drag-save
+
+import { esc, fmt } from './utils.js';
+import { SEV_COL, primaryGroup } from './severity.js';
+import { makeNodeImage, clearImgCache } from './icons.js';
+import {
+    NT_GROUP_VIEW_KEY, NT_LLDP_KEY,
+    loadPositions, savePositions, loadPinned, loadNotes, loadLinks, saveLinks,
+    loadLayout, loadTapholdMs
+} from './storage.js';
+import { aggregateByGroup } from './aggregation.js';
+import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
+import { showTip, hideTip, moveTip } from './tooltip.js';
+import { showCtx, hideCtx } from './context-menu.js';
+import { showDetail } from './detail-panel.js';
+import { setupLegend } from './legend.js';
+import { setupMinimap, showMinimap } from './minimap.js';
+import {
+    applyManualLinks, edgeLabel,
+    isLinkModeActive, getLinkFirst, setLinkFirst, exitLinkMode
+} from './manual-links.js';
+import { ensureBaseToolbar } from './tabs.js';
+import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
+import { buildLayoutConfig } from './layouts.js';
+import { buildCytoscapeStyle } from './render-tech-style.js';
+import { injectInternetCloud, buildNodeElements, buildEdgeElements } from './build-elements.js';
+
+// ── Cross-Module-Glue: setupToolbar lebt im Hauptmodul ─────────────────────
+// (es ist 228 Zeilen und ist eng mit render() und vielen Buttons verknüpft;
+// es als Modul herauszuziehen wäre nochmal eine eigene Session)
+let _setupToolbar = function() {};
+export function setSetupToolbarCallback(fn) { _setupToolbar = fn; }
+
+// ── Modul-State ────────────────────────────────────────────────────────────
+let _posSaveTimer = null;
+
+// ── updateBadge: wird nur in render() benutzt, daher hier ──────────────────
+function updateBadge(nodes) {
+    const badge = document.getElementById('nt-badge');
+    if (!badge) return;
+    let ok = 0, warn = 0, down = 0;
+    nodes.forEach(function(n) {
+        const s = n.severity || 0;
+        if (s === 0) ok++;
+        else if (s >= 5) down++;
+        else warn++;
+    });
+    badge.innerHTML = '<b>' + nodes.length + '</b> Hosts &nbsp;|&nbsp; '
+        + '<span style="color:#22c55e"><b>' + ok   + '</b> OK</span> &nbsp;|&nbsp; '
+        + '<span style="color:#f59e0b"><b>' + warn + '</b> Warn</span> &nbsp;|&nbsp; '
+        + '<span style="color:#ef4444"><b>' + down + '</b> Down</span>';
+}
+
+// ── ntShowExportOverlay: wird vom Export-Menü in setupToolbar aufgerufen ──
+// (im Hauptmodul). Daher nicht hier — bleibt im Hauptmodul.
+
+export function render(wrap, nodes, edges, dataUrl) {
+    const pnl = document.getElementById('nt-detail');
+    if (!nodes.length) {
+        wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
+                       + 'height:100%;color:#999">No hosts found.</div>';
+        return;
+    }
+
+    const cfg = window.NT_CONFIG;
+    const sel = (cfg && cfg.selected_group_names) || [];
+    nodes.forEach(function(n) { n.id = String(n.id); n._primaryGroup = primaryGroup(n, sel); });
+    const groupNames = [];
+    nodes.forEach(function(n) {
+        if (n._primaryGroup && groupNames.indexOf(n._primaryGroup) < 0) groupNames.push(n._primaryGroup);
+    });
+
+    // Group-View aktiv? → Hosts werden zu Aggregat-Nodes verschmolzen.
+    let _groupViewActive = false;
+    try { _groupViewActive = localStorage.getItem(NT_GROUP_VIEW_KEY) === '1'; } catch (e) {}
+    if (_groupViewActive && groupNames.length > 0) {
+        const agg = aggregateByGroup(nodes, edges);
+        nodes = agg.nodes;
+        edges = agg.edges;
+    }
+
+    // Hierarchie-Layout: Internet-Wolke + synthetische Edges injizieren
+    const _currentLayout = loadLayout();
+    const withInet = injectInternetCloud(nodes, edges, _currentLayout);
+    nodes = withInet.nodes;
+    edges = withInet.edges;
+
+    // Cytoscape-Elements (Nodes + Edges) bauen
+    const elements = buildNodeElements(nodes).concat(buildEdgeElements(edges, nodes));
+
+    // ── Cleanup vorheriger Tab-State ───────────────────────────────────────
+    if (window._ntEdgeAnim)     { clearInterval(window._ntEdgeAnim);     window._ntEdgeAnim     = null; }
+    if (window._ntCy)           { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
+    window._ntToolbarDone = false;
+    const oldSev    = document.getElementById('nt-sev-filter');   if (oldSev)    oldSev.remove();
+    const oldSearch = document.getElementById('nt-search-input'); if (oldSearch) oldSearch.remove();
+    Array.from(wrap.children).forEach(function(ch) {
+        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
+    });
+
+    const cyDiv = document.createElement('div');
+    cyDiv.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0';
+    wrap.style.position = 'relative';
+    wrap.appendChild(cyDiv);
+
+    if (typeof cytoscapeCola !== 'undefined') {
+        try { cytoscape.use(cytoscapeCola); } catch (e) {}
+    }
+    const useLayout = 'cose';
+    const dark = !!(document.getElementById('nt-root')
+                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+
+    cyDiv.style.width  = wrap.clientWidth  + 'px';
+    cyDiv.style.height = wrap.clientHeight + 'px';
+
+    const cy = cytoscape({
+        container: cyDiv,
+        elements: elements,
+        style: buildCytoscapeStyle(dark),
+        layout: buildLayoutConfig(loadLayout(), nodes, edges, false),
+        userZoomingEnabled: true, userPanningEnabled: true, boxSelectionEnabled: false,
+        minZoom: 0.1, maxZoom: 4,
+        // Mobile: Long-Press auf einen Knoten öffnet das Kontextmenü.
+        // Default 1000ms ist zu langsam, User-konfigurierbar 300/500/800ms.
+        tapholdDuration: loadTapholdMs(),
+    });
+
+    window._ntCy = cy;
+    window._ntNodes = nodes;
+    // (_ntGroupNames und _ntDataUrl waren tote Globals — niemand las sie.
+    //  groupNames wird im Toolbar-Setup als Param weitergereicht; dataUrl
+    //  wird von switchTab durchgereicht und im Auto-Refresh als Closure
+    //  gehalten.)
+
+    // Force resize after DOM settles (Cytoscape misst manchmal zu früh)
+    setTimeout(function() { if (cy && !cy.destroyed()) { cy.resize(); cy.fit(cy.nodes(), 40); } }, 200);
+    setTimeout(function() { if (cy && !cy.destroyed()) { cy.resize(); cy.fit(cy.nodes(), 40); } }, 600);
+    cy.one('layoutready', function() {
+        const usedPreset = (loadPositions && Object.keys(loadPositions()).length > 0);
+        if (usedPreset) {
+            setTimeout(function() {
+                if (window._ntCy) { window._ntCy.resize(); window._ntCy.fit(window._ntCy.nodes(), 40); }
+            }, 300);
+        }
+    });
+
+    // ── Click-Handler: Link-Modus, Highlight, Detail ───────────────────────
+    cy.on('tap', 'node[!isGroup]', function(e) {
+        // Internet-Wolke ist virtuell — keine Highlights, keine Detail-Panel
+        if (e.target.data('_isInternet')) return;
+        if (isLinkModeActive()) {
+            const node = e.target;
+            const first = getLinkFirst();
+            if (!first) {
+                setLinkFirst(node);
+                node.style('underlay-color', '#3b82f6');
+                node.style('underlay-opacity', 0.35);
+                node.style('underlay-padding', 8);
+                const bLinkBtn = document.getElementById('nt-btn-link');
+                if (bLinkBtn) bLinkBtn.textContent = 'Ziele klicken (ESC = fertig)';
+                cy.nodes('[!isGroup]').forEach(function(n) {
+                    if (n.id() !== node.id()) n.style('opacity', 0.25);
+                });
+            } else {
+                if (first.id() === node.id()) { exitLinkMode(); return; }
+                const s = first.id(), t = node.id();
+                const eid  = 'ml_' + s + '_' + t;
+                const eid2 = 'ml_' + t + '_' + s;
+                if (!cy.getElementById(eid).length && !cy.getElementById(eid2).length) {
+                    const ml = edgeLabel(cy, s, t);
+                    cy.add({ data: { id: eid, source: s, target: t, tLabel: ml, trafficIn: 0, trafficOut: 0 }});
+                    const lnks = loadLinks(); lnks.push({ s: s, t: t }); saveLinks(lnks);
+                    node.style('opacity', 1);
+                    node.style('underlay-color', '#22c55e');
+                    node.style('underlay-opacity', 0.3);
+                    node.style('underlay-padding', 6);
+                    setTimeout(function() { node.style('underlay-opacity', 0); }, 600);
+                }
+            }
+            return;
+        }
+        // Path-Highlight: Toggle bei erneutem Klick auf denselben Node
+        const clickedId = e.target.id();
+        if (getActiveHighlightId() === clickedId) {
+            resetHighlight(cy);
+        } else {
+            applyHighlight(cy, clickedId);
+        }
+        showDetail(pnl, e.target.data(), cy);
+    });
+
+    cy.on('mouseover', 'node[!isGroup]', function(e) {
+        if (e.target.data('_isInternet')) return;
+        showTip(e, e.target.data());
+    });
+    cy.on('mousemove', 'node[!isGroup]', function(e) { moveTip(e); });
+    cy.on('mouseout',  'node[!isGroup]', function()  { hideTip(); });
+    cy.on('tap', function() { hideTip(); });
+    cy.on('tap', function(e) {
+        if (e.target === cy) { if (pnl) pnl.style.display = 'none'; hideCtx(); resetHighlight(cy); }
+    });
+
+    cy.on('cxttap', 'node[!isGroup]', function(e) {
+        const oe = e.originalEvent;
+        if (oe) oe.preventDefault();
+        hideTip();
+        // Internet-Wolke ist virtuell — kein Kontextmenü, keine Zabbix-Links
+        if (e.target.data('_isInternet')) return;
+        const pos = oe ? { x: oe.clientX, y: oe.clientY } : e.renderedPosition;
+        showCtx(pos.x, pos.y, e.target.data());
+    });
+
+    // Mobile: Long-Press = selbe Aktion wie Rechtsklick. Cytoscape's taphold-
+    // Event feuert auf Touch-Geräten wenn der Finger länger als
+    // tapholdDuration auf einem Knoten liegt. Auf Desktop feuert es auch bei
+    // gedrückter linker Maustaste — kein Problem, weil dort schon cxttap
+    // (Rechtsklick) existiert und beide dasselbe Menü öffnen.
+    cy.on('taphold', 'node[!isGroup]', function(e) {
+        hideTip();
+        if (e.target.data('_isInternet')) return;
+        // Position aus touch oder original-event holen
+        const oe = e.originalEvent;
+        let cx, cy2;
+        if (oe && oe.touches && oe.touches[0]) {
+            cx = oe.touches[0].clientX; cy2 = oe.touches[0].clientY;
+        } else if (oe && (oe.clientX !== undefined)) {
+            cx = oe.clientX; cy2 = oe.clientY;
+        } else {
+            const r = e.renderedPosition; cx = r.x; cy2 = r.y;
+        }
+        showCtx(cx, cy2, e.target.data());
+    });
+
+    // ── Toolbar + Legende + Badge + Animation + Heatmap ────────────────────
+    _setupToolbar(cy, wrap, nodes, groupNames, dark, useLayout);
+    ensureBaseToolbar(wrap);
+    setupLegend(groupNames, nodes);
+    updateBadge(nodes);
+
+    startEdgeAnimation(cy, nodes);
+    setTimeout(function() { applyTrafficHeatmap(cy); }, 1800);
+
+    setupMinimap(cy, wrap);
+    applyManualLinks(cy);
+    showMinimap();
+
+    // ── Pin/Note aus localStorage wiederherstellen ─────────────────────────
+    (function() {
+        const pinned = loadPinned();
+        const notes  = loadNotes();
+        clearImgCache();
+        cy.nodes('[!isGroup]').forEach(function(n) {
+            const isPinned = pinned.indexOf(n.id()) >= 0;
+            const note     = notes[n.id()] || '';
+            n.data('pinned', isPinned);
+            n.data('note',   note);
+            n.data('bgImage', makeNodeImage(n.data()));
+            if (isPinned) n.lock();
+        });
+    })();
+
+    // ── Drag → Position speichern (debounced) ──────────────────────────────
+    cy.on('dragfree', 'node[!isGroup]', function() {
+        clearTimeout(_posSaveTimer);
+        _posSaveTimer = setTimeout(function() { savePositions(cy); }, 400);
+    });
+
+    // Nach automatischem Layout Position einmalig speichern
+    cy.one('layoutstop', function() {
+        setTimeout(function() {
+            if (window._ntCy) {
+                savePositions(window._ntCy);
+                window._ntCy.fit(window._ntCy.nodes(), 40);
+                applyTrafficHeatmap(window._ntCy);
+            }
+        }, 800);
+    });
+
+    // ── Auto-Refresh (alle 30s) ────────────────────────────────────────────
+    if (window._ntRefreshTimer) clearInterval(window._ntRefreshTimer);
+    window._ntRefreshTimer = setInterval(function() {
+        if (window._ntRefreshOn === false || !window._ntCy) return;
+        fetch(dataUrl, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.nodes) {
+                    window._ntLastData = window._ntLastData || {};
+                    window._ntLastData.nodes = data.nodes;
+                    window._ntLastData.edges = data.edges || [];
+                }
+                // In Group-View komplett re-rendern (Aggregate können sich
+                // strukturell ändern, In-Place-Update wäre fragil)
+                let inGroupView = false;
+                try { inGroupView = localStorage.getItem(NT_GROUP_VIEW_KEY) === '1'; } catch (e) {}
+                if (inGroupView) {
+                    render(wrap, data.nodes.slice(), (data.edges || []).slice(), dataUrl);
+                    return;
+                }
+                const map = {};
+                (data.nodes || []).forEach(function(n) { map[String(n.id)] = n; });
+                clearImgCache();
+                cy.nodes('[!isGroup]').forEach(function(node) {
+                    const u = map[node.id()]; if (!u) return;
+                    node.data('severity', u.severity || 0);
+                    node.data('cpu', u.cpu);
+                    node.data('memory', u.memory);
+                    node.data('ping', u.ping);
+                    node.data('traffic', u.traffic);
+                    if (u.problems !== undefined) node.data('problems', u.problems);
+                    // Defensive: nur überschreiben wenn der Refresh die Felder
+                    // tatsächlich liefert. Sonst würde z.B. ein Backend-Hiccup
+                    // den acked-Ring still verschwinden lassen.
+                    if ('acknowledged' in u) node.data('acknowledged', !!u.acknowledged);
+                    if ('maintenance'  in u) node.data('maintenance',  !!u.maintenance);
+                    if ('extra_items'  in u) node.data('extra_items',  u.extra_items || []);
+                    node.data('bgImage', makeNodeImage(node.data()));
+                });
+                updateBadge(data.nodes || []);
+                window._ntCy && window._ntCy.edges('[id^="ml_"]').forEach(function(e) {
+                    e.data('tLabel', edgeLabel(window._ntCy, e.source().id(), e.target().id()));
+                });
+                applyTrafficHeatmap(window._ntCy);
+            });
+    }, 30000);
+}
