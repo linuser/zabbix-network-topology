@@ -11,7 +11,7 @@
 // (v3.6 → v4.0) wurde sie auf eine reine Orchestrierungs-Schicht reduziert.
 
 import { esc } from './modules/utils.js';
-import { NT_TAB_KEY } from './modules/storage.js';
+import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar } from './modules/tabs.js';
 import { renderTree } from './modules/render-tree.js';
@@ -19,6 +19,7 @@ import { renderManagement } from './modules/render-mgmt.js';
 import { render, setSetupToolbarCallback } from './modules/render-tech.js';
 import { renderGeo, cleanupGeo } from './modules/render-geo.js';
 import { setupToolbar, setRenderCallback as setToolbarRenderCallback } from './modules/toolbar.js';
+import { setRenderCallback as setPresetsRenderCallback } from './modules/presets-ui.js';
 
 // ── Tab-State ──────────────────────────────────────────────────────────────
 // Lebt im Hauptmodul, wird via Getter an tabs.js gereicht. Persistenz im
@@ -54,6 +55,8 @@ setSetupToolbarCallback(function(cy, wrap, nodes, groupNames, isDark, useLayout)
 
 // toolbar.js (Group-View-Toggle) → render() (ebenfalls zirkulär)
 setToolbarRenderCallback(render);
+// presets-ui.js (Preset-Wechsel) → render() (ebenfalls zirkulär)
+setPresetsRenderCallback(render);
 
 // ── Globaler State ─────────────────────────────────────────────────────────
 // Auto-Refresh-On wird zwischen render-tech.js (Loop) und toolbar.js (Toggle)
@@ -105,10 +108,28 @@ function init() {
     ensureBaseToolbar(wrap);
 
     if (!cfg.selected_groupids || !cfg.selected_groupids.length) {
+        // Keine Gruppen ausgewählt — versuche die letzte Auswahl wiederherzustellen.
+        // Wenn vorhanden: URL ergänzen und reload, damit das PHP-Backend die
+        // Hostgroups validiert und das Multiselect korrekt vorbefüllt.
+        const lastGroups = loadLastGroups();
+        if (lastGroups && lastGroups.length) {
+            const u = new URL(window.location.href);
+            // Bestehende groupids[]-Params (gibt's hier definitionsgemäß nicht,
+            // aber sicher ist sicher) und ggf. action ungetastet lassen
+            u.searchParams.delete('groupids[]');
+            lastGroups.forEach(function(id) { u.searchParams.append('groupids[]', id); });
+            window.location.replace(u.toString());
+            return;
+        }
         if (spin) spin.innerHTML = '<span style="color:#64748b">'
             + '&#8592; Bitte Host-Gruppen w\u00E4hlen und Apply klicken.</span>';
         return;
     }
+
+    // saveLastGroups wird erst NACH erfolgreichem Fetch aufgerufen, sonst
+    // persistieren wir Auswahlen für die der User keine Daten kriegt
+    // (z.B. nach Permission-Entzug) — die würden beim nächsten Page-Load
+    // via Auto-Restore wieder zur leeren Karte führen.
 
     if (spin) spin.innerHTML = '<span style="color:#64748b">Lade Topologie...</span>';
 
@@ -122,6 +143,31 @@ function init() {
             spin.style.display = 'none';
             window._ntLastData = { nodes: data.nodes || [], edges: data.edges || [], url: url };
             switchTab(_activeTab, wrap, data.nodes || [], data.edges || [], url);
+
+            // Letzte Auswahl persistieren — nur wenn der Fetch tatsächlich
+            // Hosts geliefert hat. Sonst speichern wir eine "tote" Auswahl
+            // (z.B. weil Permissions entzogen wurden) und der User bleibt
+            // beim nächsten Page-Load in einer leeren Karte hängen.
+            if (data.nodes && data.nodes.length > 0) {
+                saveLastGroups(cfg.selected_groupids);
+            }
+
+            // Wallboard-Mode: alle 30s Tab-Wechsel zwischen Tech und Geo,
+            // damit auf dem Büro-Monitor abwechselnd beide Sichten zu sehen
+            // sind. Geomap nur einbinden wenn überhaupt Hosts mit Geo-Koordinaten
+            // existieren — sonst bleibt der Wechsel auf Tech.
+            if (cfg.wallboard) {
+                const hasGeoHosts = (data.nodes || []).some(function(n) {
+                    return typeof n.lat === 'number' && typeof n.lon === 'number';
+                });
+                if (hasGeoHosts) {
+                    setInterval(function() {
+                        const next = _activeTab === 'tech' ? 'geo' : 'tech';
+                        const ld = window._ntLastData || {};
+                        switchTab(next, wrap, ld.nodes || [], ld.edges || [], ld.url || url);
+                    }, 30000);
+                }
+            }
         })
         .catch(function(err) {
             spin.innerHTML = '<span style="color:#ef4444">Error: ' + esc(err.message) + '</span>';

@@ -24,7 +24,8 @@ class NetworkTopologyView extends CController {
         $fields = [
             'groupids' => 'array_id',
             'groups'   => 'string',  // Komma-Liste von Gruppennamen für Bookmarks
-            'internet' => 'string'   // Optionaler Provider-Label für Internet-Wolke (Hierarchie-Layout)
+            'internet' => 'string',  // Optionaler Provider-Label für Internet-Wolke (Hierarchie-Layout)
+            'wallboard' => 'in 0,1'  // Vollbild-Modus für Büro-Monitor
         ];
 
         $ret = $this->validateInput($fields);
@@ -68,10 +69,48 @@ class NetworkTopologyView extends CController {
             }
         }
 
+        // Permission-Filter: URL-Parameter könnten Gruppen-IDs enthalten, auf
+        // die der aktuelle User keinen Zugriff (mehr) hat. API::HostGroup
+        // respektiert die User-Permissions automatisch — wir nehmen nur die
+        // IDs zurück die wirklich zugänglich sind. Sonst sieht das Frontend
+        // eine Auswahl, das Backend filtert sie weg, und die Karte bleibt
+        // mysteriös leer.
+        if ($selected_groupids) {
+            $accessible = API::HostGroup()->get([
+                'output'   => ['groupid'],
+                'groupids' => $selected_groupids,
+                'preservekeys' => true
+            ]);
+            $selected_groupids = array_values(array_intersect(
+                $selected_groupids,
+                array_map('strval', array_keys($accessible))
+            ));
+        }
+
+        // Permission-Filter: URL kann beliebige Group-IDs enthalten (Bookmark
+        // von einem anderen User, manueller Edit, alter Bookmark nach Group-
+        // Löschung). Wir filtern hier gegen die Hostgroups die der Session-
+        // User tatsächlich lesen darf, damit das Frontend keine "kaputten"
+        // IDs sieht und kein wirres Multiselect-Verhalten entsteht.
+        if ($selected_groupids) {
+            $allowed = API::HostGroup()->get([
+                'output'   => ['groupid'],
+                'groupids' => $selected_groupids
+            ]);
+            $allowed_ids = array_column($allowed, 'groupid');
+            $selected_groupids = array_values(array_filter(
+                $selected_groupids,
+                static function($id) use ($allowed_ids) {
+                    return in_array((string) $id, $allowed_ids, true);
+                }
+            ));
+        }
+
         $response = new CControllerResponseData([
             'hostgroups'        => $hostgroups,
             'selected_groupids' => $selected_groupids,
             'internet_label'    => trim($this->getInput('internet', '')),
+            'wallboard'         => (int) $this->getInput('wallboard', 0) === 1,
             'user'              => [
                 'type'     => $this->getUserType(),
                 'can_edit' => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN

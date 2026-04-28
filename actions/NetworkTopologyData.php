@@ -132,8 +132,10 @@ class NetworkTopologyData extends CController {
         // Per Host: 'nt:icon'-Tag (max 1) und 'nt:show'-Tags (n) sammeln.
         // - nt:icon=router  → überschreibt die Auto-Erkennung in deviceType()
         // - nt:show=<key>   → das Item wird in den Tooltip aufgenommen
+        // - nt:link=Label|URL  → Custom-Link im Kontextmenü (mehrfach möglich)
         $host_icon_override = [];   // hid => 'router'|'firewall'|...
         $host_show_keys     = [];   // hid => ['system.cpu.util', 'vfs.fs.size[/,pused]', ...]
+        $host_links         = [];   // hid => [{label, url}, ...]
         // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
         $allowed_icons = ['firewall', 'router', 'switch', 'wireless',
                           'server', 'storage', 'camera', 'printer',
@@ -156,6 +158,32 @@ class NetworkTopologyData extends CController {
                     if (count($host_show_keys[$hid]) < 4) {
                         $host_show_keys[$hid][] = trim($value);
                     }
+                } elseif ($name === 'nt:link' && $value !== '') {
+                    // Format: "Label|URL" — Pipe-getrennt. Wenn kein Pipe vorhanden,
+                    // ist der ganze Wert die URL und das Label wird die Domain.
+                    // Begrenzung pro Host: 6 (sonst wird das Untermenü unhandlich).
+                    if (!isset($host_links[$hid])) $host_links[$hid] = [];
+                    if (count($host_links[$hid]) >= 6) continue;
+
+                    $pipe_pos = strpos($value, '|');
+                    if ($pipe_pos !== false) {
+                        $label = trim(substr($value, 0, $pipe_pos));
+                        $url   = trim(substr($value, $pipe_pos + 1));
+                    } else {
+                        $url   = trim($value);
+                        // Domain als Label extrahieren ("https://nas.fox1.de:5000" → "nas.fox1.de")
+                        $parsed = parse_url($url);
+                        $label  = $parsed['host'] ?? $url;
+                    }
+
+                    // Sicherheits-Validierung der URL: nur http/https, keine
+                    // javascript:/data:/file: Schemes (würden XSS via Tooltip
+                    // ermöglichen wenn ein User die Tags eines anderen sehen
+                    // kann). Anchor-Tags werden im Frontend zusätzlich escaped.
+                    if ($label === '' || $url === '') continue;
+                    if (!preg_match('#^https?://#i', $url)) continue;
+
+                    $host_links[$hid][] = ['label' => $label, 'url' => $url];
                 }
             }
         }
@@ -619,6 +647,8 @@ class NetworkTopologyData extends CController {
                 'location'    => $h['inventory']['location'] ?? '',
                 // Extra-Items aus nt:show-Tags (Tooltip + Detail-Panel)
                 'extra_items' => $extra_items,
+                // Custom-Links aus nt:link-Tags (Kontextmenü)
+                'links'       => $host_links[$hid] ?? [],
             ];
         }
 

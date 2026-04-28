@@ -190,3 +190,34 @@
     min-height: 26px;
     box-sizing: border-box;
 }
+
+/* ── Wallboard-Mode (Vollbild für Büro-Monitor) ────────────────
+ * Aktiviert via ?wallboard=1 — Body bekommt .nt-wallboard.
+ * Versteckt Zabbix-Header, Sidebar, Filter-Form und unsere
+ * Page-Title. Der Canvas bekommt die volle Viewport-Höhe.
+ * Größere Schrift in der Toolbar für Lesbarkeit aus 2-3 m. */
+body.nt-wallboard header.header-title,
+body.nt-wallboard #page-title-general,
+body.nt-wallboard nav.sidebar,
+body.nt-wallboard div.sidebar,
+body.nt-wallboard .filter-container,
+body.nt-wallboard #nt-filter-form,
+body.nt-wallboard div.header-title,
+body.nt-wallboard h1.page-title-general {
+    display: none !important;
+}
+body.nt-wallboard main,
+body.nt-wallboard .layout-wrapper,
+body.nt-wallboard .wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+}
+body.nt-wallboard #nt-canvas-wrap {
+    height: 100vh !important;
+}
+body.nt-wallboard .nt-topbar__actions .btn-alt,
+body.nt-wallboard .nt-topbar__actions .btn-small {
+    font-size: 13px !important;
+    min-height: 32px;
+}

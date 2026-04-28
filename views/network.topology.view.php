@@ -169,6 +169,8 @@ window.NT_CONFIG = <?= json_encode([
     // Optionaler Provider-Name für die Internet-Wolke im Hierarchie-Layout.
     // Aus URL-Parameter ?internet=Vodafone gelesen; leer = "Internet" als Default.
     'internet_label' => (string) ($data['internet_label'] ?? ''),
+    // Wallboard-Mode: ?wallboard=1 → vollflächig, kein Header, Auto-Tab-Wechsel
+    'wallboard'  => (bool) ($data['wallboard'] ?? false),
     // User-ID f\u00FCr Multi-User-Trennung der localStorage-Keys.
     // F\u00E4llt auf 0 zur\u00FCck, falls CWebUser nicht verf\u00FCgbar \u2014 dann teilt
     // sich der Browser wie fr\u00FCher die Daten (non-breaking Fallback).
@@ -192,6 +194,11 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
 </script>
 <script type="module" src="modules/network_topology_v6/assets/js/network-topology.js"></script>
 <script>window.addEventListener("load", function(){
+    // Wallboard-Mode: Body-Klasse setzen damit CSS Header/Filter ausblendet,
+    // und Auto-Tab-Switch starten (Tech ↔ Geo alle 30s).
+    if (window.NT_CONFIG && window.NT_CONFIG.wallboard) {
+        document.body.classList.add('nt-wallboard');
+    }
     var form = document.getElementById("nt-filter-form");
     if (form) {
         form.addEventListener("submit", function() {

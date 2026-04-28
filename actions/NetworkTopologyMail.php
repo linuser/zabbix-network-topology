@@ -82,6 +82,18 @@ class NetworkTopologyMail extends CController {
     protected function doAction(): void {
         $to  = trim($this->getInput('to', ''));
         $b64 = isset($_POST['html_b64']) ? (string) $_POST['html_b64'] : '';
+
+        // Body-Size-Check: Base64 ist ~33% größer als Original. 5 MB Base64
+        // entspricht ~3.7 MB HTML — genug für Reports mit eingebetteten PNGs,
+        // aber kein Resource-Exhaust-Vektor falls jemand mit gültigem CSRF-
+        // Token versucht den Server zu fluten.
+        if (strlen($b64) > 5_000_000) {
+            $this->setResponse(new CControllerResponseData([
+                'main_block' => json_encode(['error' => 'Mail-Body zu gro\u00DF (>5MB Base64)'])
+            ]));
+            return;
+        }
+
         $body = base64_decode($b64, true);
         if ($body === false) { $body = ''; }
         $subject = 'Network Topology Report — ' . date('d.m.Y H:i');
