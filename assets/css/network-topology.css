@@ -27,6 +27,13 @@
     align-items: center;
     gap: 4px;
     margin-left: auto;
+    /* Wrap wenn die Toolbar nicht in eine Zeile passt — sonst fliegen
+       Buttons rechts aus dem Viewport, vor allem auf engen Bildschirmen
+       oder wenn der Sev-Filter + Such-Input + Presets-Block + Mail
+       zusammen nicht reinpassen. */
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 4px;
 }
 
 /* ── Canvas ──────────────────────────────────────────────── */

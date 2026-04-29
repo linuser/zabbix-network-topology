@@ -35,8 +35,11 @@ class NetworkTopologyData extends CController {
         }
 
         // ── 1. HOSTS ──────────────────────────────────────────────────────
+        // proxyid + proxy_groupid sind seit Zabbix 7.0 verfügbar (in 6.x hieß
+        // proxyid noch "proxy_hostid"). Bei Verwendung in älteren Versionen
+        // einfach aus dem output-Array entfernen.
         $hosts = API::Host()->get([
-            'output'                => ['hostid', 'host', 'name', 'status', 'maintenance_status', 'maintenanceid'],
+            'output'                => ['hostid', 'host', 'name', 'status', 'maintenance_status', 'maintenanceid', 'proxyid', 'proxy_groupid'],
             'groupids'              => $groupids,
             'selectInterfaces'      => ['ip', 'type', 'main'],
             'selectParentTemplates' => ['name'],
@@ -165,6 +168,11 @@ class NetworkTopologyData extends CController {
                     if (!isset($host_links[$hid])) $host_links[$hid] = [];
                     if (count($host_links[$hid]) >= 6) continue;
 
+                    // Hard cap am ganzen Tag-Value: 2500 Zeichen reicht für jede
+                    // realistische URL+Label, schützt aber vor pathologisch großen
+                    // Tags die das JSON-Response aufblähen.
+                    if (strlen($value) > 2500) continue;
+
                     $pipe_pos = strpos($value, '|');
                     if ($pipe_pos !== false) {
                         $label = trim(substr($value, 0, $pipe_pos));
@@ -182,6 +190,17 @@ class NetworkTopologyData extends CController {
                     // kann). Anchor-Tags werden im Frontend zusätzlich escaped.
                     if ($label === '' || $url === '') continue;
                     if (!preg_match('#^https?://#i', $url)) continue;
+
+                    // Length-Caps + Control-Char-Filter:
+                    //   - URL > 2048 Zeichen: realistisch nie sinnvoll, bricht
+                    //     den meisten Browsern eh
+                    //   - Label > 200 Zeichen: würde das Kontextmenü zerstören
+                    //   - Control-Chars (CR/LF/Tab/0x00-0x1F) raus damit kein
+                    //     Header-Injection o.ä. möglich ist falls die URL irgendwo
+                    //     unsauber landet (z.B. in Logs, in einer redirect-Kette)
+                    if (strlen($url) > 2048 || strlen($label) > 200) continue;
+                    if (preg_match('/[\x00-\x1F\x7F]/', $url)) continue;
+                    if (preg_match('/[\x00-\x1F\x7F]/', $label)) continue;
 
                     $host_links[$hid][] = ['label' => $label, 'url' => $url];
                 }
@@ -583,6 +602,53 @@ class NetworkTopologyData extends CController {
             }
         }
 
+        // ── 5b. PROXY + PROXY-GROUP LOOKUP ────────────────────────────────
+        // Hosts können via Proxy oder Proxy-Group (Zabbix 7+) monitored werden.
+        // Wir sammeln die unique Proxy-IDs und Proxy-Group-IDs aus den Hosts
+        // und holen dann je einen Lookup-Call (proxy.get / proxygroup.get).
+        // Hosts ohne Proxy haben proxyid=0, ohne Group proxy_groupid=0.
+        $unique_proxyids = [];
+        $unique_pgids    = [];
+        foreach ($hosts as $h) {
+            $pid  = (string) ($h['proxyid']        ?? '0');
+            $pgid = (string) ($h['proxy_groupid']  ?? '0');
+            if ($pid !== '0' && $pid !== '')  $unique_proxyids[$pid]  = true;
+            if ($pgid !== '0' && $pgid !== '') $unique_pgids[$pgid]   = true;
+        }
+        $proxy_names = [];        // proxyid → name
+        $pgroup_names = [];       // proxy_groupid → name
+        if ($unique_proxyids) {
+            // proxy.get gibt es seit Zabbix 7.0; in 6.x hieß es noch nicht so.
+            // Bei Versions-Inkompatibilität fängt der try-catch den Fehler ab,
+            // damit das Modul nicht komplett abbricht.
+            try {
+                $proxies = API::Proxy()->get([
+                    'output'   => ['proxyid', 'name'],
+                    'proxyids' => array_keys($unique_proxyids),
+                    'preservekeys' => true,
+                ]);
+                foreach ($proxies as $pid => $p) {
+                    $proxy_names[$pid] = $p['name'] ?? '';
+                }
+            } catch (\Throwable $e) {
+                // Silent fail — Proxy-Info bleibt leer
+            }
+        }
+        if ($unique_pgids) {
+            try {
+                $pgroups = API::ProxyGroup()->get([
+                    'output'        => ['proxy_groupid', 'name'],
+                    'proxy_groupids' => array_keys($unique_pgids),
+                    'preservekeys'  => true,
+                ]);
+                foreach ($pgroups as $pgid => $pg) {
+                    $pgroup_names[$pgid] = $pg['name'] ?? '';
+                }
+            } catch (\Throwable $e) {
+                // Silent fail — ProxyGroup-Info bleibt leer
+            }
+        }
+
         // ── 6. BUILD NODES ────────────────────────────────────────────────
         $nodes = [];
         foreach ($hosts as $hid => $h) {
@@ -634,6 +700,9 @@ class NetworkTopologyData extends CController {
                 'type'        => $effective_type,
                 'icon_override' => isset($host_icon_override[$hid]),  // Frontend-Hinweis
                 'groups'      => $host_group_names[$hid] ?? [],
+                // Proxy/ProxyGroup-Lookup (leer wenn Host direkt am Server hängt)
+                'proxy_name'       => $proxy_names[(string)($h['proxyid'] ?? '0')] ?? '',
+                'proxy_group_name' => $pgroup_names[(string)($h['proxy_groupid'] ?? '0')] ?? '',
                 'traffic'     => $host_traffic[$hid]  ?? ['in' => 0.0, 'out' => 0.0],
                 'cpu'         => $host_cpu[$hid]       ?? null,
                 'memory'      => $host_memory[$hid]    ?? null,

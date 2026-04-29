@@ -14,12 +14,13 @@ import { esc } from './modules/utils.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar } from './modules/tabs.js';
-import { renderTree } from './modules/render-tree.js';
+import { renderTable, cleanupTable } from './modules/render-table.js';
 import { renderManagement } from './modules/render-mgmt.js';
 import { render, setSetupToolbarCallback } from './modules/render-tech.js';
 import { renderGeo, cleanupGeo } from './modules/render-geo.js';
 import { setupToolbar, setRenderCallback as setToolbarRenderCallback } from './modules/toolbar.js';
 import { setRenderCallback as setPresetsRenderCallback } from './modules/presets-ui.js';
+import { setHistoryRenderCallback, getHistorySeverities, isHistoryActive, setLiveRefreshHooks } from './modules/history-mode.js';
 
 // ── Tab-State ──────────────────────────────────────────────────────────────
 // Lebt im Hauptmodul, wird via Getter an tabs.js gereicht. Persistenz im
@@ -63,6 +64,38 @@ setPresetsRenderCallback(render);
 // geteilt — daher window-Scope.
 window._ntRefreshOn = (window._ntRefreshOn === undefined) ? true : window._ntRefreshOn;
 
+// History-Override: Wenn der History-Mode aktiv ist, ersetzen wir vor jedem
+// Tab-Render die Live-Severity/Probleme der Hosts mit den Werten zur
+// gewählten Cursor-Zeit. Die ursprünglichen Werte werden in _liveSeverity
+// gesichert damit beim Verlassen des History-Mode wieder die Live-Daten da sind.
+function applyHistoryOverrides(nodes) {
+    if (!nodes) return;
+    if (isHistoryActive()) {
+        const sevs = getHistorySeverities() || {};
+        nodes.forEach(function(n) {
+            if (n._liveSeverity === undefined) n._liveSeverity = n.severity || 0;
+            if (n._liveProblems === undefined) n._liveProblems = n.problems || 0;
+            const newSev = sevs[String(n.id)] || 0;
+            n.severity = newSev;
+            n.problems = newSev > 0 ? 1 : 0;   // wir wissen nicht die genaue Anzahl
+            n._historyDimmed = newSev === 0;   // Flag für Render: ausgrauen
+        });
+    } else {
+        // Verlassen — Live-Werte zurück
+        nodes.forEach(function(n) {
+            if (n._liveSeverity !== undefined) {
+                n.severity = n._liveSeverity;
+                delete n._liveSeverity;
+            }
+            if (n._liveProblems !== undefined) {
+                n.problems = n._liveProblems;
+                delete n._liveProblems;
+            }
+            delete n._historyDimmed;
+        });
+    }
+}
+
 // ── Tab-Switch ─────────────────────────────────────────────────────────────
 function switchTab(tab, wrap, nodes, edges, dataUrl) {
     // Wenn wir den Geo-Tab verlassen, Leaflet-Map sauber abbauen
@@ -70,15 +103,47 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     if (_activeTab === 'geo' && tab !== 'geo') {
         cleanupGeo();
     }
+    // Wenn wir den Tabellen-Tab verlassen, Detail-Panel-Container aus body entfernen
+    if (_activeTab === 'tree' && tab !== 'tree') {
+        cleanupTable();
+    }
     _activeTab = tab;
     try { localStorage.setItem(NT_TAB_KEY, tab); } catch (e) {}
+    // History-Severities anwenden falls History-Mode aktiv
+    applyHistoryOverrides(nodes);
     if      (tab === 'mgmt') renderManagement(wrap, nodes, edges);
-    else if (tab === 'tree') renderTree(wrap, nodes, edges);
+    else if (tab === 'tree') renderTable(wrap, nodes, edges);
     else if (tab === 'geo')  renderGeo(wrap, nodes, edges, dataUrl);
     else                     render(wrap, nodes, edges, dataUrl);
     ensureBaseToolbar(wrap);
 }
 window.switchTab = switchTab;
+
+// History-Mode → Re-Render-Hook: history-mode ruft das auf wenn sich die
+// Cursor-Zeit ändert oder der Mode verlassen wird. Wir rendern den aktiven
+// Tab mit den (ggf. neuen) History-Severities neu.
+setHistoryRenderCallback(function() {
+    const d = window._ntLastData;
+    if (!d || !d.nodes) return;
+    switchTab(_activeTab, document.getElementById('nt-canvas-wrap'),
+              d.nodes, d.edges || [], d.url || '');
+});
+
+// Live-Refresh-Pause während History-Mode aktiv ist — sonst würde der
+// 30s-Auto-Refresh die History-Severities mit Live-Daten überschreiben.
+let _refreshSavedState = null;
+setLiveRefreshHooks(
+    function pause() {
+        _refreshSavedState = window._ntRefreshOn;
+        window._ntRefreshOn = false;
+    },
+    function resume() {
+        if (_refreshSavedState !== null) {
+            window._ntRefreshOn = _refreshSavedState;
+            _refreshSavedState = null;
+        }
+    }
+);
 
 // ── Init ───────────────────────────────────────────────────────────────────
 function init() {
