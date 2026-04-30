@@ -61,14 +61,97 @@ export function renderManagement(wrap, nodes, edges) {
     container.style.cssText = 'width:100%;height:100%;overflow-y:auto;overflow-x:hidden;'
                             + 'padding:24px 20px;box-sizing:border-box;background:' + bg;
 
-    // Nodes nach Level gruppieren
+    // Nodes nach Level gruppieren. Pro Level merken wir uns max. Severity
+    // damit wir die Levels später worst-first sortieren können.
     const levels = {};
+    const levelMaxSev = {};
     nodes.forEach(function(n) {
         const lvl = MGMT_LEVEL[n.type] !== undefined ? MGMT_LEVEL[n.type] : 4;
         if (!levels[lvl]) levels[lvl] = [];
         levels[lvl].push(n);
+        const sev = n.severity || 0;
+        if (sev > (levelMaxSev[lvl] || 0)) levelMaxSev[lvl] = sev;
     });
-    const sortedLevels = Object.keys(levels).map(Number).sort(function(a, b) { return a - b; });
+    // Worst-First: Level mit höchster Severity oben. Tiebreaker: ursprüngliche
+    // MGMT_LEVEL-Nummer (Firewall vor Router etc.) damit gleich-kritische Levels
+    // ihre Topologie-Reihenfolge behalten.
+    const sortedLevels = Object.keys(levels).map(Number).sort(function(a, b) {
+        const sb = levelMaxSev[b] || 0, sa = levelMaxSev[a] || 0;
+        if (sb !== sa) return sb - sa;
+        return a - b;
+    });
+
+    // Aggregat-Stats für den Header: pro Severity zählen, dazu Wartung + Acked.
+    const sevCounts = [0, 0, 0, 0, 0, 0];
+    let maintCount = 0, ackCount = 0;
+    nodes.forEach(function(n) {
+        const s = n.severity || 0;
+        if (s >= 0 && s <= 5) sevCounts[s]++;
+        if (n.maintenance)  maintCount++;
+        if (n.acknowledged) ackCount++;
+    });
+    const totalHosts = nodes.length;
+    const problemHosts = totalHosts - sevCounts[0];
+
+    // Stats-Header: kompakte Kachel-Reihe oben mit Total / Probleme / Severity-Pillen
+    // / Wartung / Acked. Dunkel-Mode-konform.
+    const statsBar = document.createElement('div');
+    statsBar.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;'
+        + 'padding:10px 14px;margin-bottom:18px;background:' + card
+        + ';border:1px solid ' + bdr + ';border-radius:10px;'
+        + 'box-shadow:0 1px 3px rgba(0,0,0,0.04)';
+
+    const _statBlocks = [];   // alle .stat-Elemente damit wir am Ende die
+                              // letzte Trenn-Border entfernen können
+    function addStat(label, value, color) {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;'
+            + 'padding:2px 12px;border-right:1px solid ' + bdr;
+        const v = document.createElement('div');
+        v.style.cssText = 'font-size:18px;font-weight:700;line-height:1.1;color:'
+            + (color || text);
+        v.textContent = String(value);
+        const l = document.createElement('div');
+        l.style.cssText = 'font-size:10px;font-weight:600;color:' + sub
+            + ';text-transform:uppercase;letter-spacing:0.05em;margin-top:2px';
+        l.textContent = label;
+        wrap.appendChild(v);
+        wrap.appendChild(l);
+        statsBar.appendChild(wrap);
+        _statBlocks.push(wrap);
+    }
+
+    addStat('Hosts', totalHosts, text);
+    addStat('Mit Problem', problemHosts, problemHosts > 0 ? '#dc2626' : text);
+    if (maintCount > 0) addStat('Wartung', maintCount, '#92400e');
+    if (ackCount > 0)   addStat('Bestätigt', ackCount, '#16a34a');
+
+    // Letzte Stat-Kachel: Trenn-Border weg
+    if (_statBlocks.length > 0) {
+        _statBlocks[_statBlocks.length - 1].style.borderRight = 'none';
+    }
+
+    // Severity-Pillen — nur die mit Treffern anzeigen, kritischste links.
+    // Normal (0) blenden wir aus, im "Mit Problem"-Counter ist das Komplement.
+    const sevColors = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
+    const sevLabels = ['OK', 'Info', 'Warn', 'Avg', 'High', 'Krit'];
+    const pills = document.createElement('div');
+    pills.style.cssText = 'display:flex;align-items:center;gap:6px;padding:0 8px;'
+        + 'margin-left:auto;flex-wrap:wrap';
+    for (let s = 5; s >= 1; s--) {
+        if (!sevCounts[s]) continue;
+        const pill = document.createElement('span');
+        pill.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:3px 9px;'
+            + 'border-radius:11px;background:' + sevColors[s] + '22;color:' + sevColors[s]
+            + ';font-size:11px;font-weight:700';
+        pill.innerHTML = '<span style="display:inline-block;width:8px;height:8px;'
+            + 'border-radius:50%;background:' + sevColors[s] + '"></span>'
+            + sevLabels[s] + ' ' + sevCounts[s];
+        pills.appendChild(pill);
+    }
+    if (pills.children.length > 0) statsBar.appendChild(pills);
+
+    container.appendChild(statsBar);
 
     // Notizen einmal laden, nicht pro Tile
     const _mgmtNotes = loadNotes();

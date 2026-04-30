@@ -102,9 +102,10 @@ class NetworkTopologyData extends CController {
         // Problem-API liefert acknowledge-Flag direkt (anders als Trigger-API).
         $host_ack_total  = [];   // hid => Anzahl Probleme
         $host_ack_acked  = [];   // hid => Anzahl davon acknowledged
+        $host_problem_list = []; // hid => [{name, severity, clock, acknowledged}, ...] (max 20/Host)
         if ($host_problems) {
             $problems = API::Problem()->get([
-                'output'       => ['eventid', 'objectid', 'acknowledged'],
+                'output'       => ['eventid', 'objectid', 'name', 'severity', 'clock', 'acknowledged'],
                 'hostids'      => array_keys($host_problems),
                 'recent'       => false,
                 'preservekeys' => false
@@ -122,13 +123,33 @@ class NetworkTopologyData extends CController {
                 // Type-loose-Vergleich: Zabbix-API liefert acknowledged je
                 // nach Version mal als String '1', mal als Integer 1.
                 $is_acked = (int) ($p['acknowledged'] ?? 0) === 1;
+                $entry = [
+                    'name'         => (string) ($p['name'] ?? ''),
+                    'severity'     => (int)    ($p['severity'] ?? 0),
+                    'clock'        => (int)    ($p['clock'] ?? 0),
+                    'acknowledged' => $is_acked,
+                ];
                 foreach ($hids as $hid) {
                     $host_ack_total[$hid] = ($host_ack_total[$hid] ?? 0) + 1;
                     if ($is_acked) {
                         $host_ack_acked[$hid] = ($host_ack_acked[$hid] ?? 0) + 1;
                     }
+                    // Cap pro Host: 20 Probleme reichen für die UI; mehr würden
+                    // den Accordion unbrauchbar machen und den Payload aufblähen.
+                    if (!isset($host_problem_list[$hid])) $host_problem_list[$hid] = [];
+                    if (count($host_problem_list[$hid]) < 20) {
+                        $host_problem_list[$hid][] = $entry;
+                    }
                 }
             }
+            // Pro Host: nach Severity desc, dann nach Clock desc (neueste oben).
+            foreach ($host_problem_list as $hid => &$list) {
+                usort($list, function($a, $b) {
+                    if ($a['severity'] !== $b['severity']) return $b['severity'] - $a['severity'];
+                    return $b['clock'] - $a['clock'];
+                });
+            }
+            unset($list);
         }
 
         // ── 2b. TAG-SCAN: nt:icon, nt:show ────────────────────────────────
@@ -694,6 +715,7 @@ class NetworkTopologyData extends CController {
                 'iftype'      => $this->ifaceType($ifaces),
                 'severity'    => $host_severity[$hid] ?? 0,
                 'problems'    => $host_problems[$hid]  ?? 0,
+                'problem_list' => $host_problem_list[$hid] ?? [],
                 'acknowledged'=> $all_acked,
                 // Type-loose: API liefert mal '1', mal 1
                 'maintenance' => (int) ($h['maintenance_status'] ?? 0) === 1,

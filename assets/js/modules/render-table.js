@@ -105,6 +105,59 @@ function fmtBps(bps) {
     return (bps / 1e9).toFixed(2) + ' Gbps';
 }
 
+// Alter eines Problems als kompakte Einheit ("5m", "3h", "2d").
+// clock = Unix-Sekunden vom Backend.
+function fmtAge(clock) {
+    if (!clock || clock <= 0) return '';
+    const sec = Math.max(0, Math.floor(Date.now() / 1000) - clock);
+    if (sec < 60)    return sec + 's';
+    if (sec < 3600)  return Math.floor(sec / 60) + 'm';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h';
+    return Math.floor(sec / 86400) + 'd';
+}
+
+// Detail-Row mit den einzelnen Problemen eines Hosts.
+// colspan deckt alle Spalten ab. Aufklapp-Toggle in der Probleme-Zelle der
+// Haupt-Row schiebt diese Zeile direkt darunter ein/aus.
+function buildProblemDetailRow(n, colspan) {
+    const list = n.problem_list || [];
+    if (list.length === 0) {
+        return '<tr class="nt-prob-detail" data-host-id="' + esc(String(n.id)) + '">'
+            + '<td colspan="' + colspan + '" '
+            + 'style="padding:10px 14px 14px 14px;background:#fafbfc;'
+            + 'border-bottom:1px solid #f1f5f9;color:#94a3b8;font-size:12px">'
+            + 'Keine Detail-Daten verf\u00fcgbar.</td></tr>';
+    }
+    let body = '';
+    list.forEach(function(p) {
+        const sev = p.severity || 0;
+        const col = SEV_COL[sev] || '#94a3b8';
+        const lbl = SEV_LBL[sev] || '';
+        const age = fmtAge(p.clock);
+        body += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;'
+            + 'font-size:12px;line-height:1.4">'
+            + '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;'
+            +     'background:' + col + ';flex-shrink:0"></span>'
+            + '<span style="color:' + col + ';font-weight:600;font-size:11px;'
+            +     'min-width:62px">' + esc(lbl) + '</span>'
+            + '<span style="flex:1;color:#1e293b;overflow:hidden;text-overflow:ellipsis;'
+            +     'white-space:nowrap">' + esc(p.name || '') + '</span>'
+            + (p.acknowledged
+                ? '<span title="Best\u00e4tigt" style="color:#16a34a;font-size:11px;'
+                    + 'font-weight:600;flex-shrink:0">\u2714</span>'
+                : '')
+            + (age
+                ? '<span style="color:#94a3b8;font-size:11px;font-family:monospace;'
+                    + 'flex-shrink:0;min-width:40px;text-align:right">' + esc(age) + '</span>'
+                : '')
+            + '</div>';
+    });
+    return '<tr class="nt-prob-detail" data-host-id="' + esc(String(n.id)) + '">'
+        + '<td colspan="' + colspan + '" '
+        + 'style="padding:8px 14px 12px 28px;background:#fafbfc;'
+        + 'border-bottom:1px solid #f1f5f9">' + body + '</td></tr>';
+}
+
 function passesFilter(n) {
     if (!_filterStatuses.has(n.severity || 0)) return false;
     if (_filterGroup && n._primaryGroup !== _filterGroup) return false;
@@ -337,12 +390,20 @@ function rowHtml(n, baseUrl) {
             + 'font-family:monospace;line-height:1.3;white-space:nowrap">'
             + '\u2193 ' + trafIn + '<br>\u2191 ' + trafOut
             + '</td>'
-        // Probleme
+        // Probleme — clickable Toggle wenn Count>0; öffnet Detail-Row mit
+        // Einzel-Problemen darunter (Accordion). data-no-detail verhindert
+        // dass der Row-Click parallel das Detail-Panel öffnet.
         + '<td style="padding:6px 10px;text-align:right">'
             + (n.problems > 0
-                ? '<span style="display:inline-block;padding:1px 8px;border-radius:10px;'
-                    + 'background:#dc262622;color:#dc2626;font-size:11px;font-weight:700">'
-                    + n.problems + '</span>'
+                ? '<button type="button" data-toggle-problems="' + esc(String(n.id)) + '" '
+                    + 'data-no-detail="1" '
+                    + 'title="Probleme aufklappen" '
+                    + 'style="display:inline-flex;align-items:center;gap:3px;padding:1px 8px;'
+                    + 'border:none;border-radius:10px;background:#dc262622;color:#dc2626;'
+                    + 'font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">'
+                    + '<span class="nt-prob-arrow" style="font-size:9px;display:inline-block;'
+                    +     'transition:transform 0.15s;line-height:1">▶</span>'
+                    + n.problems + '</button>'
                 : '<span style="color:#94a3b8;font-size:12px">0</span>')
             + '</td>'
         // Actions
@@ -665,8 +726,8 @@ export function renderTable(wrap, nodes, edges) {
                 rerenderTable();
             });
         });
-        // Row-Click: Detail-Panel zeigen
-        tableArea.querySelectorAll('tr[data-host-id]').forEach(function(tr) {
+        // Row-Click: Detail-Panel zeigen (nur Haupt-Rows, nicht Detail-Rows)
+        tableArea.querySelectorAll('tr[data-host-id]:not(.nt-prob-detail)').forEach(function(tr) {
             tr.addEventListener('mouseenter', function() { this.style.background = '#f8fafc'; });
             tr.addEventListener('mouseleave', function() { this.style.background = ''; });
             tr.addEventListener('click', function(e) {
@@ -678,6 +739,31 @@ export function renderTable(wrap, nodes, edges) {
                 if (!n) return;
                 detailPanel.style.display = 'block';
                 showDetail(detailPanel, n, null);
+            });
+        });
+        // Probleme-Toggle: schiebt Detail-Row mit Einzel-Problemen unter den Host.
+        // colspan = Anzahl Spalten in buildTable (siehe cols-Array).
+        tableArea.querySelectorAll('button[data-toggle-problems]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const id = this.dataset.toggleProblems;
+                const tr = this.closest('tr');
+                if (!tr) return;
+                const next = tr.nextElementSibling;
+                const arrow = this.querySelector('.nt-prob-arrow');
+                if (next && next.classList.contains('nt-prob-detail')
+                        && next.dataset.hostId === id) {
+                    // Schon offen → schließen
+                    next.remove();
+                    if (arrow) arrow.style.transform = '';
+                    return;
+                }
+                const n = realNodes.find(function(x) { return String(x.id) === String(id); });
+                if (!n) return;
+                const tbl = tr.closest('table');
+                const colspan = tbl ? tbl.querySelectorAll('thead th').length : 11;
+                tr.insertAdjacentHTML('afterend', buildProblemDetailRow(n, colspan));
+                if (arrow) arrow.style.transform = 'rotate(90deg)';
             });
         });
     }
