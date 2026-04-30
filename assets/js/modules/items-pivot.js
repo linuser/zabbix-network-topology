@@ -87,23 +87,34 @@ export async function fetchItemsPivot(pattern) {
     }
 }
 
+// Fallback-Theme falls renderTable kein Theme reicht (z.B. neuer Aufrufer).
+// Hat dieselben Keys wie mkTheme() in render-table.js \u2014 Light-Mode Werte.
+const FALLBACK_THEME = {
+    head: '#f8fafc', surface: '#ffffff', inputBg: '#ffffff',
+    border: '#e2e8f0', borderSoft: '#f1f5f9',
+    text: '#1e293b', textStrong: '#0f172a', sub: '#64748b', subSoft: '#94a3b8',
+    accent: '#2563eb', link: '#2563eb',
+};
+
 // Renders the items-pivot toolbar (preset-dropdown + custom-pattern + apply).
 // Wird einmal angelegt und bleibt zwischen Render-Zyklen erhalten.
-export function buildPivotToolbar(onApply) {
+export function buildPivotToolbar(onApply, theme) {
+    const t = theme || FALLBACK_THEME;
     const wrap = document.createElement('div');
     wrap.id = 'nt-items-toolbar';
-    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;'
-        + 'border-bottom:1px solid #e2e8f0;flex-wrap:wrap';
+    wrap.style.cssText = 'display:flex;align-items:center;gap:10px;padding:0;flex-wrap:wrap';
 
     const lbl = document.createElement('span');
-    lbl.textContent = 'Preset:';
-    lbl.style.cssText = 'font-size:12px;color:#475569;font-weight:600';
+    lbl.textContent = 'Preset';
+    lbl.style.cssText = 'font-size:11px;color:' + t.sub
+        + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em';
     wrap.appendChild(lbl);
 
     const sel = document.createElement('select');
     sel.id = 'nt-items-preset';
-    sel.style.cssText = 'padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;'
-        + 'font-size:12px;background:#fff';
+    sel.style.cssText = 'padding:5px 8px;border:1px solid ' + t.border
+        + ';border-radius:6px;font-size:12px;background:' + t.surface
+        + ';color:' + t.text + ';font-family:inherit;cursor:pointer';
     PRESETS.forEach(function(p) {
         const o = document.createElement('option');
         o.value = p.pattern;
@@ -119,10 +130,11 @@ export function buildPivotToolbar(onApply) {
     wrap.appendChild(sel);
 
     const patWrap = document.createElement('span');
-    patWrap.style.cssText = 'display:flex;align-items:center;gap:6px;flex:1;min-width:200px';
+    patWrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;min-width:200px';
     const patLbl = document.createElement('span');
-    patLbl.textContent = 'Pattern:';
-    patLbl.style.cssText = 'font-size:12px;color:#475569;font-weight:600';
+    patLbl.textContent = 'Pattern';
+    patLbl.style.cssText = 'font-size:11px;color:' + t.sub
+        + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em';
     patWrap.appendChild(patLbl);
 
     const pat = document.createElement('input');
@@ -130,15 +142,28 @@ export function buildPivotToolbar(onApply) {
     pat.id = 'nt-items-pattern';
     pat.placeholder = 'z.B. vfs.fs.size[*,pused]';
     pat.value = PRESETS[0].pattern;
-    pat.style.cssText = 'flex:1;padding:4px 8px;border:1px solid #cbd5e1;'
-        + 'border-radius:4px;font-size:12px;font-family:monospace;background:#fff';
+    pat.style.cssText = 'flex:1;padding:6px 10px;border:1px solid ' + t.border
+        + ';border-radius:6px;font-size:12px;font-family:'
+        + 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:' + t.inputBg
+        + ';color:' + t.text + ';outline:none;'
+        + 'transition:border-color 0.15s,box-shadow 0.15s';
+    pat.addEventListener('focus', function() {
+        this.style.borderColor = t.accent;
+        this.style.boxShadow = '0 0 0 3px ' + t.accent + '22';
+    });
+    pat.addEventListener('blur', function() {
+        this.style.borderColor = t.border;
+        this.style.boxShadow = 'none';
+    });
     patWrap.appendChild(pat);
     wrap.appendChild(patWrap);
 
     const apply = document.createElement('button');
     apply.textContent = 'Anwenden';
-    apply.style.cssText = 'padding:4px 12px;border:1px solid #2563eb;border-radius:4px;'
-        + 'background:#2563eb;color:#fff;cursor:pointer;font-size:12px;font-weight:600';
+    apply.style.cssText = 'padding:6px 14px;border:1px solid ' + t.accent
+        + ';border-radius:6px;background:' + t.accent
+        + ';color:#ffffff;cursor:pointer;font-size:12px;font-weight:600;'
+        + 'font-family:inherit;letter-spacing:0.02em;transition:filter 0.15s';
     wrap.appendChild(apply);
 
     sel.addEventListener('change', function() {
@@ -164,25 +189,29 @@ export function buildPivotToolbar(onApply) {
 // hostsLookup: aus dem Standard-Tabellen-Mode (für späteren Detail-Panel-Bezug)
 // sortHostIds: bereits sortierte Liste der HostIds (vom Caller berechnet)
 // sortCol/sortDir: aktive Sortierung — für Pfeil-Anzeige im Header
-export function renderPivotTable(container, data, hostsLookup, sortHostIds, sortCol, sortDir) {
+export function renderPivotTable(container, data, hostsLookup, sortHostIds, sortCol, sortDir, theme) {
+    const t = theme || FALLBACK_THEME;
+    const monoFam = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
     container.innerHTML = '';
 
     if (!data || data.error) {
-        container.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8">'
+        container.innerHTML = '<div style="padding:30px;text-align:center;color:' + t.subSoft + '">'
             + 'Fehler beim Laden: ' + esc((data && data.error) || 'unbekannt') + '</div>';
         return;
     }
     if (!data.columns || data.columns.length === 0) {
         // Empty-State mit Hilfetext
-        const reasons = '<ul style="text-align:left;display:inline-block;margin-top:8px;'
-            + 'color:#64748b;font-size:12px;line-height:1.6">'
+        const reasons = '<ul style="text-align:left;display:inline-block;margin-top:10px;'
+            + 'color:' + t.sub + ';font-size:12px;line-height:1.7">'
             + '<li>Pattern matched keine Items in den ausgew\u00E4hlten Hostgroups</li>'
             + '<li>Items sind nicht numerisch (nur Float/Int werden angezeigt)</li>'
             + '<li>Items sind nicht aktiviert (disabled/unsupported)</li>'
             + '<li>Pattern zu spezifisch \u2014 versuche z.B. mit \u201E*\u201D zu erweitern</li>'
             + '</ul>';
-        container.innerHTML = '<div style="padding:30px;text-align:center;color:#475569">'
-            + '<div style="font-size:14px;margin-bottom:6px">Keine matching Items gefunden.</div>'
+        container.innerHTML = '<div style="padding:48px 30px;text-align:center;color:' + t.text + '">'
+            + '<div style="font-size:32px;margin-bottom:10px;opacity:0.4">\u{1F50D}</div>'
+            + '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'
+            + 'Keine matching Items gefunden.</div>'
             + reasons + '</div>';
         return;
     }
@@ -210,24 +239,25 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
 
     // Tabelle aufbauen
     const table = document.createElement('table');
-    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px';
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12.5px';
 
     // Header — alle Spalten sortierbar via data-sort
-    let thead = '<thead><tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0">'
-        + '<th data-sort="__host__" style="padding:8px 10px;text-align:left;font-size:11px;'
-        + 'font-weight:700;color:' + (sortCol === '__host__' || !sortCol ? '#0f172a' : '#475569')
-        + ';text-transform:uppercase;letter-spacing:0.5px;'
-        + 'position:sticky;left:0;background:#f8fafc;z-index:1">Host'
+    let thead = '<thead><tr style="background:' + t.head + ';border-bottom:1px solid ' + t.border + '">'
+        + '<th data-sort="__host__" style="padding:12px 14px;text-align:left;font-size:10.5px;'
+        + 'font-weight:700;color:' + (sortCol === '__host__' || !sortCol ? t.textStrong : t.sub)
+        + ';text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;user-select:none;'
+        + 'position:sticky;left:0;background:' + t.head + ';z-index:1">Host'
         + arrow('__host__') + (!sortCol ? ' \u25B2' : '') + '</th>';
     cols.forEach(function(c) {
         const isActive = c.key === sortCol;
         thead += '<th data-sort="' + esc(c.key) + '" '
-            + 'style="padding:8px 10px;text-align:right;font-size:11px;'
-            + 'font-weight:700;color:' + (isActive ? '#0f172a' : '#475569')
-            + ';text-transform:uppercase;letter-spacing:0.5px;font-family:monospace" '
+            + 'style="padding:12px 14px;text-align:right;font-size:10.5px;'
+            + 'font-weight:700;color:' + (isActive ? t.textStrong : t.sub)
+            + ';text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;user-select:none;'
+            + 'font-family:' + monoFam + ';white-space:nowrap" '
             + 'title="' + esc(c.key) + '">'
             + esc(c.label)
-            + (c.unit ? ' <span style="opacity:0.6">(' + esc(c.unit) + ')</span>' : '')
+            + (c.unit ? ' <span style="opacity:0.55">(' + esc(c.unit) + ')</span>' : '')
             + arrow(c.key)
             + '</th>';
     });
@@ -241,16 +271,18 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         const latestUrl = window.location.origin + baseUrl
             + 'zabbix.php?action=latest.view&filter_set=1&hostids%5B%5D=' + encodeURIComponent(hid);
 
-        let html = '<tr style="border-bottom:1px solid #f1f5f9">'
-            + '<td style="padding:6px 10px;font-weight:600;'
-            + 'position:sticky;left:0;background:#fff;z-index:1;border-right:1px solid #f1f5f9">'
+        let html = '<tr style="border-bottom:1px solid ' + t.borderSoft
+            + ';transition:background 0.12s">'
+            + '<td style="padding:11px 14px;font-weight:600;font-size:13px;'
+            + 'position:sticky;left:0;background:' + t.surface + ';z-index:1;'
+            + 'border-right:1px solid ' + t.borderSoft + '">'
             + '<a href="' + esc(latestUrl) + '" target="_blank" rel="noopener noreferrer" '
-            + 'style="color:#2563eb;text-decoration:none">' + esc(hostname) + '</a></td>';
+            + 'style="color:' + t.link + ';text-decoration:none">' + esc(hostname) + '</a></td>';
 
         cols.forEach(function(c) {
             const v = row[c.key];
-            html += '<td style="padding:6px 10px;text-align:right;font-family:monospace;'
-                + 'color:' + (v == null ? '#94a3b8' : '#0f172a') + '">'
+            html += '<td style="padding:11px 14px;text-align:right;font-family:' + monoFam + ';'
+                + 'font-size:12.5px;color:' + (v == null ? t.subSoft : t.text) + '">'
                 + esc(fmtVal(v, c.unit)) + '</td>';
         });
         html += '</tr>';
@@ -261,8 +293,8 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     // Truncated-Hinweis
     if (data.truncated) {
         const warn = document.createElement('div');
-        warn.style.cssText = 'padding:8px 12px;background:#fef3c7;color:#92400e;'
-            + 'font-size:12px;border-radius:4px;margin-bottom:8px';
+        warn.style.cssText = 'padding:10px 14px;background:#fef3c7;color:#92400e;'
+            + 'font-size:12px;border-radius:6px;margin-bottom:10px;font-weight:500';
         warn.textContent = '\u26A0 Sehr viele Items \u2014 Liste wurde abgeschnitten. '
             + 'Spezifischeres Pattern verwenden.';
         container.appendChild(warn);
@@ -270,8 +302,9 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
 
     // Scroll-Wrapper falls breit
     const scroll = document.createElement('div');
-    scroll.style.cssText = 'overflow-x:auto;background:#fff;border-radius:6px;'
-        + 'box-shadow:0 1px 3px rgba(0,0,0,0.05)';
+    scroll.style.cssText = 'overflow-x:auto;background:' + t.surface
+        + ';border:1px solid ' + t.border + ';border-radius:8px;'
+        + 'box-shadow:0 1px 3px rgba(0,0,0,0.04)';
     scroll.appendChild(table);
     container.appendChild(scroll);
 }
