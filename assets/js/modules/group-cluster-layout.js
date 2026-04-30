@@ -12,11 +12,41 @@
 // Internet-Knoten und Aggregates werden ausgenommen — sie bekommen eine
 // feste Position (mittig oben).
 
-const COLUMN_PADDING  = 40;
-const ROW_PADDING     = 40;
+// Padding zwischen Cluster-Boxen — muss groß genug sein damit die Group-Hulls
+// (group-hulls.js, PADDING=60 outward) nicht in die Nachbar-Spalte bluten.
+// Rechnung: Hull pads 60 nach außen vom letzten Knoten, cose lässt 20 inneres
+// Padding → effektiv 40px Überstand pro Hülle. Zwei Hüllen brauchen also
+// 2×40 + Sicherheits-Gap → mindestens ~100, wir nehmen 110 für sichtbaren
+// Zwischenraum.
+const COLUMN_PADDING  = 110;
+const ROW_PADDING     = 110;
 const TOP_RESERVE     = 80;
 const BOTTOM_PADDING  = 30;
 const LABEL_OFFSET    = 24;     // Platz oben für Group-Label
+const MIN_COLUMN_W    = 200;    // Minimal-Breite einer Spalte
+const MIN_ROW_H       = 140;    // Minimal-Höhe einer Reihe
+
+// Verteilt die verfuegbare Breite/Hoehe proportional zur Knoten-Anzahl der
+// Gruppe — damit kleine Gruppen nicht halb-leere Boxen bekommen, die durch
+// cose noch zusaetzlich auseinandergespreizt werden.
+//
+// counts:    [n1, n2, ...] Knoten-Anzahl pro Gruppe
+// available: nutzbare Pixel (Padding ist schon abgezogen)
+// minSize:   Minimal-Wert pro Box; nach Clamping wird ggf. proportional geshrinkt.
+function proportionalSizes(counts, available, minSize) {
+    const total = counts.reduce(function(a, b) { return a + Math.max(1, b); }, 0);
+    let sizes = counts.map(function(c) {
+        return Math.max(1, c) / total * available;
+    });
+    sizes = sizes.map(function(s) { return Math.max(minSize, s); });
+    const sum = sizes.reduce(function(a, b) { return a + b; }, 0);
+    if (sum > available) {
+        // Min-Clamp hat den Boden hochgezogen — gleichmaessig schrumpfen
+        const factor = available / sum;
+        sizes = sizes.map(function(s) { return s * factor; });
+    }
+    return sizes;
+}
 
 // Resolved den effektiven Modus aus 'auto' nach Group-Anzahl.
 function resolveMode(mode, numGroups) {
@@ -64,55 +94,68 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete) {
     const count = groupNames.length;
     console.log('[cluster] canvas:', canvasW, 'x', canvasH, '— count:', count);
 
-    // Bounding-Boxes berechnen je nach Mode
-    const boxes = {};
-    if (effective === 'columns') {
-        const colW = (canvasW - COLUMN_PADDING * (count + 1)) / count;
-        const colH = canvasH - TOP_RESERVE - BOTTOM_PADDING;
-        if (colW < 100 || colH < 100) {
-            cy.fit(cy.nodes(), 40);
-            if (onComplete) onComplete();
-            return;
-        }
-        groupNames.forEach(function(g, idx) {
-            boxes[g] = {
-                x1: COLUMN_PADDING + idx * (colW + COLUMN_PADDING),
-                y1: TOP_RESERVE,
-                w:  colW,
-                h:  colH,
-            };
-        });
-    } else {  // rows
-        const rowH = (canvasH - TOP_RESERVE - BOTTOM_PADDING - ROW_PADDING * (count - 1)) / count;
-        const rowW = canvasW - 2 * ROW_PADDING;
-        if (rowW < 100 || rowH < 80) {
-            cy.fit(cy.nodes(), 40);
-            if (onComplete) onComplete();
-            return;
-        }
-        groupNames.forEach(function(g, idx) {
-            boxes[g] = {
-                x1: ROW_PADDING,
-                y1: TOP_RESERVE + idx * (rowH + ROW_PADDING),
-                w:  rowW,
-                h:  rowH,
-            };
-        });
-    }
-
-    // Pro Gruppe Knoten sammeln (Internet/Aggregate ausgenommen)
+    // Pro Gruppe Knoten sammeln (Internet/Aggregate ausgenommen) — VOR der
+    // Box-Berechnung, weil die Spalten-Breiten proportional zur Knoten-Anzahl
+    // alloziert werden.
     const nodesByGroup = {};
     cy.nodes('[!isGroup]').forEach(function(n) {
         const d = n.data();
         if (d._isInternet || d._isAggregate) return;
         const g = d._primaryGroup;
-        if (!g || !boxes[g]) return;
+        if (!g) return;
         if (!nodesByGroup[g]) nodesByGroup[g] = cy.collection();
         nodesByGroup[g] = nodesByGroup[g].union(n);
     });
-    console.log('[cluster] nodes per group:', Object.keys(nodesByGroup).map(function(g) {
-        return g + '=' + nodesByGroup[g].length;
+    const counts = groupNames.map(function(g) {
+        return (nodesByGroup[g] && nodesByGroup[g].length) || 0;
+    });
+    console.log('[cluster] nodes per group:', groupNames.map(function(g, i) {
+        return g + '=' + counts[i];
     }).join(', '));
+
+    // Bounding-Boxes berechnen je nach Mode
+    const boxes = {};
+    if (effective === 'columns') {
+        const totalGap = COLUMN_PADDING * (count + 1);
+        const availW = canvasW - totalGap;
+        const colH = canvasH - TOP_RESERVE - BOTTOM_PADDING;
+        if (availW < MIN_COLUMN_W * count || colH < 100) {
+            cy.fit(cy.nodes(), 40);
+            if (onComplete) onComplete();
+            return;
+        }
+        const colWidths = proportionalSizes(counts, availW, MIN_COLUMN_W);
+        let xCursor = COLUMN_PADDING;
+        groupNames.forEach(function(g, idx) {
+            boxes[g] = {
+                x1: xCursor,
+                y1: TOP_RESERVE,
+                w:  colWidths[idx],
+                h:  colH,
+            };
+            xCursor += colWidths[idx] + COLUMN_PADDING;
+        });
+    } else {  // rows
+        const totalGap = ROW_PADDING * (count - 1);
+        const availH = canvasH - TOP_RESERVE - BOTTOM_PADDING - totalGap;
+        const rowW = canvasW - 2 * ROW_PADDING;
+        if (rowW < 100 || availH < MIN_ROW_H * count) {
+            cy.fit(cy.nodes(), 40);
+            if (onComplete) onComplete();
+            return;
+        }
+        const rowHeights = proportionalSizes(counts, availH, MIN_ROW_H);
+        let yCursor = TOP_RESERVE;
+        groupNames.forEach(function(g, idx) {
+            boxes[g] = {
+                x1: ROW_PADDING,
+                y1: yCursor,
+                w:  rowW,
+                h:  rowHeights[idx],
+            };
+            yCursor += rowHeights[idx] + ROW_PADDING;
+        });
+    }
 
     // Internet-Knoten zentriert oben
     const internetNodes = cy.nodes('[!isGroup]').filter(function(n) {
