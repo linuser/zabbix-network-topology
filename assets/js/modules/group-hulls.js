@@ -5,9 +5,10 @@
 //   - SVG-Overlay über dem Cytoscape-Canvas (pointer-events: none)
 //   - Hüllen werden bei Layout/Drag/Pan/Zoom neu gezeichnet via redraw()
 //   - Pro Gruppe: alle Knoten-Render-Positionen sammeln, Convex Hull
-//     berechnen, Polygon mit Gruppen-Farbe als Fläche (Alpha 0.12) und
-//     gestrichelter Border (Alpha 0.4)
-//   - Padding um Hosts: ~60px damit die Hülle nicht direkt am Icon klebt
+//     berechnen, Polygon mit Gruppen-Farbe als Fläche (Alpha 0.10) und
+//     gestrichelter Border (Alpha 0.45)
+//   - Padding um Hosts: 30px damit die Hülle nicht direkt am Icon klebt
+//     aber auch nicht in die Nachbar-Spalte blutet (siehe PADDING-Konstante)
 //
 // Ein-/Ausschalten:
 //   - setupGroupHulls(cy, wrap) installiert das Overlay + Listener
@@ -17,7 +18,13 @@
 import { grpColor } from './severity.js';
 
 const NS = 'http://www.w3.org/2000/svg';
-const PADDING = 60;          // Pixel-Abstand zwischen Knoten und Hülle
+// Pixel-Abstand zwischen aeusserstem Knoten und Huelle. War 60, aber das hat
+// in Kombination mit dem Cluster-Box-Abstand (group-cluster-layout
+// COLUMN_PADDING=110) regelmaessig zu Hull-Bleed gefuehrt — die Huellen sind
+// 60px nach aussen gezogen, cose laesst nur 20px innen, also 40px Ueberstand
+// pro Box; bei 110px Box-Abstand bleibt nur 30px Sichtgap. 30px Padding
+// reduziert den Ueberstand auf 10px und gibt damit 90px klaren Gap.
+const PADDING = 30;
 const LABEL_OFFSET = 18;     // Label-Abstand über dem höchsten Punkt
 
 let _svg = null;

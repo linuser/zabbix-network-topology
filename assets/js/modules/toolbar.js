@@ -25,6 +25,7 @@ import { addHistoryButton } from './history-mode.js';
 import { LAYOUT_OPTIONS, buildLayoutConfig } from './layouts.js';
 import { setupPresetsUI } from './presets-ui.js';
 import { buildSevFilter } from './sev-filter.js';
+import { runGroupClusterLayout } from './group-cluster-layout.js';
 
 // Cross-Module-Glue: render() wird aus dem Hauptmodul/render-tech.js injiziert,
 // damit der Group-View-Button einen Re-Render triggern kann.
@@ -151,16 +152,38 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 const pinnedNodes = cy.nodes('[!isGroup]').filter(function(n) { return n.locked(); });
                 pinnedNodes.unlock();
                 cy.resize();
-                const lo = cy.layout(buildLayoutConfig(opt.id, nodes, [], true));
-                lo.one('layoutstop', function() {
-                    setTimeout(function() {
-                        pinnedNodes.lock();
-                        savePositions(cy);
-                        savePinned(cy);
-                        cy.fit(cy.nodes(), 40);
-                    }, 400);
-                });
-                lo.run();
+
+                // Wenn Cluster-Mode aktiv ist (>=2 Gruppen + nicht 'off') muss
+                // der gewaehlte Layout PER CLUSTER laufen, sonst zerschiesst
+                // ein globales Grid/Baum/Hierarchie die Gruppen-Boundaries.
+                let _clusterMode = 'auto';
+                try {
+                    const s = localStorage.getItem(NT_GROUP_CLUSTER_KEY);
+                    if (s === 'auto' || s === 'columns' || s === 'rows' || s === 'off') _clusterMode = s;
+                } catch (e) {}
+                const _useCluster = groupNames && groupNames.length >= 2 && _clusterMode !== 'off';
+
+                if (_useCluster) {
+                    runGroupClusterLayout(cy, groupNames, _clusterMode, function() {
+                        setTimeout(function() {
+                            pinnedNodes.lock();
+                            savePositions(cy);
+                            savePinned(cy);
+                            cy.fit(cy.nodes(), 30);
+                        }, 200);
+                    }, opt.id);
+                } else {
+                    const lo = cy.layout(buildLayoutConfig(opt.id, nodes, [], true));
+                    lo.one('layoutstop', function() {
+                        setTimeout(function() {
+                            pinnedNodes.lock();
+                            savePositions(cy);
+                            savePinned(cy);
+                            cy.fit(cy.nodes(), 40);
+                        }, 400);
+                    });
+                    lo.run();
+                }
                 btn.textContent = '\u21BB Layout: ' + opt.label;
                 // Aktive Markierung im Menü aktualisieren — nächstes Aufklappen
                 // soll den neuen Stand zeigen.

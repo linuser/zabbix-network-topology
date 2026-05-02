@@ -8,16 +8,19 @@
 //   'off'     — kein Cluster-Layout, normales Force-Layout
 //
 // Wird aufgerufen wenn der gewählte Mode != 'off' und ≥2 Gruppen existieren.
-// Pro Gruppe wird ein cose-Layout in der jeweiligen Bounding-Box ausgeführt.
+// Pro Gruppe wird per default ein cose-Layout in der Bounding-Box ausgeführt;
+// optional kann per innerLayoutId-Parameter ein anderes Layout (grid /
+// breadthfirst / concentric / circle) pro Cluster gewählt werden — wird vom
+// Layout-Toggle in der Toolbar gesetzt damit "Raster", "Baum" usw. die
+// Gruppen-Boundaries respektieren.
 // Internet-Knoten und Aggregates werden ausgenommen — sie bekommen eine
 // feste Position (mittig oben).
 
-// Padding zwischen Cluster-Boxen — muss groß genug sein damit die Group-Hulls
-// (group-hulls.js, PADDING=60 outward) nicht in die Nachbar-Spalte bluten.
-// Rechnung: Hull pads 60 nach außen vom letzten Knoten, cose lässt 20 inneres
-// Padding → effektiv 40px Überstand pro Hülle. Zwei Hüllen brauchen also
-// 2×40 + Sicherheits-Gap → mindestens ~100, wir nehmen 110 für sichtbaren
-// Zwischenraum.
+// Padding zwischen Cluster-Boxen — Hauptzweck: trennen die Group-Hulls aus
+// group-hulls.js (PADDING=30 outward) so dass deren Bleed-Zonen (effektiv
+// ~10px Überstand pro Hülle bei cose-Inset 20) nie in die Nachbar-Spalte
+// reichen. 110 ist über-konservativ aber gibt einen klaren Sichtgap auch
+// wenn cose Knoten an die Box-Grenzen drückt.
 const COLUMN_PADDING  = 110;
 const ROW_PADDING     = 110;
 const TOP_RESERVE     = 80;
@@ -32,18 +35,45 @@ const MIN_ROW_H       = 140;    // Minimal-Höhe einer Reihe
 //
 // counts:    [n1, n2, ...] Knoten-Anzahl pro Gruppe
 // available: nutzbare Pixel (Padding ist schon abgezogen)
-// minSize:   Minimal-Wert pro Box; nach Clamping wird ggf. proportional geshrinkt.
+// minSize:   Minimal-Wert pro Box; bleibt garantiert eingehalten.
+//
+// Wenn die Summe der Min-geclampten Boxen das Budget uebersteigt, werden NUR
+// die Boxen die noch >minSize sind proportional zurueckgeshrinkt — die
+// Min-geclampten bleiben am Floor. Konvergenz-Schutz via Iteration mit
+// Abbruch wenn keine flexiblen Boxen mehr da sind oder keine weitere
+// Reduktion mehr erreicht wird.
 function proportionalSizes(counts, available, minSize) {
     const total = counts.reduce(function(a, b) { return a + Math.max(1, b); }, 0);
     let sizes = counts.map(function(c) {
         return Math.max(1, c) / total * available;
     });
     sizes = sizes.map(function(s) { return Math.max(minSize, s); });
-    const sum = sizes.reduce(function(a, b) { return a + b; }, 0);
-    if (sum > available) {
-        // Min-Clamp hat den Boden hochgezogen — gleichmaessig schrumpfen
-        const factor = available / sum;
-        sizes = sizes.map(function(s) { return s * factor; });
+
+    // Falls Min-Clamp das Budget gesprengt hat: schrumpfe iterativ nur die
+    // Boxen, die noch ueber minSize liegen. Min-geclampte bleiben fix.
+    let sum = sizes.reduce(function(a, b) { return a + b; }, 0);
+    let guard = 0;
+    while (sum > available && guard < 20) {
+        guard++;
+        const flexIdx = [];
+        let flexSum = 0;
+        sizes.forEach(function(s, i) {
+            if (s > minSize + 0.0001) {
+                flexIdx.push(i);
+                flexSum += s;
+            }
+        });
+        if (flexIdx.length === 0) break;   // alles am Floor — nicht weiter shrinkbar
+        const overflow = sum - available;
+        // Verteile den Overflow proportional auf die flexiblen Boxen, ohne
+        // dabei einer den Floor zu unterschreiten.
+        flexIdx.forEach(function(i) {
+            const share = (sizes[i] / flexSum) * overflow;
+            sizes[i] = Math.max(minSize, sizes[i] - share);
+        });
+        const newSum = sizes.reduce(function(a, b) { return a + b; }, 0);
+        if (newSum >= sum - 0.5) break;   // keine Konvergenz mehr
+        sum = newSum;
     }
     return sizes;
 }
@@ -57,7 +87,55 @@ function resolveMode(mode, numGroups) {
 }
 
 // Layout-Config pro Cluster. animate=false ist viel schneller.
-function buildClusterLayoutConfig(boundingBox, nodeCount) {
+// innerLayoutId: 'cose' (default) | 'grid' | 'breadthfirst' | 'concentric' | 'circle'
+// 'auto' / 'hierarchy' / unbekannt fallen auf cose zurueck (cose ist immer die
+// sicherste Per-Cluster-Strategie).
+function buildClusterLayoutConfig(boundingBox, nodeCount, innerLayoutId) {
+    const id = innerLayoutId || 'cose';
+    if (id === 'grid') {
+        return {
+            name: 'grid',
+            animate: false,
+            fit: false,
+            padding: 20,
+            boundingBox: boundingBox,
+            avoidOverlap: true,
+            condense: true,
+        };
+    }
+    if (id === 'breadthfirst') {
+        return {
+            name: 'breadthfirst',
+            animate: false,
+            fit: false,
+            padding: 20,
+            boundingBox: boundingBox,
+            directed: false,
+            spacingFactor: 1.0,
+        };
+    }
+    if (id === 'concentric') {
+        return {
+            name: 'concentric',
+            animate: false,
+            fit: false,
+            padding: 20,
+            boundingBox: boundingBox,
+            minNodeSpacing: 30,
+            avoidOverlap: true,
+        };
+    }
+    if (id === 'circle') {
+        return {
+            name: 'circle',
+            animate: false,
+            fit: false,
+            padding: 20,
+            boundingBox: boundingBox,
+            avoidOverlap: true,
+        };
+    }
+    // cose (default + Fallback fuer 'auto' / 'hierarchy' / Unbekannte)
     return {
         name: 'cose',
         animate: false,
@@ -73,7 +151,7 @@ function buildClusterLayoutConfig(boundingBox, nodeCount) {
     };
 }
 
-export function runGroupClusterLayout(cy, groupNames, mode, onComplete) {
+export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLayoutId) {
     console.log('[cluster] runGroupClusterLayout called', {mode, groupNames, hasCy: !!cy, destroyed: cy && cy.destroyed()});
     if (!cy || cy.destroyed()) { console.log('[cluster] EARLY EXIT: no cy or destroyed'); return; }
     if (!groupNames || groupNames.length < 2) {
@@ -168,8 +246,20 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete) {
         });
     }
 
-    // Pro Gruppe Layout starten und auf alle layoutstop-Events warten
-    let pending = 0;
+    // Pro Gruppe Layout starten und auf alle layoutstop-Events warten.
+    //
+    // WICHTIG: pending wird in einem ERSTEN Pass berechnet, bevor irgendein
+    // lay.run() läuft. Discrete Layouts (grid/circle/concentric/breadthfirst)
+    // feuern layoutstop synchron innerhalb von lay.run() — wenn pending erst
+    // in der Schleife inkrementiert würde, sähe checkDone() nach der ersten
+    // Iteration completed=1 >= pending=1 und würde onComplete/cy.fit
+    // mehrfach feuern (einmal pro Iteration), während andere Gruppen noch
+    // in Pre-Layout-Positionen sind. Cose ist async und maskierte das früher.
+    const groupsToLayout = groupNames.filter(function(g) {
+        const nodes = nodesByGroup[g];
+        return nodes && nodes.length > 0;
+    });
+    const pending = groupsToLayout.length;
     let completed = 0;
     function checkDone() {
         if (completed >= pending) {
@@ -179,19 +269,20 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete) {
         }
     }
 
-    groupNames.forEach(function(g) {
+    if (pending === 0) {
+        console.log('[cluster] EARLY EXIT: pending=0 (no nodes in any group)');
+        if (onComplete) onComplete();
+        return;
+    }
+
+    groupsToLayout.forEach(function(g) {
         const nodes = nodesByGroup[g];
-        if (!nodes || nodes.length === 0) {
-            console.log('[cluster] skip group', g, '(no nodes)');
-            return;
-        }
-        pending++;
         const bb = Object.assign({}, boxes[g]);
         // Top-Reserve in der BB für Group-Label
         bb.y1 += LABEL_OFFSET;
         bb.h  -= LABEL_OFFSET;
-        console.log('[cluster] starting layout for group', g, 'in box', bb, '(', nodes.length, 'nodes)');
-        const lay = nodes.layout(buildClusterLayoutConfig(bb, nodes.length));
+        console.log('[cluster] starting layout for group', g, 'in box', bb, '(', nodes.length, 'nodes) inner:', innerLayoutId || 'cose');
+        const lay = nodes.layout(buildClusterLayoutConfig(bb, nodes.length, innerLayoutId));
         lay.one('layoutstop', function() {
             completed++;
             console.log('[cluster] layout done for', g, '(', completed, '/', pending, ')');
@@ -199,11 +290,6 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete) {
         });
         lay.run();
     });
-
-    if (pending === 0) {
-        console.log('[cluster] EARLY EXIT: pending=0 (no nodes in any group)');
-        if (onComplete) onComplete();
-    }
 }
 
 // Public Helper für UI-Code: gibt den effektiven Mode zurück

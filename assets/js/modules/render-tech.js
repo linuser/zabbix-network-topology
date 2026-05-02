@@ -182,10 +182,15 @@ export function render(wrap, nodes, edges, dataUrl) {
 
     // Bei Cluster nach dem Cytoscape-Init das eigentliche Layout fahren.
     // setTimeout damit das Canvas seine Größe bekommt.
+    // Inner-Layout = die User-Wahl (grid/breadthfirst/concentric/...) damit
+    // die Cluster nicht stur cose nutzen wenn der User explizit "Raster" o.ae.
+    // gewaehlt hat. 'auto' und 'hierarchy' fallen in group-cluster-layout
+    // automatisch auf cose zurueck.
     if (_useCluster) {
+        const _innerLayout = loadLayout();
         setTimeout(function() {
             if (cy && !cy.destroyed()) {
-                runGroupClusterLayout(cy, groupNames, _clusterMode);
+                runGroupClusterLayout(cy, groupNames, _clusterMode, null, _innerLayout);
             }
         }, 50);
     }
