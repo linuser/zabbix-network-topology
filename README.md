@@ -3,7 +3,7 @@
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.18.3-blue)
+![Version](https://img.shields.io/badge/version-4.19.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Features

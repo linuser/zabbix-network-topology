@@ -2,6 +2,27 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.19.0 — 2026-05-05
+
+### Added
+- **Probleme aufklappbar in der Tabelle**: Klick auf den Probleme-Counter öffnet eine Detail-Zeile mit den einzelnen Problemen (Severity-Punkt, Name, Acked-Häkchen, Alter). Backend liefert pro Host bis zu 20 Probleme, sortiert nach Severity desc + Clock desc.
+- **Management-Tab Stats-Header**: Aggregat-Kacheln oben (Hosts / Mit Problem / Wartung / Bestätigt) plus Severity-Pillen für Krit→Info. Levels jetzt nach Worst-Severity desc sortiert (Tiebreaker: MGMT_LEVEL).
+- **Dark-Mode für Tabellen-Tab**: zentrales Theme-System (`mkTheme(dark)`) liefert komplette Farb-Map an alle Build-Funktionen — keine hardcoded `#f8fafc`-Konstanten mehr im Body.
+- **Layout-Routing durch Cluster**: `runGroupClusterLayout` akzeptiert optionalen `innerLayoutId`-Parameter (`cose`/`grid`/`breadthfirst`/`concentric`/`circle`). Layout-Toggle in der Toolbar respektiert jetzt Cluster-Boundaries — "Raster"/"Baum"/"Konzentrisch" laufen per-Cluster statt global.
+- **Items-Pivot**: Preset-Auto-Switch auf "Custom" bei manueller Pattern-Änderung; Quotes (`"BR-MAILCOW"`) in Spalten-Headern werden gestrippt.
+
+### Changed
+- **Toolbar-Cleanup**: graph-spezifische Buttons (Layout/Cluster/Zoom/Fit/Hide-Labels/LLDP/Link/Presets/Sev-Filter/Suche) werden in Mgmt/Tabelle/Geo automatisch ausgeblendet.
+- **Tabelle Polish**: Zell-Padding 6×10 → 11×14, numerische Spalten in Mono-Font (IP/CPU/Mem/Ping/Traffic), Status-Pille mit Severity-Dot, integriertes Lupen-Icon im Suchfeld + Accent-Focus-Ring.
+- **Filter-Bar**: keine Trennstriche mehr, Segmente per `gap` getrennt; Mode-Toggle (Hosts/Items) mit 6px Border-Radius, Action-Buttons als 24×24-Tiles.
+- **Items-Pivot Tabelle**: gleiche Header-Optik wie Hosts-Mode (12px Padding, 10.5px Schrift, sticky Host-Spalte mit Border-Right), Empty-State mit 🔍-Glyph.
+
+### Fixed
+- **Cluster-Layout Hüllen-Überlappung**: `COLUMN_PADDING` 40 → 110, `group-hulls` `PADDING` 60 → 30. Ergibt jetzt einen klaren ~90px Sichtgap zwischen benachbarten Hüllen statt der vorigen Berührung/Überlappung.
+- **Spalten-Breite proportional zur Knoten-Anzahl**: kleine Gruppen bekommen nicht mehr halb-leere Boxen, in denen cose Knoten unnötig auseinanderspreizt. Min-Floor (200px Spalte / 140px Reihe) wird auch nach Shrink garantiert eingehalten.
+- **Sync-Race im pending-Counter**: discrete Layouts (grid/circle/concentric/breadthfirst) feuern `layoutstop` synchron — `pending` wird jetzt in einem ersten Pass berechnet, damit `cy.fit()` und `onComplete` genau einmal feuern statt N-mal pro Cluster.
+- **Console-Logs**: `[cluster] ...`-Debug-Spam entfernt.
+
 ## v4.18.3 — 2026-04-29
 
 ### Fixed

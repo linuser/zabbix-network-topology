@@ -174,6 +174,14 @@ export function buildPivotToolbar(onApply, theme) {
             pat.value = this.value;
         }
     });
+    // Wenn der User das Pattern manuell aendert und es matcht keinen Preset
+    // mehr, springt das Dropdown auf "Custom" — sonst sieht man "Disk-Auslastung"
+    // bei einem net.if.in[*]-Pattern, was inkonsistent wirkt.
+    pat.addEventListener('input', function() {
+        const v = pat.value;
+        const match = PRESETS.find(function(p) { return p.pattern === v; });
+        sel.value = match ? match.pattern : '__custom__';
+    });
     apply.addEventListener('click', function() {
         if (onApply) onApply(pat.value);
     });
@@ -248,6 +256,12 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         + ';text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;user-select:none;'
         + 'position:sticky;left:0;background:' + t.head + ';z-index:1">Host'
         + arrow('__host__') + (!sortCol ? ' \u25B2' : '') + '</th>';
+    // Spalten-Label aufraeumen: Zabbix-Discovery-Keys stehen oft in Quotes
+    // (z.B. net.if.in["BR-MAILCOW"]) — die fuehrenden/abschliessenden " sind
+    // Delimiter und in der UI nur Laerm.
+    const cleanLabel = function(s) {
+        return String(s || '').replace(/^"+|"+$/g, '');
+    };
     cols.forEach(function(c) {
         const isActive = c.key === sortCol;
         thead += '<th data-sort="' + esc(c.key) + '" '
@@ -256,7 +270,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             + ';text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;user-select:none;'
             + 'font-family:' + monoFam + ';white-space:nowrap" '
             + 'title="' + esc(c.key) + '">'
-            + esc(c.label)
+            + esc(cleanLabel(c.label))
             + (c.unit ? ' <span style="opacity:0.55">(' + esc(c.unit) + ')</span>' : '')
             + arrow(c.key)
             + '</th>';

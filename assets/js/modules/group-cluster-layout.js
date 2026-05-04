@@ -152,17 +152,13 @@ function buildClusterLayoutConfig(boundingBox, nodeCount, innerLayoutId) {
 }
 
 export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLayoutId) {
-    console.log('[cluster] runGroupClusterLayout called', {mode, groupNames, hasCy: !!cy, destroyed: cy && cy.destroyed()});
-    if (!cy || cy.destroyed()) { console.log('[cluster] EARLY EXIT: no cy or destroyed'); return; }
+    if (!cy || cy.destroyed()) return;
     if (!groupNames || groupNames.length < 2) {
-        console.log('[cluster] EARLY EXIT: <2 groups');
         if (onComplete) onComplete();
         return;
     }
     const effective = resolveMode(mode || 'auto', groupNames.length);
-    console.log('[cluster] effective mode:', effective);
     if (effective === 'off') {
-        console.log('[cluster] EARLY EXIT: mode=off');
         if (onComplete) onComplete();
         return;
     }
@@ -170,7 +166,6 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
     const canvasW = cy.width();
     const canvasH = cy.height();
     const count = groupNames.length;
-    console.log('[cluster] canvas:', canvasW, 'x', canvasH, '— count:', count);
 
     // Pro Gruppe Knoten sammeln (Internet/Aggregate ausgenommen) — VOR der
     // Box-Berechnung, weil die Spalten-Breiten proportional zur Knoten-Anzahl
@@ -187,9 +182,6 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
     const counts = groupNames.map(function(g) {
         return (nodesByGroup[g] && nodesByGroup[g].length) || 0;
     });
-    console.log('[cluster] nodes per group:', groupNames.map(function(g, i) {
-        return g + '=' + counts[i];
-    }).join(', '));
 
     // Bounding-Boxes berechnen je nach Mode
     const boxes = {};
@@ -263,14 +255,12 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
     let completed = 0;
     function checkDone() {
         if (completed >= pending) {
-            console.log('[cluster] all', pending, 'group layouts done — fitting');
             cy.fit(cy.nodes(), 30);
             if (onComplete) onComplete();
         }
     }
 
     if (pending === 0) {
-        console.log('[cluster] EARLY EXIT: pending=0 (no nodes in any group)');
         if (onComplete) onComplete();
         return;
     }
@@ -281,11 +271,9 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
         // Top-Reserve in der BB für Group-Label
         bb.y1 += LABEL_OFFSET;
         bb.h  -= LABEL_OFFSET;
-        console.log('[cluster] starting layout for group', g, 'in box', bb, '(', nodes.length, 'nodes) inner:', innerLayoutId || 'cose');
         const lay = nodes.layout(buildClusterLayoutConfig(bb, nodes.length, innerLayoutId));
         lay.one('layoutstop', function() {
             completed++;
-            console.log('[cluster] layout done for', g, '(', completed, '/', pending, ')');
             checkDone();
         });
         lay.run();

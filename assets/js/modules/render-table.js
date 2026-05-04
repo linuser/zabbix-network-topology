@@ -671,7 +671,12 @@ export function renderTable(wrap, nodes, edges) {
         }, theme);
         wrapInner.appendChild(toolbar);
         const patIn = toolbar.querySelector('#nt-items-pattern');
-        if (patIn) patIn.value = _itemsPattern;
+        if (patIn) {
+            patIn.value = _itemsPattern;
+            // Preset-Select syncen falls das geladene Pattern einem Preset entspricht
+            // (sonst blieb es auf dem ersten Preset stehen, auch bei Custom-Pattern).
+            patIn.dispatchEvent(new Event('input'));
+        }
 
         // Suchfeld + Counter (zweite Zeile)
         const row2 = document.createElement('div');
