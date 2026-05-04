@@ -104,6 +104,39 @@ export async function fetchItemsPivot(pattern) {
     }
 }
 
+// Discovery-Cache: Map<groupids-key, Promise<patterns[]>>. Ein Refresh pro
+// Group-Auswahl, geteilt zwischen mehreren Aufrufern (vermeidet Doppel-Fetch).
+const _discoverCache = new Map();
+
+// Holt die distinct Item-Pattern-Stems der ausgewaehlten Hostgroups vom
+// Backend. Cached pro Group-Auswahl, sodass das Dropdown beim Reopen nicht
+// jedesmal neu fetchen muss. Returns Promise<{patterns: [...]}|{error: ...}>.
+export function fetchPatternSuggestions() {
+    const cfg = window.NT_CONFIG;
+    const groupids = (cfg && cfg.selected_groupids) || [];
+    if (!groupids.length) return Promise.resolve({ patterns: [] });
+
+    const cacheKey = groupids.slice().sort().join(',');
+    if (_discoverCache.has(cacheKey)) return _discoverCache.get(cacheKey);
+
+    const params = new URLSearchParams();
+    params.append('action', 'network.topology.v6.discover_patterns');
+    groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
+    const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
+
+    const promise = fetch(url, { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) return { error: data.error, patterns: [] };
+            return { patterns: data.patterns || [] };
+        })
+        .catch(function(e) {
+            return { error: e.message, patterns: [] };
+        });
+    _discoverCache.set(cacheKey, promise);
+    return promise;
+}
+
 // Fallback-Theme falls renderTable kein Theme reicht (z.B. neuer Aufrufer).
 // Hat dieselben Keys wie mkTheme() in render-table.js \u2014 Light-Mode Werte.
 const FALLBACK_THEME = {
@@ -132,19 +165,56 @@ export function buildPivotToolbar(onApply, theme) {
     sel.style.cssText = 'padding:5px 8px;border:1px solid ' + t.border
         + ';border-radius:6px;font-size:12px;background:' + t.surface
         + ';color:' + t.text + ';font-family:inherit;cursor:pointer';
+    // Statische Presets in einer optgroup damit sie sich von den
+    // dynamischen Discovery-Patterns optisch absetzen
+    const grpStatic = document.createElement('optgroup');
+    grpStatic.label = 'Standard-Presets';
     PRESETS.forEach(function(p) {
         const o = document.createElement('option');
         o.value = p.pattern;
         o.dataset.unit = p.unit;
         o.textContent = p.lbl;
-        sel.appendChild(o);
+        grpStatic.appendChild(o);
     });
     // "Custom"-Eintrag am Ende
     const customOpt = document.createElement('option');
     customOpt.value = '__custom__';
     customOpt.textContent = '\u2014 Custom-Pattern \u2014';
-    sel.appendChild(customOpt);
+    grpStatic.appendChild(customOpt);
+    sel.appendChild(grpStatic);
+    // Discovery-Optgroup wird async befuellt nachdem der Backend-Call zurueck ist
+    const grpDisc = document.createElement('optgroup');
+    grpDisc.label = '\u{1F50D} Auf deinen Hosts gefunden';
+    grpDisc.id = 'nt-items-preset-discovery';
+    // Loading-Placeholder bis der Fetch durch ist
+    const loadingOpt = document.createElement('option');
+    loadingOpt.disabled = true;
+    loadingOpt.textContent = '\u23f3 Lade Patterns...';
+    grpDisc.appendChild(loadingOpt);
+    sel.appendChild(grpDisc);
     wrap.appendChild(sel);
+
+    // Discovery async laden + Optgroup befuellen.
+    fetchPatternSuggestions().then(function(res) {
+        // Loading-Placeholder weg
+        while (grpDisc.firstChild) grpDisc.removeChild(grpDisc.firstChild);
+        const list = (res && res.patterns) || [];
+        if (list.length === 0) {
+            const empty = document.createElement('option');
+            empty.disabled = true;
+            empty.textContent = res && res.error
+                ? 'Fehler: ' + res.error
+                : 'Keine Patterns gefunden';
+            grpDisc.appendChild(empty);
+            return;
+        }
+        list.forEach(function(p) {
+            const o = document.createElement('option');
+            o.value = p.stem;
+            o.textContent = p.stem + '  (' + p.items + 'x, ' + p.hosts + 'h)';
+            grpDisc.appendChild(o);
+        });
+    });
 
     const patWrap = document.createElement('span');
     patWrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;min-width:200px';

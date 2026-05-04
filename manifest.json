@@ -27,6 +27,10 @@
         "network.topology.v6.items": {
             "class": "NetworkTopologyItems",
             "layout": "layout.json"
+        },
+        "network.topology.v6.discover_patterns": {
+            "class": "NetworkTopologyDiscoverPatterns",
+            "layout": "layout.json"
         }
     }
 }
