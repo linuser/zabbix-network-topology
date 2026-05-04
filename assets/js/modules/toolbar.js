@@ -91,6 +91,31 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             bFs.textContent = 'Fullscreen';
         }
     });
+    // Fullscreen-Toggle aendert die Canvas-Groesse, aber Cytoscape bekommt
+    // das nicht selbst mit — ohne expliziten cy.resize() + cy.fit() rutschen
+    // Nodes aus dem sichtbaren Bereich. Listener nur einmal pro Page anhaengen
+    // (idempotent ueber Window-Flag, damit Re-Render-Pfade nicht stapeln).
+    if (!window._ntFsListenerInstalled) {
+        window._ntFsListenerInstalled = true;
+        const _onFsChange = function() {
+            // 100ms Verzoegerung: Browser braucht einen Tick um die neue
+            // Canvas-Groesse zu applizieren bevor cy.resize() korrekte Werte sieht.
+            setTimeout(function() {
+                if (window._ntCy && !window._ntCy.destroyed()) {
+                    window._ntCy.resize();
+                    window._ntCy.fit(window._ntCy.nodes(), 40);
+                }
+            }, 100);
+            // Fullscreen-Button-Label sync (wichtig wenn User mit Esc statt
+            // Button rauswechselt — sonst behaelt der Button "Exit Fullscreen").
+            if (bFs) {
+                const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+                bFs.textContent = inFs ? 'Exit Fullscreen' : 'Fullscreen';
+            }
+        };
+        document.addEventListener('fullscreenchange', _onFsChange);
+        document.addEventListener('webkitfullscreenchange', _onFsChange);
+    }
 
     // Fit
     const bReset = mkbtn('nt-btn-reset', 'Fit', null);
