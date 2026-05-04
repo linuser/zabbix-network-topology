@@ -13,7 +13,8 @@
 import { esc } from './modules/utils.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
-import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar } from './modules/tabs.js';
+import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
+         setGraphToolbarVisible } from './modules/tabs.js';
 import { renderTable, cleanupTable } from './modules/render-table.js';
 import { renderManagement } from './modules/render-mgmt.js';
 import { render, setSetupToolbarCallback } from './modules/render-tech.js';
@@ -116,6 +117,10 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     else if (tab === 'geo')  renderGeo(wrap, nodes, edges, dataUrl);
     else                     render(wrap, nodes, edges, dataUrl);
     ensureBaseToolbar(wrap);
+    // Graph-spezifische Toolbar-Buttons (Layout/Cluster/Zoom/Fit/Hide-Labels/
+    // LLDP/Link/Presets/Sev-Filter/Suche) nur im Tech-Tab anzeigen — andere
+    // Tabs haben kein Cytoscape und brauchen die Buttons nicht.
+    setGraphToolbarVisible(tab === 'tech');
 }
 window.switchTab = switchTab;
 

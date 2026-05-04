@@ -112,3 +112,35 @@ export function ensureBaseToolbar(wrap) {
 
 // Alter Name behalten — wird noch im Hauptmodul aufgerufen, delegiert
 export function ensureTabs(wrap) { ensureBaseToolbar(wrap); }
+
+// Graph-spezifische Toolbar-Elemente die NUR im Tech-Tab Sinn ergeben.
+// Mgmt/Tabelle/Geo brauchen weder Cytoscape-Zoom noch Layout-Switcher noch
+// Cluster-Toggle, weil sie kein Cytoscape-Canvas haben.
+//
+// Universelle Elemente (Tabs, Dark, Fullscreen, Auto-Refresh, Historie,
+// Export) bleiben sichtbar — die fetchen Daten bzw. greifen tab-uebergreifend.
+const _GRAPH_ONLY_SELECTORS = [
+    '#nt-btn-labels',     // Hide Labels
+    '.nt-zoom-btns',      // +/-/100% Wrapper
+    '#nt-btn-reset',      // Fit
+    '#nt-layout-wrap',    // Layout-Dropdown
+    '#nt-btn-groupview',  // Gruppieren
+    '#nt-cluster-wrap',   // Cluster-Mode-Toggle
+    '#nt-btn-lldp',       // LLDP an/aus
+    '#nt-btn-link',       // Link-Mode
+    '#nt-btn-unlink',     // Links entfernen
+    '#nt-preset-wrap',    // Presets + Save/Erase/Trash
+    '#nt-sev-filter',     // Severity-Pills (Tabelle hat eigene)
+    '#nt-search-input',   // Host-Suche (Tabelle hat eigene)
+    '#nt-taphold-wrap',   // Touch-Long-Press-Picker
+];
+
+// Blendet Graph-Toolbar-Elemente aus (false) oder ein (true).
+// Wird von switchTab im Hauptmodul aufgerufen — je nach aktivem Tab.
+export function setGraphToolbarVisible(visible) {
+    _GRAPH_ONLY_SELECTORS.forEach(function(sel) {
+        document.querySelectorAll(sel).forEach(function(el) {
+            el.style.display = visible ? '' : 'none';
+        });
+    });
+}
