@@ -130,8 +130,27 @@ $selected_data = array_map(
     ->show();
 ?>
 
+<?php
+// Cache-Buster gegen klebrigen Browser-Cache (besonders ES-Module in Safari).
+// mtime der Haupt-JS-Datei + manifest.json kombiniert ergibt einen Token,
+// der sich bei jedem Deploy aendert. ES-Module-Sub-Imports bekommen das ?v=
+// nicht automatisch, fallen aber auf ETag/Last-Modified-Validierung zurueck —
+// wenn beim Deploy das ganze Modul-Verzeichnis ersetzt wird (was praktisch
+// immer der Fall ist), werden die mtimes aller Sub-Module mit-aktualisiert
+// und der bedingte GET liefert frischen Code statt Cache.
+$_nt_module_root = dirname(__DIR__);
+$_nt_main_js  = $_nt_module_root . '/assets/js/network-topology.js';
+$_nt_main_css = $_nt_module_root . '/assets/css/network-topology.css';
+$_nt_manifest = $_nt_module_root . '/manifest.json';
+$_nt_v = (string) max(
+    is_file($_nt_main_js)  ? filemtime($_nt_main_js)  : 0,
+    is_file($_nt_main_css) ? filemtime($_nt_main_css) : 0,
+    is_file($_nt_manifest) ? filemtime($_nt_manifest) : 0
+);
+if ($_nt_v === '0' || $_nt_v === '') $_nt_v = (string) time();
+?>
 <link rel="stylesheet" type="text/css"
-      href="modules/network_topology_v6/assets/css/network-topology.css">
+      href="modules/network_topology_v6/assets/css/network-topology.css?v=<?= $_nt_v ?>">
 <link rel="stylesheet" type="text/css"
       href="modules/network_topology_v6/assets/js/leaflet/leaflet.css">
 <script src="modules/network_topology_v6/assets/js/cytoscape.min.js"></script>
@@ -192,7 +211,7 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
 }
 
 </script>
-<script type="module" src="modules/network_topology_v6/assets/js/network-topology.js"></script>
+<script type="module" src="modules/network_topology_v6/assets/js/network-topology.js?v=<?= $_nt_v ?>"></script>
 <script>window.addEventListener("load", function(){
     // Wallboard-Mode: Body-Klasse setzen damit CSS Header/Filter ausblendet,
     // und Auto-Tab-Switch starten (Tech ↔ Geo alle 30s).

@@ -10,6 +10,7 @@ Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 - **Dark-Mode für Tabellen-Tab**: zentrales Theme-System (`mkTheme(dark)`) liefert komplette Farb-Map an alle Build-Funktionen — keine hardcoded `#f8fafc`-Konstanten mehr im Body.
 - **Layout-Routing durch Cluster**: `runGroupClusterLayout` akzeptiert optionalen `innerLayoutId`-Parameter (`cose`/`grid`/`breadthfirst`/`concentric`/`circle`). Layout-Toggle in der Toolbar respektiert jetzt Cluster-Boundaries — "Raster"/"Baum"/"Konzentrisch" laufen per-Cluster statt global.
 - **Items-Pivot**: Preset-Auto-Switch auf "Custom" bei manueller Pattern-Änderung; Quotes (`"BR-MAILCOW"`) in Spalten-Headern werden gestrippt.
+- **Cache-Buster im JS-Loader**: `?v=<mtime>` an Haupt-JS und Haupt-CSS, abgeleitet aus dem max. mtime von `network-topology.js` / `network-topology.css` / `manifest.json`. Bei jedem Deploy bekommt der Browser eine neue URL und kann die alte Version nicht mehr aus dem Cache servieren.
 
 ### Changed
 - **Toolbar-Cleanup**: graph-spezifische Buttons (Layout/Cluster/Zoom/Fit/Hide-Labels/LLDP/Link/Presets/Sev-Filter/Suche) werden in Mgmt/Tabelle/Geo automatisch ausgeblendet.
