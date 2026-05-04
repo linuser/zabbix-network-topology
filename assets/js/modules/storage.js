@@ -35,6 +35,7 @@ export const NT_GEO_PROVIDER_KEY = 'nt_' + PFX + 'geo_provider';
 export const NT_TAPHOLD_KEY    = 'nt_' + PFX + 'taphold_ms';
 export const NT_TABLE_MODE_KEY     = 'nt_' + PFX + 'table_mode';
 export const NT_ITEMS_PATTERN_KEY  = 'nt_' + PFX + 'items_pattern';
+export const NT_ITEMS_HIDE_EMPTY_KEY = 'nt_' + PFX + 'items_hide_empty';
 export const NT_GROUP_CLUSTER_KEY  = 'nt_' + PFX + 'group_cluster';   // 'auto'|'columns'|'rows'|'off'
 
 // ── Einmalige Migration der Legacy-Keys ──────────────────────────────────────

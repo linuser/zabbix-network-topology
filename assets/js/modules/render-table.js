@@ -17,7 +17,7 @@
 import { esc, fmt } from './utils.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
-import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY } from './storage.js';
+import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY, NT_ITEMS_HIDE_EMPTY_KEY } from './storage.js';
 import { showDetail } from './detail-panel.js';
 
 // Konsistent mit detail-panel.js (TYPE_INFO dort dupliziert hier nur was wir
@@ -56,6 +56,7 @@ let _itemsData = null;
 let _itemsSearch = '';     // Hostname-Filter
 let _itemsSortCol = '';    // '' = Hostname-Sort (default)
 let _itemsSortDir = 'desc';
+let _itemsHideEmpty = false;   // Toggle: leere Hosts/Items ausblenden
 
 // Persistente State-Restoration aus localStorage
 try {
@@ -63,6 +64,8 @@ try {
     if (m === 'hosts' || m === 'items') _tableMode = m;
     const p = localStorage.getItem(NT_ITEMS_PATTERN_KEY);
     if (p) _itemsPattern = p;
+    const he = localStorage.getItem(NT_ITEMS_HIDE_EMPTY_KEY);
+    if (he === '1') _itemsHideEmpty = true;
 } catch (e) {}
 
 // Theme — wird einmal pro renderTable() gebaut und durch alle build*-Funktionen
@@ -706,6 +709,30 @@ export function renderTable(wrap, nodes, edges) {
         });
         row2.appendChild(searchIn);
 
+        // Toggle: leere Hosts/Items ausblenden
+        const hideEmptyBtn = document.createElement('button');
+        hideEmptyBtn.type = 'button';
+        hideEmptyBtn.id = 'nt-items-hide-empty';
+        const _setHideEmptyStyle = function() {
+            const active = _itemsHideEmpty;
+            hideEmptyBtn.style.cssText = 'padding:5px 10px;border:1px solid '
+                + (active ? theme.accent : theme.border) + ';border-radius:6px;'
+                + 'background:' + (active ? theme.accent + '22' : theme.surface)
+                + ';color:' + (active ? theme.accent : theme.sub)
+                + ';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;'
+                + 'letter-spacing:0.02em;transition:all 0.15s';
+        };
+        hideEmptyBtn.textContent = 'Leere ausblenden';
+        hideEmptyBtn.title = 'Hosts und Items ohne Werte verbergen';
+        _setHideEmptyStyle();
+        hideEmptyBtn.addEventListener('click', function() {
+            _itemsHideEmpty = !_itemsHideEmpty;
+            try { localStorage.setItem(NT_ITEMS_HIDE_EMPTY_KEY, _itemsHideEmpty ? '1' : '0'); } catch (e) {}
+            _setHideEmptyStyle();
+            renderPivotInto(pivotArea, counter);
+        });
+        row2.appendChild(hideEmptyBtn);
+
         const counter = document.createElement('span');
         counter.id = 'nt-items-count';
         counter.style.cssText = 'font-size:11px;color:' + theme.subSoft
@@ -767,7 +794,8 @@ export function renderTable(wrap, nodes, edges) {
 
             // Sortierung der gefilterten IDs
             const sortHostIds = sortPivotHostIds(_itemsData, visibleIds);
-            renderPivotTable(area, _itemsData, realNodes, sortHostIds, _itemsSortCol, _itemsSortDir, theme);
+            renderPivotTable(area, _itemsData, realNodes, sortHostIds, _itemsSortCol, _itemsSortDir, theme,
+                { hideEmpty: _itemsHideEmpty });
 
             const total = allIds.length;
             const visible = visibleIds.length;

@@ -214,9 +214,11 @@ export function buildPivotToolbar(onApply, theme) {
 // hostsLookup: aus dem Standard-Tabellen-Mode (für späteren Detail-Panel-Bezug)
 // sortHostIds: bereits sortierte Liste der HostIds (vom Caller berechnet)
 // sortCol/sortDir: aktive Sortierung — für Pfeil-Anzeige im Header
-export function renderPivotTable(container, data, hostsLookup, sortHostIds, sortCol, sortDir, theme) {
+export function renderPivotTable(container, data, hostsLookup, sortHostIds, sortCol, sortDir, theme, options) {
     const t = theme || FALLBACK_THEME;
     const monoFam = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    const opt = options || {};
+    const hideEmpty = !!opt.hideEmpty;
     container.innerHTML = '';
 
     if (!data || data.error) {
@@ -241,11 +243,11 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         return;
     }
 
-    const cols = data.columns;
+    let cols = data.columns;
     const rows = data.rows || {};
     const hostMeta = data.hosts || {};
 
-    // Wenn keine sortierte Liste übergeben wurde: alphabetisch nach Hostname (alt-Verhalten)
+    // Wenn keine sortierte Liste uebergeben wurde: alphabetisch nach Hostname
     let hostIds = sortHostIds;
     if (!hostIds) {
         hostIds = Object.keys(hostMeta);
@@ -254,7 +256,61 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         });
     }
 
+    // primaryGroup-Map aus hostsLookup ableiten (fuer Hostgroup-Grouping)
+    const _primaryGroup = {};
+    if (Array.isArray(hostsLookup)) {
+        hostsLookup.forEach(function(n) {
+            _primaryGroup[String(n.id)] = n._primaryGroup || '';
+        });
+    }
+    const _selOrder = (window.NT_CONFIG && window.NT_CONFIG.selected_group_names) || [];
+    const _groupRank = function(hid) {
+        const g = _primaryGroup[String(hid)] || '';
+        const idx = _selOrder.indexOf(g);
+        return idx >= 0 ? idx : 999;
+    };
+    // Hostgroup-Grouping: Zeilen nach primaryGroup-Rank vor-sortieren, damit
+    // Hosts derselben Gruppe zusammenstehen. Innerhalb einer Gruppe behaelt
+    // die vom Caller uebergebene Reihenfolge ihren Sinn (Hostname / Sortcol).
+    const _hasMultiGroups = new Set(hostIds.map(function(hid) {
+        return _primaryGroup[String(hid)] || '';
+    })).size >= 2;
+    if (_hasMultiGroups) {
+        hostIds = hostIds.slice().sort(function(a, b) {
+            const ra = _groupRank(a), rb = _groupRank(b);
+            return ra - rb;
+        });
+    }
+
+    // Hide-Empty-Filter: Spalten ohne irgendeinen Wert raus, dann Zeilen
+    // ohne Werte (in den noch sichtbaren Spalten) raus.
+    if (hideEmpty) {
+        cols = cols.filter(function(c) {
+            return hostIds.some(function(hid) {
+                const v = rows[hid] && rows[hid][c.key];
+                return v != null;
+            });
+        });
+        hostIds = hostIds.filter(function(hid) {
+            return cols.some(function(c) {
+                const v = rows[hid] && rows[hid][c.key];
+                return v != null;
+            });
+        });
+    }
+
     const baseUrl = buildBaseUrl();
+
+    // Aggregat-Helper: Sum / Avg / Max ueber non-null numerische Werte.
+    const aggregate = function(values, mode) {
+        const nums = values.filter(function(v) {
+            return v != null && !isNaN(v);
+        });
+        if (nums.length === 0) return null;
+        if (mode === 'sum') return nums.reduce(function(a, b) { return a + b; }, 0);
+        if (mode === 'max') return Math.max.apply(null, nums);
+        return nums.reduce(function(a, b) { return a + b; }, 0) / nums.length;
+    };
 
     // Sort-Pfeil-Helfer
     const arrow = function(col) {
@@ -292,14 +348,38 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             + arrow(c.key)
             + '</th>';
     });
+    // Aggregat-Spalte rechts (Avg pro Host-Zeile)
+    thead += '<th style="padding:12px 14px;text-align:right;font-size:10.5px;'
+        + 'font-weight:700;color:' + t.sub + ';text-transform:uppercase;'
+        + 'letter-spacing:0.07em;font-family:' + monoFam + ';white-space:nowrap;'
+        + 'border-left:2px solid ' + t.border + '" title="Durchschnitt ueber alle Item-Spalten">'
+        + 'Avg</th>';
     thead += '</tr></thead>';
     table.innerHTML = thead;
 
     const tbody = document.createElement('tbody');
+    let _lastGroup = null;
+    const _colspan = cols.length + 2;   // Host-Col + Item-Cols + Avg-Col
+
     hostIds.forEach(function(hid) {
         const hostname = hostMeta[hid] || '';
         const row = rows[hid] || {};
-        const latestUrl = window.location.origin + baseUrl
+        const grp = _primaryGroup[String(hid)] || '';
+
+        // Gruppen-Separator-Zeile wenn >=2 Gruppen UND Gruppe wechselt
+        if (_hasMultiGroups && grp !== _lastGroup) {
+            tbody.insertAdjacentHTML('beforeend',
+                '<tr><td colspan="' + _colspan + '" '
+                + 'style="padding:8px 14px;background:' + t.head
+                + ';color:' + t.sub + ';font-size:10.5px;font-weight:700;'
+                + 'text-transform:uppercase;letter-spacing:0.07em;'
+                + 'border-top:1px solid ' + t.border + ';border-bottom:1px solid ' + t.borderSoft
+                + ';position:sticky;left:0">'
+                + esc(grp || '— Ohne Gruppe —') + '</td></tr>');
+            _lastGroup = grp;
+        }
+
+        const latestHostUrl = window.location.origin + baseUrl
             + 'zabbix.php?action=latest.view&filter_set=1&hostids%5B%5D=' + encodeURIComponent(hid);
 
         let html = '<tr style="border-bottom:1px solid ' + t.borderSoft
@@ -307,19 +387,79 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             + '<td style="padding:11px 14px;font-weight:600;font-size:13px;'
             + 'position:sticky;left:0;background:' + t.surface + ';z-index:1;'
             + 'border-right:1px solid ' + t.borderSoft + '">'
-            + '<a href="' + esc(latestUrl) + '" target="_blank" rel="noopener noreferrer" '
+            + '<a href="' + esc(latestHostUrl) + '" target="_blank" rel="noopener noreferrer" '
             + 'style="color:' + t.link + ';text-decoration:none">' + esc(hostname) + '</a></td>';
 
+        const rowVals = [];
         cols.forEach(function(c) {
             const v = row[c.key];
-            html += '<td style="padding:11px 14px;text-align:right;font-family:' + monoFam + ';'
-                + 'font-size:12.5px;color:' + (v == null ? t.subSoft : t.text) + '">'
-                + esc(fmtVal(v, c.unit)) + '</td>';
+            if (v != null) rowVals.push(v);
+            // Drill-Down-URL pro Zelle: Latest Data fuer Host gefiltert nach
+            // Spalten-Label (z.B. "sda"). Zabbix nimmt das als Substring im
+            // Item-Namen — funktioniert in den meisten Discovery-Templates.
+            const cellLink = window.location.origin + baseUrl
+                + 'zabbix.php?action=latest.view&filter_set=1'
+                + '&hostids%5B%5D=' + encodeURIComponent(hid)
+                + '&select=' + encodeURIComponent(cleanLabel(c.label) || c.key);
+            const cellColor = (v == null ? t.subSoft : t.text);
+            html += '<td style="padding:0;text-align:right;font-family:' + monoFam + ';'
+                + 'font-size:12.5px">'
+                + (v != null
+                    ? '<a href="' + esc(cellLink) + '" target="_blank" rel="noopener noreferrer" '
+                        + 'style="display:block;padding:11px 14px;color:' + cellColor
+                        + ';text-decoration:none" title="In Latest Data oeffnen">'
+                        + esc(fmtVal(v, c.unit)) + '</a>'
+                    : '<span style="display:block;padding:11px 14px;color:' + cellColor + '">'
+                        + esc(fmtVal(v, c.unit)) + '</span>')
+                + '</td>';
         });
+        // Aggregat-Spalte (Avg) pro Zeile rechts
+        const avgVal = aggregate(rowVals, 'avg');
+        const aggUnit = (cols[0] && cols[0].unit) || '';
+        html += '<td style="padding:11px 14px;text-align:right;font-family:' + monoFam + ';'
+            + 'font-size:12.5px;color:' + (avgVal == null ? t.subSoft : t.textStrong)
+            + ';font-weight:600;border-left:2px solid ' + t.border + '">'
+            + esc(fmtVal(avgVal, aggUnit)) + '</td>';
         html += '</tr>';
         tbody.insertAdjacentHTML('beforeend', html);
     });
     table.appendChild(tbody);
+
+    // Footer: Sum / Avg / Max pro Item-Spalte
+    if (hostIds.length > 0) {
+        const tfoot = document.createElement('tfoot');
+        ['sum', 'avg', 'max'].forEach(function(mode, idx) {
+            const lblMap = { sum: 'Sum', avg: 'Avg', max: 'Max' };
+            let row = '<tr style="background:' + t.head
+                + ';border-top:' + (idx === 0 ? '2px solid ' + t.border : '1px solid ' + t.borderSoft) + '">'
+                + '<td style="padding:9px 14px;font-size:10.5px;font-weight:700;'
+                + 'color:' + t.sub + ';text-transform:uppercase;letter-spacing:0.07em;'
+                + 'position:sticky;left:0;background:' + t.head + ';z-index:1;'
+                + 'border-right:1px solid ' + t.borderSoft + '">' + lblMap[mode] + '</td>';
+            const footerSelfVals = [];
+            cols.forEach(function(c) {
+                const colVals = hostIds.map(function(hid) {
+                    return rows[hid] && rows[hid][c.key];
+                });
+                const v = aggregate(colVals, mode);
+                if (v != null) footerSelfVals.push(v);
+                row += '<td style="padding:9px 14px;text-align:right;font-family:' + monoFam + ';'
+                    + 'font-size:12px;color:' + (v == null ? t.subSoft : t.textStrong)
+                    + ';font-weight:600">'
+                    + esc(fmtVal(v, c.unit)) + '</td>';
+            });
+            // Avg-Spalte des Footers: aggregiert die Footer-Werte selbst
+            const footerAvg = aggregate(footerSelfVals, 'avg');
+            const aggUnit = (cols[0] && cols[0].unit) || '';
+            row += '<td style="padding:9px 14px;text-align:right;font-family:' + monoFam + ';'
+                + 'font-size:12px;color:' + (footerAvg == null ? t.subSoft : t.textStrong)
+                + ';font-weight:600;border-left:2px solid ' + t.border + '">'
+                + esc(fmtVal(footerAvg, aggUnit)) + '</td>';
+            row += '</tr>';
+            tfoot.insertAdjacentHTML('beforeend', row);
+        });
+        table.appendChild(tfoot);
+    }
 
     // Truncated-Hinweis
     if (data.truncated) {
