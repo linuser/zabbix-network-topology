@@ -119,6 +119,13 @@ export function ensureTabs(wrap) { ensureBaseToolbar(wrap); }
 //
 // Universelle Elemente (Tabs, Dark, Fullscreen, Auto-Refresh, Historie,
 // Export) bleiben sichtbar — die fetchen Daten bzw. greifen tab-uebergreifend.
+//
+// WICHTIG: wir steuern die Sichtbarkeit ueber eine Body-Klasse + CSS-Rule,
+// NICHT ueber inline el.style.display. Inline-Override wuerde den
+// urspruenglichen display-Wert (display:flex am sev-filter-wrap, inline-block
+// am layout-wrap etc.) zerstoeren, wenn wir ihn auf '' zurueck setzen — das
+// macht z.B. Pills vertikal weil der wrap dann zum Default block faellt.
+// Mit CSS-Klasse bleiben die Originalstyles unangetastet.
 const _GRAPH_ONLY_SELECTORS = [
     '#nt-btn-labels',     // Hide Labels
     '.nt-zoom-btns',      // +/-/100% Wrapper
@@ -135,12 +142,20 @@ const _GRAPH_ONLY_SELECTORS = [
     '#nt-taphold-wrap',   // Touch-Long-Press-Picker
 ];
 
+// Stellt sicher dass die CSS-Rule fuer das Hide-Verhalten existiert.
+// Einmal pro Page-Load via Style-Element angehaengt — keine externe CSS noetig.
+function _ensureGraphHideStyle() {
+    if (document.getElementById('nt-graph-hide-style')) return;
+    const st = document.createElement('style');
+    st.id = 'nt-graph-hide-style';
+    st.textContent = 'body.nt-graph-hidden ' + _GRAPH_ONLY_SELECTORS.join(',body.nt-graph-hidden ')
+        + ' { display: none !important; }';
+    document.head.appendChild(st);
+}
+
 // Blendet Graph-Toolbar-Elemente aus (false) oder ein (true).
 // Wird von switchTab im Hauptmodul aufgerufen — je nach aktivem Tab.
 export function setGraphToolbarVisible(visible) {
-    _GRAPH_ONLY_SELECTORS.forEach(function(sel) {
-        document.querySelectorAll(sel).forEach(function(el) {
-            el.style.display = visible ? '' : 'none';
-        });
-    });
+    _ensureGraphHideStyle();
+    document.body.classList.toggle('nt-graph-hidden', !visible);
 }
