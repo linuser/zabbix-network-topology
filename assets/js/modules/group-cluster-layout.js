@@ -183,7 +183,15 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
         return (nodesByGroup[g] && nodesByGroup[g].length) || 0;
     });
 
-    // Bounding-Boxes berechnen je nach Mode
+    // Bounding-Boxes berechnen je nach Mode.
+    // Fuer kreisfoermige Inner-Layouts (concentric / circle) brauchen alle
+    // Gruppen quadratische Boxen damit der Kreis nicht zur Linie zusammenfaellt.
+    // Bei diesen Layouts ueberschreibt equal-split die proportionale Verteilung.
+    const isCircular = innerLayoutId === 'concentric' || innerLayoutId === 'circle';
+    const equalSplit = function(avail, n) {
+        return Array(n).fill(avail / n);
+    };
+
     const boxes = {};
     if (effective === 'columns') {
         const totalGap = COLUMN_PADDING * (count + 1);
@@ -194,7 +202,9 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
             if (onComplete) onComplete();
             return;
         }
-        const colWidths = proportionalSizes(counts, availW, MIN_COLUMN_W);
+        const colWidths = isCircular
+            ? equalSplit(availW, count)
+            : proportionalSizes(counts, availW, MIN_COLUMN_W);
         let xCursor = COLUMN_PADDING;
         groupNames.forEach(function(g, idx) {
             boxes[g] = {
@@ -214,7 +224,9 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
             if (onComplete) onComplete();
             return;
         }
-        const rowHeights = proportionalSizes(counts, availH, MIN_ROW_H);
+        const rowHeights = isCircular
+            ? equalSplit(availH, count)
+            : proportionalSizes(counts, availH, MIN_ROW_H);
         let yCursor = TOP_RESERVE;
         groupNames.forEach(function(g, idx) {
             boxes[g] = {
