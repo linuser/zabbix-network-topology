@@ -13,18 +13,35 @@
 import { esc } from './utils.js';
 
 const PRESETS = [
-    { id: 'disks',      lbl: 'Disk-Auslastung (%)',
+    // Filesystem
+    { id: 'disks',      lbl: 'Filesystem Auslastung (%)',
       pattern: 'vfs.fs.size[*,pused]', unit: '%' },
-    { id: 'disks_used', lbl: 'Disk-Used (Bytes)',
+    { id: 'disks_used', lbl: 'Filesystem Used (Bytes)',
       pattern: 'vfs.fs.size[*,used]', unit: 'B' },
+    // Block-Device IO (Standard Linux-Template, Zabbix 7.x)
+    { id: 'dev_util',   lbl: 'Disk Utilization (%)',
+      pattern: 'vfs.dev.util[*]',         unit: '%' },
+    { id: 'dev_rrate',  lbl: 'Disk Read Rate (r/s)',
+      pattern: 'vfs.dev.read.rate[*]',    unit: '' },
+    { id: 'dev_wrate',  lbl: 'Disk Write Rate (w/s)',
+      pattern: 'vfs.dev.write.rate[*]',   unit: '' },
+    { id: 'dev_queue',  lbl: 'Disk Queue Size',
+      pattern: 'vfs.dev.queue_size[*]',   unit: '' },
+    { id: 'dev_rawait', lbl: 'Disk Read Wait (ms)',
+      pattern: 'vfs.dev.read.await[*]',   unit: 'ms' },
+    { id: 'dev_wawait', lbl: 'Disk Write Wait (ms)',
+      pattern: 'vfs.dev.write.await[*]',  unit: 'ms' },
+    // System
     { id: 'mem',        lbl: 'Memory (Bytes)',
       pattern: 'vm.memory.size[*]',   unit: 'B' },
     { id: 'cpu',        lbl: 'CPU-Util (%)',
       pattern: 'system.cpu.util*',    unit: '%' },
+    // Network
     { id: 'netin',      lbl: 'Network In (bps)',
       pattern: 'net.if.in[*]',        unit: 'bps' },
     { id: 'netout',     lbl: 'Network Out (bps)',
       pattern: 'net.if.out[*]',       unit: 'bps' },
+    // Connectivity
     { id: 'ping',       lbl: 'Ping-Loss + RTT',
       pattern: 'icmpping*',           unit: '' },
 ];
