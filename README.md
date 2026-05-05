@@ -3,7 +3,7 @@
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.19.0-blue)
+![Version](https://img.shields.io/badge/version-4.20.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Features
@@ -74,6 +74,26 @@ sudo systemctl reload php8.3-fpm
 In Zabbix-UI: Administration → General → Modules → Scan directory → "Network Topology v6" aktivieren.
 
 Aufruf via Monitoring → Network Topology v6.
+
+## Dashboard-Widget (optional)
+
+Im Verzeichnis [`widget/`](widget/) liegt ein **separates Zabbix-Modul** vom Typ `widget` das die Daten dieses Hauptmoduls in einer Dashboard-Kachel rendert. Reduzierte Sicht (Tech + Mgmt), gleiche Offline/Stale-Detection, konfigurierbar pro Widget-Instanz (Hostgroups, Default-View, LLDP, Hide-Offline).
+
+**Voraussetzung:** Hauptmodul muss installiert + enabled sein (das Widget ruft dessen `network.topology.v6.data`-Action).
+
+```bash
+cd widget
+zip -r /tmp/widget.zip .
+scp /tmp/widget.zip <server>:/tmp/
+ssh <server>
+cd /usr/share/zabbix/ui/modules
+sudo mkdir network_topology_v6_widget
+sudo unzip /tmp/widget.zip -d network_topology_v6_widget
+sudo chown -R root:root network_topology_v6_widget
+sudo systemctl reload php8.3-fpm
+```
+
+Dann Scan directory → "Network Topology v6 Widget" enablen → im Dashboard-Editor verfügbar.
 
 ## Architektur
 

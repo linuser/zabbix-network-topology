@@ -2,6 +2,19 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.20.0 — 2026-05-06
+
+### Added
+- **Offline-Detection** (Backend + alle 5 Tabs): `Host.get` prüft `interface.available === 2` UND `host.active_available === 2` (Zabbix 7.0+ für Active-Agents). Frontend markiert Offline-Hosts in Detail-Panel (roter Banner), Hosts-Tabelle (gedimmte Zeile + OFFLINE-Pille), Tech-Tab Cytoscape (graue dashed Pie + rotes X), Mgmt-Tab (gedimmte Tile + OFFLINE-Header), Geo-Tab (grauer Marker + rotes X).
+- **Stale-Data-Detection**: Backend liefert `last_seen = max(item.lastclock)` pro Host. Frontend markiert Hosts als STALE wenn `unavailable=false` aber Items > 5 min nicht aktualisiert (orange Pille + Banner).
+- **Offline-Counter im Mgmt Stats-Header** + **"Nur Offline"-Filter** in Hosts-Tabelle und Tech-Tab.
+- **Detail-Panel-Refresh**: Card-Sections (Status / Identität / Metriken / Items / Verbindungen) statt flacher Rows-Tabelle. Items > 4 in `<details>`-Block kollabiert. Action-Bar Zabbix-flacher.
+- **Dashboard-Widget** (`widget/`-Subdir): separates Zabbix-Modul vom Typ `widget`, rendert die Daten dieses Hauptmoduls in Dashboard-Kachel. Reduzierte Tech+Mgmt-Sicht, gleiche Offline/Stale-Detection, optionaler `hide_offline`-Toggle.
+
+### Fixed
+- **Auto-refresh-Pause während Drag**: Cytoscape `grab`/`dragfree`-Events setzen `_ntDragActive`-Flag, Auto-Refresh skippt während Drag — kein "Drag-bricht-ab"-Bug mehr.
+- **Tabelle Zabbix-Native-Look**: Border-Radius 6-8px → 2-3px, Cell-Padding 11×14 → 5×8, Zabbix-Farb-Tokens (#0275b8 Accent, #1f2c33 Text, #dfe4e7 Border, #e53742 Critical), tabular-nums in numerischen Spalten.
+
 ## v4.19.0 — 2026-05-05
 
 ### Added
