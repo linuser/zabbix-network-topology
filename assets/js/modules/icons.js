@@ -67,12 +67,20 @@ export function makeNodeImage(d) {
         d.traffic ? d.traffic.in : 0, d.traffic ? d.traffic.out : 0,
         d._primaryGroup, d.problems || 0,
         d.pinned ? 1 : 0, d.note ? 1 : 0,
-        d.acknowledged ? 1 : 0, d.maintenance ? 1 : 0
+        d.acknowledged ? 1 : 0, d.maintenance ? 1 : 0,
+        d.unavailable ? 1 : 0
     ].join('|');
     if (_imgCache[key]) return _imgCache[key];
 
-    const dead = (d.severity || 0) >= 5;
-    const sevCol = SEV_COL[Math.min(d.severity || 0, SEV_COL.length - 1)];
+    // Offline = Host laut Zabbix unavailable. Severity-basiertes "dead" trifft
+    // nur bei worst-case Severity 5 (Disaster) zu — das ist nicht dasselbe wie
+    // unreachable. Wir behandeln beide jetzt visuell aehnlich (gedimmt, Severity-
+    // Ring grau), aber Offline hat Vorrang im Symbol (Steckersymbol statt
+    // Skull-Server damit man "tot" von "Disaster-Trigger" unterscheiden kann).
+    const offline = !!d.unavailable;
+    const dead = !offline && (d.severity || 0) >= 5;
+    const sevCol = offline ? '#9ca3af'
+        : SEV_COL[Math.min(d.severity || 0, SEV_COL.length - 1)];
     const gc = grpColor(d._primaryGroup);
     const segs = [
         { col: '#3b82f6', val: Math.min(d.cpu    || 0, 100) },
@@ -82,11 +90,15 @@ export function makeNodeImage(d) {
     ];
 
     let p = '';
+    // Bei Offline werden Pie-Segmente massiv gedimmt — die Werte sind stale
+    // (letzter Stand vor Disconnect), sollen optisch aber nicht aktiv wirken.
+    const segFillOp  = offline ? '0.08' : '0.12';
+    const segValOp   = offline ? '0.30' : '0.85';
     segs.forEach(function(seg, i) {
         const base = i * 90;
-        p += '<path d="' + pieSlice(RO, base, base + 90) + '" fill="' + seg.col + '" fill-opacity="0.12"/>';
+        p += '<path d="' + pieSlice(RO, base, base + 90) + '" fill="' + seg.col + '" fill-opacity="' + segFillOp + '"/>';
         if (seg.val > 1) {
-            p += '<path d="' + pieSlice(RO, base, base + seg.val * 0.9) + '" fill="' + seg.col + '" fill-opacity="0.85"/>';
+            p += '<path d="' + pieSlice(RO, base, base + seg.val * 0.9) + '" fill="' + seg.col + '" fill-opacity="' + segValOp + '"/>';
         }
         const a = (base - 90) * Math.PI / 180;
         p += '<line x1="' + (C + RI * Math.cos(a)).toFixed(1)
@@ -96,9 +108,14 @@ export function makeNodeImage(d) {
            + '" stroke="white" stroke-width="1.5"/>';
     });
 
+    // Severity-Ring bei Offline grau + dashed um klar zu signalisieren dass
+    // die Severity stale ist (eingefrorene Trigger vor Disconnect).
+    const ringStroke = offline ? '#9ca3af' : (dead ? '#94a3b8' : sevCol);
+    const ringDash   = offline ? ' stroke-dasharray="6,4"' : '';
+    const ringOp     = (offline || dead) ? '0.6' : '1';
     p += '<circle cx="' + C + '" cy="' + C + '" r="' + RI
-       + '" fill="' + gc + '" fill-opacity="' + (dead ? '0.08' : '0.15')
-       + '" stroke="' + (dead ? '#94a3b8' : sevCol) + '" stroke-width="3" opacity="' + (dead ? '0.6' : '1') + '"/>';
+       + '" fill="' + gc + '" fill-opacity="' + (offline || dead ? '0.08' : '0.15')
+       + '" stroke="' + ringStroke + '" stroke-width="3" opacity="' + ringOp + '"' + ringDash + '/>';
 
     // Acknowledged-Indikator: dicker grüner Doppel-Außenring um den Severity-Ring.
     // Zeigt: alle aktiven Probleme dieses Hosts wurden bestätigt.
@@ -109,7 +126,21 @@ export function makeNodeImage(d) {
            + '" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>';
     }
 
-    if (dead) {
+    if (offline) {
+        // Offline-Icon — Type-Icon halb-transparent + grosses rotes "X" druebergelegt
+        // damit man den Host-Typ noch erkennt aber sofort sieht "der ist tot".
+        const icon = TYPE_ICON[d.type] || TYPE_ICON.server;
+        p += '<g transform="translate(' + C + ',' + C
+           + ') scale(0.62)" fill="none" stroke="#9ca3af" stroke-width="1.6"'
+           + ' stroke-linecap="round" stroke-linejoin="round" opacity="0.5">'
+           + '<path d="' + icon + '"/></g>';
+        // Rotes X als klarer Offline-Indikator
+        p += '<g transform="translate(' + C + ',' + C + ')"'
+           + ' stroke="#e53742" stroke-width="3.5" stroke-linecap="round">'
+           + '<line x1="-12" y1="-12" x2="12" y2="12"/>'
+           + '<line x1="12"  y1="-12" x2="-12" y2="12"/>'
+           + '</g>';
+    } else if (dead) {
         // "Dead Server"-Icon — gestrichelter Server mit X über CPUs
         p += '<g transform="translate(' + C + ',' + (C - 3) + ') scale(0.62)">'
             + '<path d="M0,-14 a13,10 0 0,1 13,10 L13,4 Q13,9 8,10 L-8,10 Q-13,9 -13,4 L-13,-4 a13,10 0 0,1 13,-10z" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1.5"/>'

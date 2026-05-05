@@ -31,13 +31,26 @@ let _tileLayer   = null;   // aktueller Tile-Layer (für Provider-Wechsel)
 // Größe wächst sanft mit Anzahl der Probleme (12px → 24px).
 function buildMarkerIcon(node) {
     const sev = node.severity || 0;
-    const col = SEV_COL[Math.min(sev, SEV_COL.length - 1)] || SEV_COL[0];
+    const isOff = !!node.unavailable;
+    // Offline ueberschreibt die Severity-Farbe — der Marker wird grau und
+    // bekommt ein rotes "X" damit man auf der Karte sofort tote Hosts sieht.
+    const col = isOff
+        ? '#9ca3af'
+        : (SEV_COL[Math.min(sev, SEV_COL.length - 1)] || SEV_COL[0]);
     const probs = node.problems || 0;
     const r = Math.min(12 + probs, 24);
-    const opacity = node.maintenance ? 0.55 : 1;
+    const opacity = isOff ? 0.6 : (node.maintenance ? 0.55 : 1);
     const ackRing = node.acknowledged
         ? '<circle cx="' + (r + 2) + '" cy="' + (r + 2) + '" r="' + (r - 1)
             + '" fill="none" stroke="#22c55e" stroke-width="2.5" opacity="0.9"/>'
+        : '';
+    // Bei Offline: rotes X im Marker statt Problem-Counter
+    const offX = isOff
+        ? '<g transform="translate(' + (r + 2) + ',' + (r + 2) + ')"'
+            + ' stroke="#e53742" stroke-width="3" stroke-linecap="round">'
+            + '<line x1="-' + (r * 0.5) + '" y1="-' + (r * 0.5) + '" x2="' + (r * 0.5) + '" y2="' + (r * 0.5) + '"/>'
+            + '<line x1="' + (r * 0.5) + '" y1="-' + (r * 0.5) + '" x2="-' + (r * 0.5) + '" y2="' + (r * 0.5) + '"/>'
+            + '</g>'
         : '';
     const html =
         '<svg xmlns="http://www.w3.org/2000/svg" width="' + ((r + 2) * 2) + '" height="' + ((r + 2) * 2) + '"'
@@ -45,7 +58,8 @@ function buildMarkerIcon(node) {
         + '<circle cx="' + (r + 2) + '" cy="' + (r + 2) + '" r="' + r
         + '" fill="' + col + '" stroke="white" stroke-width="2"/>'
         + ackRing
-        + (probs > 0
+        + offX
+        + (probs > 0 && !isOff
             ? '<text x="' + (r + 2) + '" y="' + (r + 2) + '" text-anchor="middle" dominant-baseline="central"'
               + ' font-family="sans-serif" font-size="' + (probs > 9 ? 9 : 11) + '" font-weight="700"'
               + ' fill="white">' + (probs > 99 ? '99+' : probs) + '</text>'

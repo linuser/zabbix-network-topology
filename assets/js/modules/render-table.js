@@ -45,6 +45,7 @@ const TYPE_LBL = {
 let _filterStatuses = new Set([0, 1, 2, 3, 4, 5]);  // alle Severities default an
 let _filterGroup = '';   // '' = alle
 let _filterText = '';
+let _filterOfflineOnly = false;  // Toggle "nur Offline-Hosts zeigen"
 let _sortCol = 'severity';
 let _sortDir = 'desc';
 
@@ -235,7 +236,15 @@ function buildProblemDetailRow(n, colspan, theme) {
 }
 
 function passesFilter(n) {
-    if (!_filterStatuses.has(n.severity || 0)) return false;
+    // "Nur Offline" laeuft VOR den anderen Filtern: wenn aktiv und Host
+    // online ist -> rausfiltern. Severity-Pills werden ignoriert in dem Modus
+    // (sonst widerspricht sich's wenn der User bei Offline-Filter alle
+    // Severities deaktiviert haette).
+    if (_filterOfflineOnly) {
+        if (!n.unavailable) return false;
+    } else {
+        if (!_filterStatuses.has(n.severity || 0)) return false;
+    }
     if (_filterGroup && n._primaryGroup !== _filterGroup) return false;
     if (_filterText) {
         const hay = (
@@ -326,15 +335,38 @@ function buildFilterBar(nodes, groupNames, theme) {
         const active = _filterStatuses.has(sev);
         pill.dataset.sev = String(sev);
         pill.textContent = '\u25CF ' + SEV_LBL[sev];
+        // Bei aktivem "Nur Offline"-Filter sind die Severity-Pills disabled,
+        // damit klar ist dass sie gerade keinen Effekt haben.
+        const dimmed = _filterOfflineOnly;
         pill.style.cssText = 'padding:2px 8px;border:1px solid '
             + (active ? SEV_COL[sev] : theme.border)
             + ';background:' + (active ? SEV_COL[sev] + '22' : theme.surface)
             + ';color:' + (active ? SEV_COL[sev] : theme.subSoft)
             + ';border-radius:' + NT_R.pill + ';font-size:11px;font-weight:600;cursor:pointer;'
-            + 'transition:all 0.12s;font-family:inherit';
+            + 'transition:all 0.12s;font-family:inherit'
+            + (dimmed ? ';opacity:0.4;pointer-events:none' : '');
         sevWrap.appendChild(pill);
     });
     bar.appendChild(sevWrap);
+
+    // "Nur Offline"-Toggle neben den Severity-Pills
+    const offBtn = document.createElement('button');
+    offBtn.type = 'button';
+    offBtn.id = 'nt-table-offline-only';
+    offBtn.textContent = '\u25CF Offline';
+    offBtn.title = 'Nur unavailable Hosts anzeigen';
+    const _setOffStyle = function() {
+        const active = _filterOfflineOnly;
+        offBtn.style.cssText = 'padding:2px 8px;border:1px solid '
+            + (active ? '#e53742' : theme.border)
+            + ';background:' + (active ? 'rgba(229,55,66,0.13)' : theme.surface)
+            + ';color:' + (active ? '#e53742' : theme.subSoft)
+            + ';border-radius:' + NT_R.pill + ';font-size:11px;font-weight:600;'
+            + 'cursor:pointer;transition:all 0.12s;font-family:inherit;'
+            + 'margin-left:6px';
+    };
+    _setOffStyle();
+    bar.appendChild(offBtn);
 
     // Hostgroup-Filter (nur wenn >=2 Gruppen)
     if (groupNames.length >= 2) {
@@ -995,6 +1027,18 @@ export function renderTable(wrap, nodes, edges) {
             rerenderTable();
         });
     });
+    // "Nur Offline"-Toggle: schaltet den Offline-Filter und triggert Re-Render
+    // der ganzen Filter-Bar (damit die Severity-Pills disabled werden).
+    const offBtnRef = document.getElementById('nt-table-offline-only');
+    if (offBtnRef) {
+        offBtnRef.addEventListener('click', function() {
+            _filterOfflineOnly = !_filterOfflineOnly;
+            // Komplettes Filter-Bar-Rebuild damit die Pill-Disabled-Optik
+            // sich aktualisiert. Tabelle wird im rerenderTable() automatisch
+            // neu gefilter.
+            renderTable(wrap, nodes, edges);
+        });
+    }
     const grpSel = document.getElementById('nt-table-group');
     if (grpSel) {
         grpSel.addEventListener('change', function() {

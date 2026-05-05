@@ -86,6 +86,11 @@ export function buildNodeElements(nodes) {
             problems: n.problems || 0,
             acknowledged: !!n.acknowledged,
             maintenance:  !!n.maintenance,
+            // Offline-Status durchreichen (Backend liefert 'unavailable' bool +
+            // 'down_since' Unix-TS) — render-tech-style + detail-panel nutzen das.
+            unavailable:  !!n.unavailable,
+            down_since:   n.down_since || 0,
+            down_error:   n.down_error || '',
             // Extra-Items aus nt:show-Tags + icon_override-Flag
             extra_items:  n.extra_items || [],
             icon_override: !!n.icon_override,

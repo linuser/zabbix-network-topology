@@ -83,12 +83,13 @@ export function renderManagement(wrap, nodes, edges) {
 
     // Aggregat-Stats für den Header: pro Severity zählen, dazu Wartung + Acked.
     const sevCounts = [0, 0, 0, 0, 0, 0];
-    let maintCount = 0, ackCount = 0;
+    let maintCount = 0, ackCount = 0, offCount = 0;
     nodes.forEach(function(n) {
         const s = n.severity || 0;
         if (s >= 0 && s <= 5) sevCounts[s]++;
         if (n.maintenance)  maintCount++;
         if (n.acknowledged) ackCount++;
+        if (n.unavailable)  offCount++;
     });
     const totalHosts = nodes.length;
     const problemHosts = totalHosts - sevCounts[0];
@@ -123,6 +124,7 @@ export function renderManagement(wrap, nodes, edges) {
 
     addStat('Hosts', totalHosts, text);
     addStat('Mit Problem', problemHosts, problemHosts > 0 ? '#dc2626' : text);
+    if (offCount > 0)   addStat('Offline', offCount, '#e53742');
     if (maintCount > 0) addStat('Wartung', maintCount, '#92400e');
     if (ackCount > 0)   addStat('Bestätigt', ackCount, '#16a34a');
 
@@ -181,29 +183,38 @@ export function renderManagement(wrap, nodes, edges) {
             const noteText = _mgmtNotes[String(n.id)] || '';
             const problems = n.problems || 0;
 
+            // Offline-Detection: Backend liefert n.unavailable. Tile wird stark
+            // gedimmt + Severity-Border grau, Severity-Label wird "OFFLINE",
+            // alle Metriken werden grau dargestellt — analog zum Detail-Panel/
+            // zur Tabelle.
+            const isOff = !!n.unavailable;
+            const tileBorderColor = isOff ? '#9ca3af' : sev.color;
             const tile = document.createElement('div');
             // Acked-Hosts bekommen einen zusätzlichen grünen Outline-Ring
             // (box-shadow), Wartungs-Hosts halb-transparent gedimmt.
             const ackShadow = n.acknowledged ? '0 0 0 2px #22c55e, ' : '';
             tile.style.cssText = [
                 'width:190px;min-height:80px;background:' + card,
-                'border:1.5px solid ' + sev.color,
+                'border:1.5px solid ' + tileBorderColor,
                 'border-radius:10px;padding:12px 14px',
                 'cursor:pointer;position:relative',
                 'box-shadow:' + ackShadow + '0 1px 4px rgba(0,0,0,0.07)',
                 'transition:box-shadow 0.15s,transform 0.15s',
                 'box-sizing:border-box',
-                n.maintenance ? 'opacity:0.75' : ''
+                isOff           ? 'opacity:0.55' :
+                n.maintenance   ? 'opacity:0.75' : ''
             ].filter(Boolean).join(';');
 
-            // Severity-Header
+            // Severity-Header (oder Offline-Header bei unreachable)
             const topRow = document.createElement('div');
             topRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px';
             const dot = document.createElement('div');
-            dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:' + sev.color + ';flex-shrink:0';
+            dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:'
+                + (isOff ? '#9ca3af' : sev.color) + ';flex-shrink:0';
             const sevLbl = document.createElement('span');
-            sevLbl.style.cssText = 'font-size:10px;font-weight:700;color:' + sev.color;
-            sevLbl.textContent = sev.label;
+            sevLbl.style.cssText = 'font-size:10px;font-weight:700;color:'
+                + (isOff ? '#e53742' : sev.color);
+            sevLbl.textContent = isOff ? 'OFFLINE' : sev.label;
             topRow.appendChild(dot);
             topRow.appendChild(sevLbl);
 
