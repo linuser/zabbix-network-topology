@@ -213,10 +213,33 @@ export function buildPivotToolbar(onApply, theme) {
     const _disc = { loading: true, patterns: [], error: null, truncated: false };
     let _items = [];
 
+    // Pruefe ob ein Preset-Pattern (mit '*'-Wildcards) gegen einen Stem passt.
+    // Discovery liefert exakte Stems wie "vfs.fs.size[*,pused]". Preset-Pattern
+    // sind aehnlich, koennen aber "system.cpu.util*" sein (trailing wildcard).
+    // Wir wandeln das Pattern in eine Regex (alle '*' -> '.*', alles andere
+    // escaped) und testen.
+    function patternMatchesAnyStem(pattern, stems) {
+        if (!stems || stems.length === 0) return false;
+        const re = new RegExp('^' + pattern.split('*').map(function(p) {
+            return p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }).join('.*') + '$');
+        return stems.some(function(s) { return re.test(s); });
+    }
+
     function rebuildItemsList() {
         _items = [];
+        // Standard-Presets nach Discovery filtern: solange Discovery noch laedt
+        // ALLE zeigen, sobald da eine non-empty Liste da ist nur die behalten
+        // die auf deinen Hosts auch was matchen. Bei Error/Empty: alle zeigen.
+        const stems = (_disc.patterns || []).map(function(p) { return p.stem; });
+        const showAllPresets = _disc.loading || _disc.error || stems.length === 0;
+        const visiblePresets = showAllPresets
+            ? PRESETS
+            : PRESETS.filter(function(p) {
+                return patternMatchesAnyStem(p.pattern, stems);
+              });
         _items.push({ type: 'header', label: 'Standard-Presets' });
-        PRESETS.forEach(function(p) {
+        visiblePresets.forEach(function(p) {
             _items.push({ type: 'item', label: p.lbl, value: p.pattern });
         });
         _items.push({ type: 'item',
