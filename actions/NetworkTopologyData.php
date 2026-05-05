@@ -38,8 +38,13 @@ class NetworkTopologyData extends CController {
         // proxyid + proxy_groupid sind seit Zabbix 7.0 verfügbar (in 6.x hieß
         // proxyid noch "proxy_hostid"). Bei Verwendung in älteren Versionen
         // einfach aus dem output-Array entfernen.
+        // active_available: Zabbix 7.0+ exposes ACTIVE-agent availability als
+        // Top-Level-Feld am Host (separat von interface.available das nur den
+        // PASSIVEN Heartbeat-Agent trackt). Aelteren Versionen ignorieren das
+        // Feld silently — keine Auswirkung. Werte: 0=unknown, 1=available,
+        // 2=unavailable.
         $hosts = API::Host()->get([
-            'output'                => ['hostid', 'host', 'name', 'status', 'maintenance_status', 'maintenanceid', 'proxyid', 'proxy_groupid'],
+            'output'                => ['hostid', 'host', 'name', 'status', 'maintenance_status', 'maintenanceid', 'proxyid', 'proxy_groupid', 'active_available'],
             'groupids'              => $groupids,
             // available + errors_from + disable_until pro Interface — fuer
             // Offline-Detection. Zabbix-API: available 0=unknown, 1=available,
@@ -711,9 +716,18 @@ class NetworkTopologyData extends CController {
                 ];
             }
 
-            // Offline-Detection: ein Host gilt als unavailable wenn IRGENDEIN
-            // monitored Interface available=2 meldet. errors_from gibt den
-            // Unix-Timestamp wann der Disconnect anfing (= "down since").
+            // Offline-Detection mit zwei Signalen:
+            //
+            // 1) interface.available === 2: passiver Heartbeat-Agent (Port 10050),
+            //    SNMP, IPMI, JMX. Plus errors_from = "down since"-Timestamp.
+            //
+            // 2) host.active_available === 2: ACTIVE-Agent-Verfuegbarkeit
+            //    (separater Mechanismus seit Zabbix 7.0). Active-Agent-Hosts
+            //    haben oft interface.available=0 (unknown, weil passiver Port
+            //    nicht abgefragt wird), aber Zabbix trackt die Erreichbarkeit
+            //    ueber das Active-Agent-Heartbeat. Ohne diese 2. Detection
+            //    wuerden Active-Agent-Hosts als "online" durchgehen obwohl
+            //    Zabbix sie als "not available" markiert hat.
             $host_unavailable = false;
             $down_since = 0;
             $down_error = '';
@@ -728,6 +742,14 @@ class NetworkTopologyData extends CController {
                         $down_error = (string) $iface['error'];
                     }
                 }
+            }
+            // Active-Agent-Verfuegbarkeit (Zabbix 7.0+). Top-Level-Feld am Host.
+            if (!$host_unavailable && isset($h['active_available'])
+                    && (int) $h['active_available'] === 2) {
+                $host_unavailable = true;
+                // Active-Agent hat keinen errors_from-Timestamp am Host-Level.
+                // down_since bleibt 0 — Detail-Panel zeigt dann "OFFLINE" ohne
+                // Zeitangabe, was OK ist.
             }
 
             $nodes[] = [
