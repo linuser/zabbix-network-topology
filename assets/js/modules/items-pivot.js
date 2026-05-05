@@ -134,7 +134,11 @@ export function fetchPatternSuggestions() {
                 _discoverCache.delete(cacheKey);
                 return { error: data.error, patterns: [] };
             }
-            return { patterns: data.patterns || [], truncated: !!data.truncated };
+            return {
+                patterns: data.patterns || [],
+                truncated: !!data.truncated,
+                cached: !!data.cached    // Backend setzt true bei APCu-Hit
+            };
         })
         .catch(function(e) {
             _discoverCache.delete(cacheKey);

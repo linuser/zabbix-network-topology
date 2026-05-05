@@ -45,6 +45,8 @@ class NetworkTopologyDiscoverPatterns extends CController {
 
     private const MAX_ITEMS  = 20000;
     private const MAX_STEMS  = 500;
+    private const CACHE_TTL  = 300;     // 5 Minuten — Discovery-Patterns aendern sich
+                                         // selten genug, ein 5min-Stale ist kein Drama.
 
     protected function init(): void {
         $this->disableCsrfValidation();
@@ -82,6 +84,21 @@ class NetworkTopologyDiscoverPatterns extends CController {
         $allowed_ids = array_keys($allowed_groups);
         if (empty($allowed_ids)) {
             $this->respond(['patterns' => []]);
+            return;
+        }
+
+        // Cache-Lookup: Item-Scan ueber 20k Items kostet 1-2s, aber Pattern-
+        // Stems aendern sich selten — TTL=300s ist ein guter Kompromiss.
+        // Cache-Key isoliert nach (user_id, sorted permitted-groupids) damit
+        // Permission-Filter beim Cache-Hit gewahrt bleiben (User A sieht
+        // andere Gruppen als User B → andere Stems).
+        $cache_ids = $allowed_ids;
+        sort($cache_ids);
+        $cache_key = $this->cacheKey($cache_ids);
+        $cached = $this->cacheGet($cache_key);
+        if ($cached !== null) {
+            $cached['cached'] = true;
+            $this->respond($cached);
             return;
         }
 
@@ -151,11 +168,46 @@ class NetworkTopologyDiscoverPatterns extends CController {
             $stemsTruncated = true;
         }
 
-        $this->respond([
+        $payload = [
             'patterns'         => $patterns,
             'truncated'        => $itemsTruncated,
             'stems_truncated'  => $stemsTruncated,
-        ]);
+        ];
+        // Cache-Write fuer naechste Aufrufe innerhalb der TTL — wir cachen
+        // nur das Roh-Payload, das 'cached'-Flag wird beim Hit injiziert.
+        $this->cacheSet($cache_key, $payload);
+        $payload['cached'] = false;
+        $this->respond($payload);
+    }
+
+    /**
+     * Cache-Key: namespaced mit user_id + groupids-Hash.
+     * user_id stellt sicher dass User mit unterschiedlichen Permissions
+     * keinen geteilten Cache-Eintrag treffen (privacy + correctness).
+     */
+    private function cacheKey(array $sortedGroupIds): string {
+        $uid = (int) (\CWebUser::$data['userid'] ?? 0);
+        return 'nt_dp_' . $uid . '_' . md5(implode(',', $sortedGroupIds));
+    }
+
+    /**
+     * Cache-Get: APCu wenn verfuegbar (in-memory, schnell, shared zwischen
+     * PHP-FPM-Workern), sonst null = no-cache. APCu ist in den meisten
+     * modernen PHP-Setups (>=8.0) verfuegbar; Zabbix selber nutzt es auch.
+     * Bei deaktiviertem APCu degradiert das Modul auf "kein Cache" — die
+     * Action laeuft dann jedes Mal voll durch (1-2s), aber funktional OK.
+     */
+    private function cacheGet(string $key): ?array {
+        if (!function_exists('apcu_fetch')) return null;
+        $ok  = false;
+        $val = apcu_fetch($key, $ok);
+        if (!$ok || !is_array($val)) return null;
+        return $val;
+    }
+
+    private function cacheSet(string $key, array $value): void {
+        if (!function_exists('apcu_store')) return;
+        apcu_store($key, $value, self::CACHE_TTL);
     }
 
     /**
