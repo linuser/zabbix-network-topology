@@ -72,9 +72,11 @@ try {
     if (hm === '1') _itemsHeatmap = true;
 } catch (e) {}
 
-// Theme — wird einmal pro renderTable() gebaut und durch alle build*-Funktionen
-// gereicht. Hell- und Dunkelmode-Farben in einer Map damit der Rest des Moduls
-// keine #f8fafc-Konstanten kennt.
+// Theme — Zabbix-native Farb-Palette. Light-Mode matcht Zabbix' .list-table
+// Defaults (helle BG, dunkler Text, Blau-Accent #0275b8). Dark-Mode bleibt
+// vorerst eigenstaendig (Zabbix Dark hat nicht komplett standardisierte Tokens
+// fuer Module). border-radius wird im Code generell auf 2-3px reduziert
+// damit es flach/Zabbix-konform wirkt — siehe RADIUS-Konstante unten.
 function mkTheme(dark) {
     if (dark) {
         return {
@@ -89,8 +91,8 @@ function mkTheme(dark) {
             textStrong:   '#f0f6fc',
             sub:          '#8b949e',
             subSoft:      '#6e7681',
-            link:         '#58a6ff',
-            accent:       '#1f6feb',
+            link:         '#4f9bdb',
+            accent:       '#0275b8',
             inputBg:      '#0d1117',
             actionBg:     '#21262d',
             actionBorder: '#30363d',
@@ -98,35 +100,42 @@ function mkTheme(dark) {
             detailBg:     '#0d1117',
             detailText:   '#e6edf3',
             counterText:  '#8b949e',
-            problemBg:    'rgba(220,38,38,0.18)',
-            problemText:  '#f87171',
+            problemBg:    'rgba(229,55,66,0.18)',
+            problemText:  '#e57280',
         };
     }
     return {
         bg:           '#ffffff',
         surface:      '#ffffff',
-        head:         '#f8fafc',
-        hover:        '#f1f5f9',
-        stripe:       '#fbfcfd',
-        border:       '#e2e8f0',
-        borderSoft:   '#f1f5f9',
-        text:         '#1e293b',
-        textStrong:   '#0f172a',
-        sub:          '#64748b',
-        subSoft:      '#94a3b8',
-        link:         '#2563eb',
-        accent:       '#2563eb',
+        head:         '#f6fafd',     // Zabbix list-table thead
+        hover:        '#eaf6fb',     // Zabbix row hover
+        stripe:       '#fbfdfe',
+        border:       '#dfe4e7',     // Zabbix table-border
+        borderSoft:   '#ebeef0',
+        text:         '#1f2c33',     // Zabbix body text
+        textStrong:   '#000000',
+        sub:          '#768d99',     // Zabbix muted text
+        subSoft:      '#a4afb5',
+        link:         '#0275b8',     // Zabbix anchor color
+        accent:       '#0275b8',     // Zabbix primary blue
         inputBg:      '#ffffff',
-        actionBg:     '#f1f5f9',
-        actionBorder: '#e2e8f0',
-        actionText:   '#475569',
+        actionBg:     '#f4f6f7',
+        actionBorder: '#dfe4e7',
+        actionText:   '#1f2c33',
         detailBg:     '#fafbfc',
-        detailText:   '#1e293b',
-        counterText:  '#64748b',
-        problemBg:    'rgba(220,38,38,0.13)',
-        problemText:  '#dc2626',
+        detailText:   '#1f2c33',
+        counterText:  '#768d99',
+        problemBg:    'rgba(229,55,66,0.13)',
+        problemText:  '#e53742',     // Zabbix critical red
     };
 }
+
+// Border-Radius-Konstanten — Zabbix nutzt flache Ecken, max 2-3px.
+const NT_R = {
+    sm: '2px',    // Inputs, Buttons
+    md: '3px',    // Containers
+    pill: '11px', // Status-/Severity-Pills (bleiben rund)
+};
 
 function buildBaseUrl() {
     const p = window.location.pathname;
@@ -269,24 +278,23 @@ function compare(a, b) {
 function buildFilterBar(nodes, groupNames, theme) {
     const bar = document.createElement('div');
     bar.id = 'nt-table-filterbar';
-    bar.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px 18px;'
+    bar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;'
         + 'background:' + theme.head + ';border-bottom:1px solid ' + theme.border
         + ';flex-wrap:wrap';
 
-    // Mode-Toggle: "Hosts" / "Items" — schaltet zwischen Standard-Tabelle
-    // und Items-Pivot-Tabelle. Items-Modus blendet die Standard-Filter aus
-    // und zeigt stattdessen Preset+Pattern-Auswahl.
+    // Mode-Toggle: "Hosts" / "Items" — Zabbix-flach, sharp corners.
     const modeWrap = document.createElement('div');
     modeWrap.style.cssText = 'display:inline-flex;border:1px solid ' + theme.border
-        + ';border-radius:6px;overflow:hidden;background:' + theme.surface;
+        + ';border-radius:' + NT_R.sm + ';overflow:hidden;background:' + theme.surface;
     const mkModeBtn = function(id, lbl) {
         const b = document.createElement('button');
+        b.type = 'button';
         b.dataset.mode = id;
         b.textContent = lbl;
         const active = _tableMode === id;
-        b.style.cssText = 'padding:6px 14px;border:none;cursor:pointer;font-size:12px;'
-            + 'font-weight:600;letter-spacing:0.02em;font-family:inherit;'
-            + 'transition:background 0.15s,color 0.15s;'
+        b.style.cssText = 'padding:3px 12px;border:none;cursor:pointer;font-size:12px;'
+            + 'font-weight:600;font-family:inherit;'
+            + 'transition:background 0.12s,color 0.12s;'
             + 'background:' + (active ? theme.accent : 'transparent')
             + ';color:' + (active ? '#ffffff' : theme.sub);
         modeWrap.appendChild(b);
@@ -305,24 +313,25 @@ function buildFilterBar(nodes, groupNames, theme) {
 
     // Status-Pills
     const sevWrap = document.createElement('div');
-    sevWrap.style.cssText = 'display:flex;gap:5px;align-items:center';
+    sevWrap.style.cssText = 'display:flex;gap:4px;align-items:center';
     const sevLabel = document.createElement('span');
-    sevLabel.textContent = 'Status';
-    sevLabel.style.cssText = 'font-size:11px;color:' + theme.sub
-        + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-right:2px';
+    sevLabel.textContent = 'Status:';
+    sevLabel.style.cssText = 'font-size:12px;color:' + theme.sub
+        + ';font-weight:600;margin-right:2px';
     sevWrap.appendChild(sevLabel);
 
     [0, 1, 2, 3, 4, 5].forEach(function(sev) {
         const pill = document.createElement('button');
+        pill.type = 'button';
         const active = _filterStatuses.has(sev);
         pill.dataset.sev = String(sev);
         pill.textContent = '\u25CF ' + SEV_LBL[sev];
-        pill.style.cssText = 'padding:4px 11px;border:1px solid '
+        pill.style.cssText = 'padding:2px 8px;border:1px solid '
             + (active ? SEV_COL[sev] : theme.border)
             + ';background:' + (active ? SEV_COL[sev] + '22' : theme.surface)
             + ';color:' + (active ? SEV_COL[sev] : theme.subSoft)
-            + ';border-radius:13px;font-size:11px;font-weight:600;cursor:pointer;'
-            + 'transition:all 0.15s;font-family:inherit';
+            + ';border-radius:' + NT_R.pill + ';font-size:11px;font-weight:600;cursor:pointer;'
+            + 'transition:all 0.12s;font-family:inherit';
         sevWrap.appendChild(pill);
     });
     bar.appendChild(sevWrap);
@@ -333,15 +342,14 @@ function buildFilterBar(nodes, groupNames, theme) {
         grpWrap.style.cssText = 'display:flex;gap:6px;align-items:center';
 
         const grpLabel = document.createElement('span');
-        grpLabel.textContent = 'Gruppe';
-        grpLabel.style.cssText = 'font-size:11px;color:' + theme.sub
-            + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em';
+        grpLabel.textContent = 'Gruppe:';
+        grpLabel.style.cssText = 'font-size:12px;color:' + theme.sub + ';font-weight:600';
         grpWrap.appendChild(grpLabel);
 
         const grpSel = document.createElement('select');
         grpSel.id = 'nt-table-group';
-        grpSel.style.cssText = 'padding:5px 8px;border:1px solid ' + theme.border
-            + ';border-radius:6px;font-size:12px;background:' + theme.surface
+        grpSel.style.cssText = 'padding:3px 6px;border:1px solid ' + theme.border
+            + ';border-radius:' + NT_R.sm + ';font-size:12px;background:' + theme.surface
             + ';color:' + theme.text + ';font-family:inherit;cursor:pointer';
         const optAll = document.createElement('option');
         optAll.value = '';
@@ -358,33 +366,23 @@ function buildFilterBar(nodes, groupNames, theme) {
         bar.appendChild(grpWrap);
     }
 
-    // Suche — Lupen-Glyph als Prefix-Icon, Focus-Ring im Accent-Farbton
-    const searchWrap = document.createElement('div');
-    searchWrap.style.cssText = 'position:relative;display:flex;align-items:center';
-    const searchIcon = document.createElement('span');
-    searchIcon.textContent = '\u{1F50D}';
-    searchIcon.style.cssText = 'position:absolute;left:9px;font-size:11px;opacity:0.55;'
-        + 'pointer-events:none';
+    // Suche — flach, kein Lupen-Glyph (Zabbix nutzt das nicht), schmaler Focus.
     const search = document.createElement('input');
     search.id = 'nt-table-search';
     search.type = 'text';
     search.placeholder = 'Suche Host / IP / Type / Interface / Proxy...';
     search.value = _filterText;
-    search.style.cssText = 'padding:6px 10px 6px 28px;border:1px solid ' + theme.border
-        + ';border-radius:6px;font-size:12px;width:240px;background:' + theme.inputBg
+    search.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
+        + ';border-radius:' + NT_R.sm + ';font-size:12px;width:240px;background:' + theme.inputBg
         + ';color:' + theme.text + ';font-family:inherit;outline:none;'
-        + 'transition:border-color 0.15s,box-shadow 0.15s';
+        + 'transition:border-color 0.12s';
     search.addEventListener('focus', function() {
         this.style.borderColor = theme.accent;
-        this.style.boxShadow = '0 0 0 3px ' + theme.accent + '22';
     });
     search.addEventListener('blur', function() {
         this.style.borderColor = theme.border;
-        this.style.boxShadow = 'none';
     });
-    searchWrap.appendChild(searchIcon);
-    searchWrap.appendChild(search);
-    bar.appendChild(searchWrap);
+    bar.appendChild(search);
 
     // Counter rechts
     const counter = document.createElement('div');
@@ -404,10 +402,12 @@ function rowHtml(n, baseUrl, theme) {
     const tl = TYPE_LBL[n.type] || (n.type || 'Unbekannt');
     const grp = n._primaryGroup || '';
     const grpCol = grp ? grpColor(grp) : theme.subSoft;
-    // Mehr Atemluft pro Zeile + Mono-Font fuer numerische Spalten
-    const cellPad   = 'padding:11px 14px';
+    // Zabbix-tighter Density (war 11x14, Zabbix list-table nutzt ca. 5x8).
+    // Mono-Font fuer numerische Spalten + tabular-nums fuer perfekte Alignment.
+    const cellPad   = 'padding:5px 8px';
     const cellPadR  = cellPad + ';text-align:right';
     const monoFam   = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    const monoNum   = 'font-family:' + monoFam + ';font-variant-numeric:tabular-nums';
     const hostId = encodeURIComponent(n.id);
     const latestUrl = window.location.origin + baseUrl
         + 'zabbix.php?action=latest.view&filter_set=1&hostids%5B%5D=' + hostId;
@@ -431,10 +431,10 @@ function rowHtml(n, baseUrl, theme) {
         return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" '
             + 'data-no-detail="1" title="' + esc(title) + '" '
             + 'style="display:inline-flex;align-items:center;justify-content:center;'
-            + 'width:24px;height:24px;margin:0 1px;background:' + theme.actionBg
-            + ';border:1px solid ' + theme.actionBorder + ';border-radius:5px;'
-            + 'text-decoration:none;color:' + theme.actionText + ';font-size:12px;'
-            + 'line-height:1;transition:filter 0.15s">' + lbl + '</a>';
+            + 'width:20px;height:20px;margin:0 1px;background:' + theme.actionBg
+            + ';border:1px solid ' + theme.actionBorder + ';border-radius:' + NT_R.sm + ';'
+            + 'text-decoration:none;color:' + theme.actionText + ';font-size:11px;'
+            + 'line-height:1;transition:filter 0.12s">' + lbl + '</a>';
     };
 
     return '<tr data-host-id="' + esc(String(n.id)) + '" '
@@ -442,30 +442,30 @@ function rowHtml(n, baseUrl, theme) {
         + 'border-left:3px solid ' + sevCol + ';transition:background 0.12s">'
         // Status (Pille mit Punkt + Label)
         + '<td style="' + cellPad + '"><span style="display:inline-flex;align-items:center;'
-            + 'gap:5px;padding:3px 9px;border-radius:11px;background:' + sevCol + '22;'
-            + 'color:' + sevCol + ';font-size:11px;font-weight:700;letter-spacing:0.02em">'
-            + '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;'
+            + 'gap:4px;padding:2px 8px;border-radius:' + NT_R.pill + ';background:' + sevCol + '22;'
+            + 'color:' + sevCol + ';font-size:11px;font-weight:700">'
+            + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
             + 'background:' + sevCol + '"></span>' + esc(sevLbl) + '</span></td>'
         // Host (Link zu Latest-Data)
         + '<td style="' + cellPad + '"><a href="' + esc(latestUrl) + '" '
             + 'target="_blank" rel="noopener noreferrer" '
             + 'data-no-detail="1" '
             + 'style="color:' + theme.link + ';text-decoration:none;font-weight:600;'
-            + 'font-size:13px">'
+            + 'font-size:12px">'
             + esc(n.label || n.host || '') + '</a></td>'
         // Type (Icon + Label)
-        + '<td style="' + cellPad + ';font-size:12.5px;color:' + theme.text + '">'
+        + '<td style="' + cellPad + ';font-size:12px;color:' + theme.text + '">'
             + '<span style="margin-right:5px">' + ti + '</span>' + esc(tl) + '</td>'
         // Group (gefaerbte Pille pro Hostgroup)
         + '<td style="' + cellPad + '"><span style="display:inline-block;'
-            + 'padding:2px 9px;border-radius:9px;background:' + grpCol + '22;'
+            + 'padding:1px 7px;border-radius:' + NT_R.pill + ';background:' + grpCol + '22;'
             + 'color:' + grpCol + ';font-size:11px;font-weight:600">'
             + esc(grp || '\u2014') + '</span></td>'
         // IP + Interface-Typ ("192.168.33.10 (SNMP)") — Iftype kommt vom Backend.
         // Tooltip am Iftype-Span zeigt zusätzlich Proxy/Proxy-Group-Info
         // (oder "Server (kein Proxy)" wenn der Host direkt am Zabbix-Server hängt).
-        + '<td style="' + cellPad + ';font-size:12.5px;color:' + theme.text
-        + ';font-family:' + monoFam + '">'
+        + '<td style="' + cellPad + ';font-size:12px;color:' + theme.text
+        + ';' + monoNum + '">'
             + esc(n.ip || '\u2014')
             + (n.iftype
                 ? ' <span title="' + esc(proxyTooltip(n)) + '" '
@@ -473,16 +473,16 @@ function rowHtml(n, baseUrl, theme) {
                     + 'border-bottom:1px dotted ' + theme.border + '">(' + esc(n.iftype) + ')</span>'
                 : '')
             + '</td>'
-        // CPU / Memory / Ping - rechtsbuendig, Mono-Font
-        + '<td style="' + cellPadR + ';font-size:12.5px;color:' + theme.text
-            + ';font-family:' + monoFam + '">' + fmtPct(n.cpu) + '</td>'
-        + '<td style="' + cellPadR + ';font-size:12.5px;color:' + theme.text
-            + ';font-family:' + monoFam + '">' + fmtPct(n.memory) + '</td>'
-        + '<td style="' + cellPadR + ';font-size:12.5px;color:' + theme.text
-            + ';font-family:' + monoFam + '">' + fmtMs(n.ping) + '</td>'
+        // CPU / Memory / Ping - rechtsbuendig, Mono mit tabular-nums
+        + '<td style="' + cellPadR + ';font-size:12px;color:' + theme.text
+            + ';' + monoNum + '">' + fmtPct(n.cpu) + '</td>'
+        + '<td style="' + cellPadR + ';font-size:12px;color:' + theme.text
+            + ';' + monoNum + '">' + fmtPct(n.memory) + '</td>'
+        + '<td style="' + cellPadR + ';font-size:12px;color:' + theme.text
+            + ';' + monoNum + '">' + fmtMs(n.ping) + '</td>'
         // Traffic In/Out (zwei Zeilen kompakt)
         + '<td style="' + cellPadR + ';font-size:11px;color:' + theme.text
-            + ';font-family:' + monoFam + ';line-height:1.45;white-space:nowrap">'
+            + ';' + monoNum + ';line-height:1.4;white-space:nowrap">'
             + '\u2193 ' + trafIn + '<br>\u2191 ' + trafOut
             + '</td>'
         // Probleme — clickable Toggle wenn Count>0
@@ -491,17 +491,17 @@ function rowHtml(n, baseUrl, theme) {
                 ? '<button type="button" data-toggle-problems="' + esc(String(n.id)) + '" '
                     + 'data-no-detail="1" '
                     + 'title="Probleme aufklappen" '
-                    + 'style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;'
-                    + 'border:none;border-radius:11px;background:' + theme.problemBg
+                    + 'style="display:inline-flex;align-items:center;gap:3px;padding:1px 8px;'
+                    + 'border:none;border-radius:' + NT_R.pill + ';background:' + theme.problemBg
                     + ';color:' + theme.problemText + ';font-size:11px;font-weight:700;'
-                    + 'cursor:pointer;font-family:inherit;transition:filter 0.15s">'
+                    + 'cursor:pointer;font-family:inherit;transition:filter 0.12s">'
                     + '<span class="nt-prob-arrow" style="font-size:9px;display:inline-block;'
                     +     'transition:transform 0.15s;line-height:1">▶</span>'
                     + n.problems + '</button>'
                 : '<span style="color:' + theme.subSoft + ';font-size:12px">0</span>')
             + '</td>'
         // Actions
-        + '<td style="padding:11px 8px;text-align:right;white-space:nowrap">'
+        + '<td style="padding:5px;text-align:right;white-space:nowrap">'
             + actBtn(latestUrl, '\u{1F4CA}', 'Latest Data')
             + actBtn(probUrl,   '\u26A0',    'Probleme')
             + actBtn(chartsUrl, '\u{1F4C8}', 'Graphs')
@@ -535,9 +535,9 @@ function buildTable(nodes, baseUrl, theme) {
         const sortAttr = c.noSort ? '' : ' data-sort="' + c.id + '"';
         const cursor = c.noSort ? 'default' : 'pointer';
         thead += '<th' + sortAttr + ' '
-            + 'style="padding:12px 14px;text-align:' + c.align + ';font-size:10.5px;'
+            + 'style="padding:6px 8px;text-align:' + c.align + ';font-size:11px;'
             + 'font-weight:700;color:' + (isActive ? theme.textStrong : theme.sub) + ';'
-            + 'text-transform:uppercase;letter-spacing:0.07em;cursor:' + cursor
+            + 'text-transform:uppercase;letter-spacing:0.04em;cursor:' + cursor
             + ';user-select:none;white-space:nowrap">'
             + esc(c.lbl) + arrow + '</th>';
     });

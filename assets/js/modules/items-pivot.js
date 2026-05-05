@@ -176,8 +176,8 @@ export function buildPivotToolbar(onApply, theme) {
     combo.style.cssText = 'position:relative;display:inline-block';
     const trigger = document.createElement('button');
     trigger.type = 'button';
-    trigger.style.cssText = 'padding:5px 28px 5px 10px;border:1px solid ' + t.border
-        + ';border-radius:6px;font-size:12px;background:' + t.surface
+    trigger.style.cssText = 'padding:3px 24px 3px 8px;border:1px solid ' + t.border
+        + ';border-radius:2px;font-size:12px;background:' + t.surface
         + ';color:' + t.text + ';font-family:inherit;cursor:pointer;'
         + 'min-width:200px;text-align:left;position:relative';
     // Trigger-Label als TextNode damit wir es spaeter ueber firstChild.nodeValue
@@ -193,18 +193,18 @@ export function buildPivotToolbar(onApply, theme) {
     const popup = document.createElement('div');
     popup.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:1000;'
         + 'margin-top:2px;min-width:280px;max-width:480px;background:' + t.surface
-        + ';border:1px solid ' + t.border + ';border-radius:6px;'
-        + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);overflow:hidden';
+        + ';border:1px solid ' + t.border + ';border-radius:2px;'
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.10);overflow:hidden';
     const filterIn = document.createElement('input');
     filterIn.type = 'text';
     filterIn.placeholder = 'Suchen...';
-    filterIn.style.cssText = 'width:100%;box-sizing:border-box;padding:8px 12px;'
+    filterIn.style.cssText = 'width:100%;box-sizing:border-box;padding:5px 10px;'
         + 'border:none;border-bottom:1px solid ' + t.borderSoft + ';outline:none;'
         + 'font-size:12px;background:' + t.head + ';color:' + t.text
         + ';font-family:inherit';
     popup.appendChild(filterIn);
     const listBox = document.createElement('div');
-    listBox.style.cssText = 'max-height:340px;overflow-y:auto;padding:4px 0';
+    listBox.style.cssText = 'max-height:340px;overflow-y:auto;padding:2px 0';
     popup.appendChild(listBox);
     combo.appendChild(popup);
     wrap.appendChild(combo);
@@ -284,14 +284,14 @@ export function buildPivotToolbar(onApply, theme) {
             if (pendingHeader) {
                 const h = document.createElement('div');
                 h.textContent = pendingHeader.label;
-                h.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:700;'
+                h.style.cssText = 'padding:4px 10px;font-size:10px;font-weight:700;'
                     + 'color:' + t.sub + ';text-transform:uppercase;'
-                    + 'letter-spacing:0.06em;background:' + t.head;
+                    + 'letter-spacing:0.04em;background:' + t.head;
                 listBox.appendChild(h);
                 pendingHeader = null;
             }
             const row = document.createElement('div');
-            row.style.cssText = 'padding:7px 12px;cursor:' + (it.disabled ? 'default' : 'pointer')
+            row.style.cssText = 'padding:4px 10px;cursor:' + (it.disabled ? 'default' : 'pointer')
                 + ';font-size:12px;color:' + (it.disabled ? t.subSoft : t.text)
                 + ';display:flex;align-items:baseline;gap:8px'
                 + (it.disabled ? ';font-style:italic' : '');
@@ -381,28 +381,26 @@ export function buildPivotToolbar(onApply, theme) {
     pat.id = 'nt-items-pattern';
     pat.placeholder = 'z.B. vfs.fs.size[*,pused]';
     pat.value = PRESETS[0].pattern;
-    pat.style.cssText = 'flex:1;padding:6px 10px;border:1px solid ' + t.border
-        + ';border-radius:6px;font-size:12px;font-family:'
+    pat.style.cssText = 'flex:1;padding:3px 8px;border:1px solid ' + t.border
+        + ';border-radius:2px;font-size:12px;font-family:'
         + 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:' + t.inputBg
         + ';color:' + t.text + ';outline:none;'
-        + 'transition:border-color 0.15s,box-shadow 0.15s';
+        + 'transition:border-color 0.12s';
     pat.addEventListener('focus', function() {
         this.style.borderColor = t.accent;
-        this.style.boxShadow = '0 0 0 3px ' + t.accent + '22';
     });
     pat.addEventListener('blur', function() {
         this.style.borderColor = t.border;
-        this.style.boxShadow = 'none';
     });
     patWrap.appendChild(pat);
     wrap.appendChild(patWrap);
 
     const apply = document.createElement('button');
     apply.textContent = 'Anwenden';
-    apply.style.cssText = 'padding:6px 14px;border:1px solid ' + t.accent
-        + ';border-radius:6px;background:' + t.accent
+    apply.style.cssText = 'padding:3px 12px;border:1px solid ' + t.accent
+        + ';border-radius:2px;background:' + t.accent
         + ';color:#ffffff;cursor:pointer;font-size:12px;font-weight:600;'
-        + 'font-family:inherit;letter-spacing:0.02em;transition:filter 0.15s';
+        + 'font-family:inherit;transition:filter 0.12s';
     wrap.appendChild(apply);
 
     // Sync vom Pattern-Input zurueck in den Combo-Trigger: wenn der User
@@ -635,13 +633,13 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
 
     // Tabelle aufbauen
     const table = document.createElement('table');
-    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12.5px';
+    table.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px';
 
     // Header — alle Spalten sortierbar via data-sort
     let thead = '<thead><tr style="background:' + t.head + ';border-bottom:1px solid ' + t.border + '">'
-        + '<th data-sort="__host__" style="padding:12px 14px;text-align:left;font-size:10.5px;'
+        + '<th data-sort="__host__" style="padding:6px 8px;text-align:left;font-size:11px;'
         + 'font-weight:700;color:' + (sortCol === '__host__' || !sortCol ? t.textStrong : t.sub)
-        + ';text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;user-select:none;'
+        + ';text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;user-select:none;'
         + 'position:sticky;left:0;background:' + t.head + ';z-index:1">Host'
         + arrow('__host__') + (!sortCol ? ' \u25B2' : '') + '</th>';
     // Spalten-Label aufraeumen: Zabbix-Discovery-Keys stehen oft in Quotes
@@ -653,9 +651,9 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     cols.forEach(function(c) {
         const isActive = c.key === sortCol;
         thead += '<th data-sort="' + esc(c.key) + '" '
-            + 'style="padding:12px 14px;text-align:right;font-size:10.5px;'
+            + 'style="padding:6px 8px;text-align:right;font-size:11px;'
             + 'font-weight:700;color:' + (isActive ? t.textStrong : t.sub)
-            + ';text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;user-select:none;'
+            + ';text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;user-select:none;'
             + 'font-family:' + monoFam + ';white-space:nowrap" '
             + 'title="' + esc(c.key) + '">'
             + esc(cleanLabel(c.label))
@@ -664,9 +662,9 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             + '</th>';
     });
     // Aggregat-Spalte rechts (Avg pro Host-Zeile)
-    thead += '<th style="padding:12px 14px;text-align:right;font-size:10.5px;'
+    thead += '<th style="padding:6px 8px;text-align:right;font-size:11px;'
         + 'font-weight:700;color:' + t.sub + ';text-transform:uppercase;'
-        + 'letter-spacing:0.07em;font-family:' + monoFam + ';white-space:nowrap;'
+        + 'letter-spacing:0.04em;font-family:' + monoFam + ';white-space:nowrap;'
         + 'border-left:2px solid ' + t.border + '" title="Durchschnitt ueber alle Item-Spalten">'
         + 'Avg</th>';
     thead += '</tr></thead>';
@@ -686,8 +684,8 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             tbody.insertAdjacentHTML('beforeend',
                 '<tr><td colspan="' + _colspan + '" '
                 + 'style="padding:8px 14px;background:' + t.head
-                + ';color:' + t.sub + ';font-size:10.5px;font-weight:700;'
-                + 'text-transform:uppercase;letter-spacing:0.07em;'
+                + ';color:' + t.sub + ';font-size:11px;font-weight:700;'
+                + 'text-transform:uppercase;letter-spacing:0.04em;'
                 + 'border-top:1px solid ' + t.border + ';border-bottom:1px solid ' + t.borderSoft
                 + ';position:sticky;left:0">'
                 + esc(grp || '— Ohne Gruppe —') + '</td></tr>');
@@ -699,7 +697,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
 
         let html = '<tr style="border-bottom:1px solid ' + t.borderSoft
             + ';transition:background 0.12s">'
-            + '<td style="padding:11px 14px;font-weight:600;font-size:13px;'
+            + '<td style="padding:5px 8px;font-weight:600;font-size:13px;'
             + 'position:sticky;left:0;background:' + t.surface + ';z-index:1;'
             + 'border-right:1px solid ' + t.borderSoft + '">'
             + '<a href="' + esc(latestHostUrl) + '" target="_blank" rel="noopener noreferrer" '
@@ -719,21 +717,21 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             const cellColor = (v == null ? t.subSoft : t.text);
             const bg = cellBg(v, c.unit, _colStats[c.key]);
             html += '<td style="padding:0;text-align:right;font-family:' + monoFam + ';'
-                + 'font-size:12.5px' + bg + '">'
+                + 'font-size:12px' + bg + '">'
                 + (v != null
                     ? '<a href="' + esc(cellLink) + '" target="_blank" rel="noopener noreferrer" '
-                        + 'style="display:block;padding:11px 14px;color:' + cellColor
+                        + 'style="display:block;padding:5px 8px;color:' + cellColor
                         + ';text-decoration:none" title="In Latest Data oeffnen">'
                         + esc(fmtVal(v, c.unit)) + '</a>'
-                    : '<span style="display:block;padding:11px 14px;color:' + cellColor + '">'
+                    : '<span style="display:block;padding:5px 8px;color:' + cellColor + '">'
                         + esc(fmtVal(v, c.unit)) + '</span>')
                 + '</td>';
         });
         // Aggregat-Spalte (Avg) pro Zeile rechts
         const avgVal = aggregate(rowVals, 'avg');
         const avgBg = cellBg(avgVal, _aggUnit, _avgStats);
-        html += '<td style="padding:11px 14px;text-align:right;font-family:' + monoFam + ';'
-            + 'font-size:12.5px;color:' + (avgVal == null ? t.subSoft : t.textStrong)
+        html += '<td style="padding:5px 8px;text-align:right;font-family:' + monoFam + ';'
+            + 'font-size:12px;color:' + (avgVal == null ? t.subSoft : t.textStrong)
             + ';font-weight:600;border-left:2px solid ' + t.border + avgBg + '">'
             + esc(fmtVal(avgVal, _aggUnit)) + '</td>';
         html += '</tr>';
@@ -748,8 +746,8 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             const lblMap = { sum: 'Sum', avg: 'Avg', max: 'Max' };
             let row = '<tr style="background:' + t.head
                 + ';border-top:' + (idx === 0 ? '2px solid ' + t.border : '1px solid ' + t.borderSoft) + '">'
-                + '<td style="padding:9px 14px;font-size:10.5px;font-weight:700;'
-                + 'color:' + t.sub + ';text-transform:uppercase;letter-spacing:0.07em;'
+                + '<td style="padding:5px 8px;font-size:11px;font-weight:700;'
+                + 'color:' + t.sub + ';text-transform:uppercase;letter-spacing:0.04em;'
                 + 'position:sticky;left:0;background:' + t.head + ';z-index:1;'
                 + 'border-right:1px solid ' + t.borderSoft + '">' + lblMap[mode] + '</td>';
             // Alle Werte aller Hosts in allen Spalten flach gesammelt — wird
@@ -766,7 +764,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
                     if (v != null) flatVals.push(v);
                 });
                 const v = aggregate(colVals, mode);
-                row += '<td style="padding:9px 14px;text-align:right;font-family:' + monoFam + ';'
+                row += '<td style="padding:5px 8px;text-align:right;font-family:' + monoFam + ';'
                     + 'font-size:12px;color:' + (v == null ? t.subSoft : t.textStrong)
                     + ';font-weight:600">'
                     + esc(fmtVal(v, c.unit)) + '</td>';
@@ -776,7 +774,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             // Avg-Row -> globaler Mittelwert (jede Zelle gleich gewichtet).
             // Bei Mixed-Units wird unitless angezeigt damit nichts irrefuehrt.
             const footerCross = aggregate(flatVals, mode);
-            row += '<td style="padding:9px 14px;text-align:right;font-family:' + monoFam + ';'
+            row += '<td style="padding:5px 8px;text-align:right;font-family:' + monoFam + ';'
                 + 'font-size:12px;color:' + (footerCross == null ? t.subSoft : t.textStrong)
                 + ';font-weight:600;border-left:2px solid ' + t.border + '">'
                 + esc(fmtVal(footerCross, _aggUnit)) + '</td>';
@@ -790,7 +788,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     if (data.truncated) {
         const warn = document.createElement('div');
         warn.style.cssText = 'padding:10px 14px;background:#fef3c7;color:#92400e;'
-            + 'font-size:12px;border-radius:6px;margin-bottom:10px;font-weight:500';
+            + 'font-size:12px;border-radius:2px;margin-bottom:8px;font-weight:500';
         warn.textContent = '\u26A0 Sehr viele Items \u2014 Liste wurde abgeschnitten. '
             + 'Spezifischeres Pattern verwenden.';
         container.appendChild(warn);
@@ -799,7 +797,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     // Scroll-Wrapper falls breit
     const scroll = document.createElement('div');
     scroll.style.cssText = 'overflow-x:auto;background:' + t.surface
-        + ';border:1px solid ' + t.border + ';border-radius:8px;'
+        + ';border:1px solid ' + t.border + ';border-radius:2px;'
         + 'box-shadow:0 1px 3px rgba(0,0,0,0.04)';
     scroll.appendChild(table);
     container.appendChild(scroll);
