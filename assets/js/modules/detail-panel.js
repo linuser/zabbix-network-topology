@@ -62,42 +62,94 @@ export function showDetail(panel, d, cy) {
     // wir alle Metriken als STALE (letzter Wert vor Disconnect). Sonst sieht
     // ein toter Host mit eingefrorenem CPU 96% wie ein heisser Host aus.
     const isOff = !!d.unavailable;
+    // Stale-Detection: Host scheint zwar online (unavailable=false) aber
+    // letzter Item-Update liegt > 5min zurueck. Kann passieren wenn der
+    // Agent zwar antwortet aber Items disabled / not-supported sind, oder
+    // wenn ein Polling-Pause aktiv ist. Schwellwert: 5min
+    // (300s) — typisch fuer Live-Metriken die alle 30-60s aktualisiert werden.
+    const STALE_S = 300;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const ageSec = (d.last_seen && d.last_seen > 0) ? (nowSec - d.last_seen) : 0;
+    const isStale = !isOff && d.last_seen > 0 && ageSec > STALE_S;
     const offColor = '#9ca3af';   // grey-500
-    const staleStyle = isOff
+    const staleStyle = (isOff || isStale)
         ? 'opacity:0.55;text-decoration:line-through;' + 'text-decoration-style:wavy;'
         : '';
-    const staleNote = isOff ? ' <span style="color:' + offColor
+    const staleNote = isOff || isStale ? ' <span style="color:' + offColor
         + ';font-size:10px">(stale)</span>' : '';
     const fmtMetric = function(rawHtml) {
-        return isOff
+        return (isOff || isStale)
             ? '<span style="' + staleStyle + '">' + rawHtml + '</span>' + staleNote
             : rawHtml;
     };
 
-    const rows = [
-        ['Host', esc(d.host || d.label)],
-        ['Type', '<b style="color:' + ti.col + '">' + ti.icon + ' ' + esc(ti.lbl) + '</b>' + customMark],
-        ['IP', esc(d.ip || '\u2014')],
-        ['Interface', ifaceCell],
-        ...(d.pinned ? [['Status', '<span style="color:#3b82f6;font-weight:600">&#128204; Fixiert</span>']] : []),
-        ...(d.maintenance ? [['Wartung', '<span style="color:#f59e0b;font-weight:600">\u{1F527} In Wartung</span>']] : []),
-        ...(d.acknowledged ? [['Acked',   '<span style="color:#22c55e;font-weight:600">\u2714 Probleme best\u00E4tigt</span>']] : []),
-        ...(d.note   ? [['Notiz',  '<span style="color:#f59e0b">&#127991; ' + esc(d.note) + '</span>']] : []),
-        // Status-Row: bei Offline wird "Offline" statt der Severity-Anzeige
-        // gerendert \u2014 sonst sieht man "High" (von eingefrorenen Triggern) und
-        // denkt der Host ist heiss aber alive.
-        ['Status', isOff
-            ? '<span style="color:#e53742;font-weight:700">&#9711; Offline / nicht erreichbar</span>'
-            : '<span style="color:' + sc + ';font-weight:700">&#9679; '
-                + esc(SEV_LBL[d.severity || 0] || 'Normal') + '</span>'],
-        ['CPU',    fmtMetric(d.cpu    != null ? '<b>' + d.cpu    + '%</b>' : '\u2014')],
-        ['Memory', fmtMetric(d.memory != null ? '<b>' + d.memory + '%</b>' : '\u2014')],
-        ['Ping',   fmtMetric(d.ping > 0       ? '<b>' + d.ping   + ' ms</b>' : '\u2014')],
-        ['&#8595; In',  fmtMetric('<span style="color:#22c55e">'
-            + fmt(d.traffic ? d.traffic.in  : 0) + '</span>')],
-        ['&#8593; Out', fmtMetric('<span style="color:#38bdf8">'
-            + fmt(d.traffic ? d.traffic.out : 0) + '</span>')],
-    ];
+    // Card-Sections: Detail-Panel als sequenz von kleinen Sections statt
+    // einer flachen Rows-Tabelle. Macht den Inhalt strukturierter und gibt
+    // Raum fuer logische Hierarchie (Status oben, Identitaet, Metriken,
+    // Custom Items, Peers).
+    //
+    // Section-Helper: kleines Uppercase-Header-Label + duenne Trennlinie,
+    // standardisiertes Format quer durch alle Sections.
+    const section = function(label) {
+        return '<div style="margin-top:10px;padding-top:6px;'
+            + 'border-top:1px solid #f1f5f9;'
+            + 'font-size:10px;color:#94a3b8;font-weight:700;'
+            + 'text-transform:uppercase;letter-spacing:0.06em;'
+            + 'margin-bottom:6px">' + label + '</div>';
+    };
+
+    // Status-Pille (gross + prominent) \u2014 Offline > Stale > Severity Hierarchie
+    const statusPill = isOff
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;'
+            + 'padding:3px 10px;border-radius:11px;background:rgba(229,55,66,0.13);'
+            + 'color:#e53742;font-size:12px;font-weight:700">'
+            + '<span style="width:8px;height:8px;border-radius:50%;background:#e53742;'
+            + 'display:inline-block"></span>OFFLINE</span>'
+        : isStale
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;'
+            + 'padding:3px 10px;border-radius:11px;background:rgba(245,158,11,0.13);'
+            + 'color:#92400e;font-size:12px;font-weight:700">'
+            + '<span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;'
+            + 'display:inline-block"></span>STALE</span>'
+        : '<span style="display:inline-flex;align-items:center;gap:4px;'
+            + 'padding:3px 10px;border-radius:11px;background:' + sc + '22;'
+            + 'color:' + sc + ';font-size:12px;font-weight:700">'
+            + '<span style="width:8px;height:8px;border-radius:50%;background:' + sc + ';'
+            + 'display:inline-block"></span>' + esc(SEV_LBL[d.severity || 0] || 'Normal')
+            + '</span>';
+
+    // Status-Badges (Pinned, Wartung, Acked, Note) als kleine Chips daneben
+    const badges = [];
+    if (d.pinned)        badges.push('<span style="background:rgba(59,130,246,0.13);color:#3b82f6;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">&#128204; Fixiert</span>');
+    if (d.maintenance)   badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u{1F527} Wartung</span>');
+    if (d.acknowledged)  badges.push('<span style="background:rgba(34,197,94,0.13);color:#16a34a;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u2714 Acked</span>');
+    if (d.note)          badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px" title="' + esc(d.note) + '">&#127991; Notiz</span>');
+
+    // Identitaets-Section (Host, Type, IP, Interface) \u2014 kompakte Key-Value-Liste
+    const idRow = function(k, v) {
+        return '<div style="display:flex;font-size:12px;line-height:1.4;'
+            + 'padding:1px 0">'
+            + '<span style="color:#64748b;min-width:72px;flex-shrink:0">' + k + '</span>'
+            + '<span style="color:#1f2c33;font-weight:500;'
+            + 'overflow:hidden;text-overflow:ellipsis">' + v + '</span>'
+            + '</div>';
+    };
+    const identityHtml =
+          idRow('Host', esc(d.host || d.label))
+        + idRow('Type', '<b style="color:' + ti.col + '">' + ti.icon + ' ' + esc(ti.lbl) + '</b>' + customMark)
+        + idRow('IP', esc(d.ip || '\u2014'))
+        + idRow('Interface', ifaceCell);
+
+    // Metrik-Numeric-Liste (zusaetzlich zu den Rings \u2014 gibt exakte Werte
+    // mit Unit). Stale-Marker greifen hier durch fmtMetric().
+    const metricsHtml =
+          idRow('CPU',    fmtMetric(d.cpu    != null ? '<b>' + d.cpu    + '%</b>' : '\u2014'))
+        + idRow('Memory', fmtMetric(d.memory != null ? '<b>' + d.memory + '%</b>' : '\u2014'))
+        + idRow('Ping',   fmtMetric(d.ping > 0       ? '<b>' + d.ping   + ' ms</b>' : '\u2014'))
+        + idRow('&#8595; In',  fmtMetric('<span style="color:#22c55e">'
+            + fmt(d.traffic ? d.traffic.in  : 0) + '</span>'))
+        + idRow('&#8593; Out', fmtMetric('<span style="color:#38bdf8">'
+            + fmt(d.traffic ? d.traffic.out : 0) + '</span>'));
 
     // Offline-Banner: rote prominente Box ueber dem Action-Bar.
     // "vor 5m" / "vor 2h" / "vor 3d" relative-time-Format.
@@ -109,6 +161,20 @@ export function showDetail(panel, d, cy) {
         if (sec < 86400) return 'vor ' + Math.floor(sec / 3600) + 'h';
         return 'vor ' + Math.floor(sec / 86400) + 'd';
     };
+    // Stale-Banner: orangener Hinweis wenn Host zwar online aber Items
+    // veraltet sind — separate Box, kommt NACH dem Offline-Banner falls beide
+    // zutreffen (selten, aber moeglich wenn Zabbix unavailable=false meldet
+    // und gleichzeitig keine neuen Werte ankommen).
+    const staleBanner = (isStale && !isOff)
+        ? '<div style="background:rgba(245,158,11,0.13);border:1px solid #f59e0b;'
+            + 'border-left:4px solid #f59e0b;border-radius:2px;padding:6px 10px;'
+            + 'margin-bottom:8px;color:#92400e;font-size:12px">'
+            + '<div style="font-weight:700">&#9888; STALE &middot; letzter Wert ' + fmtAgo(d.last_seen) + '</div>'
+            + '<div style="font-size:11px;margin-top:2px;font-style:italic">'
+            + 'Host gilt laut Zabbix als verfuegbar, aber es kommen keine '
+            + 'aktuellen Item-Werte mehr an</div>'
+            + '</div>'
+        : '';
     const offlineBanner = isOff
         ? '<div style="background:rgba(229,55,66,0.12);border:1px solid #e53742;'
             + 'border-left:4px solid #e53742;border-radius:2px;padding:6px 10px;'
@@ -143,8 +209,7 @@ export function showDetail(panel, d, cy) {
         { col: '#f59e0b', lbl: 'Ping',    val: d.ping > 0 ? d.ping + ' ms' : '\u2014', pct: _pPct },
     ];
 
-    let ringHtml = '<div style="display:flex;gap:8px;margin:8px 0;padding:6px 0;'
-                 + 'border-top:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9">';
+    let ringHtml = '<div style="display:flex;gap:8px;margin-bottom:6px;padding:2px 0">';
     rings.forEach(function(r) {
         ringHtml += '<div style="flex:1;text-align:center">'
             + '<svg width="36" height="36" viewBox="0 0 36 36">'
@@ -162,21 +227,32 @@ export function showDetail(panel, d, cy) {
     ringHtml += '</div>';
 
     panel.style.display = 'block';
-    // Extra-Items-Block (nt:show-Tags)
-    const extraBlock = (d.extra_items && d.extra_items.length)
-        ? '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #f1f5f9">'
-            + '<div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Items</div>'
-            + '<table style="width:100%;font-size:11px;border-collapse:collapse">'
-            + d.extra_items.map(function(it) {
-                const val = it.error
-                    ? '<span style="color:#94a3b8;font-style:italic">' + esc(it.error) + '</span>'
-                    : '<b>' + esc(fmtItemValue(it.value, it.units)) + '</b>';
-                return '<tr>'
-                    + '<td style="color:#64748b;padding:2px 0;padding-right:10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">'
-                    + esc((it.name || '').substring(0, 32))
-                    + '</td><td>' + val + '</td></tr>';
-            }).join('')
-            + '</table></div>'
+    // Extra-Items-Block (nt:show-Tags) — bei mehr als 4 Items collapsible
+    // mit Summary "X Items anzeigen", verhindert dass das Panel ausufert.
+    const _items = d.extra_items || [];
+    const _itemsCollapsible = _items.length > 4;
+    const _itemsHtml = _items.map(function(it) {
+        const val = it.error
+            ? '<span style="color:#94a3b8;font-style:italic">' + esc(it.error) + '</span>'
+            : '<b>' + esc(fmtItemValue(it.value, it.units)) + '</b>';
+        return '<div style="display:flex;font-size:11px;line-height:1.45;padding:1px 0">'
+            + '<span style="color:#64748b;flex:1;min-width:0;'
+            +     'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
+            +     'padding-right:10px" title="' + esc(it.name || '') + '">'
+            +     esc((it.name || '').substring(0, 40)) + '</span>'
+            + '<span style="color:#1f2c33;font-weight:500;flex-shrink:0">'
+            +     val + '</span>'
+            + '</div>';
+    }).join('');
+    const extraBlock = _items.length > 0
+        ? section('Items')
+            + (_itemsCollapsible
+                ? '<details><summary style="font-size:11px;color:#0275b8;cursor:pointer;'
+                    + 'user-select:none;margin-bottom:4px">'
+                    + _items.length + ' Items anzeigen</summary>'
+                    + _itemsHtml
+                    + '</details>'
+                : _itemsHtml)
         : '';
 
     // Zabbix-URLs für Action-Buttons. Base-Path detektion wie im
@@ -198,41 +274,50 @@ export function showDetail(panel, d, cy) {
         { lbl: '\u2699\uFE0F', title: 'Bearbeiten',
           url: zbxOrigin + 'zabbix.php?action=popup&popup=host.edit&hostid=' + hostId },
     ];
-    const actionBar = '<div style="display:flex;gap:4px;margin-bottom:8px;'
-        + 'padding-bottom:6px;border-bottom:1px solid #f1f5f9">'
+    const actionBar = '<div style="display:flex;gap:4px;margin-bottom:4px">'
         + actions.map(function(a, i) {
             return '<button data-act="' + i + '" title="' + esc(a.title) + '" '
-                + 'style="flex:1;padding:5px;background:#f8fafc;border:1px solid #e2e8f0;'
-                + 'border-radius:4px;cursor:pointer;font-size:13px;color:#475569;'
-                + 'transition:background 0.15s">' + a.lbl + '</button>';
+                + 'style="flex:1;padding:5px;background:#f4f6f7;border:1px solid #dfe4e7;'
+                + 'border-radius:2px;cursor:pointer;font-size:13px;color:#1f2c33;'
+                + 'transition:background 0.12s">' + a.lbl + '</button>';
         }).join('')
         + '</div>';
 
+    // Status-Section: Status-Pille + optionale Status-Badges nebeneinander.
+    const statusSection = section('Status')
+        + '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px">'
+        + statusPill
+        + (badges.length ? badges.join('') : '')
+        + '</div>';
+
     panel.innerHTML =
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px">'
+        // Header: Icon + Hostname + Type-Pill + Close-Button
+        '<div style="display:flex;align-items:center;justify-content:space-between;'
+        + 'margin-bottom:8px;gap:6px">'
         + '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'
             + '<span style="font-size:18px;line-height:1;flex-shrink:0">' + ti.icon + '</span>'
-            + '<span style="font-weight:700;font-size:13px;color:#0f172a;'
+            + '<span style="font-weight:700;font-size:14px;color:#0f172a;'
             + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(d.label) + '">'
             + esc(d.label) + '</span>'
-            + '<span style="display:inline-block;padding:1px 7px;border-radius:10px;'
+            + '<span style="display:inline-block;padding:1px 6px;border-radius:9px;'
             + 'background:' + ti.col + '22;color:' + ti.col + ';'
-            + 'font-size:9px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;'
+            + 'font-size:9px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;'
             + 'flex-shrink:0">' + esc(ti.lbl) + customMark + '</span>'
         + '</div>'
-        + '<button id="nt-detail-close" style="background:none;border:none;cursor:pointer;color:#94a3b8;'
-        + 'font-size:18px;line-height:1;padding:0;flex-shrink:0">&#x2715;</button>'
+        + '<button id="nt-detail-close" style="background:none;border:none;cursor:pointer;'
+        + 'color:#94a3b8;font-size:18px;line-height:1;padding:0;flex-shrink:0">&#x2715;</button>'
         + '</div>'
         + offlineBanner
+        + staleBanner
         + actionBar
-        + ringHtml
-        + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
-        + rows.map(function(r) {
-            return '<tr><td style="color:#64748b;padding:3px 0;padding-right:10px">' + r[0] + '</td><td>' + r[1] + '</td></tr>';
-        }).join('')
-        + '</table>'
+        + statusSection
+        + section('Identität') + identityHtml
+        + section('Metriken') + ringHtml + metricsHtml
         + extraBlock
-        + (peers ? '<div style="margin-top:8px;font-size:11px;color:#475569;border-top:1px solid #f1f5f9;padding-top:6px">' + peers + '</div>' : '');
+        + (peers
+            ? section('Verbindungen')
+                + '<div style="font-size:11px;color:#475569;line-height:1.6">' + peers + '</div>'
+            : '');
 
     const cb = document.getElementById('nt-detail-close');
     if (cb) cb.addEventListener('click', function(e) {

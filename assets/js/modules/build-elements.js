@@ -91,6 +91,9 @@ export function buildNodeElements(nodes) {
             unavailable:  !!n.unavailable,
             down_since:   n.down_since || 0,
             down_error:   n.down_error || '',
+            // Stale-Detection: max(lastclock) aller Live-Metrik-Items.
+            // Wenn das deutlich aelter als 5min ist, ist der Host stale.
+            last_seen:    n.last_seen || 0,
             // Extra-Items aus nt:show-Tags + icon_override-Flag
             extra_items:  n.extra_items || [],
             icon_override: !!n.icon_override,

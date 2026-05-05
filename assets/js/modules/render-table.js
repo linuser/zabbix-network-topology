@@ -469,23 +469,35 @@ function rowHtml(n, baseUrl, theme) {
             + 'line-height:1;transition:filter 0.12s">' + lbl + '</a>';
     };
 
-    // Offline-Detection: Host laut Zabbix unavailable → Zeile gedimmt,
-    // Status-Pille zeigt "Offline" statt Severity, alle Metriken stale.
+    // Offline/Stale-Detection: Host laut Zabbix unavailable -> OFFLINE-Pille.
+    // Sonst: pruefen ob Items > 5min nicht aktualisiert -> STALE-Pille
+    // (orange) statt Severity. Beide Faelle dimmen die ganze Zeile.
     const isOff = !!n.unavailable;
+    const STALE_S = 300;
+    const _nowSec = Math.floor(Date.now() / 1000);
+    const _ageSec = (n.last_seen && n.last_seen > 0) ? (_nowSec - n.last_seen) : 0;
+    const isStale = !isOff && n.last_seen > 0 && _ageSec > STALE_S;
     const offColor = '#9ca3af';
-    const rowOpacity = isOff ? 'opacity:0.55;' : '';
+    const rowOpacity = (isOff || isStale) ? 'opacity:0.55;' : '';
     const sevCellHtml = isOff
         ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
             + 'border-radius:' + NT_R.pill + ';background:rgba(229,55,66,0.13);'
             + 'color:#e53742;font-size:11px;font-weight:700">'
             + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
             + 'background:#e53742"></span>OFFLINE</span>'
+        : isStale
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
+            + 'border-radius:' + NT_R.pill + ';background:rgba(245,158,11,0.13);'
+            + 'color:#92400e;font-size:11px;font-weight:700"'
+            + ' title="Letzter Wert vor ' + Math.floor(_ageSec / 60) + 'm">'
+            + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
+            + 'background:#f59e0b"></span>STALE</span>'
         : '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
             + 'border-radius:' + NT_R.pill + ';background:' + sevCol + '22;'
             + 'color:' + sevCol + ';font-size:11px;font-weight:700">'
             + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
             + 'background:' + sevCol + '"></span>' + esc(sevLbl) + '</span>';
-    const metricColor = isOff ? offColor : theme.text;
+    const metricColor = (isOff || isStale) ? offColor : theme.text;
 
     return '<tr data-host-id="' + esc(String(n.id)) + '" '
         + 'style="border-bottom:1px solid ' + theme.borderSoft + ';cursor:pointer;'

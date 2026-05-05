@@ -354,6 +354,21 @@ export function render(wrap, nodes, edges, dataUrl) {
         _posSaveTimer = setTimeout(function() { savePositions(cy); }, 400);
     });
 
+    // ── Auto-Refresh-Pause waehrend User-Aktion ────────────────────────────
+    // Wenn der User gerade einen Knoten draggt, soll der 30s-Refresh-Timer
+    // den Drag nicht zerstoeren. Window-Flag _ntDragActive blockiert den
+    // Refresh waehrend Drag aktiv ist; Reset 1s nach dragfree damit die
+    // Position-Speicherung sicher durch ist.
+    cy.on('grab', 'node[!isGroup]', function() {
+        window._ntDragActive = true;
+    });
+    cy.on('dragfree', 'node[!isGroup]', function() {
+        clearTimeout(window._ntDragReleaseTimer);
+        window._ntDragReleaseTimer = setTimeout(function() {
+            window._ntDragActive = false;
+        }, 1000);
+    });
+
     // Nach automatischem Layout Position einmalig speichern
     cy.one('layoutstop', function() {
         setTimeout(function() {
@@ -369,6 +384,9 @@ export function render(wrap, nodes, edges, dataUrl) {
     if (window._ntRefreshTimer) clearInterval(window._ntRefreshTimer);
     window._ntRefreshTimer = setInterval(function() {
         if (window._ntRefreshOn === false || !window._ntCy) return;
+        // Pause waehrend Drag — sonst zerlegt der Refresh den User-Workflow
+        // (Position springt zurueck weil neue Daten alte Positionen ueberschreiben).
+        if (window._ntDragActive) return;
         fetch(dataUrl, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }

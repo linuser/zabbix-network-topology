@@ -11,10 +11,25 @@ import { loadSevFilter, saveSevFilter } from './storage.js';
 
 // Modul-State: Set<number> der aktiven Severity-Levels.
 const _sevFilter = loadSevFilter();
+// Modul-State: Toggle "nur offline-Hosts zeigen". Persistiert NICHT in
+// localStorage — das ist eher ein Ad-hoc-Filter ("zeig mir gerade die
+// Toten") als eine Dauer-Praeferenz.
+let _offlineOnly = false;
 
 // Filter-Logik einmal als Helper, wird beim Build initial und bei jedem
 // Pillen-Klick erneut angewendet. Empty Set → alle sichtbar via reset-style.
 function applyFilter(cy) {
+    // Offline-Only ueberschreibt Severity: Sev-Pills sind dann irrelevant.
+    if (_offlineOnly) {
+        cy.nodes('[!isGroup]').forEach(function(n) {
+            n.style('display', n.data('unavailable') ? 'element' : 'none');
+        });
+        cy.edges().forEach(function(e) {
+            const show = e.source().data('unavailable') || e.target().data('unavailable');
+            e.style('display', show ? 'element' : 'none');
+        });
+        return;
+    }
     if (_sevFilter.size === 0) {
         cy.elements().style('display', 'element');
         return;
@@ -73,6 +88,37 @@ export function buildSevFilter(bar, cy) {
         wrap.appendChild(pill);
     });
 
+    // Offline-Only Toggle \u2014 separate Pille rechts. Aktiver Zustand mit
+    // rotem Akzent damit man sofort sieht "Filter ist scharf, andere Hosts
+    // sind ausgeblendet" \u2014 das ist ein recht aggressiver Filter.
+    const offBtn = document.createElement('button');
+    offBtn.id = 'nt-offline-only';
+    offBtn.title = 'Nur offline Hosts anzeigen';
+    offBtn.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;'
+        + 'background:#9ca3af;display:inline-block;margin-right:3px"></span>Offline';
+    const _setOffStyle = function() {
+        const a = _offlineOnly;
+        offBtn.style.cssText = 'display:flex;align-items:center;padding:2px 7px;'
+            + 'border-radius:12px;border:1.5px solid '
+            + (a ? '#e53742' : '#cbd5e1')
+            + ';background:' + (a ? 'rgba(229,55,66,0.13)' : 'transparent')
+            + ';cursor:pointer;font-size:11px;font-weight:600;'
+            + 'color:' + (a ? '#e53742' : '#94a3b8');
+    };
+    _setOffStyle();
+    offBtn.addEventListener('click', function() {
+        _offlineOnly = !_offlineOnly;
+        _setOffStyle();
+        // Wenn Offline-Only aktiviert wird, dimmen wir die Sev-Pills optisch
+        // (sie haben aktuell keinen Effekt) \u2014 beim Deaktivieren wieder normal.
+        wrap.querySelectorAll('button[data-sev]').forEach(function(b) {
+            b.style.opacity = _offlineOnly ? '0.4' : '';
+            b.style.pointerEvents = _offlineOnly ? 'none' : '';
+        });
+        applyFilter(cy);
+    });
+    wrap.appendChild(offBtn);
+
     const clr = document.createElement('button');
     clr.textContent = '\u2715';
     clr.title = 'Filter zur\u00FCcksetzen';
@@ -80,9 +126,13 @@ export function buildSevFilter(bar, cy) {
         + 'background:transparent;cursor:pointer;font-size:11px;color:#94a3b8';
     clr.addEventListener('click', function() {
         _sevFilter.clear();
+        _offlineOnly = false;
+        _setOffStyle();
         wrap.querySelectorAll('button[data-sev]').forEach(function(b) {
             b.style.background = 'transparent';
             b.style.boxShadow  = 'none';
+            b.style.opacity = '';
+            b.style.pointerEvents = '';
         });
         applyFilter(cy);
         saveSevFilter(_sevFilter);

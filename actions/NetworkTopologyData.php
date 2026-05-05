@@ -317,6 +317,7 @@ class NetworkTopologyData extends CController {
         // Für 482 Items reduziert das 482 Queries auf ~25.
         $all_items = $items_a + $items_b + $items_show;
         $last_values = [];
+        $last_clocks = [];   // itemid => max(clock) — fuer Stale-Detection
         $CHUNK = 20;
 
         foreach ([
@@ -334,15 +335,34 @@ class NetworkTopologyData extends CController {
                 $parts = [];
                 foreach ($chunk as $iid) {
                     $iid = (int) $iid;
-                    $parts[] = '(SELECT ' . $iid . ' AS itemid, value FROM ' . $table
+                    // value + clock fuer Stale-Detection beide aus dem
+                    // selben SELECT — kein zusaetzlicher Roundtrip.
+                    $parts[] = '(SELECT ' . $iid . ' AS itemid, value, clock FROM ' . $table
                              . ' WHERE itemid=' . $iid
                              . ' ORDER BY clock DESC LIMIT 1)';
                 }
                 $sql = implode(' UNION ALL ', $parts);
                 $res = DBselect($sql);
                 while ($row = DBfetch($res)) {
-                    $last_values[(int) $row['itemid']] = $row['value'];
+                    $iid = (int) $row['itemid'];
+                    $last_values[$iid] = $row['value'];
+                    $last_clocks[$iid] = (int) $row['clock'];
                 }
+            }
+        }
+
+        // Stale-Detection: pro Host das max(lastclock) aller seiner Items.
+        // Wenn das alle Items des Hosts mehrere Minuten alt sind, kommen
+        // keine neuen Daten mehr an — Host ist effektiv stale (auch wenn
+        // unavailable=false). Nur Items aus all_items (Live-Metriken),
+        // nicht aus Discovery oder anderen Quellen.
+        $host_last_seen = [];
+        foreach ($all_items as $iid => $item) {
+            if (!isset($last_clocks[$iid])) continue;
+            $hid = (int) $item['hostid'];
+            $clk = $last_clocks[$iid];
+            if (!isset($host_last_seen[$hid]) || $clk > $host_last_seen[$hid]) {
+                $host_last_seen[$hid] = $clk;
             }
         }
 
@@ -766,6 +786,7 @@ class NetworkTopologyData extends CController {
                 'unavailable' => $host_unavailable,
                 'down_since'  => $down_since,    // 0 wenn nicht offline, sonst Unix-TS
                 'down_error'  => $down_error,    // Last Zabbix-Error-Message vom Interface
+                'last_seen'   => $host_last_seen[$hid] ?? 0,   // max(lastclock) fuer Stale-Detection
                 // Type-loose: API liefert mal '1', mal 1
                 'maintenance' => (int) ($h['maintenance_status'] ?? 0) === 1,
                 'type'        => $effective_type,
