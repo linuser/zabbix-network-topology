@@ -695,6 +695,12 @@ export function renderTable(wrap, nodes, edges) {
         searchIn.id = 'nt-items-hostsearch';
         searchIn.placeholder = 'Hostname filtern...';
         searchIn.value = _itemsSearch;
+        // Native Autocomplete via <datalist> — Browser-Default-Dropdown
+        // mit Vorschlaegen aus den verfuegbaren Hostnamen. Keine Custom-Lib
+        // noetig. Liste wird gefuellt sobald _itemsData da ist (s. unten).
+        searchIn.setAttribute('list', 'nt-items-hostlist');
+        searchIn.setAttribute('autocomplete', 'off');   // off = browser-history aus,
+                                                         // datalist bleibt aktiv
         searchIn.style.cssText = 'flex:1;max-width:280px;padding:6px 10px;border:1px solid '
             + theme.border + ';border-radius:6px;font-size:12px;background:' + theme.inputBg
             + ';color:' + theme.text + ';font-family:inherit;outline:none;'
@@ -708,6 +714,12 @@ export function renderTable(wrap, nodes, edges) {
             this.style.boxShadow = 'none';
         });
         row2.appendChild(searchIn);
+
+        // Datalist als Sibling — id matched das list-Attribut oben.
+        // Wird in renderPivotInto() befuellt sobald _itemsData da ist.
+        const hostList = document.createElement('datalist');
+        hostList.id = 'nt-items-hostlist';
+        row2.appendChild(hostList);
 
         // Toggle: leere Hosts/Items ausblenden
         const hideEmptyBtn = document.createElement('button');
@@ -780,6 +792,20 @@ export function renderTable(wrap, nodes, edges) {
         // iteriert nur über die übergebenen IDs.
         function renderPivotInto(area, counter) {
             if (!_itemsData) return;
+
+            // Datalist mit allen Hostnamen befuellen (idempotent: nur einmal
+            // pro neuem Datensatz — wir markieren den Stand mit dataset.filled).
+            const dlExpect = String(Object.keys(_itemsData.hosts || {}).length);
+            if (hostList && hostList.dataset.filled !== dlExpect) {
+                while (hostList.firstChild) hostList.removeChild(hostList.firstChild);
+                Object.values(_itemsData.hosts || {}).forEach(function(hn) {
+                    if (!hn) return;
+                    const o = document.createElement('option');
+                    o.value = hn;
+                    hostList.appendChild(o);
+                });
+                hostList.dataset.filled = dlExpect;
+            }
 
             // Hostids nach Suche filtern (kein Clone — nur ID-Liste)
             const allIds = Object.keys(_itemsData.hosts || {});
