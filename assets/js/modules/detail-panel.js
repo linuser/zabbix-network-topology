@@ -58,6 +58,22 @@ export function showDetail(panel, d, cy) {
     const ifaceCell = esc(d.iftype || '\u2014')
         + (proxyTxt ? '<span style="color:#94a3b8;font-size:11px">' + esc(proxyTxt) + '</span>' : '');
 
+    // Offline-Detection: wenn Host laut Zabbix unavailable ist, kennzeichnen
+    // wir alle Metriken als STALE (letzter Wert vor Disconnect). Sonst sieht
+    // ein toter Host mit eingefrorenem CPU 96% wie ein heisser Host aus.
+    const isOff = !!d.unavailable;
+    const offColor = '#9ca3af';   // grey-500
+    const staleStyle = isOff
+        ? 'opacity:0.55;text-decoration:line-through;' + 'text-decoration-style:wavy;'
+        : '';
+    const staleNote = isOff ? ' <span style="color:' + offColor
+        + ';font-size:10px">(stale)</span>' : '';
+    const fmtMetric = function(rawHtml) {
+        return isOff
+            ? '<span style="' + staleStyle + '">' + rawHtml + '</span>' + staleNote
+            : rawHtml;
+    };
+
     const rows = [
         ['Host', esc(d.host || d.label)],
         ['Type', '<b style="color:' + ti.col + '">' + ti.icon + ' ' + esc(ti.lbl) + '</b>' + customMark],
@@ -67,13 +83,48 @@ export function showDetail(panel, d, cy) {
         ...(d.maintenance ? [['Wartung', '<span style="color:#f59e0b;font-weight:600">\u{1F527} In Wartung</span>']] : []),
         ...(d.acknowledged ? [['Acked',   '<span style="color:#22c55e;font-weight:600">\u2714 Probleme best\u00E4tigt</span>']] : []),
         ...(d.note   ? [['Notiz',  '<span style="color:#f59e0b">&#127991; ' + esc(d.note) + '</span>']] : []),
-        ['Status', '<span style="color:' + sc + ';font-weight:700">&#9679; ' + esc(SEV_LBL[d.severity || 0] || 'Normal') + '</span>'],
-        ['CPU',    d.cpu    != null ? '<b>' + d.cpu    + '%</b>' : '\u2014'],
-        ['Memory', d.memory != null ? '<b>' + d.memory + '%</b>' : '\u2014'],
-        ['Ping',   d.ping > 0       ? '<b>' + d.ping   + ' ms</b>' : '\u2014'],
-        ['&#8595; In',  '<span style="color:#22c55e">' + fmt(d.traffic ? d.traffic.in  : 0) + '</span>'],
-        ['&#8593; Out', '<span style="color:#38bdf8">' + fmt(d.traffic ? d.traffic.out : 0) + '</span>'],
+        // Status-Row: bei Offline wird "Offline" statt der Severity-Anzeige
+        // gerendert \u2014 sonst sieht man "High" (von eingefrorenen Triggern) und
+        // denkt der Host ist heiss aber alive.
+        ['Status', isOff
+            ? '<span style="color:#e53742;font-weight:700">&#9711; Offline / nicht erreichbar</span>'
+            : '<span style="color:' + sc + ';font-weight:700">&#9679; '
+                + esc(SEV_LBL[d.severity || 0] || 'Normal') + '</span>'],
+        ['CPU',    fmtMetric(d.cpu    != null ? '<b>' + d.cpu    + '%</b>' : '\u2014')],
+        ['Memory', fmtMetric(d.memory != null ? '<b>' + d.memory + '%</b>' : '\u2014')],
+        ['Ping',   fmtMetric(d.ping > 0       ? '<b>' + d.ping   + ' ms</b>' : '\u2014')],
+        ['&#8595; In',  fmtMetric('<span style="color:#22c55e">'
+            + fmt(d.traffic ? d.traffic.in  : 0) + '</span>')],
+        ['&#8593; Out', fmtMetric('<span style="color:#38bdf8">'
+            + fmt(d.traffic ? d.traffic.out : 0) + '</span>')],
     ];
+
+    // Offline-Banner: rote prominente Box ueber dem Action-Bar.
+    // "vor 5m" / "vor 2h" / "vor 3d" relative-time-Format.
+    const fmtAgo = function(unixTs) {
+        if (!unixTs || unixTs <= 0) return '';
+        const sec = Math.max(0, Math.floor(Date.now() / 1000) - unixTs);
+        if (sec < 60)    return 'vor ' + sec + 's';
+        if (sec < 3600)  return 'vor ' + Math.floor(sec / 60) + 'm';
+        if (sec < 86400) return 'vor ' + Math.floor(sec / 3600) + 'h';
+        return 'vor ' + Math.floor(sec / 86400) + 'd';
+    };
+    const offlineBanner = isOff
+        ? '<div style="background:rgba(229,55,66,0.12);border:1px solid #e53742;'
+            + 'border-left:4px solid #e53742;border-radius:2px;padding:6px 10px;'
+            + 'margin-bottom:8px;color:#e53742;font-size:12px">'
+            + '<div style="font-weight:700">&#9888; OFFLINE'
+            + (d.down_since ? ' &middot; ' + fmtAgo(d.down_since) : '')
+            + '</div>'
+            + (d.down_error
+                ? '<div style="font-size:11px;color:#9c1a25;margin-top:2px;'
+                    + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap" '
+                    + 'title="' + esc(d.down_error) + '">' + esc(d.down_error) + '</div>'
+                : '')
+            + '<div style="font-size:11px;color:#9c1a25;margin-top:2px;font-style:italic">'
+            + 'Metriken unten sind die letzten Werte vor Disconnect</div>'
+            + '</div>'
+        : '';
 
     let peers = '';
     cy.getElementById(d.id).connectedEdges().forEach(function(edge) {
@@ -172,6 +223,7 @@ export function showDetail(panel, d, cy) {
         + '<button id="nt-detail-close" style="background:none;border:none;cursor:pointer;color:#94a3b8;'
         + 'font-size:18px;line-height:1;padding:0;flex-shrink:0">&#x2715;</button>'
         + '</div>'
+        + offlineBanner
         + actionBar
         + ringHtml
         + '<table style="width:100%;font-size:12px;border-collapse:collapse">'

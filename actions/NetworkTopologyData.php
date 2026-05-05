@@ -41,7 +41,11 @@ class NetworkTopologyData extends CController {
         $hosts = API::Host()->get([
             'output'                => ['hostid', 'host', 'name', 'status', 'maintenance_status', 'maintenanceid', 'proxyid', 'proxy_groupid'],
             'groupids'              => $groupids,
-            'selectInterfaces'      => ['ip', 'type', 'main'],
+            // available + errors_from + disable_until pro Interface — fuer
+            // Offline-Detection. Zabbix-API: available 0=unknown, 1=available,
+            // 2=unavailable. errors_from = Unix-Timestamp seit wann es
+            // Probleme gibt (= last_seen-Aequivalent fuer "down since").
+            'selectInterfaces'      => ['ip', 'type', 'main', 'available', 'errors_from', 'error'],
             'selectParentTemplates' => ['name'],
             'selectInventory'       => ['location_lat', 'location_lon', 'location'],
             'selectTags'            => ['tag', 'value'],
@@ -707,6 +711,25 @@ class NetworkTopologyData extends CController {
                 ];
             }
 
+            // Offline-Detection: ein Host gilt als unavailable wenn IRGENDEIN
+            // monitored Interface available=2 meldet. errors_from gibt den
+            // Unix-Timestamp wann der Disconnect anfing (= "down since").
+            $host_unavailable = false;
+            $down_since = 0;
+            $down_error = '';
+            foreach ($ifaces as $iface) {
+                if ((int) ($iface['available'] ?? 0) === 2) {
+                    $host_unavailable = true;
+                    $ef = (int) ($iface['errors_from'] ?? 0);
+                    if ($ef > 0 && ($down_since === 0 || $ef < $down_since)) {
+                        $down_since = $ef;
+                    }
+                    if (empty($down_error) && !empty($iface['error'])) {
+                        $down_error = (string) $iface['error'];
+                    }
+                }
+            }
+
             $nodes[] = [
                 'id'          => $hid,
                 'label'       => $h['name'] !== '' ? $h['name'] : $h['host'],
@@ -717,6 +740,10 @@ class NetworkTopologyData extends CController {
                 'problems'    => $host_problems[$hid]  ?? 0,
                 'problem_list' => $host_problem_list[$hid] ?? [],
                 'acknowledged'=> $all_acked,
+                // Offline-Status (eines der monitored Interfaces ist unavailable)
+                'unavailable' => $host_unavailable,
+                'down_since'  => $down_since,    // 0 wenn nicht offline, sonst Unix-TS
+                'down_error'  => $down_error,    // Last Zabbix-Error-Message vom Interface
                 // Type-loose: API liefert mal '1', mal 1
                 'maintenance' => (int) ($h['maintenance_status'] ?? 0) === 1,
                 'type'        => $effective_type,

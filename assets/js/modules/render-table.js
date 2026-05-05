@@ -437,15 +437,30 @@ function rowHtml(n, baseUrl, theme) {
             + 'line-height:1;transition:filter 0.12s">' + lbl + '</a>';
     };
 
-    return '<tr data-host-id="' + esc(String(n.id)) + '" '
-        + 'style="border-bottom:1px solid ' + theme.borderSoft + ';cursor:pointer;'
-        + 'border-left:3px solid ' + sevCol + ';transition:background 0.12s">'
-        // Status (Pille mit Punkt + Label)
-        + '<td style="' + cellPad + '"><span style="display:inline-flex;align-items:center;'
-            + 'gap:4px;padding:2px 8px;border-radius:' + NT_R.pill + ';background:' + sevCol + '22;'
+    // Offline-Detection: Host laut Zabbix unavailable → Zeile gedimmt,
+    // Status-Pille zeigt "Offline" statt Severity, alle Metriken stale.
+    const isOff = !!n.unavailable;
+    const offColor = '#9ca3af';
+    const rowOpacity = isOff ? 'opacity:0.55;' : '';
+    const sevCellHtml = isOff
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
+            + 'border-radius:' + NT_R.pill + ';background:rgba(229,55,66,0.13);'
+            + 'color:#e53742;font-size:11px;font-weight:700">'
+            + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
+            + 'background:#e53742"></span>OFFLINE</span>'
+        : '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
+            + 'border-radius:' + NT_R.pill + ';background:' + sevCol + '22;'
             + 'color:' + sevCol + ';font-size:11px;font-weight:700">'
             + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
-            + 'background:' + sevCol + '"></span>' + esc(sevLbl) + '</span></td>'
+            + 'background:' + sevCol + '"></span>' + esc(sevLbl) + '</span>';
+    const metricColor = isOff ? offColor : theme.text;
+
+    return '<tr data-host-id="' + esc(String(n.id)) + '" '
+        + 'style="border-bottom:1px solid ' + theme.borderSoft + ';cursor:pointer;'
+        + 'border-left:3px solid ' + (isOff ? '#9ca3af' : sevCol)
+        + ';transition:background 0.12s;' + rowOpacity + '">'
+        // Status (Pille mit Punkt + Label oder Offline-Anzeige)
+        + '<td style="' + cellPad + '">' + sevCellHtml + '</td>'
         // Host (Link zu Latest-Data)
         + '<td style="' + cellPad + '"><a href="' + esc(latestUrl) + '" '
             + 'target="_blank" rel="noopener noreferrer" '
@@ -454,7 +469,7 @@ function rowHtml(n, baseUrl, theme) {
             + 'font-size:12px">'
             + esc(n.label || n.host || '') + '</a></td>'
         // Type (Icon + Label)
-        + '<td style="' + cellPad + ';font-size:12px;color:' + theme.text + '">'
+        + '<td style="' + cellPad + ';font-size:12px;color:' + metricColor + '">'
             + '<span style="margin-right:5px">' + ti + '</span>' + esc(tl) + '</td>'
         // Group (gefaerbte Pille pro Hostgroup)
         + '<td style="' + cellPad + '"><span style="display:inline-block;'
@@ -464,7 +479,7 @@ function rowHtml(n, baseUrl, theme) {
         // IP + Interface-Typ ("192.168.33.10 (SNMP)") — Iftype kommt vom Backend.
         // Tooltip am Iftype-Span zeigt zusätzlich Proxy/Proxy-Group-Info
         // (oder "Server (kein Proxy)" wenn der Host direkt am Zabbix-Server hängt).
-        + '<td style="' + cellPad + ';font-size:12px;color:' + theme.text
+        + '<td style="' + cellPad + ';font-size:12px;color:' + metricColor
         + ';' + monoNum + '">'
             + esc(n.ip || '\u2014')
             + (n.iftype
@@ -473,15 +488,15 @@ function rowHtml(n, baseUrl, theme) {
                     + 'border-bottom:1px dotted ' + theme.border + '">(' + esc(n.iftype) + ')</span>'
                 : '')
             + '</td>'
-        // CPU / Memory / Ping - rechtsbuendig, Mono mit tabular-nums
-        + '<td style="' + cellPadR + ';font-size:12px;color:' + theme.text
+        // CPU / Memory / Ping - bei Offline werden die Werte gedimmt dargestellt
+        + '<td style="' + cellPadR + ';font-size:12px;color:' + metricColor
             + ';' + monoNum + '">' + fmtPct(n.cpu) + '</td>'
-        + '<td style="' + cellPadR + ';font-size:12px;color:' + theme.text
+        + '<td style="' + cellPadR + ';font-size:12px;color:' + metricColor
             + ';' + monoNum + '">' + fmtPct(n.memory) + '</td>'
-        + '<td style="' + cellPadR + ';font-size:12px;color:' + theme.text
+        + '<td style="' + cellPadR + ';font-size:12px;color:' + metricColor
             + ';' + monoNum + '">' + fmtMs(n.ping) + '</td>'
-        // Traffic In/Out (zwei Zeilen kompakt)
-        + '<td style="' + cellPadR + ';font-size:11px;color:' + theme.text
+        // Traffic In/Out
+        + '<td style="' + cellPadR + ';font-size:11px;color:' + metricColor
             + ';' + monoNum + ';line-height:1.4;white-space:nowrap">'
             + '\u2193 ' + trafIn + '<br>\u2191 ' + trafOut
             + '</td>'
