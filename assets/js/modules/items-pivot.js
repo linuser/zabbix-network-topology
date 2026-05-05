@@ -167,67 +167,182 @@ export function buildPivotToolbar(onApply, theme) {
         + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em';
     wrap.appendChild(lbl);
 
-    const sel = document.createElement('select');
-    sel.id = 'nt-items-preset';
-    sel.style.cssText = 'padding:5px 8px;border:1px solid ' + t.border
+    // Custom durchsuchbarer Combo statt nativem <select>: native selects
+    // sind nicht filterbar \u2014 mit vielen Discovery-Patterns wird die Liste
+    // unhandlich. Combo = Trigger-Button + Popup mit Filter-Input + scroll-
+    // barer Liste mit Section-Headern.
+    const combo = document.createElement('div');
+    combo.id = 'nt-items-preset';
+    combo.style.cssText = 'position:relative;display:inline-block';
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.style.cssText = 'padding:5px 28px 5px 10px;border:1px solid ' + t.border
         + ';border-radius:6px;font-size:12px;background:' + t.surface
-        + ';color:' + t.text + ';font-family:inherit;cursor:pointer';
-    // Statische Presets in einer optgroup damit sie sich von den
-    // dynamischen Discovery-Patterns optisch absetzen
-    const grpStatic = document.createElement('optgroup');
-    grpStatic.label = 'Standard-Presets';
-    PRESETS.forEach(function(p) {
-        const o = document.createElement('option');
-        o.value = p.pattern;
-        o.dataset.unit = p.unit;
-        o.textContent = p.lbl;
-        grpStatic.appendChild(o);
-    });
-    // "Custom"-Eintrag am Ende
-    const customOpt = document.createElement('option');
-    customOpt.value = '__custom__';
-    customOpt.textContent = '\u2014 Custom-Pattern \u2014';
-    grpStatic.appendChild(customOpt);
-    sel.appendChild(grpStatic);
-    // Discovery-Optgroup wird async befuellt nachdem der Backend-Call zurueck ist
-    const grpDisc = document.createElement('optgroup');
-    grpDisc.label = '\u{1F50D} Auf deinen Hosts gefunden';
-    grpDisc.id = 'nt-items-preset-discovery';
-    // Loading-Placeholder bis der Fetch durch ist
-    const loadingOpt = document.createElement('option');
-    loadingOpt.disabled = true;
-    loadingOpt.textContent = '\u23f3 Lade Patterns...';
-    grpDisc.appendChild(loadingOpt);
-    sel.appendChild(grpDisc);
-    wrap.appendChild(sel);
+        + ';color:' + t.text + ';font-family:inherit;cursor:pointer;'
+        + 'min-width:200px;text-align:left;position:relative';
+    // Trigger-Label als TextNode damit wir es spaeter ueber firstChild.nodeValue
+    // austauschen koennen ohne den Caret-Span zu ueberschreiben.
+    trigger.appendChild(document.createTextNode(PRESETS[0].lbl));
+    const caret = document.createElement('span');
+    caret.textContent = '\u25be';   // small down-triangle
+    caret.style.cssText = 'position:absolute;right:8px;top:50%;transform:translateY(-50%);'
+        + 'font-size:9px;opacity:0.6;pointer-events:none';
+    trigger.appendChild(caret);
+    combo.appendChild(trigger);
 
-    // Discovery async laden + Optgroup befuellen.
-    fetchPatternSuggestions().then(function(res) {
-        // Loading-Placeholder weg
-        while (grpDisc.firstChild) grpDisc.removeChild(grpDisc.firstChild);
-        const list = (res && res.patterns) || [];
-        if (list.length === 0) {
-            const empty = document.createElement('option');
-            empty.disabled = true;
-            empty.textContent = res && res.error
-                ? 'Fehler: ' + res.error
-                : 'Keine Patterns gefunden';
-            grpDisc.appendChild(empty);
-            return;
-        }
-        list.forEach(function(p) {
-            const o = document.createElement('option');
-            o.value = p.stem;
-            o.textContent = p.stem + '  (' + p.items + 'x, ' + p.hosts + 'h)';
-            grpDisc.appendChild(o);
+    const popup = document.createElement('div');
+    popup.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:1000;'
+        + 'margin-top:2px;min-width:280px;max-width:480px;background:' + t.surface
+        + ';border:1px solid ' + t.border + ';border-radius:6px;'
+        + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);overflow:hidden';
+    const filterIn = document.createElement('input');
+    filterIn.type = 'text';
+    filterIn.placeholder = 'Suchen...';
+    filterIn.style.cssText = 'width:100%;box-sizing:border-box;padding:8px 12px;'
+        + 'border:none;border-bottom:1px solid ' + t.borderSoft + ';outline:none;'
+        + 'font-size:12px;background:' + t.head + ';color:' + t.text
+        + ';font-family:inherit';
+    popup.appendChild(filterIn);
+    const listBox = document.createElement('div');
+    listBox.style.cssText = 'max-height:340px;overflow-y:auto;padding:4px 0';
+    popup.appendChild(listBox);
+    combo.appendChild(popup);
+    wrap.appendChild(combo);
+
+    // Discovery-State; rebuildItemsList triggert Popup-Inhalt neu.
+    const _disc = { loading: true, patterns: [], error: null, truncated: false };
+    let _items = [];
+
+    function rebuildItemsList() {
+        _items = [];
+        _items.push({ type: 'header', label: 'Standard-Presets' });
+        PRESETS.forEach(function(p) {
+            _items.push({ type: 'item', label: p.lbl, value: p.pattern });
         });
-        // Truncation-Hinweis als disabled Option am Ende
-        if (res && res.truncated) {
-            const trunc = document.createElement('option');
-            trunc.disabled = true;
-            trunc.textContent = '⚠ Item-Scan abgeschnitten — Counts ggf. zu niedrig';
-            grpDisc.appendChild(trunc);
+        _items.push({ type: 'item',
+                      label: '\u2014 Custom-Pattern \u2014',
+                      value: '__custom__' });
+        _items.push({ type: 'header', label: '\u{1F50D} Auf deinen Hosts gefunden' });
+        if (_disc.loading) {
+            _items.push({ type: 'item', label: '\u23f3 Lade Patterns...',
+                          value: null, disabled: true });
+        } else if (_disc.error) {
+            _items.push({ type: 'item', label: 'Fehler: ' + _disc.error,
+                          value: null, disabled: true });
+        } else if (_disc.patterns.length === 0) {
+            _items.push({ type: 'item', label: 'Keine Patterns gefunden',
+                          value: null, disabled: true });
+        } else {
+            _disc.patterns.forEach(function(p) {
+                _items.push({ type: 'item', label: p.stem, value: p.stem,
+                              sub: '(' + p.items + 'x, ' + p.hosts + 'h)' });
+            });
+            if (_disc.truncated) {
+                _items.push({ type: 'item',
+                              label: '\u26a0 Scan abgeschnitten \u2014 Counts ggf. niedriger',
+                              value: null, disabled: true });
+            }
         }
+        renderList(filterIn.value);
+    }
+
+    function renderList(q) {
+        listBox.innerHTML = '';
+        const ql = (q || '').toLowerCase();
+        let pendingHeader = null;
+        _items.forEach(function(it) {
+            if (it.type === 'header') {
+                pendingHeader = it;
+                return;
+            }
+            const hay = (it.label + ' ' + (it.sub || '')).toLowerCase();
+            if (ql && hay.indexOf(ql) < 0) return;
+            // Header erst rendern wenn ein Item dieser Section gematched hat
+            if (pendingHeader) {
+                const h = document.createElement('div');
+                h.textContent = pendingHeader.label;
+                h.style.cssText = 'padding:6px 12px;font-size:10px;font-weight:700;'
+                    + 'color:' + t.sub + ';text-transform:uppercase;'
+                    + 'letter-spacing:0.06em;background:' + t.head;
+                listBox.appendChild(h);
+                pendingHeader = null;
+            }
+            const row = document.createElement('div');
+            row.style.cssText = 'padding:7px 12px;cursor:' + (it.disabled ? 'default' : 'pointer')
+                + ';font-size:12px;color:' + (it.disabled ? t.subSoft : t.text)
+                + ';display:flex;align-items:baseline;gap:8px'
+                + (it.disabled ? ';font-style:italic' : '');
+            const lab = document.createElement('span');
+            lab.textContent = it.label;
+            lab.style.flex = '1';
+            row.appendChild(lab);
+            if (it.sub) {
+                const sub = document.createElement('span');
+                sub.textContent = it.sub;
+                sub.style.cssText = 'color:' + t.subSoft + ';font-size:11px;'
+                    + 'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+                row.appendChild(sub);
+            }
+            if (!it.disabled) {
+                row.addEventListener('mouseenter', function() {
+                    this.style.background = t.hover;
+                });
+                row.addEventListener('mouseleave', function() {
+                    this.style.background = '';
+                });
+                row.addEventListener('click', function() {
+                    if (it.value === '__custom__') {
+                        trigger.firstChild.nodeValue = '\u2014 Custom-Pattern \u2014';
+                        pat.value = '';
+                        closePopup();
+                        pat.focus();
+                    } else {
+                        trigger.firstChild.nodeValue = it.label;
+                        pat.value = it.value;
+                        closePopup();
+                    }
+                });
+            }
+            listBox.appendChild(row);
+        });
+        if (listBox.children.length === 0) {
+            const empty = document.createElement('div');
+            empty.textContent = 'Keine Treffer';
+            empty.style.cssText = 'padding:14px;text-align:center;color:' + t.subSoft
+                + ';font-size:12px;font-style:italic';
+            listBox.appendChild(empty);
+        }
+    }
+
+    function openPopup() {
+        popup.style.display = 'block';
+        filterIn.value = '';
+        renderList('');
+        setTimeout(function() { filterIn.focus(); }, 0);
+    }
+    function closePopup() { popup.style.display = 'none'; }
+
+    trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (popup.style.display === 'block') closePopup();
+        else openPopup();
+    });
+    filterIn.addEventListener('input', function() { renderList(this.value); });
+    filterIn.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') { closePopup(); trigger.focus(); }
+    });
+    document.addEventListener('click', function(e) {
+        if (!combo.contains(e.target)) closePopup();
+    });
+    // Initial-Liste mit Loading-Placeholder rendern; Discovery-Fetch pflegt
+    // dann _disc und triggert ein Re-Render.
+    rebuildItemsList();
+    fetchPatternSuggestions().then(function(res) {
+        _disc.loading = false;
+        if (res && res.error) _disc.error = res.error;
+        _disc.patterns = (res && res.patterns) || [];
+        _disc.truncated = !!(res && res.truncated);
+        rebuildItemsList();
     });
 
     const patWrap = document.createElement('span');
@@ -267,21 +382,23 @@ export function buildPivotToolbar(onApply, theme) {
         + 'font-family:inherit;letter-spacing:0.02em;transition:filter 0.15s';
     wrap.appendChild(apply);
 
-    sel.addEventListener('change', function() {
-        if (this.value === '__custom__') {
-            pat.value = '';
-            pat.focus();
-        } else {
-            pat.value = this.value;
-        }
-    });
-    // Wenn der User das Pattern manuell aendert und es matcht keinen Preset
-    // mehr, springt das Dropdown auf "Custom" — sonst sieht man "Disk-Auslastung"
-    // bei einem net.if.in[*]-Pattern, was inkonsistent wirkt.
+    // Sync vom Pattern-Input zurueck in den Combo-Trigger: wenn der User
+    // das Pattern manuell tippt und es matcht einen bekannten Preset oder
+    // Discovered-Stem, soll der Trigger das passende Label zeigen statt
+    // weiterhin den vorigen Eintrag. Sonst zeigt der Trigger "Custom".
     pat.addEventListener('input', function() {
         const v = pat.value;
-        const match = PRESETS.find(function(p) { return p.pattern === v; });
-        sel.value = match ? match.pattern : '__custom__';
+        const matchPreset = PRESETS.find(function(p) { return p.pattern === v; });
+        if (matchPreset) {
+            trigger.firstChild.nodeValue = matchPreset.lbl;
+            return;
+        }
+        const matchDisc = (_disc.patterns || []).find(function(p) { return p.stem === v; });
+        if (matchDisc) {
+            trigger.firstChild.nodeValue = matchDisc.stem;
+            return;
+        }
+        trigger.firstChild.nodeValue = '— Custom-Pattern —';
     });
     apply.addEventListener('click', function() {
         if (onApply) onApply(pat.value);
