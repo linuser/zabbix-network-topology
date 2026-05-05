@@ -278,7 +278,19 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
     }
 
     groupsToLayout.forEach(function(g) {
-        const nodes = nodesByGroup[g];
+        // Pinned (locked) Nodes vom Per-Cluster-Layout ausschliessen — cose
+        // honoriert den locked-State zwar selbst, aber explizit zu filtern
+        // ist robuster (manche Layouts wie 'preset'/'grid' tun's nicht
+        // zuverlaessig). Wenn alle Nodes der Gruppe pinned sind, wird die
+        // Gruppe komplett uebersprungen — sind ja schon manuell positioniert.
+        const nodes = nodesByGroup[g].not(':locked');
+        if (nodes.length === 0) {
+            // Nichts zu layouten, aber checkDone trotzdem trigger damit
+            // die pending/completed-Buchhaltung sauber bleibt.
+            completed++;
+            checkDone();
+            return;
+        }
         const bb = Object.assign({}, boxes[g]);
         // Top-Reserve in der BB für Group-Label
         bb.y1 += LABEL_OFFSET;

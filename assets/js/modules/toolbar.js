@@ -173,9 +173,14 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 saveLayout(opt.id);
                 // Re-Layout mit forceFresh=true: der User hat aktiv gewählt,
                 // also nicht den Preset wiederverwenden.
+                //
+                // WICHTIG: Pinned (locked) Nodes NICHT mehr unlocken vor dem
+                // Layout. Vorher gab's einen unlock+layout+relock-Tanz —
+                // dadurch landeten gepinnte Knoten nach Layout-Wechsel an
+                // einer neuen Position obwohl sie eigentlich genau den Sinn
+                // haben "stay where I put you". Jetzt: locked bleiben locked,
+                // Cytoscape's Layouts respektieren das und ueberspringen sie.
                 clearPositions();
-                const pinnedNodes = cy.nodes('[!isGroup]').filter(function(n) { return n.locked(); });
-                pinnedNodes.unlock();
                 cy.resize();
 
                 // Wenn Cluster-Mode aktiv ist (>=2 Gruppen + nicht 'off') muss
@@ -191,9 +196,11 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 if (_useCluster) {
                     runGroupClusterLayout(cy, groupNames, _clusterMode, function() {
                         setTimeout(function() {
-                            pinnedNodes.lock();
                             savePositions(cy);
                             savePinned(cy);
+                            // Bei der Fit nur ueber NICHT-pinned Nodes — sonst
+                            // koennten Pins ausserhalb des fit-Bereichs liegen
+                            // und nach Layout abgeschnitten sein.
                             cy.fit(cy.nodes(), 30);
                         }, 200);
                     }, opt.id);
@@ -201,7 +208,6 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                     const lo = cy.layout(buildLayoutConfig(opt.id, nodes, [], true));
                     lo.one('layoutstop', function() {
                         setTimeout(function() {
-                            pinnedNodes.lock();
                             savePositions(cy);
                             savePinned(cy);
                             cy.fit(cy.nodes(), 40);
