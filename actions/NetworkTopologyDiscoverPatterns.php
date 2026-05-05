@@ -108,6 +108,10 @@ class NetworkTopologyDiscoverPatterns extends CController {
             $this->respond(['patterns' => []]);
             return;
         }
+        // Wenn das Limit erreicht ist, ist der Scan vermutlich incomplete —
+        // weiter unten wird das Flag mitgeschickt damit das Frontend warnen
+        // kann statt unvollstaendige Pattern-Counts als wahr darzustellen.
+        $itemsTruncated = count($items) >= self::MAX_ITEMS;
 
         // Nur numerische Value-Types behalten
         $stemMap = [];   // stem => ['items' => int, 'hosts' => array<hostid,bool>]
@@ -141,11 +145,17 @@ class NetworkTopologyDiscoverPatterns extends CController {
             if ($a['items'] !== $b['items']) return $b['items'] - $a['items'];
             return strcmp($a['stem'], $b['stem']);
         });
+        $stemsTruncated = false;
         if (count($patterns) > self::MAX_STEMS) {
             $patterns = array_slice($patterns, 0, self::MAX_STEMS);
+            $stemsTruncated = true;
         }
 
-        $this->respond(['patterns' => $patterns]);
+        $this->respond([
+            'patterns'         => $patterns,
+            'truncated'        => $itemsTruncated,
+            'stems_truncated'  => $stemsTruncated,
+        ]);
     }
 
     /**
@@ -167,7 +177,7 @@ class NetworkTopologyDiscoverPatterns extends CController {
         }
         $prefix   = substr($key, 0, $open);
         $paramStr = substr($key, $open + 1, $close - $open - 1);
-        $params = explode(',', $paramStr);
+        $params   = $this->splitParams($paramStr);
         // Quotes strippen damit "BR-MAILCOW" und BR-MAILCOW gleich gemappt werden
         $params = array_map(function($p) {
             return trim(trim($p), '"');
@@ -179,6 +189,37 @@ class NetworkTopologyDiscoverPatterns extends CController {
             $params[0] = '*';
         }
         return $prefix . '[' . implode(',', $params) . ']';
+    }
+
+    /**
+     * Quote-aware Komma-Split fuer Item-Key-Parameter. Standard-explode(',')
+     * mis-splittet bei Real-Zabbix-Keys wie:
+     *   log[/var/log/syslog,"a,b,c"]   <- Komma in quoted param
+     *   web.page.regexp[host,"GET ,POST"]
+     *   vfs.file.regexp[/etc/hosts,"a,b"]
+     * Diese Keys existieren in Standard-Zabbix-Templates und sind sonst
+     * fehlklassifiziert (verschmolzen in falsche Stems).
+     */
+    private function splitParams(string $paramStr): array {
+        if ($paramStr === '') return [''];
+        $parts    = [];
+        $cur      = '';
+        $inQuotes = false;
+        $len      = strlen($paramStr);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $paramStr[$i];
+            if ($ch === '"') {
+                $inQuotes = !$inQuotes;
+                $cur .= $ch;
+            } elseif ($ch === ',' && !$inQuotes) {
+                $parts[] = $cur;
+                $cur = '';
+            } else {
+                $cur .= $ch;
+            }
+        }
+        $parts[] = $cur;
+        return $parts;
     }
 
     private function respond(array $data): void {

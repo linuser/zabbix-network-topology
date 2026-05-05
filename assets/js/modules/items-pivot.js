@@ -127,10 +127,17 @@ export function fetchPatternSuggestions() {
     const promise = fetch(url, { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (data.error) return { error: data.error, patterns: [] };
-            return { patterns: data.patterns || [] };
+            if (data.error) {
+                // Error-Response NICHT cachen — naechster Aufruf soll retry
+                // koennen (transienter Backend-Fehler waere sonst permanent
+                // bis zum Page-Reload).
+                _discoverCache.delete(cacheKey);
+                return { error: data.error, patterns: [] };
+            }
+            return { patterns: data.patterns || [], truncated: !!data.truncated };
         })
         .catch(function(e) {
+            _discoverCache.delete(cacheKey);
             return { error: e.message, patterns: [] };
         });
     _discoverCache.set(cacheKey, promise);
@@ -214,6 +221,13 @@ export function buildPivotToolbar(onApply, theme) {
             o.textContent = p.stem + '  (' + p.items + 'x, ' + p.hosts + 'h)';
             grpDisc.appendChild(o);
         });
+        // Truncation-Hinweis als disabled Option am Ende
+        if (res && res.truncated) {
+            const trunc = document.createElement('option');
+            trunc.disabled = true;
+            trunc.textContent = '⚠ Item-Scan abgeschnitten — Counts ggf. zu niedrig';
+            grpDisc.appendChild(trunc);
+        }
     });
 
     const patWrap = document.createElement('span');
@@ -342,9 +356,15 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     // Hostgroup-Grouping: Zeilen nach primaryGroup-Rank vor-sortieren, damit
     // Hosts derselben Gruppe zusammenstehen. Innerhalb einer Gruppe behaelt
     // die vom Caller uebergebene Reihenfolge ihren Sinn (Hostname / Sortcol).
-    const _hasMultiGroups = new Set(hostIds.map(function(hid) {
-        return _primaryGroup[String(hid)] || '';
-    })).size >= 2;
+    // Empty-String-Gruppen (Hosts ohne _primaryGroup) zaehlen nicht — sonst
+    // triggert die Multi-Group-Detection auch wenn nur EINE echte Gruppe da
+    // ist plus ein paar gruppenlose Hosts.
+    const _groupSet = new Set();
+    hostIds.forEach(function(hid) {
+        const g = _primaryGroup[String(hid)];
+        if (g) _groupSet.add(g);
+    });
+    const _hasMultiGroups = _groupSet.size >= 2;
     if (_hasMultiGroups) {
         hostIds = hostIds.slice().sort(function(a, b) {
             const ra = _groupRank(a), rb = _groupRank(b);
@@ -367,20 +387,44 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
                 return v != null;
             });
         });
+        // Nach dem Filter: nichts mehr uebrig -> dedicated Empty-State,
+        // sonst rendert eine kaputt aussehende Tabelle mit lauter "—" und
+        // dangling Avg-Spalte/Footer.
+        if (cols.length === 0 || hostIds.length === 0) {
+            container.innerHTML = '<div style="padding:48px 30px;text-align:center;color:' + t.text + '">'
+                + '<div style="font-size:32px;margin-bottom:10px;opacity:0.4">\u{1F4ED}</div>'
+                + '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'
+                + 'Alles leer.</div>'
+                + '<div style="color:' + t.sub + ';font-size:12px;margin-top:6px">'
+                + '"Leere ausblenden" hat alle Hosts/Items entfernt — '
+                + 'Toggle deaktivieren um die volle Pivot zu sehen.</div></div>';
+            return;
+        }
     }
 
     const baseUrl = buildBaseUrl();
 
     // Aggregat-Helper: Sum / Avg / Max ueber non-null numerische Werte.
+    // Filter strikt auf 'number' damit numeric-Strings (z.B. "12.5") nicht
+    // im Sum-Modus zu String-Konkatenation fuehren ("0" + "12.5" = "012.5").
+    // isFinite filtert auch Infinity/-Infinity raus.
     const aggregate = function(values, mode) {
         const nums = values.filter(function(v) {
-            return v != null && !isNaN(v);
+            return typeof v === 'number' && isFinite(v);
         });
         if (nums.length === 0) return null;
         if (mode === 'sum') return nums.reduce(function(a, b) { return a + b; }, 0);
         if (mode === 'max') return Math.max.apply(null, nums);
         return nums.reduce(function(a, b) { return a + b; }, 0) / nums.length;
     };
+
+    // Mixed-Units-Detection fuer die Aggregat-Spalte: nur wenn alle Spalten
+    // dieselbe Unit haben, ist der Avg-Wert sinnvoll formatierbar. Bei
+    // gemischten Units (z.B. Discovery-Pattern matched Bytes + %) waere
+    // "57.34 %" auf einem Mix von Werten irrefuehrend — wir formatieren
+    // dann ohne Unit (raw Zahl).
+    const _unitSet = new Set(cols.map(function(c) { return c.unit || ''; }));
+    const _aggUnit = (_unitSet.size === 1 ? (cols[0] && cols[0].unit) : '') || '';
 
     // Sort-Pfeil-Helfer
     const arrow = function(col) {
@@ -465,12 +509,12 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             const v = row[c.key];
             if (v != null) rowVals.push(v);
             // Drill-Down-URL pro Zelle: Latest Data fuer Host gefiltert nach
-            // Spalten-Label (z.B. "sda"). Zabbix nimmt das als Substring im
-            // Item-Namen — funktioniert in den meisten Discovery-Templates.
+            // Spalten-Label (z.B. "sda"). Zabbix 7.x nimmt 'name' als
+            // Substring-Filter ueber den Item-Namen.
             const cellLink = window.location.origin + baseUrl
                 + 'zabbix.php?action=latest.view&filter_set=1'
                 + '&hostids%5B%5D=' + encodeURIComponent(hid)
-                + '&select=' + encodeURIComponent(cleanLabel(c.label) || c.key);
+                + '&name=' + encodeURIComponent(cleanLabel(c.label) || c.key);
             const cellColor = (v == null ? t.subSoft : t.text);
             html += '<td style="padding:0;text-align:right;font-family:' + monoFam + ';'
                 + 'font-size:12.5px">'
@@ -485,11 +529,10 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         });
         // Aggregat-Spalte (Avg) pro Zeile rechts
         const avgVal = aggregate(rowVals, 'avg');
-        const aggUnit = (cols[0] && cols[0].unit) || '';
         html += '<td style="padding:11px 14px;text-align:right;font-family:' + monoFam + ';'
             + 'font-size:12.5px;color:' + (avgVal == null ? t.subSoft : t.textStrong)
             + ';font-weight:600;border-left:2px solid ' + t.border + '">'
-            + esc(fmtVal(avgVal, aggUnit)) + '</td>';
+            + esc(fmtVal(avgVal, _aggUnit)) + '</td>';
         html += '</tr>';
         tbody.insertAdjacentHTML('beforeend', html);
     });
@@ -506,25 +549,34 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
                 + 'color:' + t.sub + ';text-transform:uppercase;letter-spacing:0.07em;'
                 + 'position:sticky;left:0;background:' + t.head + ';z-index:1;'
                 + 'border-right:1px solid ' + t.borderSoft + '">' + lblMap[mode] + '</td>';
-            const footerSelfVals = [];
+            // Alle Werte aller Hosts in allen Spalten flach gesammelt — wird
+            // fuer die trailing Aggregat-Spalte des Footers verwendet, damit
+            // die Sum-Row dort eine echte Gesamtsumme zeigt (nicht ein
+            // mathematisch unsinniges Mean-of-Sums) und entsprechend Max-Row
+            // ein echtes Max-of-all.
+            const flatVals = [];
             cols.forEach(function(c) {
                 const colVals = hostIds.map(function(hid) {
                     return rows[hid] && rows[hid][c.key];
                 });
+                colVals.forEach(function(v) {
+                    if (v != null) flatVals.push(v);
+                });
                 const v = aggregate(colVals, mode);
-                if (v != null) footerSelfVals.push(v);
                 row += '<td style="padding:9px 14px;text-align:right;font-family:' + monoFam + ';'
                     + 'font-size:12px;color:' + (v == null ? t.subSoft : t.textStrong)
                     + ';font-weight:600">'
                     + esc(fmtVal(v, c.unit)) + '</td>';
             });
-            // Avg-Spalte des Footers: aggregiert die Footer-Werte selbst
-            const footerAvg = aggregate(footerSelfVals, 'avg');
-            const aggUnit = (cols[0] && cols[0].unit) || '';
+            // Trailing Aggregat-Cell: derselbe Modus wie die Zeile aber ueber
+            // ALLE Werte (Cross-Cells). Sum-Row -> Gesamtsumme, Max-Row -> Max,
+            // Avg-Row -> globaler Mittelwert (jede Zelle gleich gewichtet).
+            // Bei Mixed-Units wird unitless angezeigt damit nichts irrefuehrt.
+            const footerCross = aggregate(flatVals, mode);
             row += '<td style="padding:9px 14px;text-align:right;font-family:' + monoFam + ';'
-                + 'font-size:12px;color:' + (footerAvg == null ? t.subSoft : t.textStrong)
+                + 'font-size:12px;color:' + (footerCross == null ? t.subSoft : t.textStrong)
                 + ';font-weight:600;border-left:2px solid ' + t.border + '">'
-                + esc(fmtVal(footerAvg, aggUnit)) + '</td>';
+                + esc(fmtVal(footerCross, _aggUnit)) + '</td>';
             row += '</tr>';
             tfoot.insertAdjacentHTML('beforeend', row);
         });
