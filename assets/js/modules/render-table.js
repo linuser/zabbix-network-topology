@@ -17,7 +17,8 @@
 import { esc, fmt } from './utils.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
-import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY, NT_ITEMS_HIDE_EMPTY_KEY } from './storage.js';
+import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY, NT_ITEMS_HIDE_EMPTY_KEY,
+         NT_ITEMS_HEATMAP_KEY } from './storage.js';
 import { showDetail } from './detail-panel.js';
 
 // Konsistent mit detail-panel.js (TYPE_INFO dort dupliziert hier nur was wir
@@ -57,6 +58,7 @@ let _itemsSearch = '';     // Hostname-Filter
 let _itemsSortCol = '';    // '' = Hostname-Sort (default)
 let _itemsSortDir = 'desc';
 let _itemsHideEmpty = false;   // Toggle: leere Hosts/Items ausblenden
+let _itemsHeatmap = false;     // Toggle: Heatmap-Coloring an/aus
 
 // Persistente State-Restoration aus localStorage
 try {
@@ -66,6 +68,8 @@ try {
     if (p) _itemsPattern = p;
     const he = localStorage.getItem(NT_ITEMS_HIDE_EMPTY_KEY);
     if (he === '1') _itemsHideEmpty = true;
+    const hm = localStorage.getItem(NT_ITEMS_HEATMAP_KEY);
+    if (hm === '1') _itemsHeatmap = true;
 } catch (e) {}
 
 // Theme — wird einmal pro renderTable() gebaut und durch alle build*-Funktionen
@@ -745,6 +749,30 @@ export function renderTable(wrap, nodes, edges) {
         });
         row2.appendChild(hideEmptyBtn);
 
+        // Toggle: Heatmap-Coloring (Gradient gruen->rot pro Spalte)
+        const heatmapBtn = document.createElement('button');
+        heatmapBtn.type = 'button';
+        heatmapBtn.id = 'nt-items-heatmap';
+        const _setHeatmapStyle = function() {
+            const active = _itemsHeatmap;
+            heatmapBtn.style.cssText = 'padding:5px 10px;border:1px solid '
+                + (active ? theme.accent : theme.border) + ';border-radius:6px;'
+                + 'background:' + (active ? theme.accent + '22' : theme.surface)
+                + ';color:' + (active ? theme.accent : theme.sub)
+                + ';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;'
+                + 'letter-spacing:0.02em;transition:all 0.15s';
+        };
+        heatmapBtn.textContent = 'Heatmap';
+        heatmapBtn.title = 'Zellen-Hintergrund nach relativer Position in der Spalte einfaerben';
+        _setHeatmapStyle();
+        heatmapBtn.addEventListener('click', function() {
+            _itemsHeatmap = !_itemsHeatmap;
+            try { localStorage.setItem(NT_ITEMS_HEATMAP_KEY, _itemsHeatmap ? '1' : '0'); } catch (e) {}
+            _setHeatmapStyle();
+            renderPivotInto(pivotArea, counter);
+        });
+        row2.appendChild(heatmapBtn);
+
         const counter = document.createElement('span');
         counter.id = 'nt-items-count';
         counter.style.cssText = 'font-size:11px;color:' + theme.subSoft
@@ -821,7 +849,7 @@ export function renderTable(wrap, nodes, edges) {
             // Sortierung der gefilterten IDs
             const sortHostIds = sortPivotHostIds(_itemsData, visibleIds);
             renderPivotTable(area, _itemsData, realNodes, sortHostIds, _itemsSortCol, _itemsSortDir, theme,
-                { hideEmpty: _itemsHideEmpty });
+                { hideEmpty: _itemsHideEmpty, heatmap: _itemsHeatmap });
 
             const total = allIds.length;
             const visible = visibleIds.length;

@@ -443,6 +443,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     const monoFam = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
     const opt = options || {};
     const hideEmpty = !!opt.hideEmpty;
+    const heatmap   = !!opt.heatmap;
     container.innerHTML = '';
 
     if (!data || data.error) {
@@ -566,6 +567,66 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     const _unitSet = new Set(cols.map(function(c) { return c.unit || ''; }));
     const _aggUnit = (_unitSet.size === 1 ? (cols[0] && cols[0].unit) : '') || '';
 
+    // Heatmap-Stats: pro Spalte min/max ueber non-null Werte. Wird einmal
+    // pro Render berechnet und unten in cellBg() abgerufen.
+    const _colStats = {};
+    if (heatmap) {
+        cols.forEach(function(c) {
+            let mn = Infinity, mx = -Infinity, n = 0;
+            hostIds.forEach(function(hid) {
+                const v = rows[hid] && rows[hid][c.key];
+                if (typeof v === 'number' && isFinite(v)) {
+                    if (v < mn) mn = v;
+                    if (v > mx) mx = v;
+                    n++;
+                }
+            });
+            // Nur wenn mindestens 2 verschiedene Werte da sind ergibt der
+            // Gradient Sinn — sonst waere alles dieselbe Farbe.
+            _colStats[c.key] = (n >= 2 && mn < mx) ? { min: mn, max: mx } : null;
+        });
+    }
+    // Aggregate (Avg pro Zeile) fuer Heatmap separat: ueber alle Zeilen-Avgs.
+    let _avgStats = null;
+    if (heatmap) {
+        const allAvgs = [];
+        hostIds.forEach(function(hid) {
+            const row = rows[hid] || {};
+            const vals = [];
+            cols.forEach(function(c) {
+                const v = row[c.key];
+                if (typeof v === 'number' && isFinite(v)) vals.push(v);
+            });
+            const a = aggregate(vals, 'avg');
+            if (a != null) allAvgs.push(a);
+        });
+        if (allAvgs.length >= 2) {
+            const mn = Math.min.apply(null, allAvgs);
+            const mx = Math.max.apply(null, allAvgs);
+            if (mn < mx) _avgStats = { min: mn, max: mx };
+        }
+    }
+
+    // Hintergrund-Farbe pro Zelle. Heatmap-Modus: Gradient gruen->gelb->rot
+    // basierend auf relativer Position in der Spalte. Default-Modus:
+    // Threshold-Coloring fuer % Zellen (>80% orange, >95% rot) — hard rules,
+    // funktionieren auch ohne Heatmap-Daten.
+    function cellBg(v, unit, statsForCol) {
+        if (typeof v !== 'number' || !isFinite(v)) return '';
+        if (heatmap && statsForCol) {
+            const norm = Math.max(0, Math.min(1, (v - statsForCol.min) / (statsForCol.max - statsForCol.min)));
+            // Gruen (HSL hue 120) -> Gelb (60) -> Rot (0)
+            const hue = Math.round(120 - norm * 120);
+            return ';background:hsla(' + hue + ',65%,50%,0.18)';
+        }
+        // Threshold-Coloring: Hard rules fuer haeufige Units
+        if (unit === '%') {
+            if (v >= 95) return ';background:rgba(220,38,38,0.18)';   // rot
+            if (v >= 80) return ';background:rgba(245,158,11,0.20)';  // orange
+        }
+        return '';
+    }
+
     // Sort-Pfeil-Helfer
     const arrow = function(col) {
         if (col !== sortCol) return '';
@@ -656,8 +717,9 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
                 + '&hostids%5B%5D=' + encodeURIComponent(hid)
                 + '&name=' + encodeURIComponent(cleanLabel(c.label) || c.key);
             const cellColor = (v == null ? t.subSoft : t.text);
+            const bg = cellBg(v, c.unit, _colStats[c.key]);
             html += '<td style="padding:0;text-align:right;font-family:' + monoFam + ';'
-                + 'font-size:12.5px">'
+                + 'font-size:12.5px' + bg + '">'
                 + (v != null
                     ? '<a href="' + esc(cellLink) + '" target="_blank" rel="noopener noreferrer" '
                         + 'style="display:block;padding:11px 14px;color:' + cellColor
@@ -669,9 +731,10 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         });
         // Aggregat-Spalte (Avg) pro Zeile rechts
         const avgVal = aggregate(rowVals, 'avg');
+        const avgBg = cellBg(avgVal, _aggUnit, _avgStats);
         html += '<td style="padding:11px 14px;text-align:right;font-family:' + monoFam + ';'
             + 'font-size:12.5px;color:' + (avgVal == null ? t.subSoft : t.textStrong)
-            + ';font-weight:600;border-left:2px solid ' + t.border + '">'
+            + ';font-weight:600;border-left:2px solid ' + t.border + avgBg + '">'
             + esc(fmtVal(avgVal, _aggUnit)) + '</td>';
         html += '</tr>';
         tbody.insertAdjacentHTML('beforeend', html);
