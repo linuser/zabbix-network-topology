@@ -51,5 +51,17 @@ export function buildCytoscapeStyle(dark) {
             'underlay-color': '#6366f1', 'underlay-padding': 6,
             'underlay-opacity': 0.25, 'underlay-shape': 'ellipse',
         }},
+        // Path-Highlight (path-highlight.js): cyan, klar abgesetzt von der
+        // selected-Underlay (#6366f1 indigo) und von Severity-Farben.
+        { selector: '.nt-path-dim', style: { 'opacity': 0.15 }},
+        { selector: 'edge.nt-path-edge', style: {
+            'width': 5, 'line-color': '#06b6d4', 'line-style': 'solid',
+            'opacity': 1, 'z-index': 999, 'color': '#0891b2',
+        }},
+        { selector: 'node.nt-path-node', style: {
+            'underlay-color': '#06b6d4', 'underlay-padding': 8,
+            'underlay-opacity': 0.45, 'underlay-shape': 'ellipse',
+            'opacity': 1, 'z-index': 999,
+        }},
     ];
 }

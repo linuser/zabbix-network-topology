@@ -24,6 +24,7 @@ import {
 } from './storage.js';
 import { aggregateByGroup } from './aggregation.js';
 import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
+import { isPathActive, clearPathState } from './path-highlight.js';
 import { showTip, hideTip, moveTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
@@ -118,7 +119,8 @@ export function render(wrap, nodes, edges, dataUrl) {
 
     // ── Cleanup vorheriger Tab-State ───────────────────────────────────────
     if (window._ntEdgeAnim)     { clearInterval(window._ntEdgeAnim);     window._ntEdgeAnim     = null; }
-    if (window._ntCy)           { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
+    if (window._ntCy)           { try { clearPathState(window._ntCy); } catch (e) {}
+                                  try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     window._ntToolbarDone = false;
     const oldSev    = document.getElementById('nt-sev-filter');   if (oldSev)    oldSev.remove();
     const oldSearch = document.getElementById('nt-search-input'); if (oldSearch) oldSearch.remove();
@@ -249,12 +251,17 @@ export function render(wrap, nodes, edges, dataUrl) {
             }
             return;
         }
-        // Path-Highlight: Toggle bei erneutem Klick auf denselben Node
+        // Connected-Component-Highlight: Toggle bei erneutem Klick. Wenn aber
+        // gerade ein BFS-Pfad gerendert ist (path-highlight.js), nicht dimmen
+        // — die Klassen wuerden vom Inline-Style ueberschrieben und das
+        // Pfad-Highlight kaputt machen.
         const clickedId = e.target.id();
-        if (getActiveHighlightId() === clickedId) {
-            resetHighlight(cy);
-        } else {
-            applyHighlight(cy, clickedId);
+        if (!isPathActive()) {
+            if (getActiveHighlightId() === clickedId) {
+                resetHighlight(cy);
+            } else {
+                applyHighlight(cy, clickedId);
+            }
         }
         showDetail(pnl, e.target.data(), cy);
     });
@@ -267,7 +274,12 @@ export function render(wrap, nodes, edges, dataUrl) {
     cy.on('mouseout',  'node[!isGroup]', function()  { hideTip(); });
     cy.on('tap', function() { hideTip(); });
     cy.on('tap', function(e) {
-        if (e.target === cy) { if (pnl) pnl.style.display = 'none'; hideCtx(); resetHighlight(cy); }
+        if (e.target === cy) {
+            if (pnl) pnl.style.display = 'none';
+            hideCtx();
+            resetHighlight(cy);
+            clearPathState(cy);
+        }
     });
 
     cy.on('cxttap', 'node[!isGroup]', function(e) {

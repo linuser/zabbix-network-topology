@@ -19,6 +19,7 @@ import { NT_LLDP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
 import { resetHighlight } from './highlight.js';
+import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isLinkModeActive, enterLinkMode, exitLinkMode } from './manual-links.js';
 import { setupExportMenu } from './export-mail.js';
 import { addHistoryButton } from './history-mode.js';
@@ -436,7 +437,12 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         document.getElementById('nt-canvas-wrap').style.cursor = 'crosshair';
     };
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && isLinkModeActive()) exitLinkMode();
+        if (e.key !== 'Escape') return;
+        if (isLinkModeActive()) { exitLinkMode(); return; }
+        // ESC clears Pfad-Highlight (path-highlight.js) — Connected-Component
+        // Reset bleibt dem Background-Click ueberlassen.
+        const cyRef = window._ntCy;
+        if (cyRef && (isPathActive() || getPathStart())) clearPathState(cyRef);
     });
 
     // Alle manuellen Links löschen

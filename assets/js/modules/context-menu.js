@@ -13,6 +13,9 @@
 import { SEV_COL } from './severity.js';
 import { NT_GROUP_VIEW_KEY, savePinned, saveNote } from './storage.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
+import { getPathStart, isPathActive, setPathStart,
+         applyPathHighlight, clearPathState } from './path-highlight.js';
+import { resetHighlight } from './highlight.js';
 
 const _ctx = document.createElement('div');
 _ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #ddd;'
@@ -211,6 +214,45 @@ export function showCtx(cx, cy2, d) {
         clearImgCache();
         node.data('bgImage', makeNodeImage(node.data()));
     }));
+
+    // Pfad-Highlight: BFS-Pfad zwischen zwei Hosts.
+    //   - Pfad aktiv               \u2192 "Pfad ausblenden"
+    //   - Start gesetzt = this     \u2192 "Pfad-Start zur\u00FCcksetzen"
+    //   - Start gesetzt \u2260 this     \u2192 "Pfad zu hier" + "Pfad-Start zur\u00FCcksetzen"
+    //   - kein Start               \u2192 "Pfad von hier starten"
+    const pathSep = document.createElement('div');
+    pathSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+    _ctx.appendChild(pathSep);
+
+    const startId = getPathStart();
+    if (isPathActive()) {
+        _ctx.appendChild(_ctxRow('\u{2716} Pfad ausblenden', '#64748b', function() {
+            clearPathState(window._ntCy);
+        }));
+    } else if (!startId) {
+        _ctx.appendChild(_ctxRow('\u{1F517} Pfad von hier starten', '#0891b2', function() {
+            const cy = window._ntCy; if (!cy) return;
+            resetHighlight(cy);   // Connected-Component-Dim aus, sonst Konflikt
+            setPathStart(hostId);
+        }));
+    } else if (startId === hostId) {
+        _ctx.appendChild(_ctxRow('\u{2716} Pfad-Start zur\u00FCcksetzen', '#64748b', function() {
+            clearPathState(window._ntCy);
+        }));
+    } else {
+        _ctx.appendChild(_ctxRow('\u{1F517} Pfad zu hier', '#0891b2', function() {
+            const cy = window._ntCy; if (!cy) return;
+            resetHighlight(cy);
+            const ok = applyPathHighlight(cy, startId, hostId);
+            if (!ok) {
+                alert('Kein Pfad zwischen den Hosts gefunden.');
+                clearPathState(cy);
+            }
+        }));
+        _ctx.appendChild(_ctxRow('\u{2716} Pfad-Start zur\u00FCcksetzen', '#64748b', function() {
+            clearPathState(window._ntCy);
+        }));
+    }
 
     _ctx.style.left = cx + 'px';
     _ctx.style.top  = cy2 + 'px';
