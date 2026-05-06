@@ -127,18 +127,27 @@ export function makeNodeImage(d) {
     }
 
     if (offline) {
-        // Offline-Icon — Type-Icon halb-transparent + grosses rotes "X" druebergelegt
-        // damit man den Host-Typ noch erkennt aber sofort sieht "der ist tot".
+        // Offline-Icon — Type-Icon stark gedimmt + grosses rotes "X" mit weissem
+        // Halo druebergelegt damit man den Host-Typ noch erkennt aber sofort
+        // sieht "der ist tot". Halo ist noetig weil das X sonst optisch in den
+        // Icon-Strichen verschwimmt.
         const icon = TYPE_ICON[d.type] || TYPE_ICON.server;
         p += '<g transform="translate(' + C + ',' + C
            + ') scale(0.62)" fill="none" stroke="#9ca3af" stroke-width="1.6"'
-           + ' stroke-linecap="round" stroke-linejoin="round" opacity="0.5">'
+           + ' stroke-linecap="round" stroke-linejoin="round" opacity="0.32">'
            + '<path d="' + icon + '"/></g>';
+        // Weisser Halo unter dem roten X — sorgt fuer klare Kanten gegen das
+        // darunterliegende Type-Icon.
+        p += '<g transform="translate(' + C + ',' + C + ')"'
+           + ' stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity="0.95">'
+           + '<line x1="-15" y1="-15" x2="15" y2="15"/>'
+           + '<line x1="15"  y1="-15" x2="-15" y2="15"/>'
+           + '</g>';
         // Rotes X als klarer Offline-Indikator
         p += '<g transform="translate(' + C + ',' + C + ')"'
-           + ' stroke="#e53742" stroke-width="3.5" stroke-linecap="round">'
-           + '<line x1="-12" y1="-12" x2="12" y2="12"/>'
-           + '<line x1="12"  y1="-12" x2="-12" y2="12"/>'
+           + ' stroke="#dc2626" stroke-width="4.5" stroke-linecap="round">'
+           + '<line x1="-15" y1="-15" x2="15" y2="15"/>'
+           + '<line x1="15"  y1="-15" x2="-15" y2="15"/>'
            + '</g>';
     } else if (dead) {
         // "Dead Server"-Icon — gestrichelter Server mit X über CPUs
