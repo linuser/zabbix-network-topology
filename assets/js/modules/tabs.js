@@ -239,6 +239,95 @@ function _ensureMenuOutsideHandler() {
     });
 }
 
+// CSS fuer Menu-Items im Pop — flach, einheitliche Hoehe, Hover-Highlight.
+// Wird einmalig per Style-Tag eingehaengt damit wir die Original-btn-alt-
+// Styles ueberschreiben koennen (mit !important wegen Inline-Style-Konflikten).
+function _ensureMenuStyle() {
+    if (document.getElementById('nt-menu-style')) return;
+    const st = document.createElement('style');
+    st.id = 'nt-menu-style';
+    st.textContent = ''
+        + '[data-nt-menu-pop] > button,'
+        + '[data-nt-menu-pop] > div {'
+        + '  display: block !important;'
+        + '  width: 100% !important;'
+        + '  text-align: left !important;'
+        + '  margin: 0 0 1px 0 !important;'
+        + '  padding: 6px 10px !important;'
+        + '  border: 1px solid transparent !important;'
+        + '  border-radius: 4px !important;'
+        + '  background: transparent !important;'
+        + '  color: #334155 !important;'
+        + '  font-size: 12px !important;'
+        + '  font-weight: 500 !important;'
+        + '  cursor: pointer !important;'
+        + '  box-shadow: none !important;'
+        + '  white-space: nowrap !important;'
+        + '  position: static !important;'
+        + '}'
+        + '[data-nt-menu-pop] > button:hover,'
+        + '[data-nt-menu-pop] > div:hover {'
+        + '  background: #f1f5f9 !important;'
+        + '}'
+        // Inner-Buttons (Layout-Wrap / Cluster-Wrap / Preset-Wrap haben einen
+        // primary Button als Trigger + ein eigenes Sub-Menu). Den Trigger so
+        // stylen dass er als Menu-Item wirkt.
+        + '[data-nt-menu-pop] > div > button:first-child {'
+        + '  display: block !important;'
+        + '  width: 100% !important;'
+        + '  text-align: left !important;'
+        + '  margin: 0 !important;'
+        + '  padding: 0 !important;'
+        + '  border: none !important;'
+        + '  background: transparent !important;'
+        + '  color: inherit !important;'
+        + '  box-shadow: none !important;'
+        + '  font-size: 12px !important;'
+        + '  font-weight: 500 !important;'
+        + '}'
+        // Inneres Submenu (z.B. Layout-Optionen) positioniert relativ zur
+        // Pop-Wand statt absolute — damit es nicht weit ausserhalb schwebt.
+        + '[data-nt-menu-pop] > div > div {'
+        + '  position: static !important;'
+        + '  background: #f8fafc !important;'
+        + '  border: 1px solid #e2e8f0 !important;'
+        + '  border-radius: 4px !important;'
+        + '  margin-top: 4px !important;'
+        + '  padding: 2px !important;'
+        + '  box-shadow: none !important;'
+        + '}'
+        // Sub-Menu Items (Layout-Optionen)
+        + '[data-nt-menu-pop] > div > div > button {'
+        + '  display: block !important;'
+        + '  width: 100% !important;'
+        + '  text-align: left !important;'
+        + '  margin: 0 !important;'
+        + '  padding: 4px 8px !important;'
+        + '  border: none !important;'
+        + '  background: transparent !important;'
+        + '  font-size: 11px !important;'
+        + '  border-radius: 3px !important;'
+        + '  cursor: pointer !important;'
+        + '}'
+        + '[data-nt-menu-pop] > div > div > button:hover {'
+        + '  background: #e2e8f0 !important;'
+        + '}'
+        // Dark-Mode
+        + '#nt-root.nt-dark [data-nt-menu-pop] {'
+        + '  background: #1e293b !important;'
+        + '  border-color: #334155 !important;'
+        + '}'
+        + '#nt-root.nt-dark [data-nt-menu-pop] > button,'
+        + '#nt-root.nt-dark [data-nt-menu-pop] > div {'
+        + '  color: #e2e8f0 !important;'
+        + '}'
+        + '#nt-root.nt-dark [data-nt-menu-pop] > button:hover,'
+        + '#nt-root.nt-dark [data-nt-menu-pop] > div:hover {'
+        + '  background: #334155 !important;'
+        + '}';
+    document.head.appendChild(st);
+}
+
 function _mkMenuShell(id, label) {
     let wrap = document.getElementById(id + '-wrap');
     if (wrap) return wrap;
@@ -270,25 +359,26 @@ function _mkMenuShell(id, label) {
 }
 
 // Verschiebt ein bestehendes Element in einen Menu-Pop. Idempotent.
-// Setzt den Style so dass das Element als Menu-Item passt (volle Breite, links).
+// Inline-Styles werden geloescht — das Item-Styling kommt aus _ensureMenuStyle().
 function _moveIntoMenu(srcId, menuId) {
     const el = document.getElementById(srcId);
     const pop = document.getElementById(menuId + '-pop');
     if (!el || !pop) return;
     if (el.parentNode === pop) return;
-    // Original-Inline-Style zuruecksetzen + Menu-Item-Style anwenden
-    el.style.marginLeft = '0';
-    el.style.marginRight = '0';
-    el.style.marginTop = '0';
-    el.style.marginBottom = '2px';
-    el.style.display = 'block';
-    el.style.width = '100%';
-    el.style.textAlign = 'left';
+    // Inline-Margins/Display zurueck — CSS uebernimmt
+    el.style.removeProperty('margin');
+    el.style.removeProperty('margin-left');
+    el.style.removeProperty('margin-right');
+    el.style.removeProperty('margin-top');
+    el.style.removeProperty('margin-bottom');
+    el.style.removeProperty('display');
+    el.style.removeProperty('position');
     pop.appendChild(el);
 }
 
 function regroupToolbar() {
     _ensureMenuOutsideHandler();
+    _ensureMenuStyle();
     const bar = document.querySelector('.nt-topbar__actions');
     if (!bar) return;
 
