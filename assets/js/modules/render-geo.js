@@ -17,7 +17,7 @@
 //
 // Leaflet ist als globales L verfügbar (vor diesem Modul per <script> geladen).
 
-import { esc, fmt } from './utils.js';
+import { fmt } from './utils.js';
 import { SEV_COL, SEV_LBL } from './severity.js';
 import { loadGeoProvider, saveGeoProvider } from './storage.js';
 import { GEO_PROVIDERS, getProvider } from './geo-providers.js';
@@ -79,28 +79,66 @@ function buildPopup(node) {
     const col = SEV_COL[Math.min(sev, SEV_COL.length - 1)] || SEV_COL[0];
     const lbl = SEV_LBL[sev] || 'Normal';
     const tr = node.traffic || { in: 0, out: 0 };
-    const pills = [];
-    if (node.maintenance)  pills.push('<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">\u{1F527} Wartung</span>');
-    if (node.acknowledged) pills.push('<span style="background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">\u2714 Acked</span>');
 
-    return '<div style="font-family:sans-serif;min-width:200px">'
-        + '<div style="font-weight:700;color:#0f172a;margin-bottom:4px">' + esc(node.label) + '</div>'
-        + (node.ip       ? '<div style="font-size:10px;color:#64748b;font-family:monospace">' + esc(node.ip) + '</div>' : '')
-        + (node.location ? '<div style="font-size:10px;color:#64748b;margin-top:2px">\u{1F4CD} ' + esc(node.location) + '</div>' : '')
-        + (pills.length  ? '<div style="margin-top:4px">' + pills.join('') + '</div>' : '')
-        + '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #f1f5f9;font-size:11px;color:#334155">'
-        + '<div><span style="color:' + col + ';font-weight:600">\u25CF ' + esc(lbl) + '</span>'
-        + (node.problems > 0 ? ' &nbsp; <b style="color:#ef4444">' + node.problems + '</b> Probleme' : '')
-        + '</div>'
-        + (node.cpu    != null ? '<div>CPU: <b>' + node.cpu    + '%</b></div>' : '')
-        + (node.memory != null ? '<div>RAM: <b>' + node.memory + '%</b></div>' : '')
-        + (node.ping > 0       ? '<div>Ping: <b>' + node.ping  + ' ms</b></div>' : '')
-        + (tr.in || tr.out
-            ? '<div>Traffic: <span style="color:#22c55e">\u2193 ' + fmt(tr.in) + '</span> '
-            + '<span style="color:#06b6d4">\u2191 ' + fmt(tr.out) + '</span></div>'
-            : '')
-        + '</div>'
-        + '</div>';
+    function mk(tag, css, text) {
+        const e = document.createElement(tag);
+        if (css) e.style.cssText = css;
+        if (text !== undefined) e.textContent = text;
+        return e;
+    }
+
+    const root = mk('div', 'font-family:sans-serif;min-width:200px');
+    root.appendChild(mk('div', 'font-weight:700;color:#0f172a;margin-bottom:4px',
+        node.label || ''));
+    if (node.ip) {
+        root.appendChild(mk('div', 'font-size:10px;color:#64748b;font-family:monospace',
+            node.ip));
+    }
+    if (node.location) {
+        root.appendChild(mk('div', 'font-size:10px;color:#64748b;margin-top:2px',
+            '\u{1F4CD} ' + node.location));
+    }
+    if (node.maintenance || node.acknowledged) {
+        const row = mk('div', 'margin-top:4px');
+        if (node.maintenance) {
+            row.appendChild(mk('span',
+                'background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
+                '\u{1F527} Wartung'));
+        }
+        if (node.acknowledged) {
+            row.appendChild(mk('span',
+                'background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
+                '\u2714 Acked'));
+        }
+        root.appendChild(row);
+    }
+
+    const stats = mk('div',
+        'margin-top:6px;padding-top:6px;border-top:1px solid #f1f5f9;font-size:11px;color:#334155');
+    const sevLine = mk('div');
+    sevLine.appendChild(mk('span', 'color:' + col + ';font-weight:600', '\u25CF ' + lbl));
+    if (node.problems > 0) {
+        sevLine.appendChild(document.createTextNode('   '));
+        sevLine.appendChild(mk('b', 'color:#ef4444', String(node.problems)));
+        sevLine.appendChild(document.createTextNode(' Probleme'));
+    }
+    stats.appendChild(sevLine);
+    function metric(label, val) {
+        const r = mk('div'); r.textContent = label + ': ';
+        r.appendChild(mk('b', '', String(val))); stats.appendChild(r);
+    }
+    if (node.cpu    != null) metric('CPU', node.cpu + '%');
+    if (node.memory != null) metric('RAM', node.memory + '%');
+    if (node.ping > 0)       metric('Ping', node.ping + ' ms');
+    if (tr.in || tr.out) {
+        const r = mk('div'); r.textContent = 'Traffic: ';
+        r.appendChild(mk('span', 'color:#22c55e', '\u2193 ' + fmt(tr.in)));
+        r.appendChild(document.createTextNode(' '));
+        r.appendChild(mk('span', 'color:#06b6d4', '\u2191 ' + fmt(tr.out)));
+        stats.appendChild(r);
+    }
+    root.appendChild(stats);
+    return root;
 }
 
 // Kurzlebiger Toast unten am Bildschirmrand für Provider-Warnungen.
