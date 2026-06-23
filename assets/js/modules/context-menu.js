@@ -16,6 +16,7 @@ import { makeNodeImage, clearImgCache } from './icons.js';
 import { getPathStart, isPathActive, setPathStart,
          applyPathHighlight, clearPathState } from './path-highlight.js';
 import { resetHighlight } from './highlight.js';
+import { toast } from './toast.js';
 
 const _ctx = document.createElement('div');
 _ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #ddd;'
@@ -245,7 +246,7 @@ export function showCtx(cx, cy2, d) {
             resetHighlight(cy);
             const ok = applyPathHighlight(cy, startId, hostId);
             if (!ok) {
-                alert('Kein Pfad zwischen den Hosts gefunden.');
+                toast('Kein Pfad zwischen den Hosts gefunden.', 'warn');
                 clearPathState(cy);
             }
         }));

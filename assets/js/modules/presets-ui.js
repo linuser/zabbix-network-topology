@@ -16,6 +16,7 @@ import {
     loadRelevantPresets, savePreset, deletePreset, applyPreset,
     collectCurrentState, loadActivePreset, saveActivePreset
 } from './storage.js';
+import { toast } from './toast.js';
 
 // Cross-Module-Glue: render() wird aus dem Hauptmodul injiziert
 let _renderFn = function() {};
@@ -193,7 +194,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
             return presetMatches(p, _active);
         });
         if (!existing) {
-            alert('Aktives Preset nicht gefunden — bitte "Save As..." statt "Save".');
+            toast('Aktives Preset nicht gefunden — bitte "Save As..." statt "Save".', 'warn');
             _active = null;
             saveActivePreset('', null, null);
             ddBtn.textContent = ddLabel();

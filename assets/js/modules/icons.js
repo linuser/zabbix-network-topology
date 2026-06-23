@@ -126,6 +126,16 @@ export function makeNodeImage(d) {
            + '" fill="none" stroke="#22c55e" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>';
     }
 
+    // Maintenance-Layer: orange-gestrichelter Aussenring, weit genug ausserhalb
+    // des Severity-Rings damit er nicht mit dem Acknowledged-Doppelring kollidiert.
+    // Der Schraubenschluessel-Badge oben rechts bleibt zusaetzlich erhalten —
+    // der Ring signalisiert "Host in Maintenance" sofort auch von weitem.
+    if (d.maintenance) {
+        p += '<circle cx="' + C + '" cy="' + C + '" r="' + (RI + 10)
+           + '" fill="none" stroke="#f59e0b" stroke-width="2"'
+           + ' stroke-dasharray="5,3" opacity="0.85"/>';
+    }
+
     if (offline) {
         // Offline-Icon — Type-Icon stark gedimmt + grosses rotes "X" mit weissem
         // Halo druebergelegt damit man den Host-Typ noch erkennt aber sofort

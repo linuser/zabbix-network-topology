@@ -81,6 +81,82 @@ try {
     if (hm === '1') _itemsHeatmap = true;
 } catch (e) {}
 
+// URL-Bookmark: Filter/Sort/Mode in der URL persistieren, sodass die aktuelle
+// Tabellen-Sicht teilbar ist (z.B. Slack-Link mit vorgefiltertem Kunden).
+// Prefix "t_" damit andere Tabs (Tech/Geo) ihre URL-Params spaeter ohne
+// Kollision dazupacken koennen. URL-Sync laeuft bei jedem renderTable()/
+// rerenderTable() — passive Updates ueber history.replaceState() ohne neuen
+// Browser-History-Eintrag.
+//
+// Format:
+//   t_sev=0,1,3       — aktive Severities (omit wenn alle 0..5)
+//   t_g=Kunde,proxy   — selektierte Gruppen (omit wenn leer)
+//   t_q=router -mt    — Such-Tokens (omit wenn leer)
+//   t_off=1           — "nur Offline" (omit wenn aus)
+//   t_sort=cpu        — Sort-Spalte (omit wenn default "severity")
+//   t_sdir=asc        — Sort-Richtung (omit wenn default "desc")
+//   t_mode=items      — Tabellen-Modus (omit wenn default "hosts")
+const URL_KEYS = {
+    sev: 't_sev', group: 't_g', q: 't_q', off: 't_off',
+    sort: 't_sort', sdir: 't_sdir', mode: 't_mode',
+};
+
+function _urlSync() {
+    if (typeof window === 'undefined' || !window.history) return;
+    const p = new URLSearchParams(window.location.search);
+    // Severities: nur schreiben wenn nicht vollstaendig (=Default)
+    if (_filterStatuses.size > 0 && _filterStatuses.size < 6) {
+        p.set(URL_KEYS.sev, Array.from(_filterStatuses).sort().join(','));
+    } else {
+        p.delete(URL_KEYS.sev);
+    }
+    if (_filterGroups.size > 0) {
+        p.set(URL_KEYS.group, Array.from(_filterGroups).sort().join(','));
+    } else {
+        p.delete(URL_KEYS.group);
+    }
+    if (_filterText) p.set(URL_KEYS.q, _filterText); else p.delete(URL_KEYS.q);
+    if (_filterOfflineOnly) p.set(URL_KEYS.off, '1'); else p.delete(URL_KEYS.off);
+    if (_sortCol && _sortCol !== 'severity') p.set(URL_KEYS.sort, _sortCol); else p.delete(URL_KEYS.sort);
+    if (_sortDir && _sortDir !== 'desc') p.set(URL_KEYS.sdir, _sortDir); else p.delete(URL_KEYS.sdir);
+    if (_tableMode === 'items') p.set(URL_KEYS.mode, 'items'); else p.delete(URL_KEYS.mode);
+    const q = p.toString();
+    const newUrl = window.location.pathname + (q ? '?' + q : '') + window.location.hash;
+    if (newUrl !== window.location.pathname + window.location.search + window.location.hash) {
+        window.history.replaceState(null, '', newUrl);
+    }
+}
+
+function _urlRestore() {
+    if (typeof window === 'undefined' || !window.location) return;
+    const p = new URLSearchParams(window.location.search);
+    const sev = p.get(URL_KEYS.sev);
+    if (sev !== null) {
+        _filterStatuses = new Set();
+        sev.split(',').forEach(function(s) {
+            const n = parseInt(s, 10);
+            if (n >= 0 && n <= 5) _filterStatuses.add(n);
+        });
+        // Edge-Case: leerer/ungueltiger Param → Default wiederherstellen
+        if (_filterStatuses.size === 0) _filterStatuses = new Set([0, 1, 2, 3, 4, 5]);
+    }
+    const grp = p.get(URL_KEYS.group);
+    if (grp) grp.split(',').forEach(function(g) { if (g) _filterGroups.add(g); });
+    const q = p.get(URL_KEYS.q);
+    if (q) { _filterText = q; _reparseTokens(); }
+    if (p.get(URL_KEYS.off) === '1') _filterOfflineOnly = true;
+    const sc = p.get(URL_KEYS.sort);
+    if (sc) _sortCol = sc;
+    const sd = p.get(URL_KEYS.sdir);
+    if (sd === 'asc' || sd === 'desc') _sortDir = sd;
+    const md = p.get(URL_KEYS.mode);
+    if (md === 'items') _tableMode = 'items';
+}
+
+// URL-Params einmalig beim Modul-Init lesen — laeuft VOR dem ersten
+// renderTable(), damit der initiale Render schon den richtigen Filter hat.
+_urlRestore();
+
 // Theme — Zabbix-native Farb-Palette. Light-Mode matcht Zabbix' .list-table
 // Defaults (helle BG, dunkler Text, Blau-Accent #0275b8). Dark-Mode bleibt
 // vorerst eigenstaendig (Zabbix Dark hat nicht komplett standardisierte Tokens
@@ -700,6 +776,7 @@ function buildTable(nodes, baseUrl, theme) {
 export function renderTable(wrap, nodes, edges) {
     if (window._ntEdgeAnim) { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
     if (window._ntCy) { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
+    _urlSync();
 
     // Theme aus Dark-Mode-State des Root-Containers ableiten - alle weiteren
     // Build-Funktionen kriegen das Theme als Parameter rein.
@@ -780,6 +857,7 @@ export function renderTable(wrap, nodes, edges) {
     document.body.appendChild(detailPanel);
 
     function rerenderTable() {
+        _urlSync();
         const r = buildTable(realNodes, baseUrl, theme);
         tableArea.innerHTML = r.html;
         const counter = document.getElementById('nt-table-count');
