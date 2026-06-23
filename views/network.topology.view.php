@@ -164,14 +164,6 @@ $data_url = (new CUrl('zabbix.php'))
     ->setArgument('action', 'network.topology.v6.data')
     ->getUrl();
 
-// CSRF-Token f\u00FCr die Mail-Action erzeugen. CCsrfTokenHelper existiert ab Zabbix 6.x.
-// Falls nicht vorhanden (z.B. sehr alte Zabbix-Version), bleibt der Token leer \u2014
-// die Mail-Action f\u00E4llt dann auf disableCsrfValidation zur\u00FCck (siehe NetworkTopologyMail.php).
-$nt_csrf_token = '';
-if (class_exists('CCsrfTokenHelper')) {
-    try { $nt_csrf_token = \CCsrfTokenHelper::get('network.topology.v6.mail'); }
-    catch (\Throwable $e) { $nt_csrf_token = ''; }
-}
 ?>
 <script>
 window.NT_CONFIG = <?= json_encode([
@@ -184,7 +176,6 @@ window.NT_CONFIG = <?= json_encode([
     )),
     'data_url'   => $data_url,
     'can_edit'   => (bool) $data['user']['can_edit'],
-    'csrf_token' => $nt_csrf_token,
     // Optionaler Provider-Name für die Internet-Wolke im Hierarchie-Layout.
     // Aus URL-Parameter ?internet=Vodafone gelesen; leer = "Internet" als Default.
     'internet_label' => (string) ($data['internet_label'] ?? ''),

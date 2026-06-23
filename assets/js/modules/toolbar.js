@@ -21,7 +21,7 @@ import { NT_LLDP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY,
 import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isLinkModeActive, enterLinkMode, exitLinkMode } from './manual-links.js';
-import { setupExportMenu } from './export-mail.js';
+import { setupExportMenu } from './export.js';
 import { addHistoryButton } from './history-mode.js';
 import { LAYOUT_OPTIONS, buildLayoutConfig } from './layouts.js';
 import { setupPresetsUI } from './presets-ui.js';

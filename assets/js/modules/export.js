@@ -1,20 +1,17 @@
-// export-mail.js — Export-Menü (PNG/PDF/HTML/Mail) und Vollbild-Overlay
-// für PNG-Anzeige.
+// export.js — Export-Menü (PNG/PDF/HTML) und Vollbild-Overlay für PNG.
 //
-// Zwei UI-Einstiegspunkte:
-//   - setupExportMenu(): Dropdown im Toolbar mit allen vier Export-Formaten.
-//     PDF/HTML/Mail nutzen alle den gleichen HTML-Generator und können
-//     optional einen Map-Screenshot (cy.png()) einbetten.
-//   - setupMailButton(): eigenständiger Mail-Button rechts in der Toolbar.
-//     Nutzt eine kompaktere Mail-Variante ohne Map-Screenshot, mit Inline-
-//     Styles für maximale E-Mail-Client-Kompatibilität.
+// Frueher hiess das Modul export-mail.js und konnte Reports per E-Mail
+// verschicken. Die Mail-Funktion wurde entfernt (siehe CHANGELOG); was
+// uebrig blieb ist der HTML-Report-Generator fuer PDF-Druck und
+// HTML-Download, plus das PNG-Overlay.
 //
-// Beide Code-Pfade rufen denselben buildReportHtml()-Helper auf — der
-// `mode`-Parameter steuert nur, ob CSS in <style>-Block oder als Inline-
-// Styles ausgegeben wird (E-Mail-Clients ignorieren oft <style>).
+// Ein einziger Einstiegspunkt:
+//   setupExportMenu(bar, isFirstRun) — baut den Export-Dropdown in der
+//   Toolbar (PNG / PDF / HTML).
 //
-// Mail-Versand spricht das NetworkTopologyMail-Backend per POST an, mit
-// CSRF-Token aus NT_CONFIG.
+// buildReportHtml() erzeugt einen druckfreundlichen Report (A4 landscape,
+// inline <style>-Block) mit aktuellem Stand der Hosts. Optionaler
+// Map-Screenshot via cy.png() wird oben eingebettet.
 
 import { esc, fmt } from './utils.js';
 import { loadLinks } from './storage.js';
@@ -34,28 +31,18 @@ function currentBg() {
     return (root && root.classList.contains('nt-dark')) ? '#0f172a' : '#f8fafc';
 }
 
-// Gemeinsamer HTML-Report-Generator. Ein einzelner Codepfad sowohl für
-// PDF/HTML-Datei (mode='document') als auch für Mail (mode='email').
-//
-// Optionen:
-//   includeMap: bool — Map-Screenshot via cy.png() einbetten
-//   mode:       'document' | 'email'  (Style-Strategie)
-//
-// Returns: HTML-String oder null wenn keine Daten verfügbar
+// HTML-Report-Generator fuer PDF-Druck und HTML-Download. Liefert ein
+// druckfreundliches Dokument mit @page A4 landscape + Map-Screenshot
+// (cy.png()) + Hosts-Tabelle. null wenn keine Cy-Instance verfuegbar.
 function buildReportHtml(opts) {
     if (!window._ntCy || !window._ntNodes) return null;
     const nodes = window._ntNodes;
     const links = loadLinks();
     const now   = new Date().toLocaleString('de-DE');
-    const isEmail = opts.mode === 'email';
 
     const mapImg = opts.includeMap
         ? window._ntCy.png({ full: true, scale: 2, bg: currentBg() })
         : null;
-
-    // Inline-Styles für E-Mail (viele Clients ignorieren <style>);
-    // Class-basierte Styles fürs PDF/HTML-Dokument.
-    const tdStyle = isEmail ? ' style="padding:6px 10px;border-bottom:1px solid #f1f5f9"' : '';
 
     const rows = nodes.slice()
         .sort(function(a, b) {
@@ -66,42 +53,20 @@ function buildReportHtml(opts) {
             const sev = SEV_LBL[n.severity || 0] || 'Normal';
             const col = SEV_COLORS[sev] || '#22c55e';
             const tr  = n.traffic || { in: 0, out: 0 };
-            const cellSev    = isEmail ? ' style="padding:6px 10px;border-bottom:1px solid #f1f5f9"' : '';
-            const cellTrIn   = isEmail ? ' style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#22c55e"' : ' style="color:#22c55e"';
-            const cellTrOut  = isEmail ? ' style="padding:6px 10px;border-bottom:1px solid #f1f5f9;color:#06b6d4"' : ' style="color:#06b6d4"';
             return '<tr>'
-                + '<td' + tdStyle + '>' + esc(n.label || n.host) + '</td>'
-                + '<td' + cellSev + '><span style="color:' + col + ';font-weight:600">&#9679; ' + sev + '</span></td>'
-                + '<td' + tdStyle + '>' + esc(n.ip || '\u2014') + '</td>'
-                + '<td' + tdStyle + '>' + (n.cpu    != null ? n.cpu    + '%'   : '\u2014') + '</td>'
-                + '<td' + tdStyle + '>' + (n.memory != null ? n.memory + '%'   : '\u2014') + '</td>'
-                + '<td' + tdStyle + '>' + (n.ping > 0       ? n.ping   + ' ms' : '\u2014') + '</td>'
-                + '<td' + cellTrIn  + '>' + fmt(tr.in)  + '</td>'
-                + '<td' + cellTrOut + '>' + fmt(tr.out) + '</td>'
+                + '<td>' + esc(n.label || n.host) + '</td>'
+                + '<td><span style="color:' + col + ';font-weight:600">&#9679; ' + sev + '</span></td>'
+                + '<td>' + esc(n.ip || '—') + '</td>'
+                + '<td>' + (n.cpu    != null ? n.cpu    + '%'   : '—') + '</td>'
+                + '<td>' + (n.memory != null ? n.memory + '%'   : '—') + '</td>'
+                + '<td>' + (n.ping > 0       ? n.ping   + ' ms' : '—') + '</td>'
+                + '<td style="color:#22c55e">' + fmt(tr.in)  + '</td>'
+                + '<td style="color:#06b6d4">' + fmt(tr.out) + '</td>'
                 + '</tr>';
         }).join('');
 
     const meta = now + ' &nbsp;|&nbsp; ' + nodes.length + ' Hosts &nbsp;|&nbsp; ' + links.length + ' Links';
 
-    if (isEmail) {
-        // E-Mail: alle Styles inline für maximale Client-Kompatibilität
-        return '<html><body style="font-family:sans-serif;color:#1e293b;max-width:900px;margin:20px auto">'
-            + '<h2 style="border-bottom:2px solid #3b82f6;padding-bottom:6px">Network Topology Report</h2>'
-            + '<p style="color:#64748b;font-size:12px">' + meta + '</p>'
-            + (mapImg ? '<div style="text-align:center;margin-bottom:20px">'
-                      + '<img src="' + mapImg + '" style="max-width:100%;border:1px solid #e2e8f0;border-radius:6px"/>'
-                      + '</div>' : '')
-            + '<table style="width:100%;border-collapse:collapse;font-size:13px">'
-            + '<thead><tr style="background:#f8fafc">'
-            + ['Name', 'Status', 'IP', 'CPU', 'Memory', 'Ping', 'IN', 'OUT'].map(function(h) {
-                return '<th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0">' + h + '</th>';
-            }).join('')
-            + '</tr></thead><tbody>' + rows + '</tbody></table>'
-            + '<p style="color:#94a3b8;font-size:11px;margin-top:20px">Gesendet von Zabbix Network Topology</p>'
-            + '</body></html>';
-    }
-
-    // Document: <style>-Block, druckfreundlich (@page A4 landscape)
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>NT Report</title>'
         + '<style>'
         + 'body{font-family:sans-serif;margin:20px;color:#1e293b}'
@@ -134,8 +99,8 @@ export function ntShowExportOverlay(png, printMode) {
         + 'background:rgba(0,0,0,0.88);z-index:99999;display:flex;flex-direction:column;'
         + 'align-items:center;justify-content:center;cursor:pointer';
     const hint = printMode
-        ? 'Cmd+P zum Drucken / Als PDF sichern &nbsp;\u00B7&nbsp; Klick zum Schliessen'
-        : 'Rechtsklick auf Bild \u2192 "Bild sichern unter..." &nbsp;\u00B7&nbsp; Klick zum Schliessen';
+        ? 'Cmd+P zum Drucken / Als PDF sichern &nbsp;·&nbsp; Klick zum Schliessen'
+        : 'Rechtsklick auf Bild → "Bild sichern unter..." &nbsp;·&nbsp; Klick zum Schliessen';
     ov.innerHTML = '<div style="color:#ccc;font-family:sans-serif;font-size:12px;'
         + 'margin-bottom:12px;text-align:center">' + hint + '</div>'
         + '<img src="' + png + '" style="max-width:95vw;max-height:85vh;display:block;'
@@ -145,14 +110,10 @@ export function ntShowExportOverlay(png, printMode) {
     if (printMode) setTimeout(function() { window.print(); }, 500);
 }
 
-// Baut den Export-Button samt Dropdown (PNG / PDF / HTML / Mail) und hängt
-// ihn an die übergebene Toolbar-Leiste an. Idempotent: bestehende
+// Baut den Export-Button samt Dropdown (PNG / PDF / HTML) und haengt
+// ihn an die uebergebene Toolbar-Leiste an. Idempotent: bestehende
 // nt-export-wrap wird ersetzt (sodass Re-Renders kein Mehrfach-Anzeigen
 // erzeugen).
-//
-// Hinweis: PNG-Hintergrund liest jetzt currentBg() bei jedem Klick statt
-// den isDark-Snapshot aus dem Toolbar-Build — Dark-Mode-Wechsel wird im
-// Export reflektiert.
 export function setupExportMenu(bar, isFirstRun) {
     const existing = document.getElementById('nt-export-wrap');
     if (existing) existing.remove();
@@ -164,7 +125,7 @@ export function setupExportMenu(bar, isFirstRun) {
     const expBtn = document.createElement('button');
     expBtn.className = 'btn-alt btn-small';
     expBtn.style.margin = '0';
-    expBtn.textContent = '\u2B07 Export';
+    expBtn.textContent = '⬇ Export';
 
     const expMenu = document.createElement('div');
     expMenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
@@ -190,7 +151,7 @@ export function setupExportMenu(bar, isFirstRun) {
     });
 
     mItem('&#128196;', 'PDF (Drucken)', function() {
-        const h = buildReportHtml({ includeMap: true, mode: 'document' });
+        const h = buildReportHtml({ includeMap: true });
         if (!h) return;
         const w = window.open();
         if (w) {
@@ -201,7 +162,7 @@ export function setupExportMenu(bar, isFirstRun) {
     });
 
     mItem('&#128190;', 'HTML speichern', function() {
-        const h = buildReportHtml({ includeMap: true, mode: 'document' });
+        const h = buildReportHtml({ includeMap: true });
         if (!h) return;
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
