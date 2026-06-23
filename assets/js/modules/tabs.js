@@ -155,6 +155,11 @@ export function ensureBaseToolbar(wrap) {
         bSnapEl.title = snap ? 'Neuen Snapshot setzen (ersetzt den alten)' : 'Aktuellen Stand merken — danach sieht man was sich veraendert hat';
     }
     if (bClearEl) bClearEl.style.display = snap ? '' : 'none';
+
+    // Buttons in 3 Menu-Gruppen (Anzeige/Layout/Tools) sortieren — idempotent,
+    // bewegt nur was noch nicht im richtigen Menu ist. Reduziert die Toolbar
+    // von ~25 sichtbaren Buttons auf primary + 3 Dropdowns.
+    regroupToolbar();
 }
 
 // Alter Name behalten — wird noch im Hauptmodul aufgerufen, delegiert
@@ -205,4 +210,127 @@ function _ensureGraphHideStyle() {
 export function setGraphToolbarVisible(visible) {
     _ensureGraphHideStyle();
     document.body.classList.toggle('nt-graph-hidden', !visible);
+}
+
+// ── Toolbar-Menus ──────────────────────────────────────────────────────────
+// Reduziert die ueberladene Toolbar (~25 Buttons) auf 3 Dropdown-Gruppen
+// (Anzeige / Layout / Tools) plus die wirklich oft genutzten Primary-Buttons.
+//
+// Strategie: alle Buttons werden weiter von ihren Modulen (toolbar.js,
+// presets-ui.js, history-mode.js) gebaut wie bisher. Nach dem Bauen ruft
+// ensureBaseToolbar regroupToolbar(), die per ID die Buttons in die Menu-
+// Pops verschiebt. Idempotent — schon bewegte Buttons werden nicht erneut
+// angefasst.
+
+function _closeAllMenuPops() {
+    document.querySelectorAll('[data-nt-menu-pop]').forEach(function(p) {
+        p.style.display = 'none';
+    });
+}
+
+// Outside-Click schliesst offene Menus (einmal pro Page-Load installieren).
+function _ensureMenuOutsideHandler() {
+    if (window._ntMenuHandlerDone) return;
+    window._ntMenuHandlerDone = true;
+    document.addEventListener('click', function(e) {
+        const t = e.target;
+        if (t && t.closest && t.closest('[data-nt-menu-pop],[data-nt-menu-trigger]')) return;
+        _closeAllMenuPops();
+    });
+}
+
+function _mkMenuShell(id, label) {
+    let wrap = document.getElementById(id + '-wrap');
+    if (wrap) return wrap;
+    wrap = document.createElement('div');
+    wrap.id = id + '-wrap';
+    wrap.style.cssText = 'position:relative;display:inline-block;margin-left:4px';
+    const btn = document.createElement('button');
+    btn.id = id;
+    btn.className = 'btn-alt btn-small';
+    btn.style.margin = '0';
+    btn.textContent = label + ' ▾';
+    btn.dataset.ntMenuTrigger = '1';
+    wrap.appendChild(btn);
+    const pop = document.createElement('div');
+    pop.id = id + '-pop';
+    pop.dataset.ntMenuPop = '1';
+    pop.style.cssText = 'display:none;position:absolute;top:100%;right:0;'
+        + 'background:#fff;border:1px solid #cbd5e1;border-radius:6px;'
+        + 'box-shadow:0 6px 20px rgba(0,0,0,0.14);padding:6px;min-width:170px;'
+        + 'z-index:9000;margin-top:4px';
+    wrap.appendChild(pop);
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const wasOpen = pop.style.display !== 'none' && pop.style.display !== '';
+        _closeAllMenuPops();
+        if (!wasOpen) pop.style.display = 'block';
+    });
+    return wrap;
+}
+
+// Verschiebt ein bestehendes Element in einen Menu-Pop. Idempotent.
+// Setzt den Style so dass das Element als Menu-Item passt (volle Breite, links).
+function _moveIntoMenu(srcId, menuId) {
+    const el = document.getElementById(srcId);
+    const pop = document.getElementById(menuId + '-pop');
+    if (!el || !pop) return;
+    if (el.parentNode === pop) return;
+    // Original-Inline-Style zuruecksetzen + Menu-Item-Style anwenden
+    el.style.marginLeft = '0';
+    el.style.marginRight = '0';
+    el.style.marginTop = '0';
+    el.style.marginBottom = '2px';
+    el.style.display = 'block';
+    el.style.width = '100%';
+    el.style.textAlign = 'left';
+    pop.appendChild(el);
+}
+
+function regroupToolbar() {
+    _ensureMenuOutsideHandler();
+    const bar = document.querySelector('.nt-topbar__actions');
+    if (!bar) return;
+
+    // Menu-Shells anlegen (idempotent). Reihenfolge im DOM: Anzeige, Layout, Tools.
+    const mView   = _mkMenuShell('nt-menu-view',   'Anzeige');
+    const mLayout = _mkMenuShell('nt-menu-layout', 'Layout');
+    const mTools  = _mkMenuShell('nt-menu-tools',  'Tools');
+    if (!mView.parentNode)   bar.appendChild(mView);
+    if (!mLayout.parentNode) bar.appendChild(mLayout);
+    if (!mTools.parentNode)  bar.appendChild(mTools);
+
+    // Buttons in Menus einsortieren
+    _moveIntoMenu('nt-btn-dark',       'nt-menu-view');
+    _moveIntoMenu('nt-btn-fullscreen', 'nt-menu-view');
+    _moveIntoMenu('nt-btn-labels',     'nt-menu-view');   // Tech-only, im Mgmt/Tabelle leer
+    _moveIntoMenu('nt-btn-reset',      'nt-menu-view');
+
+    _moveIntoMenu('nt-layout-wrap',    'nt-menu-layout');
+    _moveIntoMenu('nt-btn-groupview',  'nt-menu-layout');
+    _moveIntoMenu('nt-cluster-wrap',   'nt-menu-layout');
+
+    _moveIntoMenu('nt-btn-snap',       'nt-menu-tools');
+    _moveIntoMenu('nt-btn-snap-clear', 'nt-menu-tools');
+    _moveIntoMenu('nt-btn-link',       'nt-menu-tools');
+    _moveIntoMenu('nt-btn-unlink',     'nt-menu-tools');
+    _moveIntoMenu('nt-btn-history',    'nt-menu-tools');
+    _moveIntoMenu('nt-preset-wrap',    'nt-menu-tools');
+
+    // Layout-Menu wird in Mgmt/Tabelle/Geo komplett ausgeblendet (alle
+    // Inhalte sind Tech-spezifisch). Tools/Anzeige bleiben sichtbar weil
+    // sie auch tab-uebergreifende Items haben (Dark, Snapshot).
+    const layoutWrap = document.getElementById('nt-menu-layout-wrap');
+    if (layoutWrap && _GRAPH_ONLY_SELECTORS.indexOf('#nt-menu-layout-wrap') < 0) {
+        _GRAPH_ONLY_SELECTORS.push('#nt-menu-layout-wrap');
+        // Style refreshen damit der neue Selector greift
+        const oldStyle = document.getElementById('nt-graph-hide-style');
+        if (oldStyle) oldStyle.remove();
+        _ensureGraphHideStyle();
+        // Body-Klasse re-toggle damit die neue Rule sofort wirkt
+        if (document.body.classList.contains('nt-graph-hidden')) {
+            document.body.classList.remove('nt-graph-hidden');
+            document.body.classList.add('nt-graph-hidden');
+        }
+    }
 }
