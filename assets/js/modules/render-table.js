@@ -43,7 +43,11 @@ const TYPE_LBL = {
 
 // Filter-State (lebt in dieser Modul-Closure, persistiert nicht zwischen Tab-Wechseln)
 let _filterStatuses = new Set([0, 1, 2, 3, 4, 5]);  // alle Severities default an
-let _filterGroup = '';   // '' = alle
+// Mehrfach-Gruppenfilter: alle gesetzten Gruppen werden AND-verknuepft
+// (Host muss in ALLEN selektierten Gruppen sein). Leer = keine Einschraenkung.
+// Match laeuft ueber n.groups[], nicht n._primaryGroup — ein Host kann in
+// mehreren Zabbix-Gruppen sein (z.B. "Kunde X" + "proxy").
+let _filterGroups = new Set();
 let _filterText = '';
 let _filterOfflineOnly = false;  // Toggle "nur Offline-Hosts zeigen"
 let _sortCol = 'severity';
@@ -245,18 +249,43 @@ function passesFilter(n) {
     } else {
         if (!_filterStatuses.has(n.severity || 0)) return false;
     }
-    if (_filterGroup && n._primaryGroup !== _filterGroup) return false;
+    // Mehrfach-Gruppenfilter: Host muss in ALLEN selektierten Gruppen sein
+    // (Schnittmenge). Match ueber n.groups[] statt _primaryGroup — Hosts
+    // koennen in mehreren Gruppen sein (z.B. Kunde + proxy).
+    if (_filterGroups.size > 0) {
+        const hostGroups = n.groups || [];
+        let allFound = true;
+        for (const g of _filterGroups) {
+            if (hostGroups.indexOf(g) < 0) { allFound = false; break; }
+        }
+        if (!allFound) return false;
+    }
+    // Token-basierte Volltextsuche: whitespace-split, jeder Token muss
+    // (case-insensitive substring) matchen. Tokens mit "-" Prefix sind
+    // negativ (Host muss den Token NICHT enthalten). Haystack enthaelt
+    // jetzt auch alle Gruppennamen, damit "proxy" im Suchfeld die
+    // Gruppen-Members findet.
     if (_filterText) {
-        const hay = (
-            (n.host || '') + ' ' +
-            (n.label || '') + ' ' +
-            (n.ip || '') + ' ' +
-            (n.type || '') + ' ' +
-            (n.iftype || '') + ' ' +
-            (n.proxy_name || '') + ' ' +
-            (n.proxy_group_name || '')
-        ).toLowerCase();
-        if (hay.indexOf(_filterText.toLowerCase()) < 0) return false;
+        const tokens = _filterText.split(/\s+/).filter(function(t) { return t.length > 0; });
+        if (tokens.length > 0) {
+            const hay = (
+                (n.host || '') + ' ' +
+                (n.label || '') + ' ' +
+                (n.ip || '') + ' ' +
+                (n.type || '') + ' ' +
+                (n.iftype || '') + ' ' +
+                (n.proxy_name || '') + ' ' +
+                (n.proxy_group_name || '') + ' ' +
+                ((n.groups || []).join(' '))
+            ).toLowerCase();
+            for (const tok of tokens) {
+                if (tok[0] === '-' && tok.length > 1) {
+                    if (hay.indexOf(tok.slice(1).toLowerCase()) >= 0) return false;
+                } else {
+                    if (hay.indexOf(tok.toLowerCase()) < 0) return false;
+                }
+            }
+        }
     }
     return true;
 }
@@ -368,15 +397,33 @@ function buildFilterBar(nodes, groupNames, theme) {
     _setOffStyle();
     bar.appendChild(offBtn);
 
-    // Hostgroup-Filter (nur wenn >=2 Gruppen)
+    // Hostgroup-Filter — Multi-Select via Chip-Row + Add-Dropdown.
+    // AND-Semantik: Host muss in ALLEN selektierten Gruppen sein. Dropdown
+    // listet nur Gruppen die noch nicht selektiert sind. Chips haben (×)
+    // zum Entfernen.
     if (groupNames.length >= 2) {
         const grpWrap = document.createElement('div');
-        grpWrap.style.cssText = 'display:flex;gap:6px;align-items:center';
+        grpWrap.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap';
 
         const grpLabel = document.createElement('span');
         grpLabel.textContent = 'Gruppe:';
         grpLabel.style.cssText = 'font-size:12px;color:' + theme.sub + ';font-weight:600';
         grpWrap.appendChild(grpLabel);
+
+        // Aktive Gruppen als Chips (jeweils mit × zum Entfernen)
+        const activeGroups = Array.from(_filterGroups).sort();
+        activeGroups.forEach(function(g) {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.dataset.removeGroup = g;
+            chip.style.cssText = 'display:inline-flex;align-items:center;gap:4px;'
+                + 'padding:2px 4px 2px 8px;border:1px solid ' + theme.accent
+                + ';border-radius:' + NT_R.pill + ';background:' + theme.accent + '22;'
+                + 'color:' + theme.accent + ';font-size:11px;font-weight:600;'
+                + 'cursor:pointer;font-family:inherit';
+            chip.innerHTML = esc(g) + '<span style="font-size:13px;line-height:1;opacity:0.7">×</span>';
+            grpWrap.appendChild(chip);
+        });
 
         const grpSel = document.createElement('select');
         grpSel.id = 'nt-table-group';
@@ -385,13 +432,16 @@ function buildFilterBar(nodes, groupNames, theme) {
             + ';color:' + theme.text + ';font-family:inherit;cursor:pointer';
         const optAll = document.createElement('option');
         optAll.value = '';
-        optAll.textContent = 'Alle (' + groupNames.length + ')';
+        const remaining = groupNames.length - _filterGroups.size;
+        optAll.textContent = _filterGroups.size > 0
+            ? '+ Gruppe (' + remaining + ')'
+            : 'Alle (' + groupNames.length + ')';
         grpSel.appendChild(optAll);
         groupNames.forEach(function(g) {
+            if (_filterGroups.has(g)) return;   // schon als Chip aktiv
             const opt = document.createElement('option');
             opt.value = g;
             opt.textContent = g;
-            if (g === _filterGroup) opt.selected = true;
             grpSel.appendChild(opt);
         });
         grpWrap.appendChild(grpSel);
@@ -402,7 +452,10 @@ function buildFilterBar(nodes, groupNames, theme) {
     const search = document.createElement('input');
     search.id = 'nt-table-search';
     search.type = 'text';
-    search.placeholder = 'Suche Host / IP / Type / Interface / Proxy...';
+    search.placeholder = 'Suche (Tokens AND, -wort = NOT)';
+    search.title = 'Mehrere Begriffe = alle muessen matchen.\n'
+        + '-wort blendet Hosts mit dem Begriff aus.\n'
+        + 'Felder: Host, IP, Type, Interface, Proxy, Gruppen.';
     search.value = _filterText;
     search.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
         + ';border-radius:' + NT_R.sm + ';font-size:12px;width:240px;background:' + theme.inputBg
@@ -664,11 +717,16 @@ export function renderTable(wrap, nodes, edges) {
         }
     });
 
+    // Alle Gruppen einsammeln in denen mind. 1 Host Mitglied ist (nicht nur
+    // _primaryGroup). Damit listet der Filter-Dropdown alle Gruppen die
+    // ueberhaupt vergeben sind — sonst findet man "proxy" nicht, wenn fuer
+    // alle Hosts dort die Kunden-Gruppe primary ist.
     const groupNames = [];
+    const _groupSeen = {};
     realNodes.forEach(function(n) {
-        if (n._primaryGroup && groupNames.indexOf(n._primaryGroup) < 0) {
-            groupNames.push(n._primaryGroup);
-        }
+        (n.groups || []).forEach(function(g) {
+            if (g && !_groupSeen[g]) { _groupSeen[g] = true; groupNames.push(g); }
+        });
     });
     groupNames.sort();
 
@@ -1051,13 +1109,23 @@ export function renderTable(wrap, nodes, edges) {
             renderTable(wrap, nodes, edges);
         });
     }
+    // Multi-Group: Add-Dropdown fuegt ausgewaehlte Gruppe zu _filterGroups,
+    // dann komplettes Filter-Bar-Rebuild (Chip einblenden + Dropdown ohne
+    // diese Gruppe). Chips reagieren ueber Delegation auf data-remove-group.
     const grpSel = document.getElementById('nt-table-group');
     if (grpSel) {
         grpSel.addEventListener('change', function() {
-            _filterGroup = this.value;
-            rerenderTable();
+            if (!this.value) return;
+            _filterGroups.add(this.value);
+            renderTable(wrap, nodes, edges);
         });
     }
+    filterBar.querySelectorAll('button[data-remove-group]').forEach(function(chip) {
+        chip.addEventListener('click', function() {
+            _filterGroups.delete(this.dataset.removeGroup);
+            renderTable(wrap, nodes, edges);
+        });
+    });
     const search = document.getElementById('nt-table-search');
     if (search) {
         let _searchTimer = null;
