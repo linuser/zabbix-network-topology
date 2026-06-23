@@ -18,6 +18,7 @@ import { esc, fmt } from './utils.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
 import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
+import { loadSnapshot, computeDiff, formatSnapshotAge } from './diff-mode.js';
 import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY, NT_ITEMS_HIDE_EMPTY_KEY,
          NT_ITEMS_HEATMAP_KEY } from './storage.js';
 import { showDetail } from './detail-panel.js';
@@ -54,6 +55,11 @@ let _filterText = '';
 // (in query.js). passesFilter() ruft matchQuery() statt pro Host neu zu
 // parsen. null = kein Filter aktiv.
 let _filterQuery = null;
+
+// Vorberechneter Diff-State (siehe diff-mode.js). Wird beim rerenderTable
+// aus dem aktuellen Snapshot + den aktuellen realNodes erzeugt. Pro Host-Row
+// schlagen wir nach ob er als "neu/up/down" markiert werden muss.
+let _diff = null;
 let _filterOfflineOnly = false;  // Toggle "nur Offline-Hosts zeigen"
 let _sortCol = 'severity';
 let _sortDir = 'desc';
@@ -561,6 +567,31 @@ function buildFilterBar(nodes, groupNames, theme) {
     return bar;
 }
 
+// Kleines Badge das vor der Severity-Pille einer Diff-relevanten Zeile
+// erscheint. + (cyan) fuer neue Hosts, ↑ (rot) fuer schlimmere Severity,
+// ↓ (gruen) fuer bessere. Leerstring wenn kein Diff aktiv ist.
+function _diffBadgeHtml(id) {
+    if (!_diff) return '';
+    const sid = String(id);
+    const base = 'display:inline-block;width:14px;height:14px;line-height:14px;'
+        + 'border-radius:50%;color:#fff;font-size:10px;font-weight:700;'
+        + 'text-align:center;margin-right:5px;vertical-align:middle';
+    if (_diff.new.has(sid)) {
+        return '<span title="Neu seit Snapshot" style="' + base + ';background:#06b6d4">+</span>';
+    }
+    if (_diff.up.has(sid)) {
+        const ch = _diff.sevByHost.get(sid);
+        const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : 'Schlimmer seit Snapshot';
+        return '<span title="' + esc(tt) + '" style="' + base + ';background:#dc2626">↑</span>';
+    }
+    if (_diff.down.has(sid)) {
+        const ch = _diff.sevByHost.get(sid);
+        const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : 'Besser seit Snapshot';
+        return '<span title="' + esc(tt) + '" style="' + base + ';background:#16a34a">↓</span>';
+    }
+    return '';
+}
+
 function rowHtml(n, baseUrl, theme) {
     const sev = n.severity || 0;
     const sevCol = SEV_COL[sev];
@@ -638,8 +669,8 @@ function rowHtml(n, baseUrl, theme) {
         + 'style="border-bottom:1px solid ' + theme.borderSoft + ';cursor:pointer;'
         + 'border-left:3px solid ' + (isOff ? '#9ca3af' : sevCol)
         + ';transition:background 0.12s;' + rowOpacity + '">'
-        // Status (Pille mit Punkt + Label oder Offline-Anzeige)
-        + '<td style="' + cellPad + '">' + sevCellHtml + '</td>'
+        // Status (Pille mit Punkt + Label oder Offline-Anzeige) + Diff-Badge
+        + '<td style="' + cellPad + '">' + _diffBadgeHtml(n.id) + sevCellHtml + '</td>'
         // Host (Link zu Latest-Data)
         + '<td style="' + cellPad + '"><a href="' + esc(latestUrl) + '" '
             + 'target="_blank" rel="noopener noreferrer" '
@@ -849,13 +880,30 @@ export function renderTable(wrap, nodes, edges) {
 
     function rerenderTable() {
         _urlSync();
+        // Diff-State einmal pro Render berechnen (statt pro Row)
+        const snap = loadSnapshot();
+        _diff = snap ? computeDiff(realNodes, snap) : null;
+
         const r = buildTable(realNodes, baseUrl, theme);
         tableArea.innerHTML = r.html;
         const counter = document.getElementById('nt-table-count');
         if (counter) {
-            counter.textContent = r.visible === r.total
+            let txt = r.visible === r.total
                 ? r.total + ' Hosts'
                 : r.visible + ' / ' + r.total + ' Hosts';
+            if (_diff) {
+                const parts = [];
+                if (_diff.new.size)  parts.push('<span style="color:#06b6d4;font-weight:700">+' + _diff.new.size + '</span>');
+                if (_diff.gone.size) parts.push('<span style="color:#94a3b8;font-weight:700">−' + _diff.gone.size + '</span>');
+                if (_diff.up.size)   parts.push('<span style="color:#dc2626;font-weight:700">↑' + _diff.up.size + '</span>');
+                if (_diff.down.size) parts.push('<span style="color:#16a34a;font-weight:700">↓' + _diff.down.size + '</span>');
+                const diffTxt = parts.length
+                    ? ' · seit ' + formatSnapshotAge(snap) + ': ' + parts.join(' ')
+                    : ' · seit ' + formatSnapshotAge(snap) + ': keine Aenderung';
+                counter.innerHTML = esc(txt) + '<span style="color:#94a3b8">' + diffTxt + '</span>';
+            } else {
+                counter.textContent = txt;
+            }
         }
         wireTable();
     }

@@ -1,4 +1,8 @@
-// tabs.js — Basis-Toolbar (Tabs + Dark-Mode-Button) und Dark-Mode-Logic.
+// tabs.js — Basis-Toolbar (Tabs + Dark-Mode-Button + Snapshot) und Dark-Mode-Logic.
+//
+// Snapshot-Button merkt den aktuellen Daten-Stand in localStorage (siehe
+// diff-mode.js). Views koennen dann zeigen was sich veraendert hat —
+// nuetzlich z.B. nach einem Schichtwechsel.
 //
 // ensureBaseToolbar() ist idempotent: wird von jedem render-Pfad aufgerufen,
 // baut Tab-Wrap und Dark-Button nur wenn sie fehlen, und hält den aktiven
@@ -15,6 +19,7 @@
 //     von renderManagement() abhängt (zirkuläre Importe vermeiden).
 
 import { grpColor } from './severity.js';
+import { saveSnapshot, loadSnapshot, clearSnapshot, formatSnapshotAge } from './diff-mode.js';
 
 // State-Bridge: Hauptmodul setzt _getActiveTab beim init().
 let _getActiveTab = function() { return 'tech'; };
@@ -108,6 +113,48 @@ export function ensureBaseToolbar(wrap) {
         bDark.addEventListener('click', function() { applyDarkMode(); });
         bar.appendChild(bDark);
     }
+
+    // Snapshot/Diff-Buttons (einmal anlegen). Snapshot speichert den
+    // aktuellen Stand in localStorage; sobald gesetzt zeigt die Tabelle (und
+    // perspektivisch andere Views) was sich veraendert hat. Clear-Button
+    // erscheint nur wenn ein Snapshot existiert.
+    if (!document.getElementById('nt-btn-snap')) {
+        const bSnap = document.createElement('button');
+        bSnap.id = 'nt-btn-snap';
+        bSnap.className = 'btn-alt btn-small';
+        bSnap.style.marginLeft = '4px';
+        bSnap.addEventListener('click', function() {
+            const d = window._ntLastData || {};
+            if (!d.nodes || !d.nodes.length) return;
+            saveSnapshot(d.nodes);
+            ensureBaseToolbar(wrap);     // Button-Label aktualisieren
+            if (window.switchTab) window.switchTab(_getActiveTab(), wrap, d.nodes, d.edges || [], d.url || '');
+        });
+        bar.appendChild(bSnap);
+
+        const bClear = document.createElement('button');
+        bClear.id = 'nt-btn-snap-clear';
+        bClear.className = 'btn-alt btn-small';
+        bClear.style.marginLeft = '2px';
+        bClear.textContent = '✕';
+        bClear.title = 'Snapshot loeschen';
+        bClear.addEventListener('click', function() {
+            clearSnapshot();
+            ensureBaseToolbar(wrap);
+            const d = window._ntLastData || {};
+            if (window.switchTab && d.nodes) window.switchTab(_getActiveTab(), wrap, d.nodes, d.edges || [], d.url || '');
+        });
+        bar.appendChild(bClear);
+    }
+    // Label / Visibility der Snap-Buttons gemaess aktuellem Snapshot-State
+    const snap = loadSnapshot();
+    const bSnapEl  = document.getElementById('nt-btn-snap');
+    const bClearEl = document.getElementById('nt-btn-snap-clear');
+    if (bSnapEl) {
+        bSnapEl.textContent = snap ? ('Diff seit ' + formatSnapshotAge(snap)) : 'Snapshot';
+        bSnapEl.title = snap ? 'Neuen Snapshot setzen (ersetzt den alten)' : 'Aktuellen Stand merken — danach sieht man was sich veraendert hat';
+    }
+    if (bClearEl) bClearEl.style.display = snap ? '' : 'none';
 }
 
 // Alter Name behalten — wird noch im Hauptmodul aufgerufen, delegiert
