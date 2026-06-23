@@ -345,9 +345,9 @@ function passesFilter(n) {
     // Query-Suche (parser in query.js): AND/OR/NOT mit Field-Prefixen.
     //   "router"                  → match irgendwo
     //   "host:router"             → match nur in host/label
-    //   "host:fox OR host:bar"    → OR
-    //   "(host:fox OR host:bar) type:switch"
-    //   "-tag:wartung"            → negativ
+    //   "host:a OR host:b"        → OR
+    //   "(host:a OR host:b) type:switch"
+    //   "-group:wartung"          → negativ
     if (_filterQuery) {
         if (!matchQuery(_filterQuery, nodeToQueryFields(n))) return false;
     }
@@ -523,14 +523,14 @@ function buildFilterBar(nodes, groupNames, theme) {
     const search = document.createElement('input');
     search.id = 'nt-table-search';
     search.type = 'text';
-    search.placeholder = 'Suche — fox-prx, host:fox OR host:bar, group:berlin';
+    search.placeholder = 'Suche — host:web, type:switch, group:dc1, ...';
     search.title = 'Query-Syntax:\n'
-        + '  fox-prx                   match in Hostname/Label/IP\n'
+        + '  web                       match in Hostname/Label/IP\n'
         + '  -wartung                  NOT (Wort darf nicht vorkommen)\n'
-        + '  host:fox                  Hostname/Label\n'
-        + '  ip:192.168                IP-Adresse\n'
-        + '  proxy:fox                 Proxy-Name (nur per Prefix!)\n'
-        + '  group:berlin              Hostgroup-Name\n'
+        + '  host:web                  Hostname/Label\n'
+        + '  ip:10.0                   IP-Adresse\n'
+        + '  proxy:zbx-px              Proxy-Name (nur per Prefix!)\n'
+        + '  group:dc1                 Hostgroup-Name\n'
         + '  type:switch               Geraete-Type\n'
         + '  iftype:snmp               Interface-Type\n'
         + '  "with spaces"             quoted (auch field:"foo bar")\n'
@@ -898,11 +898,11 @@ export function renderTable(wrap, nodes, edges) {
         const searchIn = document.createElement('input');
         searchIn.type = 'text';
         searchIn.id = 'nt-items-hostsearch';
-        searchIn.placeholder = 'Hosts filtern — host:fox, group:berlin, ...';
+        searchIn.placeholder = 'Hosts filtern — host:web, group:dc1, ...';
         searchIn.title = 'Gleiche Query-Syntax wie Hosts-Modus:\n'
-            + '  router                 match irgendwo\n'
+            + '  web                    match in Host/Label/IP\n'
             + '  -wartung               NOT\n'
-            + '  host:fox / ip:1.2 / proxy:fox / group:berlin / type:switch\n'
+            + '  host:web / ip:10.0 / proxy:zbx-px / group:dc1 / type:switch\n'
             + '  a OR b / (a OR b) c    OR + Klammern\n'
             + '  "with spaces"          quoted';
         searchIn.value = _itemsSearch;
