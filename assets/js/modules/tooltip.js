@@ -184,3 +184,96 @@ export function moveTip(evt) {
 export function hideTip() {
     _tip.style.display = 'none';
 }
+
+// ── Edge-Tooltip ───────────────────────────────────────────────────────────
+// Wird beim Hover ueber LLDP-/Manual-Edges angezeigt. Aktuell Traffic in/out
+// (Summe beider Endpunkte) plus 1h-Sparkline. Holt Spark-Daten fuer beide
+// Endpunkte parallel und summiert element-weise.
+function _sumArrays(a, b) {
+    const len = Math.max((a && a.length) || 0, (b && b.length) || 0);
+    if (len === 0) return [];
+    const out = new Array(len);
+    for (let i = 0; i < len; i++) out[i] = (a && a[i] || 0) + (b && b[i] || 0);
+    return out;
+}
+
+export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
+    const tIn  = edgeData.trafficIn  || 0;
+    const tOut = edgeData.trafficOut || 0;
+    const srcId = edgeData.source || edgeData.from || '';
+    const tgtId = edgeData.target || edgeData.to   || '';
+
+    function buildHtml(sparkSrc, sparkTgt) {
+        const inArr  = (sparkSrc || sparkTgt)
+            ? _sumArrays(sparkSrc && sparkSrc.traffic_in,  sparkTgt && sparkTgt.traffic_in)
+            : null;
+        const outArr = (sparkSrc || sparkTgt)
+            ? _sumArrays(sparkSrc && sparkSrc.traffic_out, sparkTgt && sparkTgt.traffic_out)
+            : null;
+        const inSpark  = inArr  && inArr.length  ? drawSparkline(inArr,  '#06b6d4', 160, 26) : '';
+        const outSpark = outArr && outArr.length ? drawSparkline(outArr, '#f97316', 160, 26) : '';
+        const haveData = inSpark || outSpark;
+
+        const header = '<div style="font-weight:700;font-size:11px;color:#0f172a;margin-bottom:6px;'
+            + 'padding-bottom:5px;border-bottom:1px solid #f1f5f9">'
+            + esc(srcLabel) + ' <span style="color:#94a3b8">↔</span> ' + esc(tgtLabel)
+            + '</div>';
+
+        const liveRow = '<div style="display:flex;gap:10px;font-size:11px;color:#475569;margin-bottom:4px">'
+            + '<span><span style="color:#06b6d4">↓</span> <b>' + fmt(tIn) + '</b></span>'
+            + '<span><span style="color:#f97316">↑</span> <b>' + fmt(tOut) + '</b></span>'
+            + '</div>';
+
+        if (!haveData && (sparkSrc || sparkTgt)) {
+            // Daten geholt, aber keine Traffic-Items vorhanden
+            return header + liveRow + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
+                + 'Kein Traffic-Verlauf verfuegbar (keine net.if-/ifIn/ifOut-Items)</div>';
+        }
+
+        const sparkBlock = haveData
+            ? '<div style="margin-top:6px;font-size:10px;color:#64748b">'
+                + (inSpark ? '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
+                    + '<span style="color:#06b6d4">↓ In</span>' + inSpark + '</div>' : '')
+                + (outSpark ? '<div style="display:flex;align-items:center;gap:6px">'
+                    + '<span style="color:#f97316">↑ Out</span>' + outSpark + '</div>' : '')
+                + '<div style="font-size:9px;color:#cbd5e1;margin-top:3px">letzte 1h</div>'
+                + '</div>'
+            : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">⌛ Lade Verlauf...</div>';
+
+        return header + liveRow + sparkBlock;
+    }
+
+    _tip.style.width = '210px';
+    _tip.innerHTML = buildHtml(null, null);
+    _tip.style.display = 'block';
+    moveTip(evt);
+
+    // Async: Spark fuer beide Endpunkte holen (einen Call mit beiden IDs).
+    if (!srcId || !tgtId) return;
+    const cfg = window.NT_CONFIG;
+    if (!cfg || !cfg.data_url) return;
+    const cacheS = _sparkCache[srcId], cacheT = _sparkCache[tgtId];
+    const now = Date.now();
+    if (cacheS && cacheT && (now - cacheS.ts) < 60000 && (now - cacheT.ts) < 60000) {
+        _tip.innerHTML = buildHtml(cacheS, cacheT);
+        return;
+    }
+    const url = cfg.data_url.replace('network.topology.v6.data', 'network.topology.v6.spark')
+        + '&hostids%5B%5D=' + encodeURIComponent(srcId)
+        + '&hostids%5B%5D=' + encodeURIComponent(tgtId);
+    fetch(url, { credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'} })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            const s = data[String(srcId)] || null;
+            const t = data[String(tgtId)] || null;
+            if (s) _sparkCache[srcId] = Object.assign({}, s, { ts: now });
+            if (t) _sparkCache[tgtId] = Object.assign({}, t, { ts: now });
+            if (_tip.style.display === 'block') _tip.innerHTML = buildHtml(s, t);
+        })
+        .catch(function() {
+            if (_tip.style.display === 'block') {
+                _tip.innerHTML = buildHtml({ traffic_in: [], traffic_out: [] },
+                                          { traffic_in: [], traffic_out: [] });
+            }
+        });
+}

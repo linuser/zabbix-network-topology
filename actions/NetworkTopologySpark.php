@@ -13,6 +13,9 @@ use API;
  * Liefert für eine Liste von Hosts:
  *   - CPU-History (letzte 1h, max 30 Punkte)
  *   - Ping-History (letzte 1h, max 30 Punkte)
+ *   - Traffic-History in/out (letzte 1h, max 30 Punkte, bps, summiert über
+ *     alle net.if-/ifInOctets/ifOutOctets-Items des Hosts) — fuer
+ *     Edge-Tooltip im Frontend, das die Werte beider Endpunkte addiert.
  *   - since: Unix-Timestamp wann der aktuelle Severity-Status begann
  *
  * Request (GET/POST):
@@ -20,7 +23,11 @@ use API;
  *
  * Response JSON:
  *   {
- *     "123": { "cpu": [1.2, 3.4, ...], "ping": [12.1, ...], "since": 1710000000 },
+ *     "123": {
+ *       "cpu": [...], "ping": [...],
+ *       "traffic_in": [...], "traffic_out": [...],
+ *       "since": 1710000000
+ *     },
  *     ...
  *   }
  */
@@ -66,53 +73,92 @@ class NetworkTopologySpark extends CController {
             return;
         }
 
-        // ── 1. Items für CPU + Ping suchen ───────────────────────────────────
+        // ── 1. Items suchen: CPU + Ping + Traffic (net.if + IF-MIB) ──────────
+        // Traffic-Items werden ueber Key-Substring gematcht; pro Host koennen
+        // mehrere existieren (mehrere Interfaces) — wir summieren spaeter.
         $items = API::Item()->get([
             'output'       => ['itemid', 'hostid', 'key_', 'value_type'],
             'hostids'      => $hostids,
-            'search'       => ['key_' => ['system.cpu.util', 'icmppingsec']],
+            'search'       => ['key_' => [
+                'system.cpu.util', 'icmppingsec',
+                'net.if', 'ifInOctets', 'ifOutOctets', 'ifHCInOctets', 'ifHCOutOctets'
+            ]],
             'searchByAny'  => true,
             'monitored'    => true,
             'preservekeys' => true,
         ]);
 
-        // Aufteilen: cpu_item und ping_item pro Host
-        $cpu_items  = [];   // hostid -> itemid
-        $ping_items = [];
+        $cpu_items     = [];   // hostid -> itemid (erstes match reicht)
+        $ping_items    = [];
+        $trIn_items    = [];   // hostid -> [itemids, ...] alle In-Interfaces
+        $trOut_items   = [];   // hostid -> [itemids, ...]
+        $trIn_scale    = [];   // itemid -> Bit-Multiplier (8 fuer Bytes, 1 fuer Bits)
+        $trOut_scale   = [];
 
         foreach ($items as $itemid => $item) {
             $hid = $item['hostid'];
             $key = $item['key_'];
             if (strpos($key, 'system.cpu.util') !== false && !isset($cpu_items[$hid])) {
                 $cpu_items[$hid] = $itemid;
-            }
-            if (strpos($key, 'icmppingsec') !== false && !isset($ping_items[$hid])) {
+            } elseif (strpos($key, 'icmppingsec') !== false && !isset($ping_items[$hid])) {
                 $ping_items[$hid] = $itemid;
+            } elseif (strpos($key, 'net.if.in') === 0 || strpos($key, 'ifInOctets') !== false
+                  || strpos($key, 'ifHCInOctets') !== false) {
+                $trIn_items[$hid][] = $itemid;
+                // net.if.in liefert bps direkt (oder bytes/s — die Render-Tabelle
+                // multipliziert auch *8 fuer Octets-Keys), Octets sind Bytes/s → *8.
+                $trIn_scale[$itemid] = (strpos($key, 'Octets') !== false) ? 8 : 1;
+            } elseif (strpos($key, 'net.if.out') === 0 || strpos($key, 'ifOutOctets') !== false
+                  || strpos($key, 'ifHCOutOctets') !== false) {
+                $trOut_items[$hid][] = $itemid;
+                $trOut_scale[$itemid] = (strpos($key, 'Octets') !== false) ? 8 : 1;
             }
         }
 
-        // ── 2. History holen (Typ 0 = float) ─────────────────────────────────
-        $all_item_ids = array_unique(array_merge(
-            array_values($cpu_items),
-            array_values($ping_items)
+        // ── 2. History holen ─────────────────────────────────────────────────
+        // CPU/Ping sind FLOAT, Traffic kann FLOAT oder UINT64 sein (Counters
+        // mit Change-per-second-Preprocessing → FLOAT, raw counter → UINT64).
+        // Wir holen beide Typen separat und mergen.
+        $cp_item_ids = array_unique(array_merge(
+            array_values($cpu_items), array_values($ping_items)
         ));
+        $tr_item_ids = [];
+        foreach ($trIn_items as $arr)  { foreach ($arr as $iid) $tr_item_ids[] = $iid; }
+        foreach ($trOut_items as $arr) { foreach ($arr as $iid) $tr_item_ids[] = $iid; }
+        $tr_item_ids = array_unique($tr_item_ids);
 
-        $history_map = [];   // itemid -> [values]
+        $history_map = [];   // itemid -> [{clock, value}, ...]
 
-        if ($all_item_ids) {
-            $history = API::History()->get([
+        if ($cp_item_ids) {
+            $hist = API::History()->get([
                 'output'    => ['itemid', 'clock', 'value'],
-                'itemids'   => $all_item_ids,
+                'itemids'   => $cp_item_ids,
                 'history'   => ITEM_VALUE_TYPE_FLOAT,
                 'time_from' => $timeFrom,
                 'time_till' => $now,
                 'sortfield' => 'clock',
                 'sortorder' => 'ASC',
-                'limit'     => max(30, count($all_item_ids) * 30),
+                'limit'     => max(30, count($cp_item_ids) * 30),
             ]);
-
-            foreach ($history as $h) {
-                $history_map[$h['itemid']][] = round((float)$h['value'], 2);
+            foreach ($hist as $h) {
+                $history_map[$h['itemid']][] = ['clock' => (int)$h['clock'], 'value' => (float)$h['value']];
+            }
+        }
+        if ($tr_item_ids) {
+            foreach ([ITEM_VALUE_TYPE_FLOAT, ITEM_VALUE_TYPE_UINT64] as $vtype) {
+                $hist = API::History()->get([
+                    'output'    => ['itemid', 'clock', 'value'],
+                    'itemids'   => $tr_item_ids,
+                    'history'   => $vtype,
+                    'time_from' => $timeFrom,
+                    'time_till' => $now,
+                    'sortfield' => 'clock',
+                    'sortorder' => 'ASC',
+                    'limit'     => max(60, count($tr_item_ids) * 60),
+                ]);
+                foreach ($hist as $h) {
+                    $history_map[$h['itemid']][] = ['clock' => (int)$h['clock'], 'value' => (float)$h['value']];
+                }
             }
         }
 
@@ -153,17 +199,27 @@ class NetworkTopologySpark extends CController {
 
         // ── 4. Ergebnis zusammenbauen ─────────────────────────────────────────
         foreach ($hostids as $hid) {
-            $cpu_vals  = isset($cpu_items[$hid])  ? ($history_map[$cpu_items[$hid]]  ?? []) : [];
-            $ping_vals = isset($ping_items[$hid]) ? ($history_map[$ping_items[$hid]] ?? []) : [];
+            // CPU/Ping: erstes Match-Item, einfache Wert-Liste
+            $cpu_vals  = isset($cpu_items[$hid])
+                ? array_map(static fn($e) => round($e['value'], 2), $history_map[$cpu_items[$hid]] ?? [])
+                : [];
+            $ping_raw = isset($ping_items[$hid])
+                ? array_map(static fn($e) => $e['value'], $history_map[$ping_items[$hid]] ?? [])
+                : [];
+            $ping_ms = array_map(static fn($v) => round($v * 1000, 1), $ping_raw);
 
-            // Ping: ms statt Sekunden
-            $ping_ms = array_map(static fn($v) => round($v * 1000, 1), $ping_vals);
+            // Traffic in/out: Summe ueber alle Interfaces des Hosts, gebucketet
+            // pro Minute (60 Buckets/h) damit verschiedene Items mit
+            // unterschiedlichen Sample-Raten korrekt addiert werden.
+            $tr_in_bucketed  = $this->bucketSumScaled($history_map, $trIn_items[$hid]  ?? [], $trIn_scale,  $timeFrom, 60);
+            $tr_out_bucketed = $this->bucketSumScaled($history_map, $trOut_items[$hid] ?? [], $trOut_scale, $timeFrom, 60);
 
-            // Auf max 30 Punkte reduzieren (gleichmäßig samplen)
             $result[$hid] = [
-                'cpu'   => $this->sample($cpu_vals,  30),
-                'ping'  => $this->sample($ping_ms,   30),
-                'since' => $since_map[$hid] ?? null,
+                'cpu'         => $this->sample($cpu_vals,  30),
+                'ping'        => $this->sample($ping_ms,   30),
+                'traffic_in'  => $this->sample($tr_in_bucketed,  30),
+                'traffic_out' => $this->sample($tr_out_bucketed, 30),
+                'since'       => $since_map[$hid] ?? null,
             ];
         }
 
@@ -184,5 +240,36 @@ class NetworkTopologySpark extends CController {
             $result[] = $arr[$idx];
         }
         return $result;
+    }
+
+    /**
+     * Bucketed Sum: Mehrere Items mit unterschiedlichen Sample-Raten in
+     * gleichgrosse Zeit-Buckets aufteilen, pro Bucket den letzten Wert pro
+     * Item verwenden, dann ueber alle Items summieren. Skalar $scale[$itemid]
+     * (1 oder 8) konvertiert Bytes/s → bit/s falls Counter-Items.
+     *
+     * Liefert ein Array der Laenge $buckets, fehlende Buckets = 0.
+     */
+    private function bucketSumScaled(array $history_map, array $itemids, array $scale, int $timeFrom, int $buckets): array {
+        if (!$itemids) return [];
+        $bucketSize = 3600 / $buckets;
+        $out = array_fill(0, $buckets, 0.0);
+        // Pro Bucket: pro Item den letzten Wert behalten, dann summieren.
+        $perBucket = [];   // bucket -> itemid -> latestVal
+        foreach ($itemids as $iid) {
+            $entries = $history_map[$iid] ?? [];
+            $mul = $scale[$iid] ?? 1;
+            foreach ($entries as $e) {
+                $b = (int) (($e['clock'] - $timeFrom) / $bucketSize);
+                if ($b < 0 || $b >= $buckets) continue;
+                $perBucket[$b][$iid] = $e['value'] * $mul;
+            }
+        }
+        foreach ($perBucket as $b => $items) {
+            $sum = 0.0;
+            foreach ($items as $v) $sum += $v;
+            $out[$b] = round($sum, 1);
+        }
+        return $out;
     }
 }

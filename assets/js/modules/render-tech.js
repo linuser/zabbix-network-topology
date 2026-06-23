@@ -25,7 +25,7 @@ import {
 import { aggregateByGroup } from './aggregation.js';
 import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
 import { isPathActive, clearPathState } from './path-highlight.js';
-import { showTip, hideTip, moveTip } from './tooltip.js';
+import { showTip, hideTip, moveTip, showEdgeTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
 import { setupLegend } from './legend.js';
@@ -272,6 +272,19 @@ export function render(wrap, nodes, edges, dataUrl) {
     });
     cy.on('mousemove', 'node[!isGroup]', function(e) { moveTip(e); });
     cy.on('mouseout',  'node[!isGroup]', function()  { hideTip(); });
+    // Edge-Tooltip: Traffic-Sparkline beider Endpunkte. Internet-Edges
+    // (Wolken-Uplinks) haben einen virtuellen Internet-Knoten — kein
+    // Tooltip dafuer, ist nicht aussagekraeftig.
+    cy.on('mouseover', 'edge', function(e) {
+        const ed = e.target.data();
+        if (ed._isInternetEdge) return;
+        const src = e.target.source();
+        const tgt = e.target.target();
+        if (!src || !tgt) return;
+        showEdgeTip(e, ed, src.data('label') || src.id(), tgt.data('label') || tgt.id());
+    });
+    cy.on('mousemove', 'edge', function(e) { moveTip(e); });
+    cy.on('mouseout',  'edge', function()  { hideTip(); });
     cy.on('tap', function() { hideTip(); });
     cy.on('tap', function(e) {
         if (e.target === cy) {
