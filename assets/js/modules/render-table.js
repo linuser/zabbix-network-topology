@@ -1228,10 +1228,19 @@ export function renderTable(wrap, nodes, edges) {
             _searchTimer = setTimeout(function() {
                 _filterText = v;
                 _reparseTokens();
+                console.log('[nt-table] search:', { text: _filterText, pos: _filterPosTokens.slice(), neg: _filterNegTokens.slice() });
                 rerenderTable();
             }, 150);
         });
     }
+    // Debug-Hook: erlaubt Console-Inspection von Filter-State
+    window._ntTableDbg = {
+        text:   function() { return _filterText; },
+        pos:    function() { return _filterPosTokens.slice(); },
+        neg:    function() { return _filterNegTokens.slice(); },
+        groups: function() { return Array.from(_filterGroups); },
+        rerender: function() { rerenderTable(); }
+    };
 
     // Mode-Toggle: Hosts / Items
     filterBar.querySelectorAll('button[data-mode]').forEach(function(btn) {
