@@ -10,11 +10,32 @@ use API;
 
 class NetworkTopologyData extends CController {
 
+    // Schutz vor CSRF-Last-Abuse (Lese-Endpoint, kein CSRF-Token):
+    // Cap auf max 100 Gruppen pro Request. Realistisch hat ein User
+    // selten >10 Gruppen ausgewaehlt — 100 ist 10x Sicherheits-Puffer
+    // gegen einen Browser-Cross-Origin-Trigger mit riesigem Group-Array.
+    private const MAX_GROUPS = 100;
+
     protected function init(): void {
         $this->disableCsrfValidation();
     }
 
+    // Read-only Endpunkt — nur XHR-Aufrufe akzeptieren. Cross-Origin-Browser
+    // koennen X-Requested-With nicht ohne CORS-Preflight setzen, also
+    // schuetzt das gegen CSRF-Last (Daten kann der Angreifer wegen Same-
+    // Origin sowieso nicht lesen, aber er koennte teure Queries triggern).
+    private function requireAjax(): bool {
+        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
+            $this->setResponse(new CControllerResponseData([
+                'main_block' => json_encode(['error' => 'AJAX only'])
+            ]));
+            return false;
+        }
+        return true;
+    }
+
     protected function checkInput(): bool {
+        if (!$this->requireAjax()) return false;
         $ret = $this->validateInput(['groupids' => 'array_id']);
         if (!$ret) $this->setResponse(new CControllerResponseFatal());
         return $ret;
@@ -32,6 +53,9 @@ class NetworkTopologyData extends CController {
                 'main_block' => json_encode(['nodes' => [], 'edges' => []])
             ]));
             return;
+        }
+        if (count($groupids) > self::MAX_GROUPS) {
+            $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
         }
 
         // ── 1. HOSTS ──────────────────────────────────────────────────────

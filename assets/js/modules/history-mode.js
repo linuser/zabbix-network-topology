@@ -123,7 +123,10 @@ async function fetchHistory(rangeSec) {
 
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
     try {
-        const resp = await fetch(url, { credentials: 'same-origin' });
+        const resp = await fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
         const data = await resp.json();
         if (data.error) {
             console.warn('History fetch error:', data.error);

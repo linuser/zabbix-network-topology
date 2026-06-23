@@ -90,7 +90,10 @@ export async function fetchItemsPivot(pattern) {
 
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
     try {
-        const resp = await fetch(url, { credentials: 'same-origin' });
+        const resp = await fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
         const data = await resp.json();
         if (data.error) {
             console.warn('Items fetch error:', data.error);
@@ -124,7 +127,10 @@ export function fetchPatternSuggestions() {
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
 
-    const promise = fetch(url, { credentials: 'same-origin' })
+    const promise = fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {

@@ -52,7 +52,19 @@ class NetworkTopologyDiscoverPatterns extends CController {
         $this->disableCsrfValidation();
     }
 
+    // Read-only Endpunkt — nur XHR-Aufrufe akzeptieren (CSRF-Last-Schutz).
+    private function requireAjax(): bool {
+        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
+            $this->setResponse(new CControllerResponseData([
+                'main_block' => json_encode(['error' => 'AJAX only'])
+            ]));
+            return false;
+        }
+        return true;
+    }
+
     protected function checkInput(): bool {
+        if (!$this->requireAjax()) return false;
         $ret = $this->validateInput([
             'groupids' => 'array_id',
         ]);
