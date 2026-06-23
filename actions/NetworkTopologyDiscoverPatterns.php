@@ -184,9 +184,13 @@ class NetworkTopologyDiscoverPatterns extends CController {
      * Cache-Key: namespaced mit user_id + groupids-Hash.
      * user_id stellt sicher dass User mit unterschiedlichen Permissions
      * keinen geteilten Cache-Eintrag treffen (privacy + correctness).
+     * Bei userid == 0 (Session-Loss, anonymer Request) wird '' zurueckgegeben
+     * — die Cache-Layer muss das als "no-cache" interpretieren, damit
+     * solche Edge-Cases keinen geteilten Bucket bilden.
      */
     private function cacheKey(array $sortedGroupIds): string {
         $uid = (int) (\CWebUser::$data['userid'] ?? 0);
+        if ($uid === 0) return '';
         return 'nt_dp_' . $uid . '_' . md5(implode(',', $sortedGroupIds));
     }
 
@@ -198,7 +202,7 @@ class NetworkTopologyDiscoverPatterns extends CController {
      * Action laeuft dann jedes Mal voll durch (1-2s), aber funktional OK.
      */
     private function cacheGet(string $key): ?array {
-        if (!function_exists('apcu_fetch')) return null;
+        if ($key === '' || !function_exists('apcu_fetch')) return null;
         $ok  = false;
         $val = apcu_fetch($key, $ok);
         if (!$ok || !is_array($val)) return null;
@@ -206,7 +210,7 @@ class NetworkTopologyDiscoverPatterns extends CController {
     }
 
     private function cacheSet(string $key, array $value): void {
-        if (!function_exists('apcu_store')) return;
+        if ($key === '' || !function_exists('apcu_store')) return;
         apcu_store($key, $value, self::CACHE_TTL);
     }
 

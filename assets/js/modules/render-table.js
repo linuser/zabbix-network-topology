@@ -49,6 +49,10 @@ let _filterStatuses = new Set([0, 1, 2, 3, 4, 5]);  // alle Severities default a
 // mehreren Zabbix-Gruppen sein (z.B. "Kunde X" + "proxy").
 let _filterGroups = new Set();
 let _filterText = '';
+// Pre-parsed Tokens (positiv / negativ-NOT) — werden beim Input-Change aktualisiert
+// damit passesFilter() pro Host nicht den ganzen Token-Split neu macht.
+let _filterPosTokens = [];   // lowercase substrings; jeder muss matchen (AND)
+let _filterNegTokens = [];   // lowercase substrings; keiner darf matchen (NOT)
 let _filterOfflineOnly = false;  // Toggle "nur Offline-Hosts zeigen"
 let _sortCol = 'severity';
 let _sortDir = 'desc';
@@ -260,34 +264,45 @@ function passesFilter(n) {
         }
         if (!allFound) return false;
     }
-    // Token-basierte Volltextsuche: whitespace-split, jeder Token muss
-    // (case-insensitive substring) matchen. Tokens mit "-" Prefix sind
-    // negativ (Host muss den Token NICHT enthalten). Haystack enthaelt
-    // jetzt auch alle Gruppennamen, damit "proxy" im Suchfeld die
-    // Gruppen-Members findet.
-    if (_filterText) {
-        const tokens = _filterText.split(/\s+/).filter(function(t) { return t.length > 0; });
-        if (tokens.length > 0) {
-            const hay = (
-                (n.host || '') + ' ' +
-                (n.label || '') + ' ' +
-                (n.ip || '') + ' ' +
-                (n.type || '') + ' ' +
-                (n.iftype || '') + ' ' +
-                (n.proxy_name || '') + ' ' +
-                (n.proxy_group_name || '') + ' ' +
-                ((n.groups || []).join(' '))
-            ).toLowerCase();
-            for (const tok of tokens) {
-                if (tok[0] === '-' && tok.length > 1) {
-                    if (hay.indexOf(tok.slice(1).toLowerCase()) >= 0) return false;
-                } else {
-                    if (hay.indexOf(tok.toLowerCase()) < 0) return false;
-                }
-            }
+    // Token-basierte Volltextsuche: Tokens werden im Input-Handler einmal
+    // geparst (in _filterPosTokens/_filterNegTokens) — passesFilter() macht
+    // pro Host nur noch indexOf. Haystack enthaelt auch Gruppennamen damit
+    // "proxy" im Suchfeld Gruppen-Members findet.
+    if (_filterPosTokens.length > 0 || _filterNegTokens.length > 0) {
+        const hay = (
+            (n.host || '') + ' ' +
+            (n.label || '') + ' ' +
+            (n.ip || '') + ' ' +
+            (n.type || '') + ' ' +
+            (n.iftype || '') + ' ' +
+            (n.proxy_name || '') + ' ' +
+            (n.proxy_group_name || '') + ' ' +
+            ((n.groups || []).join(' '))
+        ).toLowerCase();
+        for (const tok of _filterPosTokens) {
+            if (hay.indexOf(tok) < 0) return false;
+        }
+        for (const tok of _filterNegTokens) {
+            if (hay.indexOf(tok) >= 0) return false;
         }
     }
     return true;
+}
+
+// Parst _filterText einmal in pos/neg-Token-Listen. Wird vom Suchfeld-Input
+// gerufen damit passesFilter() (laeuft pro Host) keinen Split mehr macht.
+function _reparseTokens() {
+    _filterPosTokens = [];
+    _filterNegTokens = [];
+    if (!_filterText) return;
+    _filterText.split(/\s+/).forEach(function(tok) {
+        if (!tok) return;
+        if (tok[0] === '-' && tok.length > 1) {
+            _filterNegTokens.push(tok.slice(1).toLowerCase());
+        } else {
+            _filterPosTokens.push(tok.toLowerCase());
+        }
+    });
 }
 
 function compare(a, b) {
@@ -1134,6 +1149,7 @@ export function renderTable(wrap, nodes, edges) {
             if (_searchTimer) clearTimeout(_searchTimer);
             _searchTimer = setTimeout(function() {
                 _filterText = v;
+                _reparseTokens();
                 rerenderTable();
             }, 150);
         });
