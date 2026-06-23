@@ -264,6 +264,9 @@ export function showDetail(panel, d, cy) {
     })();
     const zbxOrigin = window.location.origin + zbxBase;
     const hostId = encodeURIComponent(d.id);
+    // Edit-Action nur fuer Admins (NT_CONFIG.can_edit). Zabbix wuerde es
+    // serverseitig blocken, aber die UI soll keinen Button anzeigen der
+    // dann auf "Forbidden" landet.
     const actions = [
         { lbl: '\u{1F4CA}', title: 'Latest Data',
           url: zbxOrigin + 'zabbix.php?action=latest.view&filter_set=1&hostids%5B%5D=' + hostId },
@@ -271,9 +274,11 @@ export function showDetail(panel, d, cy) {
           url: zbxOrigin + 'zabbix.php?action=problem.view&filter_set=1&hostids%5B%5D=' + hostId },
         { lbl: '\u{1F4C8}', title: 'Graphs',
           url: zbxOrigin + 'zabbix.php?action=charts.view&filter_set=1&filter_hostids%5B%5D=' + hostId },
-        { lbl: '\u2699\uFE0F', title: 'Bearbeiten',
-          url: zbxOrigin + 'zabbix.php?action=popup&popup=host.edit&hostid=' + hostId },
     ];
+    if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
+        actions.push({ lbl: '\u2699\uFE0F', title: 'Bearbeiten',
+          url: zbxOrigin + 'zabbix.php?action=popup&popup=host.edit&hostid=' + hostId });
+    }
     const actionBar = '<div style="display:flex;gap:4px;margin-bottom:4px">'
         + actions.map(function(a, i) {
             return '<button data-act="' + i + '" title="' + esc(a.title) + '" '

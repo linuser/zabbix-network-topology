@@ -144,21 +144,24 @@ export function showCtx(cx, cy2, d) {
         _ctx.appendChild(np);
     }
 
-    [
+    // Read-only Links sind fuer alle sichtbar. Edit-Links (Bearbeiten +
+    // Hosts-Liste) nur fuer Admins (NT_CONFIG.can_edit = true). Zabbix
+    // prueft das serverseitig nochmal, aber die UI soll keine Buttons
+    // anzeigen die zu "Forbidden" fuehren.
+    const items = [
         [' Latest Data',          zbxUrl('latest.view',  hostId)],
         ['\u26A0 Problems',       zbxUrl('problem.view', hostId)],
         [' Graphs',               zbxUrl('charts.view',  hostId)],
-        // Direkt zum Host-Edit-Modal (Zabbix 7 nutzt intern dieselbe Route).
-        // Funktioniert mit hostid-Param. Wenn Zabbix später diese Route
-        // entfernt, fällt der Browser auf 404 zurück — dann zur Liste wechseln.
-        ['\u270F\uFE0F Bearbeiten', window.location.origin + base
-            + 'zabbix.php?action=popup&popup=host.edit&hostid=' + encodeURIComponent(hostId)],
-        // Liste mit Filter — nützlich wenn man auch andere Hosts will
-        ['\u2699\uFE0F Hosts (Liste)', window.location.origin + base
+    ];
+    if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
+        items.push(['\u270F\uFE0F Bearbeiten', window.location.origin + base
+            + 'zabbix.php?action=popup&popup=host.edit&hostid=' + encodeURIComponent(hostId)]);
+        items.push(['\u2699\uFE0F Hosts (Liste)', window.location.origin + base
             + 'zabbix.php?action=host.list'
             + '&filter_name=' + encodeURIComponent(d.host || d.label)
-            + '&filter_set=1'],
-    ].forEach(function(item) {
+            + '&filter_set=1']);
+    }
+    items.forEach(function(item) {
         const url = item[1];
         _ctx.appendChild(_ctxRow(item[0], '#334155', function() {
             window.open(url, '_blank');

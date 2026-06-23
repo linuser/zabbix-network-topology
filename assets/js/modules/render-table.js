@@ -725,12 +725,16 @@ function rowHtml(n, baseUrl, theme) {
                     + n.problems + '</button>'
                 : '<span style="color:' + theme.subSoft + ';font-size:12px">0</span>')
             + '</td>'
-        // Actions
+        // Actions \u2014 Edit nur fuer Admins (NT_CONFIG.can_edit). Zabbix
+        // prueft serverseitig nochmal, aber die UI soll keinen Button
+        // anzeigen der auf "Forbidden" landet.
         + '<td style="padding:5px;text-align:right;white-space:nowrap">'
             + actBtn(latestUrl, '\u{1F4CA}', 'Latest Data')
             + actBtn(probUrl,   '\u26A0',    'Probleme')
             + actBtn(chartsUrl, '\u{1F4C8}', 'Graphs')
-            + actBtn(editUrl,   '\u2699\uFE0F', 'Bearbeiten')
+            + (window.NT_CONFIG && window.NT_CONFIG.can_edit
+                ? actBtn(editUrl, '\u2699\uFE0F', 'Bearbeiten')
+                : '')
             + '</td>'
         + '</tr>';
 }
