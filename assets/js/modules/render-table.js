@@ -49,10 +49,17 @@ let _filterStatuses = new Set([0, 1, 2, 3, 4, 5]);  // alle Severities default a
 // mehreren Zabbix-Gruppen sein (z.B. "Kunde X" + "proxy").
 let _filterGroups = new Set();
 let _filterText = '';
-// Pre-parsed Tokens (positiv / negativ-NOT) — werden beim Input-Change aktualisiert
-// damit passesFilter() pro Host nicht den ganzen Token-Split neu macht.
-let _filterPosTokens = [];   // lowercase substrings; jeder muss matchen (AND)
-let _filterNegTokens = [];   // lowercase substrings; keiner darf matchen (NOT)
+// Pre-parsed Tokens — werden beim Input-Change aktualisiert damit passesFilter()
+// pro Host nicht den ganzen Token-Split neu macht. Jeder Token ist:
+//   { field: 'host'|'ip'|'proxy'|'group'|'type'|'iftype'|null, value: lowercase }
+// field=null heisst "matche irgendwo" (alle Felder konkateniert).
+let _filterPosTokens = [];   // alle muessen matchen (AND)
+let _filterNegTokens = [];   // keiner darf matchen (NOT)
+
+// Bekannte Field-Prefixe — alles andere (z.B. "http://...") wird als bare
+// Token gewertet, weil ":" auch in URLs/IPv6/Tags vorkommt und wir den
+// Nutzer nicht verwirren wollen.
+const FIELD_PREFIXES = { host:1, label:1, ip:1, type:1, iftype:1, proxy:1, group:1 };
 let _filterOfflineOnly = false;  // Toggle "nur Offline-Hosts zeigen"
 let _sortCol = 'severity';
 let _sortDir = 'desc';
@@ -340,44 +347,66 @@ function passesFilter(n) {
         }
         if (!allFound) return false;
     }
-    // Token-basierte Volltextsuche: Tokens werden im Input-Handler einmal
-    // geparst (in _filterPosTokens/_filterNegTokens) — passesFilter() macht
-    // pro Host nur noch indexOf. Haystack enthaelt auch Gruppennamen damit
-    // "proxy" im Suchfeld Gruppen-Members findet.
+    // Token-basierte Volltextsuche mit optionalem Field-Prefix.
+    //   "router"           → match irgendwo
+    //   "host:router"      → match nur in host/label
+    //   "proxy:fox"        → match nur in proxy_name/proxy_group_name
+    //   "-tag:wartung"     → negativ (Host muss Wort NICHT haben)
     if (_filterPosTokens.length > 0 || _filterNegTokens.length > 0) {
-        const hay = (
-            (n.host || '') + ' ' +
-            (n.label || '') + ' ' +
-            (n.ip || '') + ' ' +
-            (n.type || '') + ' ' +
-            (n.iftype || '') + ' ' +
-            (n.proxy_name || '') + ' ' +
-            (n.proxy_group_name || '') + ' ' +
-            ((n.groups || []).join(' '))
-        ).toLowerCase();
-        for (const tok of _filterPosTokens) {
-            if (hay.indexOf(tok) < 0) return false;
+        // Pro-Field-Strings einmal pro Host bauen. Anywhere = Konkatenation.
+        const fHost   = ((n.host || '') + ' ' + (n.label || '')).toLowerCase();
+        const fIp     = (n.ip || '').toLowerCase();
+        const fType   = (n.type || '').toLowerCase();
+        const fIftype = (n.iftype || '').toLowerCase();
+        const fProxy  = ((n.proxy_name || '') + ' ' + (n.proxy_group_name || '')).toLowerCase();
+        const fGroup  = (n.groups || []).join(' ').toLowerCase();
+        const anywhere = fHost + ' ' + fIp + ' ' + fType + ' ' + fIftype + ' ' + fProxy + ' ' + fGroup;
+        function _hayOf(field) {
+            switch (field) {
+                case 'host':
+                case 'label':  return fHost;
+                case 'ip':     return fIp;
+                case 'type':   return fType;
+                case 'iftype': return fIftype;
+                case 'proxy':  return fProxy;
+                case 'group':  return fGroup;
+                default:       return anywhere;
+            }
         }
-        for (const tok of _filterNegTokens) {
-            if (hay.indexOf(tok) >= 0) return false;
+        for (const t of _filterPosTokens) {
+            if (_hayOf(t.field).indexOf(t.value) < 0) return false;
+        }
+        for (const t of _filterNegTokens) {
+            if (_hayOf(t.field).indexOf(t.value) >= 0) return false;
         }
     }
     return true;
 }
 
-// Parst _filterText einmal in pos/neg-Token-Listen. Wird vom Suchfeld-Input
-// gerufen damit passesFilter() (laeuft pro Host) keinen Split mehr macht.
+// Parst _filterText einmal in pos/neg-Token-Listen. Erkennt
+// Field-Prefixe "feld:wert" (nur fuer bekannte Felder in FIELD_PREFIXES).
+// Bare-Tokens und unbekannte Prefixe matchen "irgendwo".
 function _reparseTokens() {
     _filterPosTokens = [];
     _filterNegTokens = [];
     if (!_filterText) return;
-    _filterText.split(/\s+/).forEach(function(tok) {
-        if (!tok) return;
-        if (tok[0] === '-' && tok.length > 1) {
-            _filterNegTokens.push(tok.slice(1).toLowerCase());
-        } else {
-            _filterPosTokens.push(tok.toLowerCase());
+    _filterText.split(/\s+/).forEach(function(raw) {
+        if (!raw) return;
+        let neg = false;
+        let tok = raw;
+        if (tok[0] === '-' && tok.length > 1) { neg = true; tok = tok.slice(1); }
+        let field = null;
+        let value = tok;
+        const ci = tok.indexOf(':');
+        if (ci > 0 && ci < tok.length - 1) {
+            const f = tok.slice(0, ci).toLowerCase();
+            if (FIELD_PREFIXES[f]) {
+                field = f;
+                value = tok.slice(ci + 1);
+            }
         }
+        const entry = { field: field, value: value.toLowerCase() };
+        (neg ? _filterNegTokens : _filterPosTokens).push(entry);
     });
 }
 
@@ -543,10 +572,16 @@ function buildFilterBar(nodes, groupNames, theme) {
     const search = document.createElement('input');
     search.id = 'nt-table-search';
     search.type = 'text';
-    search.placeholder = 'Suche (Tokens AND, -wort = NOT)';
-    search.title = 'Mehrere Begriffe = alle muessen matchen.\n'
-        + '-wort blendet Hosts mit dem Begriff aus.\n'
-        + 'Felder: Host, IP, Type, Interface, Proxy, Gruppen.';
+    search.placeholder = 'Suche (z.B. router -wartung, host:fox, proxy:fox)';
+    search.title = 'Tokens werden mit AND verknuepft. Beispiele:\n'
+        + '  router          — match irgendwo\n'
+        + '  -wartung        — schliesst Hosts mit "wartung" aus\n'
+        + '  host:fox        — nur im Hostname/Label\n'
+        + '  ip:192.168      — nur in der IP\n'
+        + '  proxy:fox       — nur im Proxy-Namen\n'
+        + '  group:berlin    — nur in Gruppennamen\n'
+        + '  type:switch     — nur im Geraete-Type\n'
+        + 'Bare Tokens (ohne :) matchen ueberall.';
     search.value = _filterText;
     search.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
         + ';border-radius:' + NT_R.sm + ';font-size:12px;width:240px;background:' + theme.inputBg
@@ -1228,7 +1263,6 @@ export function renderTable(wrap, nodes, edges) {
             _searchTimer = setTimeout(function() {
                 _filterText = v;
                 _reparseTokens();
-                console.log('[nt-table] search:', { text: _filterText, pos: _filterPosTokens.slice(), neg: _filterNegTokens.slice() });
                 rerenderTable();
             }, 150);
         });
