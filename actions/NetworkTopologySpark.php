@@ -64,6 +64,7 @@ class NetworkTopologySpark extends CController {
     }
 
     protected function doAction(): void {
+        $_t0 = microtime(true);
         $hostids  = $this->getInput('hostids', []);
 
         // Defensive: Spark wird vom Tooltip einzeln pro Host getriggert,
@@ -235,9 +236,15 @@ class NetworkTopologySpark extends CController {
             ];
         }
 
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
-        ]));
+        $_payload = json_encode($result, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        NetworkTopologyDiag::record([
+            'action'     => 'spark',
+            'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+            'bytes'      => strlen($_payload),
+            'cache_hit'  => false,
+            'counts'     => ['hosts' => count($hostids)],
+        ]);
+        $this->setResponse(new CControllerResponseData(['main_block' => $_payload]));
     }
 
     /**

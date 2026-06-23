@@ -46,6 +46,7 @@ class NetworkTopologyData extends CController {
     }
 
     protected function doAction(): void {
+        $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
 
         if (!$groupids) {
@@ -837,12 +838,18 @@ class NetworkTopologyData extends CController {
             ];
         }
 
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode(
-                ['nodes' => $nodes, 'edges' => $edges, 'lldp_unmatched' => $lldp_unmatched],
-                JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
-            )
-        ]));
+        $_payload = json_encode(
+            ['nodes' => $nodes, 'edges' => $edges, 'lldp_unmatched' => $lldp_unmatched],
+            JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+        NetworkTopologyDiag::record([
+            'action'     => 'data',
+            'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+            'bytes'      => strlen($_payload),
+            'cache_hit'  => false,
+            'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],
+        ]);
+        $this->setResponse(new CControllerResponseData(['main_block' => $_payload]));
     }
 
     // Returns IP from primary interface, prefers Agent but falls back to SNMP/JMX/IPMI

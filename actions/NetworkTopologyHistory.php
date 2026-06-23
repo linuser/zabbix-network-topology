@@ -82,6 +82,7 @@ class NetworkTopologyHistory extends CController {
     }
 
     protected function doAction(): void {
+        $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
         $from     = (int) $this->getInput('from', 0);
         $to       = (int) $this->getInput('to', 0);
@@ -209,12 +210,20 @@ class NetworkTopologyHistory extends CController {
             }
         }
 
-        $this->respond([
+        $_payload = [
             'from'      => $from,
             'to'        => $to,
             'events'    => $by_host ?: new \stdClass(),
             'truncated' => $truncated,
+        ];
+        NetworkTopologyDiag::record([
+            'action'     => 'history',
+            'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+            'bytes'      => strlen(json_encode($_payload)),
+            'cache_hit'  => false,
+            'counts'     => ['hosts' => is_array($by_host) ? count($by_host) : 0, 'truncated' => $truncated],
         ]);
+        $this->respond($_payload);
     }
 
     private function respond(array $data): void {

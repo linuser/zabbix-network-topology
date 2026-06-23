@@ -66,38 +66,57 @@ export function ensureBaseToolbar(wrap) {
     if (!bar) return;
     const activeTab = _getActiveTab();
 
-    // Tab-Wrap (einmal anlegen)
+    // Tab-Wrap (einmal anlegen). Diag-Tab nur fuer Admins (NT_CONFIG.can_edit) —
+    // das Backend prueft nochmal, aber wir zeigen den Tab im UI gleich nicht an.
+    const isAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.can_edit);
+    const TABS = [
+        { id: 'nt-tab-tech', lbl: 'Technisch',  tab: 'tech' },
+        { id: 'nt-tab-mgmt', lbl: 'Management', tab: 'mgmt' },
+        { id: 'nt-tab-tree', lbl: 'Tabelle',    tab: 'tree' },
+        { id: 'nt-tab-geo',  lbl: 'Geo',        tab: 'geo'  },
+    ];
+    if (isAdmin) TABS.push({ id: 'nt-tab-diag', lbl: 'Diag', tab: 'diag', dataOptional: true });
+
     if (!document.getElementById('nt-tab-wrap')) {
         const tw = document.createElement('div');
         tw.id = 'nt-tab-wrap';
         tw.style.cssText = 'display:flex;gap:2px;margin-right:8px;padding-right:8px;'
                          + 'border-right:1px solid #e2e8f0;flex-shrink:0';
-        [{ id: 'nt-tab-tech', lbl: 'Technisch',     tab: 'tech' },
-         { id: 'nt-tab-mgmt', lbl: 'Management',    tab: 'mgmt' },
-         { id: 'nt-tab-tree', lbl: 'Tabelle',  tab: 'tree' },
-         { id: 'nt-tab-geo',  lbl: 'Geo',           tab: 'geo'  }].forEach(function(item) {
+        TABS.forEach(function(item) {
             const b = document.createElement('button');
             b.id = item.id; b.textContent = item.lbl;
             b.className = 'btn-alt btn-small';
             b.style.margin = '0';
             b.addEventListener('click', function() {
                 const d = window._ntLastData || {};
-                if (!d.nodes || !d.nodes.length) return;
-                // window.switchTab wird vom Hauptmodul gesetzt — global, weil
-                // andere Module (z.B. context-menu) ihn auch aufrufen können.
-                if (window.switchTab) window.switchTab(item.tab, wrap, d.nodes, d.edges || [], d.url || '');
+                // Diag-Tab braucht keine Hosts-Daten (rein Stats)
+                if (!item.dataOptional && (!d.nodes || !d.nodes.length)) return;
+                if (window.switchTab) window.switchTab(item.tab, wrap, d.nodes || [], d.edges || [], d.url || '');
             });
             tw.appendChild(b);
         });
         bar.insertBefore(tw, bar.firstChild);
     }
+    // Falls Diag-Tab nachtraeglich noetig ist (z.B. NT_CONFIG kommt spaeter): ergaenzen
+    if (isAdmin && !document.getElementById('nt-tab-diag')) {
+        const tw = document.getElementById('nt-tab-wrap');
+        const b = document.createElement('button');
+        b.id = 'nt-tab-diag'; b.textContent = 'Diag';
+        b.className = 'btn-alt btn-small';
+        b.style.margin = '0';
+        b.addEventListener('click', function() {
+            const d = window._ntLastData || {};
+            if (window.switchTab) window.switchTab('diag', wrap, d.nodes || [], d.edges || [], d.url || '');
+        });
+        if (tw) tw.appendChild(b);
+    }
 
     // Aktiven Tab-State immer aktualisieren (auch wenn Tabs schon existieren)
-    ['tech', 'mgmt', 'tree', 'geo'].forEach(function(t) {
-        const b = document.getElementById('nt-tab-' + t);
+    TABS.forEach(function(item) {
+        const b = document.getElementById(item.id);
         if (b) {
-            b.style.background = activeTab === t ? '#3b82f6' : '';
-            b.style.color      = activeTab === t ? '#fff'    : '';
+            b.style.background = activeTab === item.tab ? '#3b82f6' : '';
+            b.style.color      = activeTab === item.tab ? '#fff'    : '';
         }
     });
 

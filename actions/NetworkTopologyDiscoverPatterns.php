@@ -81,6 +81,7 @@ class NetworkTopologyDiscoverPatterns extends CController {
     }
 
     protected function doAction(): void {
+        $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
         if (empty($groupids)) {
             $this->respond(['patterns' => []]);
@@ -110,6 +111,13 @@ class NetworkTopologyDiscoverPatterns extends CController {
         $cached = $this->cacheGet($cache_key);
         if ($cached !== null) {
             $cached['cached'] = true;
+            NetworkTopologyDiag::record([
+                'action'     => 'discover',
+                'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+                'bytes'      => strlen(json_encode($cached)),
+                'cache_hit'  => true,
+                'counts'     => ['patterns' => count($cached['patterns'] ?? [])],
+            ]);
             $this->respond($cached);
             return;
         }
@@ -189,6 +197,13 @@ class NetworkTopologyDiscoverPatterns extends CController {
         // nur das Roh-Payload, das 'cached'-Flag wird beim Hit injiziert.
         $this->cacheSet($cache_key, $payload);
         $payload['cached'] = false;
+        NetworkTopologyDiag::record([
+            'action'     => 'discover',
+            'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+            'bytes'      => strlen(json_encode($payload)),
+            'cache_hit'  => false,
+            'counts'     => ['patterns' => count($patterns)],
+        ]);
         $this->respond($payload);
     }
 

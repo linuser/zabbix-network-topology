@@ -84,6 +84,7 @@ class NetworkTopologyItems extends CController {
     }
 
     protected function doAction(): void {
+        $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
         $pattern  = trim($this->getInput('pattern', ''));
 
@@ -199,12 +200,20 @@ class NetworkTopologyItems extends CController {
             $host_meta[$hid] = $hosts[$hid]['host'] ?? '';
         }
 
-        $this->respond([
+        $_payload = [
             'columns' => $columns,
             'rows'    => $rows ?: new \stdClass(),
             'hosts'   => $host_meta ?: new \stdClass(),
             'truncated' => count($items) >= self::MAX_ITEMS,
+        ];
+        NetworkTopologyDiag::record([
+            'action'     => 'items',
+            'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+            'bytes'      => strlen(json_encode($_payload)),
+            'cache_hit'  => false,
+            'counts'     => ['items' => count($items), 'cols' => count($columns), 'hosts' => count($host_meta)],
         ]);
+        $this->respond($_payload);
     }
 
     /**

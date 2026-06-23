@@ -31,6 +31,10 @@
         "network.topology.v6.discover_patterns": {
             "class": "NetworkTopologyDiscoverPatterns",
             "layout": "layout.json"
+        },
+        "network.topology.v6.diag": {
+            "class": "NetworkTopologyDiag",
+            "layout": "layout.json"
         }
     }
 }
