@@ -169,6 +169,11 @@ export function matchQuery(ast, fields) {
 
 // Helper: baut das fields-Objekt aus einem Host-Node fuer beide Filter
 // (Tabelle Hosts-Modus + Items-Modus). Hostname/Label/IP/Proxy/Group/Type/Iftype.
+//
+// _any wird fuer bare-Tokens (ohne Field-Prefix) benutzt und enthaelt
+// BEWUSST nur host/label/ip — NICHT proxy/group/type/iftype. Sonst matched
+// "prx" alle Hosts wenn der Proxy "fox-prx" heisst. Wer in diesen
+// Sekundaer-Feldern suchen will, nutzt den jeweiligen Field-Prefix.
 export function nodeToQueryFields(n) {
     const fHost   = ((n.host || '') + ' ' + (n.label || '')).toLowerCase();
     const fIp     = (n.ip || '').toLowerCase();
@@ -184,6 +189,6 @@ export function nodeToQueryFields(n) {
         iftype: fIftype,
         proxy:  fProxy,
         group:  fGroup,
-        _any:   fHost + ' ' + fIp + ' ' + fType + ' ' + fIftype + ' ' + fProxy + ' ' + fGroup,
+        _any:   fHost + ' ' + fIp,
     };
 }

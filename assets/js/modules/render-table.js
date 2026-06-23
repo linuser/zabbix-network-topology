@@ -523,19 +523,20 @@ function buildFilterBar(nodes, groupNames, theme) {
     const search = document.createElement('input');
     search.id = 'nt-table-search';
     search.type = 'text';
-    search.placeholder = 'Suche — router -wartung, host:fox OR host:bar, group:berlin';
+    search.placeholder = 'Suche — fox-prx, host:fox OR host:bar, group:berlin';
     search.title = 'Query-Syntax:\n'
-        + '  router                    match irgendwo\n'
+        + '  fox-prx                   match in Hostname/Label/IP\n'
         + '  -wartung                  NOT (Wort darf nicht vorkommen)\n'
-        + '  host:fox                  nur im Hostname/Label\n'
-        + '  ip:192.168                nur in der IP\n'
-        + '  proxy:fox                 nur im Proxy-Namen\n'
-        + '  group:berlin              nur in Gruppennamen\n'
-        + '  type:switch               nur im Geraete-Type\n'
-        + '  iftype:snmp               nur im Interface-Type\n'
+        + '  host:fox                  Hostname/Label\n'
+        + '  ip:192.168                IP-Adresse\n'
+        + '  proxy:fox                 Proxy-Name (nur per Prefix!)\n'
+        + '  group:berlin              Hostgroup-Name\n'
+        + '  type:switch               Geraete-Type\n'
+        + '  iftype:snmp               Interface-Type\n'
         + '  "with spaces"             quoted (auch field:"foo bar")\n'
-        + '  a OR b                    ODER (Keyword, uppercase)\n'
+        + '  a OR b                    ODER (uppercase Keyword)\n'
         + '  (a OR b) c                Gruppierung mit Klammern\n'
+        + 'Bare Tokens (ohne :) matchen Host/Label/IP — nicht Proxy/Gruppe/Type.\n'
         + 'Mehrere Tokens ohne OR = UND (Standard).';
     search.value = _filterText;
     search.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
