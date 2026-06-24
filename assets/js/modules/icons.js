@@ -220,6 +220,10 @@ export function makeNodeImage(d) {
 
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + (C * 2) + '" height="' + (C * 2) + '">' + p + '</svg>';
     const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    // Echte LRU: bei Re-Insert mit gleichem Key vorher loeschen, sonst bleibt
+    // der alte Eintrag wegen JS-Object-Insertion-Order weiter "ganz vorne"
+    // und der Prune-Algorithmus schmeisst falsche Eintraege raus.
+    if (_imgCache[key]) delete _imgCache[key];
     _imgCache[key] = url;
     _imgCachePrune();
     return url;

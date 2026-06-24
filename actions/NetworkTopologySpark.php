@@ -179,30 +179,23 @@ class NetworkTopologySpark extends CController {
         // Wir holen den ältesten noch aktiven Problem-Event pro Host
         $since_map = [];   // hostid -> clock
 
+        // selectHosts direkt auf Problem.get spart den separaten Trigger.get-
+        // Roundtrip. recent=true: nur aktuell offene Probleme statt historic
+        // (war false → potentiell tausende alter Events).
         $problems = API::Problem()->get([
             'output'       => ['objectid', 'clock'],
             'hostids'      => $hostids,
-            'recent'       => false,
+            'recent'       => true,
+            'selectHosts'  => ['hostid'],
             'preservekeys' => false,
         ]);
 
-        // Trigger->Host-Mapping für Problem-Events
         if ($problems) {
-            $trigger_ids = array_unique(array_column($problems, 'objectid'));
-            $trigger_hosts = API::Trigger()->get([
-                'output'       => ['triggerid'],
-                'triggerids'   => $trigger_ids,
-                'selectHosts'  => ['hostid'],
-                'preservekeys' => true,
-            ]);
-
             foreach ($problems as $prob) {
-                $tid = $prob['objectid'];
-                if (!isset($trigger_hosts[$tid])) continue;
-                foreach ($trigger_hosts[$tid]['hosts'] as $th) {
-                    $hid   = $th['hostid'];
-                    $clock = (int)$prob['clock'];
-                    // Ältesten Problem-Timestamp merken (= seit wann Probleme bestehen)
+                $clock = (int) $prob['clock'];
+                foreach ($prob['hosts'] ?? [] as $th) {
+                    $hid = $th['hostid'];
+                    // Aeltesten Problem-Timestamp merken (= seit wann Probleme bestehen)
                     if (!isset($since_map[$hid]) || $clock < $since_map[$hid]) {
                         $since_map[$hid] = $clock;
                     }

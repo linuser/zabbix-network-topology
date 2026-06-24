@@ -47,13 +47,22 @@ export function startEdgeAnimation(cy, nodes) {
         else e.removeClass('dead-edge');
     });
 
-    // Lebende Edges animieren — "fließende Punkte" via line-dash-offset
+    // Lebende Edges animieren — "fließende Punkte" via line-dash-offset.
+    // Defenses: cy.destroyed()-Check, document.hidden-Guard (kein Render
+    // wenn Tab im Hintergrund), interval-Handle in window damit Tab-Wechsel
+    // sie sauber clearen kann.
     if (window._ntEdgeAnim) clearInterval(window._ntEdgeAnim);
     let offset = 0;
     window._ntEdgeAnim = setInterval(function() {
-        if (!window._ntCy) { clearInterval(window._ntEdgeAnim); return; }
+        const c = window._ntCy;
+        if (!c || (c.destroyed && c.destroyed())) {
+            clearInterval(window._ntEdgeAnim);
+            window._ntEdgeAnim = null;
+            return;
+        }
+        if (document.hidden) return;   // CPU sparen wenn Tab unsichtbar
         offset = (offset + 1) % 22;
-        window._ntCy.edges().filter(function(e) { return !e.hasClass('dead-edge'); })
+        c.edges().filter(function(e) { return !e.hasClass('dead-edge'); })
             .style('line-dash-offset', -offset);
     }, 50);
 }

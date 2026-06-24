@@ -333,44 +333,23 @@ class NetworkTopologyData extends CController {
             }
         }
 
-        // ── 3. ITEMS — two calls covering Agent + SNMP ────────────────────
-
-        // Call A: Traffic (Agent net.if + SNMP ifIn/ifOut/ifHC) + LLDP
+        // ── 3. ITEMS — alle relevanten Keys in einem API-Call ─────────────
+        // Frueher zwei getrennte Calls (Traffic+LLDP separat von CPU+Mem+Ping).
+        // searchByAny=true machte beide identisch von der API-Logik — nur ein
+        // Roundtrip noetig. Spart 50% API-Latenz auf dieser Stelle.
         $items_a = API::Item()->get([
             'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type'],
             'hostids'      => $hostids,
             'search'       => ['key_' => [
-                'net.if',           // Zabbix Agent
-                'ifInOctets',       // SNMP IF-MIB 32bit
-                'ifOutOctets',
-                'ifHCInOctets',     // SNMP IF-MIB 64bit (high-speed)
-                'ifHCOutOctets',
-                'lldpRemSysName',   // LLDP
-            ]],
-            'searchByAny'  => true,
-            'monitored'    => true,
-            'preservekeys' => true
-        ]);
-
-        // Call B: CPU + Memory + Ping (Agent + SNMP variants)
-        $items_b = API::Item()->get([
-            'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type'],
-            'hostids'      => $hostids,
-            'search'       => ['key_' => [
-                // CPU — Agent
-                'system.cpu.util',
-                // CPU — SNMP (net-snmp / HOST-RESOURCES-MIB)
-                'hrProcessorLoad',
-                'ssCpuUser',
-                'ssCpuSystem',
-                // CPU — Synology
+                // Traffic — Agent + SNMP
+                'net.if', 'ifInOctets', 'ifOutOctets', 'ifHCInOctets', 'ifHCOutOctets',
+                // LLDP
+                'lldpRemSysName',
+                // CPU — Agent + SNMP variants
+                'system.cpu.util', 'hrProcessorLoad', 'ssCpuUser', 'ssCpuSystem',
                 'synoSystem.ssCpuIdle',
-                // Memory — Agent
-                'vm.memory.size',
-                // Memory — SNMP HOST-RESOURCES-MIB
-                'hrStorageUsed',
-                'hrStorageSize',
-                'hrStorageType',
+                // Memory — Agent + SNMP HOST-RESOURCES-MIB
+                'vm.memory.size', 'hrStorageUsed', 'hrStorageSize', 'hrStorageType',
                 // Ping
                 'icmppingsec',
             ]],
@@ -378,6 +357,7 @@ class NetworkTopologyData extends CController {
             'monitored'    => true,
             'preservekeys' => true
         ]);
+        $items_b = [];   // Kompatibilitaet mit der nachgelagerten Merge-Logik
 
         // ── 3b. LASTVALUE via batched UNION-ALL Queries (Chunk=20 Items/Query)
         // Statt N separaten DB-Roundtrips machen wir eine Query pro 20 Items
@@ -675,6 +655,14 @@ class NetworkTopologyData extends CController {
                 }
             }
         }
+        // Short-Name-Map einmal vorberechnen statt pro Edge linear durch
+        // alle name_map-Eintraege zu iterieren. Bei 500 Hosts × 500 LLDP-
+        // Neighbors war das vorher 250k Vergleiche.
+        $short_name_map = [];   // short → [hid, ...]
+        foreach ($name_map as $mapped_name => $mapped_hid) {
+            $short = explode('.', $mapped_name)[0];
+            $short_name_map[$short][$mapped_hid] = true;
+        }
 
         $edges          = [];
         $seen_edges     = [];
@@ -691,15 +679,10 @@ class NetworkTopologyData extends CController {
                 if (!$rhid && isset($ip_map[$neighbor_raw])) {
                     $rhid = $ip_map[$neighbor_raw];
                 }
-                // 3. Short-Hostname nur wenn eindeutig
+                // 3. Short-Hostname nur wenn eindeutig (O(1)-Lookup via Map)
                 if (!$rhid) {
                     $lldp_short = explode('.', $lldp_val)[0];
-                    $candidates = [];
-                    foreach ($name_map as $mapped_name => $mapped_hid) {
-                        if (explode('.', $mapped_name)[0] === $lldp_short) {
-                            $candidates[$mapped_hid] = true;
-                        }
-                    }
+                    $candidates = $short_name_map[$lldp_short] ?? [];
                     if (count($candidates) === 1) {
                         $rhid = array_key_first($candidates);
                     }

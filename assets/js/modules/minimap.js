@@ -16,7 +16,10 @@ const MM_W = 180, MM_H = 120, PAD = 8;
 const SEV_COLORS = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
 
 export function setupMinimap(cy, wrap) {
-    if (!_el) {
+    // First-time init: DOM + Click-Handler nur EINMAL anlegen. Sonst
+    // akkumulieren bei jedem render() neue click-Listener am gleichen Element.
+    const isFirstInit = !_el;
+    if (isFirstInit) {
         _el = document.createElement('div');
         _el.id = 'nt-minimap';
         _el.style.cssText = [
@@ -31,6 +34,9 @@ export function setupMinimap(cy, wrap) {
             'backdrop-filter:blur(4px)'
         ].join(';');
         _el.title = 'Minimap \u2014 klicken zum Navigieren';
+        wrap.appendChild(_el);
+    } else if (_el.parentNode !== wrap) {
+        // Wrap koennte sich beim Tab-Wechsel geaendert haben \u2014 Element umhaengen
         wrap.appendChild(_el);
     }
 
@@ -90,35 +96,42 @@ export function setupMinimap(cy, wrap) {
             + dots + vpRect + '</svg>';
     }
 
-    // Klick → Pan zu dieser Position
-    _el.addEventListener('click', function(e) {
-        const rect = _el.getBoundingClientRect();
-        const relX = e.clientX - rect.left;
-        const relY = e.clientY - rect.top;
+    // Klick → Pan zu dieser Position. Handler nur beim ersten Init anlegen,
+    // sonst akkumulieren sie sich. Closure liest window._ntCy on-demand
+    // damit ein Tab-Wechsel die richtige Instance trifft.
+    if (isFirstInit) {
+        _el.addEventListener('click', function(e) {
+            const cyRef = window._ntCy;
+            if (!cyRef || cyRef.destroyed && cyRef.destroyed()) return;
+            const rect = _el.getBoundingClientRect();
+            const relX = e.clientX - rect.left;
+            const relY = e.clientY - rect.top;
 
-        const visNodes = [];
-        cy.nodes('[!isGroup]').forEach(function(n) {
-            if (n.style('display') !== 'none') visNodes.push(n.position());
+            const visNodes = [];
+            cyRef.nodes('[!isGroup]').forEach(function(n) {
+                if (n.style('display') !== 'none') visNodes.push(n.position());
+            });
+            if (!visNodes.length) return;
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            visNodes.forEach(function(p) {
+                if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+            });
+            const scale = Math.min(
+                (MM_W - PAD * 2) / Math.max(maxX - minX, 1),
+                (MM_H - PAD * 2) / Math.max(maxY - minY, 1)
+            );
+
+            const worldX = minX + (relX - PAD) / scale;
+            const worldY = minY + (relY - PAD) / scale;
+            const w = _el.parentNode || wrap;
+            cyRef.animate(
+                { pan: { x: w.clientWidth / 2 - worldX * cyRef.zoom(), y: w.clientHeight / 2 - worldY * cyRef.zoom() } },
+                { duration: 200 }
+            );
         });
-        if (!visNodes.length) return;
-
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        visNodes.forEach(function(p) {
-            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-        });
-        const scale = Math.min(
-            (MM_W - PAD * 2) / Math.max(maxX - minX, 1),
-            (MM_H - PAD * 2) / Math.max(maxY - minY, 1)
-        );
-
-        const worldX = minX + (relX - PAD) / scale;
-        const worldY = minY + (relY - PAD) / scale;
-        cy.animate(
-            { pan: { x: wrap.clientWidth / 2 - worldX * cy.zoom(), y: wrap.clientHeight / 2 - worldY * cy.zoom() } },
-            { duration: 200 }
-        );
-    });
+    }
 
     cy.on('zoom pan', function() {
         clearTimeout(_timer);
@@ -138,4 +151,7 @@ export function showMinimap() {
 
 export function hideMinimap() {
     if (_el) _el.style.display = 'none';
+    // Debounce-Timer beim Verstecken cancelen — sonst feuert er noch einmal
+    // gegen ein nicht-mehr-passendes cy.
+    if (_timer) { clearTimeout(_timer); _timer = null; }
 }
