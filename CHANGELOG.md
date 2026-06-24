@@ -2,6 +2,25 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.22.0 — 2026-06-25
+
+### Added
+- **Compliance-Tab**: neuer Tab in der Toolbar mit Security- und Konfigurations-Checks pro Host. Aggregat-Karten oben (pro Check Count/Total/Prozent), Pro-Host-Matrix unten mit Symbol-Spalten (`✓` good / `i` info / `✗` bad / `·` keine Daten). Toggle "Nur Hosts mit Issues" filtert auf bad-Level-Hits.
+- **Neue Backend-Action `network.topology.v6.compliance`**: ein `Host.get` + ein `Problem.get` + ein `Maintenance.get` liefern die Daten für 9 Checks:
+  - `snmp_v2` — SNMPv1/v2c statt v3 erkannt (bad)
+  - `snmp_v3` — SNMPv3 verwendet (good)
+  - `no_tls` — Agent ohne TLS/PSK (tls_connect+accept=1) (bad)
+  - `no_proxy` — direkt am Server, kein Proxy/-Group (info)
+  - `no_inventory` — inventory_mode=disabled (info)
+  - `no_location` — keine location_lat/lon im Inventory (info)
+  - `no_template` — Host hat keinen Parent-Template (bad)
+  - `stale_problem` — krit. Problem (sev≥4) > 7 Tage offen (bad)
+  - `mtnc_no_comment` — Maintenance aktiv aber description leer (info)
+- **Audit-Report bekommt Compliance-Sektion**: Click auf Audit-Report (PDF/HTML) holt die Compliance-Daten async und hängt eine Sektion mit Check/Level/Count/% am Report-Ende an. Fetch-Tolerant: bei Fehler oder leerer Group-Auswahl fällt der Report auf "ohne Compliance" zurück.
+
+### Notes
+- Manifest erweitert um Action `network.topology.v6.compliance` → `Administration → General → Modules → Scan directory` ist nach dem Update Pflicht damit Zabbix die Route kennt.
+
 ## v4.21.1 — 2026-06-25
 
 Security- + Performance-Sweep nach zwei parallelen Audit-Reviews.
