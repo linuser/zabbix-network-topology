@@ -98,7 +98,7 @@ function buildReportHtml(opts) {
 //   - Proxy-Uebersicht (Hosts pro Zabbix-Proxy)
 //
 // Returns: HTML-String oder null wenn keine Daten verfuegbar.
-function buildAuditHtml() {
+function buildAuditHtml(complianceData) {
     if (!window._ntNodes) return null;
     const nodes = window._ntNodes.filter(function(n) { return !n._isInternet; });
     const now   = new Date().toLocaleString('de-DE');
@@ -327,6 +327,43 @@ function buildAuditHtml() {
         }).join('')
         + '</tbody></table></section>';
 
+    // Compliance-Sektion — nur wenn der Caller die Daten geliefert hat
+    // (network.topology.v6.compliance Action). Sonst leer.
+    let complianceSection = '';
+    if (complianceData && complianceData.aggregate) {
+        const checks = [
+            { key: 'snmp_v2',         lbl: 'SNMP v1/v2c',             level: 'bad'  },
+            { key: 'snmp_v3',         lbl: 'SNMP v3 (positiv)',       level: 'good' },
+            { key: 'no_tls',          lbl: 'Agent ohne TLS',          level: 'bad'  },
+            { key: 'no_proxy',        lbl: 'Kein Proxy',              level: 'info' },
+            { key: 'no_inventory',    lbl: 'Inventory aus',           level: 'info' },
+            { key: 'no_location',     lbl: 'Kein Standort',           level: 'info' },
+            { key: 'no_template',     lbl: 'Kein Template',           level: 'bad'  },
+            { key: 'stale_problem',   lbl: 'Krit. Problem > ' + (complianceData.cutoff_days || 7) + 'd',
+              level: 'bad'  },
+            { key: 'mtnc_no_comment', lbl: 'Wartung ohne Kommentar',  level: 'info' },
+        ];
+        const colOf = function(lvl) { return lvl === 'bad' ? '#dc2626' : lvl === 'good' ? '#16a34a' : '#0891b2'; };
+        const tot   = complianceData.total || 0;
+        complianceSection = '<section><h2>Compliance (' + tot + ' Hosts)</h2>'
+            + '<table><thead>' + th(['Check', 'Level', 'Betroffene Hosts', '%']) + '</thead><tbody>'
+            + checks.map(function(c) {
+                const n   = complianceData.aggregate[c.key] || 0;
+                const pct = tot > 0 ? Math.round(100 * n / tot) : 0;
+                const lvlLbl = c.level === 'bad' ? '✗ Issue' : c.level === 'good' ? '✓ Gut' : 'i Info';
+                return tr([
+                    '<b>' + esc(c.lbl) + '</b>',
+                    { text: '<span style="color:' + colOf(c.level) + ';font-weight:600">' + lvlLbl + '</span>' },
+                    { text: n, style: n > 0 && c.level === 'bad' ? 'color:#dc2626;font-weight:700' : (n > 0 ? 'font-weight:600' : 'color:#94a3b8') },
+                    { text: pct + '%', style: 'color:#64748b' },
+                ]);
+            }).join('')
+            + '</tbody></table>'
+            + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
+            + 'Schlechte (✗) Findings sind echte Issues; Info (i) kontextabhaengig; '
+            + 'Gut (✓) positiv markiert.</div></section>';
+    }
+
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>NT Audit Report</title>'
         + '<style>'
         + 'body{font-family:sans-serif;margin:28px;color:#1e293b;line-height:1.4}'
@@ -348,7 +385,7 @@ function buildAuditHtml() {
         + '</style></head><body>'
         + '<h1>Network Topology — Audit Report</h1>'
         + '<div class="meta">' + esc(now) + ' &nbsp;·&nbsp; ' + nodes.length + ' Hosts</div>'
-        + summarySection + top10Section + groupsSection + critSection + offlineSection + topProbsSection + proxySection
+        + summarySection + top10Section + groupsSection + critSection + offlineSection + topProbsSection + proxySection + complianceSection
         + '</body></html>';
 }
 
@@ -437,28 +474,47 @@ export function setupExportMenu(bar, isFirstRun) {
     });
 
     // Audit-Report: strukturierter Bericht (Hostgroups + Kritische + Offline/Stale
-    // + Top-Probleme + Proxy-Uebersicht). Kein Map-Screenshot — fokussiert auf
-    // Audit-relevante Daten.
+    // + Top-Probleme + Proxy + Compliance). Kein Map-Screenshot — fokussiert auf
+    // Audit-relevante Daten. Compliance-Daten werden asynchron vom Backend
+    // gefetcht; bei Fehler/Timeout faellt der Report auf "ohne Compliance" zurueck.
+    function _fetchCompliance() {
+        const cfg = window.NT_CONFIG || {};
+        const groupids = (cfg && cfg.selected_groupids) || [];
+        if (!groupids.length) return Promise.resolve(null);
+        const params = new URLSearchParams();
+        params.append('action', 'network.topology.v6.compliance');
+        groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
+        const url = window.location.pathname.replace('zabbix.php', '') + 'zabbix.php?' + params.toString();
+        return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) { return (d && !d.error) ? d : null; })
+            .catch(function() { return null; });
+    }
+
     mItem('&#128203;', 'Audit-Report (Drucken)', function() {
-        const h = buildAuditHtml();
-        if (!h) return;
-        const w = window.open();
-        if (w) {
-            w.document.write(h);
-            w.document.close();
-            setTimeout(function() { w.print(); }, 800);
-        }
+        _fetchCompliance().then(function(compl) {
+            const h = buildAuditHtml(compl);
+            if (!h) return;
+            const w = window.open();
+            if (w) {
+                w.document.write(h);
+                w.document.close();
+                setTimeout(function() { w.print(); }, 800);
+            }
+        });
     });
 
     mItem('&#128221;', 'Audit-Report (HTML)', function() {
-        const h = buildAuditHtml();
-        if (!h) return;
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
-        a.download = 'nt-audit-' + new Date().toISOString().slice(0, 10) + '.html';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        _fetchCompliance().then(function(compl) {
+            const h = buildAuditHtml(compl);
+            if (!h) return;
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
+            a.download = 'nt-audit-' + new Date().toISOString().slice(0, 10) + '.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
     });
 
     expBtn.addEventListener('click', function(e) {
