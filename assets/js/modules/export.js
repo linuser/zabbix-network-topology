@@ -119,6 +119,26 @@ function buildAuditHtml() {
     // Hostgroups via Health-Score-Helper
     const groupStats = statsByGroup(nodes).sort(function(a, b) { return a.score - b.score; });
 
+    // Top-10 Problemhosts: Badness-Score zusammengesetzt aus Offline (+50),
+    // Severity (×10), Probleme-Anzahl (×2), Unacked (+20). Hosts ohne
+    // Probleme und nicht offline/stale fallen automatisch raus (Score 0).
+    const stale_now = nowSec;   // alias fuer Closure-Lesbarkeit
+    const top10 = nodes.map(function(n) {
+        const sev   = n.severity || 0;
+        const probs = n.problems || 0;
+        const isOff = !!n.unavailable;
+        const age   = n.last_seen ? (stale_now - n.last_seen) : 0;
+        const isStl = !isOff && n.last_seen > 0 && age > STALE_S;
+        let bad = sev * 10 + probs * 2;
+        if (isOff) bad += 50;
+        if (isStl) bad += 15;
+        if (probs > 0 && !n.acknowledged) bad += 20;
+        return { n: n, bad: bad, isOff: isOff, isStl: isStl };
+    })
+    .filter(function(x) { return x.bad > 0; })
+    .sort(function(a, b) { return b.bad - a.bad; })
+    .slice(0, 10);
+
     // Kritische Hosts (sev >= 4) sortiert nach severity desc
     const critHosts = nodes.filter(function(n) { return (n.severity || 0) >= 4; })
         .sort(function(a, b) { return (b.severity || 0) - (a.severity || 0); });
@@ -150,7 +170,8 @@ function buildAuditHtml() {
         .sort(function(a, b) {
             return b.count - a.count || b.sev - a.sev || a.name.localeCompare(b.name);
         })
-        .slice(0, 20);
+        .slice(0, 10);
+    // (alte Top-20-Variante: jetzt auf 10 reduziert fuer konsistentes Audit-Format)
 
     // Proxy-Uebersicht: Hosts pro Proxy-Name (+ "Server (kein Proxy)")
     const byProxy = {};
@@ -194,6 +215,31 @@ function buildAuditHtml() {
         +   '<tr><th>Probleme gesamt</th><td>' + totalProbs + '</td></tr>'
         + '</tbody></table>'
         + '</section>';
+
+    const top10Section = top10.length === 0
+        ? ''
+        : '<section><h2>Top 10 Problemhosts</h2>'
+            + '<table><thead>' + th(['#', 'Host', 'IP', 'Severity', 'Status', 'Probleme', 'Acked', 'Proxy']) + '</thead><tbody>'
+            + top10.map(function(x, i) {
+                const n = x.n;
+                const status = x.isOff ? '<b style="color:#dc2626">OFFLINE</b>'
+                             : x.isStl ? '<b style="color:#f59e0b">STALE</b>'
+                             : '—';
+                return tr([
+                    { text: '<b>' + (i + 1) + '</b>', style: 'color:#64748b;font-family:monospace' },
+                    esc(n.label || n.host || ''),
+                    esc(n.ip || '—'),
+                    sevPill(n.severity),
+                    status,
+                    { text: n.problems || 0, style: (n.problems || 0) > 0 ? 'font-weight:600' : 'color:#94a3b8' },
+                    n.acknowledged ? '✔' : '—',
+                    esc(n.proxy_name || '—'),
+                ]);
+            }).join('')
+            + '</tbody></table>'
+            + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
+            + 'Ranking: severity·10 + probleme·2 + offline·50 + stale·15 + unacked·20'
+            + '</div></section>';
 
     const groupsSection = '<section><h2>Hostgroups (' + groupStats.length + ')</h2>'
         + '<table><thead>' + th(['Gruppe', 'Hosts', 'Offline', 'Stale', 'Critical', 'Unacked', 'Score']) + '</thead><tbody>'
@@ -302,7 +348,7 @@ function buildAuditHtml() {
         + '</style></head><body>'
         + '<h1>Network Topology — Audit Report</h1>'
         + '<div class="meta">' + esc(now) + ' &nbsp;·&nbsp; ' + nodes.length + ' Hosts</div>'
-        + summarySection + groupsSection + critSection + offlineSection + topProbsSection + proxySection
+        + summarySection + top10Section + groupsSection + critSection + offlineSection + topProbsSection + proxySection
         + '</body></html>';
 }
 
