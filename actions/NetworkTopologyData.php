@@ -262,6 +262,37 @@ class NetworkTopologyData extends CController {
             }
         }
 
+        // ── 2c. Integration-Links aus Zabbix Global-Macros ────────────────
+        // Pattern: {$NT_INT_<NAME>_LABEL} / {$NT_INT_<NAME>_URL}. Beide
+        // muessen gesetzt sein. URL-Templates duerfen Tokens enthalten:
+        //   {host}, {label}, {ip}, {location}
+        // Pro Host wird der Template-String mit URL-encoded Werten gefuellt
+        // und an host_links angehaengt. Cap analog nt:link bei 6 Links/Host.
+        $integration_templates = $this->loadIntegrationTemplates();
+        if (!empty($integration_templates)) {
+            foreach ($hosts as $hid => $h) {
+                if (!isset($host_links[$hid])) $host_links[$hid] = [];
+                foreach ($integration_templates as $tpl) {
+                    if (count($host_links[$hid]) >= 6) break;
+                    $ip = $this->primaryIp($h['interfaces'] ?? []);
+                    $loc = '';
+                    $inv = $h['inventory'] ?? null;
+                    if (is_array($inv) && isset($inv['location'])) $loc = (string) $inv['location'];
+                    $url = strtr($tpl['url'], [
+                        '{host}'     => rawurlencode($h['host']  ?? ''),
+                        '{label}'    => rawurlencode($h['name']  ?? ''),
+                        '{ip}'       => rawurlencode($ip),
+                        '{location}' => rawurlencode($loc),
+                    ]);
+                    // Validierung wie bei nt:link
+                    if (!preg_match('#^https?://#i', $url)) continue;
+                    if (strlen($url) > 2048) continue;
+                    if (preg_match('/[\x00-\x1F\x7F]/', $url)) continue;
+                    $host_links[$hid][] = ['label' => $tpl['label'], 'url' => $url];
+                }
+            }
+        }
+
         // Items für nt:show-Tags holen. Nur wenn überhaupt jemand Tags gesetzt hat.
         // Wir nutzen exakte Key-Match (nicht 'search' substring) und filtern
         // pro Host, damit ein 'system.cpu.util'-Tag nicht versehentlich beim
@@ -850,6 +881,47 @@ class NetworkTopologyData extends CController {
             'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],
         ]);
         $this->setResponse(new CControllerResponseData(['main_block' => $_payload]));
+    }
+
+    /**
+     * Laedt Integration-Templates aus Zabbix Global-Macros.
+     * Erwartet Paare: {$NT_INT_<NAME>_LABEL} + {$NT_INT_<NAME>_URL}.
+     * Liefert ein Array [{name, label, url}, ...] mit dem URL-Template
+     * (Tokens noch nicht expandiert).
+     *
+     * Beispiel-Macros:
+     *   {$NT_INT_NETBOX_LABEL} = NetBox
+     *   {$NT_INT_NETBOX_URL}   = https://netbox.fox1.de/dcim/devices/?q={host}
+     */
+    private function loadIntegrationTemplates(): array {
+        try {
+            $macros = API::UserMacro()->get([
+                'output'      => ['macro', 'value'],
+                'globalmacro' => true,
+            ]);
+        } catch (\Throwable $e) {
+            return [];   // API nicht verfuegbar → leise no-op
+        }
+        $by_name = [];   // name → ['label' => ?, 'url' => ?]
+        foreach ($macros as $m) {
+            $macro = $m['macro'] ?? '';
+            if (!preg_match('/^\{\$NT_INT_([A-Z0-9_]+)_(LABEL|URL)\}$/', $macro, $mm)) continue;
+            $name = $mm[1];
+            $part = strtolower($mm[2]);
+            $by_name[$name][$part] = (string) ($m['value'] ?? '');
+        }
+        $out = [];
+        foreach ($by_name as $name => $parts) {
+            $label = trim($parts['label'] ?? '');
+            $url   = trim($parts['url']   ?? '');
+            if ($label === '' || $url === '') continue;
+            // Schutz-Caps analog nt:link
+            if (strlen($label) > 200 || strlen($url) > 2048) continue;
+            if (!preg_match('#^https?://#i', $url)) continue;
+            if (preg_match('/[\x00-\x1F\x7F]/', $url . $label)) continue;
+            $out[] = ['name' => $name, 'label' => $label, 'url' => $url];
+        }
+        return $out;
     }
 
     // Returns IP from primary interface, prefers Agent but falls back to SNMP/JMX/IPMI
