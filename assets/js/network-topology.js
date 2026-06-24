@@ -20,6 +20,7 @@ import { renderManagement } from './modules/render-mgmt.js';
 import { render, setSetupToolbarCallback } from './modules/render-tech.js';
 import { renderGeo, cleanupGeo } from './modules/render-geo.js';
 import { renderDiag } from './modules/render-diag.js';
+import { renderHealth } from './modules/render-health.js';
 import { setupToolbar, setRenderCallback as setToolbarRenderCallback } from './modules/toolbar.js';
 import { setRenderCallback as setPresetsRenderCallback } from './modules/presets-ui.js';
 import { setHistoryRenderCallback, getHistorySeverities, isHistoryActive, setLiveRefreshHooks } from './modules/history-mode.js';
@@ -113,11 +114,12 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     try { localStorage.setItem(NT_TAB_KEY, tab); } catch (e) {}
     // History-Severities anwenden falls History-Mode aktiv
     applyHistoryOverrides(nodes);
-    if      (tab === 'mgmt') renderManagement(wrap, nodes, edges);
-    else if (tab === 'tree') renderTable(wrap, nodes, edges);
-    else if (tab === 'geo')  renderGeo(wrap, nodes, edges, dataUrl);
-    else if (tab === 'diag') renderDiag(wrap);
-    else                     render(wrap, nodes, edges, dataUrl);
+    if      (tab === 'mgmt')   renderManagement(wrap, nodes, edges);
+    else if (tab === 'tree')   renderTable(wrap, nodes, edges);
+    else if (tab === 'geo')    renderGeo(wrap, nodes, edges, dataUrl);
+    else if (tab === 'diag')   renderDiag(wrap);
+    else if (tab === 'health') renderHealth(wrap, nodes);
+    else                       render(wrap, nodes, edges, dataUrl);
     ensureBaseToolbar(wrap);
     // Graph-spezifische Toolbar-Buttons (Layout/Cluster/Zoom/Fit/Hide-Labels/
     // LLDP/Link/Presets/Sev-Filter/Suche) nur im Tech-Tab anzeigen — andere

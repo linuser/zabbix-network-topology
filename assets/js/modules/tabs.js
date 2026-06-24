@@ -70,10 +70,11 @@ export function ensureBaseToolbar(wrap) {
     // das Backend prueft nochmal, aber wir zeigen den Tab im UI gleich nicht an.
     const isAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.can_edit);
     const TABS = [
-        { id: 'nt-tab-tech', lbl: 'Technisch',  tab: 'tech' },
-        { id: 'nt-tab-mgmt', lbl: 'Management', tab: 'mgmt' },
-        { id: 'nt-tab-tree', lbl: 'Tabelle',    tab: 'tree' },
-        { id: 'nt-tab-geo',  lbl: 'Geo',        tab: 'geo'  },
+        { id: 'nt-tab-tech',   lbl: 'Technisch',  tab: 'tech' },
+        { id: 'nt-tab-mgmt',   lbl: 'Management', tab: 'mgmt' },
+        { id: 'nt-tab-tree',   lbl: 'Tabelle',    tab: 'tree' },
+        { id: 'nt-tab-geo',    lbl: 'Geo',        tab: 'geo'  },
+        { id: 'nt-tab-health', lbl: 'Health',     tab: 'health' },
     ];
     if (isAdmin) TABS.push({ id: 'nt-tab-diag', lbl: 'Diag', tab: 'diag', dataOptional: true });
 
