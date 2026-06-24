@@ -70,12 +70,13 @@ export function ensureBaseToolbar(wrap) {
     // das Backend prueft nochmal, aber wir zeigen den Tab im UI gleich nicht an.
     const isAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.can_edit);
     const TABS = [
-        { id: 'nt-tab-tech',   lbl: 'Technisch',  tab: 'tech' },
-        { id: 'nt-tab-mgmt',   lbl: 'Management', tab: 'mgmt' },
-        { id: 'nt-tab-tree',   lbl: 'Tabelle',    tab: 'tree' },
-        { id: 'nt-tab-geo',    lbl: 'Geo',        tab: 'geo'  },
-        { id: 'nt-tab-health', lbl: 'Health',     tab: 'health' },
-        { id: 'nt-tab-stats',  lbl: 'Stats',      tab: 'stats' },
+        { id: 'nt-tab-tech',       lbl: 'Technisch',  tab: 'tech' },
+        { id: 'nt-tab-mgmt',       lbl: 'Management', tab: 'mgmt' },
+        { id: 'nt-tab-tree',       lbl: 'Tabelle',    tab: 'tree' },
+        { id: 'nt-tab-geo',        lbl: 'Geo',        tab: 'geo'  },
+        { id: 'nt-tab-health',     lbl: 'Health',     tab: 'health' },
+        { id: 'nt-tab-stats',      lbl: 'Stats',      tab: 'stats' },
+        { id: 'nt-tab-compliance', lbl: 'Compliance', tab: 'compliance', dataOptional: true },
     ];
     // Diag-Tab nur fuer Super-Admins (Backend prueft USER_TYPE_SUPER_ADMIN ===)
     const isSuperAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.is_super_admin);

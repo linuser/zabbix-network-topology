@@ -1,0 +1,220 @@
+// render-compliance.js — Security/Compliance-Tab.
+//
+// Fetcht network.topology.v6.compliance fuer die aktuell ausgewaehlten
+// Hostgroups und zeigt:
+//   - Aggregat-Header: Counter pro Check (klickbar → Host-Filter)
+//   - Per-Host-Tabelle: ein Symbol pro Check + Host-Spalte
+//
+// Checks und ihre Semantik (Definition im Backend):
+//   snmp_v2          schlecht  — SNMPv1/v2c (sollte v3 sein)
+//   snmp_v3          neutral   — SNMPv3 erkannt (positiv markiert)
+//   no_tls           schlecht  — Agent ohne TLS/PSK
+//   no_proxy         info      — Host direkt am Server (kann gewollt sein)
+//   no_inventory    info       — kein Inventory-Mode
+//   no_location      info      — kein location_lat/lon
+//   no_template      schlecht  — Host hat keinen Parent-Template
+//   stale_problem    schlecht  — krit. Problem (sev>=4) > 7 Tage offen
+//   mtnc_no_comment  info      — Maintenance aktiv aber description leer
+//
+// "schlecht" zaehlt fuer den UI-Filter "nur Issues", "info" und "neutral"
+// nicht. Aggregat-Counter sind unabhaengig — zaehlen wie viele Hosts
+// von einem Check betroffen sind.
+
+import { esc } from './utils.js';
+
+const CHECKS = [
+    { key: 'snmp_v2',         lbl: 'SNMP v1/v2c',     short: 'SNMP v2',  level: 'bad'  },
+    { key: 'snmp_v3',         lbl: 'SNMP v3',          short: 'SNMP v3', level: 'good' },
+    { key: 'no_tls',          lbl: 'Agent ohne TLS',   short: 'no TLS',  level: 'bad'  },
+    { key: 'no_proxy',        lbl: 'Kein Proxy',       short: 'no Proxy',level: 'info' },
+    { key: 'no_inventory',    lbl: 'Inventory aus',    short: 'no Inv',  level: 'info' },
+    { key: 'no_location',     lbl: 'Kein Standort',    short: 'no Loc',  level: 'info' },
+    { key: 'no_template',     lbl: 'Kein Template',    short: 'no Tpl',  level: 'bad'  },
+    { key: 'stale_problem',   lbl: 'Stale Krit-Problem', short: 'stale', level: 'bad'  },
+    { key: 'mtnc_no_comment', lbl: 'Wartung ohne Kommentar', short: 'mtnc?', level: 'info' },
+];
+
+const COL_GOOD = '#16a34a';
+const COL_INFO = '#0891b2';
+const COL_BAD  = '#dc2626';
+const COL_NONE = '#cbd5e1';
+
+function _theme(dark) {
+    return dark
+        ? { bg:'#0d1117', surface:'#161b22', head:'#1c2128', text:'#e6edf3', sub:'#8b949e',
+            subSoft:'#6e7681', border:'#30363d', borderSoft:'#21262d', hover:'#21262d' }
+        : { bg:'#ffffff', surface:'#f8fafc', head:'#f1f5f9', text:'#1f2c33', sub:'#64748b',
+            subSoft:'#94a3b8', border:'#dfe4e7', borderSoft:'#eef2f5', hover:'#f1f5f9' };
+}
+
+function buildBaseUrl() {
+    return window.location.pathname.replace('zabbix.php', '');
+}
+
+function _checkColor(check) {
+    return check.level === 'good' ? COL_GOOD
+         : check.level === 'info' ? COL_INFO
+         : COL_BAD;
+}
+
+function _checkSymbol(check, hit) {
+    if (!hit) return '<span style="color:' + COL_NONE + '">·</span>';
+    if (check.level === 'good') return '<span style="color:' + COL_GOOD + '">✓</span>';
+    if (check.level === 'info') return '<span style="color:' + COL_INFO + '">i</span>';
+    return '<span style="color:' + COL_BAD + ';font-weight:700">✗</span>';
+}
+
+function _aggregateCards(agg, total, theme, onlyIssues, onIssueToggle) {
+    const cards = CHECKS.map(function(c) {
+        const n = agg[c.key] || 0;
+        const col = _checkColor(c);
+        const pct = total > 0 ? Math.round(100 * n / total) : 0;
+        return '<div data-check="' + esc(c.key) + '" style="background:' + theme.surface
+            + ';border:1px solid ' + theme.border + ';border-radius:4px;padding:8px 10px;'
+            + 'display:flex;flex-direction:column;cursor:pointer;transition:background 0.12s">'
+            + '<div style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase;'
+            +   'letter-spacing:0.05em">' + esc(c.lbl) + '</div>'
+            + '<div style="display:flex;align-items:baseline;gap:6px;margin-top:2px">'
+            +   '<span style="font-size:20px;font-weight:700;color:' + (n > 0 ? col : theme.subSoft)
+            +     ';font-family:monospace">' + n + '</span>'
+            +   '<span style="font-size:11px;color:' + theme.sub + '">/ ' + total + '</span>'
+            +   '<span style="font-size:10px;color:' + theme.subSoft + ';margin-left:auto">'
+            +     pct + '%</span>'
+            + '</div>'
+            + '</div>';
+    }).join('');
+
+    const filterToggle = '<label style="display:inline-flex;align-items:center;gap:6px;'
+        + 'font-size:12px;color:' + theme.sub + ';cursor:pointer;margin-left:auto">'
+        + '<input type="checkbox" id="nt-compl-only-issues"' + (onlyIssues ? ' checked' : '') + '> '
+        + 'Nur Hosts mit Issues (bad-Level)</label>';
+
+    return '<div style="display:flex;align-items:center;margin-bottom:8px">'
+        + '<h3 style="margin:0;font-size:13px;color:' + theme.sub + ';text-transform:uppercase;'
+        +   'letter-spacing:0.04em">Aggregat (' + total + ' Hosts)</h3>'
+        + filterToggle
+        + '</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));'
+        +   'gap:8px;margin-bottom:18px">' + cards + '</div>';
+}
+
+function _hostTable(hosts, theme) {
+    if (!hosts.length) {
+        return '<div style="color:' + theme.subSoft + ';padding:20px 0">'
+            + 'Keine Hosts entsprechen dem Filter.</div>';
+    }
+    let html = '<table style="border-collapse:collapse;font-size:12px;width:100%">'
+        + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
+        + '<th style="padding:6px 12px;text-align:left;color:' + theme.sub + ';font-weight:600">Host</th>';
+    CHECKS.forEach(function(c) {
+        html += '<th title="' + esc(c.lbl) + '" style="padding:6px 8px;text-align:center;'
+            + 'color:' + theme.sub + ';font-weight:600;writing-mode:vertical-rl;'
+            + 'transform:rotate(180deg);white-space:nowrap;font-size:10px">'
+            + esc(c.short) + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    hosts.forEach(function(h) {
+        html += '<tr style="border-bottom:1px solid ' + theme.borderSoft + '">'
+            + '<td style="padding:5px 12px"><b>' + esc(h.label || h.host || '') + '</b></td>';
+        CHECKS.forEach(function(c) {
+            html += '<td style="padding:5px 8px;text-align:center;font-size:14px">'
+                + _checkSymbol(c, !!h.checks[c.key]) + '</td>';
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+}
+
+export function renderCompliance(wrap) {
+    if (window._ntCy)       { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
+    if (window._ntEdgeAnim) { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
+
+    const dark = !!(document.getElementById('nt-root')
+                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+    const theme = _theme(dark);
+
+    Array.from(wrap.children).forEach(function(ch) {
+        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
+    });
+
+    const root = document.createElement('div');
+    root.style.cssText = 'padding:20px;background:' + theme.bg + ';color:' + theme.text
+        + ';height:100%;overflow:auto;font-family:sans-serif';
+
+    const head = document.createElement('div');
+    head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">Compliance</h2>'
+        + '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:16px">'
+        + 'Security- und Konfigurations-Checks pro Host. Schlechte (✗) Findings sind'
+        + ' echte Issues; Info (i) sind Hinweise die kontextabhaengig sein koennen;'
+        + ' Gut (✓) ist positiv markiert.</div>';
+    root.appendChild(head);
+
+    const aggBox  = document.createElement('div');
+    const tableBox = document.createElement('div');
+    root.appendChild(aggBox);
+    root.appendChild(tableBox);
+    aggBox.innerHTML = '<div style="color:' + theme.subSoft + ';padding:20px">Laedt...</div>';
+
+    wrap.appendChild(root);
+
+    const cfg = window.NT_CONFIG || {};
+    const groupids = (cfg && cfg.selected_groupids) || [];
+    if (!groupids.length) {
+        aggBox.innerHTML = '<div style="color:' + theme.subSoft + ';padding:20px">'
+            + 'Bitte Host groups oben waehlen.</div>';
+        return;
+    }
+
+    const params = new URLSearchParams();
+    params.append('action', 'network.topology.v6.compliance');
+    groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
+    const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
+
+    let _onlyIssues = false;
+
+    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) {
+                aggBox.innerHTML = '<div style="color:' + COL_BAD + '">' + esc(data.error) + '</div>';
+                return;
+            }
+            const allHosts = data.hosts || [];
+            const agg      = data.aggregate || {};
+            const total    = data.total || 0;
+
+            function rerender() {
+                aggBox.innerHTML = _aggregateCards(agg, total, theme, _onlyIssues);
+                let filteredHosts = allHosts;
+                if (_onlyIssues) {
+                    // "bad"-Level-Checks: nur Hosts wo mindestens einer dieser hit ist
+                    const badKeys = CHECKS.filter(function(c) { return c.level === 'bad'; })
+                                          .map(function(c) { return c.key; });
+                    filteredHosts = allHosts.filter(function(h) {
+                        return badKeys.some(function(k) { return h.checks && h.checks[k]; });
+                    });
+                }
+                // Sortierung: Hosts mit meisten bad-Hits zuerst
+                const badKeys2 = CHECKS.filter(function(c) { return c.level === 'bad'; })
+                                       .map(function(c) { return c.key; });
+                filteredHosts.sort(function(a, b) {
+                    const ba = badKeys2.reduce(function(n, k) { return n + (a.checks[k] ? 1 : 0); }, 0);
+                    const bb = badKeys2.reduce(function(n, k) { return n + (b.checks[k] ? 1 : 0); }, 0);
+                    return bb - ba || (a.label || '').localeCompare(b.label || '');
+                });
+                tableBox.innerHTML = _hostTable(filteredHosts, theme);
+
+                // Toggle-Wiring
+                const cb = document.getElementById('nt-compl-only-issues');
+                if (cb) cb.addEventListener('change', function() {
+                    _onlyIssues = this.checked;
+                    rerender();
+                });
+            }
+            rerender();
+        })
+        .catch(function(e) {
+            aggBox.innerHTML = '<div style="color:' + COL_BAD + '">Fehler: ' + esc(e.message) + '</div>';
+        });
+}

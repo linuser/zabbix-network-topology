@@ -35,6 +35,10 @@
         "network.topology.v6.diag": {
             "class": "NetworkTopologyDiag",
             "layout": "layout.json"
+        },
+        "network.topology.v6.compliance": {
+            "class": "NetworkTopologyCompliance",
+            "layout": "layout.json"
         }
     }
 }
