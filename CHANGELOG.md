@@ -2,6 +2,44 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.21.0 — 2026-06-24
+
+### Added
+- **Path-Highlight** im Tech-Tab: Rechtsklick "Pfad von hier" + auf anderem Host "Pfad zu hier" → BFS-Pfad zwischen den beiden Hosts wird cyan hervorgehoben, Rest gedimmt. Manuelle BFS-Implementierung statt cytoscape's eingebauter (die war in der minifizierten Version unzuverlässig).
+- **Multi-Group-Filter** in der Tabelle: AND-Verknüpfung mehrerer Hostgroups via Chip-Row + Add-Dropdown. Match läuft über `n.groups[]` (alle Gruppen), nicht mehr nur `_primaryGroup`.
+- **Token-Suche** in der Tabelle: whitespace-getrennte Tokens, jeder muss matchen (AND), `-wort` für NOT. Haystack enthält Gruppennamen.
+- **Query-Sprache (`query.js`)** als Erweiterung der Token-Suche: `host:fox OR host:bar`, `(a OR b) c`, `-tag:wartung`, quoted strings, Field-Prefixe `host/label/ip/type/iftype/proxy/group`. Bare Tokens matchen Host/Label/IP only (nicht Proxy/Group — sonst matchte z.B. "prx" alle Hosts wenn der Zabbix-Proxy "fox-prx" heißt). Gleiche Syntax in Hosts- und Items-Modus.
+- **Toast-Notifications** (`toast.js`) statt blockierender `alert()`-Dialoge. Info/Success/Warn/Error-Varianten.
+- **URL-Bookmark** der Tabellen-Sicht: Filter/Sort/Mode persistieren via `?t_sev=&t_g=&t_q=...` in der URL. Teilbar via Link, überlebt Reload.
+- **Maintenance-Ring** im Tech-Tab: orange-gestrichelter Außenring um Hosts in Maintenance (zusätzlich zum bestehenden Wrench-Badge).
+- **Toolbar-Refactor**: ~25 Buttons auf primary inline + 3 Dropdown-Menüs (Anzeige / Layout / Tools) reduziert. Einheitliches Item-Styling.
+- **Diff-Mode** (`diff-mode.js`): Snapshot-Button merkt aktuellen Stand in localStorage. Tabelle zeigt Diff-Badge pro Zeile (+ neu, ↑ schlimmer, ↓ besser) plus Counter "+N / −N / ↑N seit Xmin".
+- **Edge-Tooltip-Sparkline**: Hover über Edge → 1h-Traffic-Trend (Summe beider Endpunkte, in/out separat). Backend `Spark`-Action liefert `traffic_in[]`/`traffic_out[]` aggregiert über `net.if`/`ifIn/Out/HC`-Items.
+- **Diag-Tab** (Admin-only): Letzte ~50 Backend-Aufrufe aus APCu-Ring-Buffer. Pro Eintrag: action, elapsed_ms, bytes, cache_hit, counts. Zusammenfassungs-Tabelle mit Avg/Max-Latenz pro Action.
+- **Health-Tab**: Topology Health Score 0-100 pro Hostgroup. Formel: `100 − offline%·40 − stale%·15 − critical%·25 − unacked%·20`. Karten-Grid sortiert nach worst-Score zuerst, Score-Farbe Gesund/OK/Achtung/Kritisch.
+- **Stats-Tab** (Wochen/Monatsübersicht): Range-Selector 7/14/30 Tage, Tagesbalken (SVG, severity-stacked), Top 10 Hosts + Top 10 Trigger. Backend `History`-Action MAX_RANGE_SECONDS 7d → 31d hochgesetzt.
+- **Filter-Presets** in der Tabelle: Built-ins (Nur Firewalls/Server/Switches/Storage/Offline + Disaster + Crit+High) + User-eigene benannte Presets (localStorage, user-scoped).
+- **Integration-Links** via Zabbix Global-Macros: `{$NT_INT_<NAME>_LABEL}` + `{$NT_INT_<NAME>_URL}` mit Token-Substitution `{host}/{label}/{ip}/{location}`. Backend expandiert pro Host, Frontend zeigt's im Kontextmenü wie `nt:link`-Tags. Für NetBox/Wiki/Zammad/Grafana etc.
+- **Audit-Report** im Export-Dropdown (PDF/HTML): strukturierter Bericht mit Summary, Top-10 Problemhosts (Badness-Ranking), Hostgroups + Score, Kritische Hosts, Offline+Stale, Top-10 Probleme, Proxy-Übersicht.
+- **Offline-X deutlicher**: weißer Halo + größeres X + kräftigeres Rot (#dc2626) im SVG-Icon für offline Hosts.
+- **Health Score / Stats / Diag** alle als neue Tabs neben Tech/Mgmt/Tabelle/Geo.
+
+### Changed
+- **CSRF-Härtung**: alle 5 Read-only-Actions (Data/History/Items/Discover/Spark/Diag) prüfen jetzt `X-Requested-With: XMLHttpRequest`. Cross-Origin-Browser können den Header nicht ohne CORS-Preflight setzen — schützt vor CSRF-Last-Abuse trotz `disableCsrfValidation()`.
+- **Edit-UI rolle-bewusst**: "Bearbeiten" und "Hosts (Liste)" im Kontextmenü/Detail-Panel/Tabelle-Action-Bar nur sichtbar bei `NT_CONFIG.can_edit` (Admin+).
+- **Geo-Popups als DOM-Nodes** statt HTML-Strings — umgeht Leaflet-1.9.4 `bindPopup`-XSS-Pfad. User-Daten via `textContent`, kein `innerHTML` mehr.
+- **Generic Search-Placeholder**: `host:web`, `group:dc1`, `proxy:zbx-px` statt umgebungsspezifischer Beispiele.
+- **MAX_GROUPS=100** in `NetworkTopologyData` als Hard-Limit gegen pathologisch große Group-Arrays.
+- **APCu-Cache Defense**: `cacheKey()` liefert leer bei `userid=0` (Session-Loss) → kein Cross-User-Bucket.
+- **Repo-Migration** auf `git.fox1.de/planet_fox/zabbix-network-topology-v2.git` (Mono-Repo-Wechsel der Vorgänger).
+
+### Fixed
+- **Pin-Positions** bleiben beim Layout-Wechsel erhalten (vorher: unlock+layout+relock zerstörte Pin-Koordinaten).
+- **ESM-Cache-Buster**: rekursiver Blob-URL-Loader für alle Module. Statische `import ... from './foo.js'`-Pfade kriegen den `?v=<mtime>`-Buster jetzt automatisch — nach Deploy reicht einfacher Reload, kein "Empty Caches" mehr nötig.
+
+### Removed
+- **Mail-Reste**: `export-mail.js` → `export.js` umbenannt (Mail-Funktion war im Vorgänger entfernt, aber `isEmail`-Branch, CSRF-Token für Mail-Action und Kommentare blieben drin).
+
 ## v4.20.0 — 2026-05-06
 
 ### Added

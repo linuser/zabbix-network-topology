@@ -1439,14 +1439,6 @@ export function renderTable(wrap, nodes, edges) {
             }, 150);
         });
     }
-    // Debug-Hook: erlaubt Console-Inspection von Filter-State
-    window._ntTableDbg = {
-        text:   function() { return _filterText; },
-        query:  function() { return _filterQuery; },
-        groups: function() { return Array.from(_filterGroups); },
-        rerender: function() { rerenderTable(); }
-    };
-
     // Mode-Toggle: Hosts / Items
     filterBar.querySelectorAll('button[data-mode]').forEach(function(btn) {
         btn.addEventListener('click', function() {
