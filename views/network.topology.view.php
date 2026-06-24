@@ -202,7 +202,68 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
 }
 
 </script>
-<script type="module" src="modules/network_topology_v6/assets/js/network-topology.js?v=<?= $_nt_v ?>"></script>
+<script type="module">
+// ES-Module-Cache-Buster fuer Safari & Co.: statische ES-Imports
+// (import ... from './foo.js') ignorieren den ?v=<mtime>-Buster am Haupt-JS,
+// d.h. nach einem Deploy laedt der Browser zwar das neue network-topology.js
+// aber die importierten Sub-Module aus seinem Cache → ReferenceErrors.
+//
+// Loesung: alle Module per fetch holen, jeden 'from'-Pfad in absolute URLs
+// mit ?v= umschreiben, dann als Blob-URL importieren. Browser sieht eine
+// Kette frischer Blob-URLs, kein Cache-Hit moeglich. ?v=<mtime> aenders
+// sich bei jedem Deploy → frischer Code, ohne Cache-Clear.
+(async function ntBoot() {
+    const V    = "<?= $_nt_v ?>";
+    const BASE = "modules/network_topology_v6/assets/js/";
+    const blobUrls = new Map();   // module-path → Blob-URL
+
+    async function loadModule(path) {
+        if (blobUrls.has(path)) return blobUrls.get(path);
+        // Placeholder gegen zirkulaere Lade-Ketten — wird gleich ueberschrieben
+        blobUrls.set(path, null);
+
+        const r = await fetch(BASE + path + '?v=' + V);
+        if (!r.ok) throw new Error('fetch failed: ' + path + ' (' + r.status + ')');
+        let src = await r.text();
+
+        // Alle 'from "./..."' und 'from "../..."' raussuchen + Sub-Module laden
+        const importRe = /(from\s+['"])(\.\.?\/[\w./-]+\.js)(['"])/g;
+        const subs = {};
+        const matches = [];
+        let m;
+        while ((m = importRe.exec(src)) !== null) matches.push(m[2]);
+        // Pro Sub-Import: relativen Pfad resolven und rekursiv laden
+        const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '';
+        for (const rel of matches) {
+            // Pfad-Normalisierung: ./foo.js, ../foo.js, ./modules/bar.js
+            let parts = (dir + rel).split('/');
+            const out = [];
+            for (const p of parts) {
+                if (p === '..') out.pop();
+                else if (p && p !== '.') out.push(p);
+            }
+            const resolved = out.join('/');
+            subs[rel] = await loadModule(resolved);
+        }
+        // Imports im Source umschreiben auf Blob-URLs
+        src = src.replace(importRe, function(_m, a, p, c) {
+            return a + (subs[p] || p) + c;
+        });
+
+        const blob = new Blob([src], { type: 'application/javascript' });
+        const url  = URL.createObjectURL(blob);
+        blobUrls.set(path, url);
+        return url;
+    }
+
+    try {
+        const mainUrl = await loadModule('network-topology.js');
+        await import(mainUrl);
+    } catch (e) {
+        console.error('[nt-boot] Module-Loader fehlgeschlagen:', e);
+    }
+})();
+</script>
 <script>window.addEventListener("load", function(){
     // Wallboard-Mode: Body-Klasse setzen damit CSS Header/Filter ausblendet,
     // und Auto-Tab-Switch starten (Tech ↔ Geo alle 30s).
