@@ -486,8 +486,9 @@ class NetworkTopologyData extends CController {
                  )) {
                 // Quelle merken (lldp/cdp/other) — Frontend kann das spaeter
                 // anzeigen oder zum Debuggen nutzen. Fuer den Match selber egal.
-                $src = (strpos($key, 'cdp') !== false) ? 'cdp'
-                     : (strpos($key, 'lldp') !== false) ? 'lldp' : 'other';
+                $src = (strpos($key, 'cdp') !== false)
+                    ? 'cdp'
+                    : ((strpos($key, 'lldp') !== false) ? 'lldp' : 'other');
                 $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val, 'src' => $src];
             }
         }
