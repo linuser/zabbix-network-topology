@@ -44,6 +44,11 @@ function _scoreLabel(s) {
 }
 
 // Stats pro Hostgroup aus den Nodes ableiten.
+// Exportiert weil der Audit-Report (export.js) dieselbe Berechnung braucht.
+export function statsByGroup(nodes) { return _statsByGroup(nodes); }
+export function scoreColor(s)       { return _scoreColor(s); }
+export function scoreLabel(s)       { return _scoreLabel(s); }
+
 function _statsByGroup(nodes) {
     const now = Math.floor(Date.now() / 1000);
     const byGroup = {};
