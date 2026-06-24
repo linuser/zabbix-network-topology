@@ -59,7 +59,12 @@ class NetworkTopologyView extends CController {
         // Links mit Gruppen-Namen funktionieren auch nach Backup-Restore o.Ä.
         // wenn die Group-IDs sich verschoben haben.
         if (!$selected_groupids) {
-            $groupNames = array_filter(array_map('trim', explode(',', $this->getInput('groups', ''))));
+            // Cap auf max 200 Eintraege gegen O(n^2)-DoS bei pathologisch
+            // grossem ?groups=... URL-Parameter (in_array innerhalb foreach).
+            $groupNames = array_slice(
+                array_filter(array_map('trim', explode(',', $this->getInput('groups', '')))),
+                0, 200
+            );
             if ($groupNames) {
                 foreach ($hostgroups as $g) {
                     if (in_array($g['name'], $groupNames, true)) {

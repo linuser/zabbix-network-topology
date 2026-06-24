@@ -16,7 +16,8 @@
             ->setAttribute('data-worst-first', !empty($data['worst_first']) ? '1' : '0')
             ->setAttribute('data-max-groups',  (string) ($data['max_groups'] ?? 0))
             ->setAttribute('data-show-legend', !empty($data['show_legend']) ? '1' : '0')
-            ->setAttribute('data-groupids',    json_encode($data['groupids'] ?? []))
+            ->setAttribute('data-groupids',    json_encode($data['groupids'] ?? [],
+                JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT))
             ->addStyle('width:100%;height:100%;position:relative;min-height:80px;overflow:auto;')
             ->addItem(
                 (new CDiv(_('Loading...')))

@@ -436,14 +436,19 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         bLink.textContent = 'Abbrechen (ESC)';
         document.getElementById('nt-canvas-wrap').style.cursor = 'crosshair';
     };
-    document.addEventListener('keydown', function(e) {
-        if (e.key !== 'Escape') return;
-        if (isLinkModeActive()) { exitLinkMode(); return; }
-        // ESC clears Pfad-Highlight (path-highlight.js) — Connected-Component
-        // Reset bleibt dem Background-Click ueberlassen.
-        const cyRef = window._ntCy;
-        if (cyRef && (isPathActive() || getPathStart())) clearPathState(cyRef);
-    });
+    // Globaler ESC-Listener — nur einmal pro Page-Load anhaengen, sonst
+    // akkumuliert er bei jedem Tab-Wechsel (setupToolbar laeuft mehrfach).
+    if (!window._ntEscListenerInstalled) {
+        window._ntEscListenerInstalled = true;
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            if (isLinkModeActive()) { exitLinkMode(); return; }
+            // ESC clears Pfad-Highlight (path-highlight.js) — Connected-Component
+            // Reset bleibt dem Background-Click ueberlassen.
+            const cyRef = window._ntCy;
+            if (cyRef && (isPathActive() || getPathStart())) clearPathState(cyRef);
+        });
+    }
 
     // Alle manuellen Links löschen
     const bUnlink = mkbtn('nt-btn-unlink', '\u2715 Links', null);

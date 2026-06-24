@@ -45,8 +45,12 @@ class NetworkTopologyDiscoverPatterns extends CController {
 
     private const MAX_ITEMS  = 20000;
     private const MAX_STEMS  = 500;
-    private const CACHE_TTL  = 300;     // 5 Minuten — Discovery-Patterns aendern sich
-                                         // selten genug, ein 5min-Stale ist kein Drama.
+    private const CACHE_TTL  = 60;      // 60s — Permission-Drift-Schutz: wenn ein
+                                         // Admin Hostgroup-Permissions entzieht,
+                                         // sieht der User max 1min lang noch alte
+                                         // Pattern-Stems aus entzogenen Gruppen.
+                                         // Vorher 300s war zu lang fuer den
+                                         // Stale-Risk vs. Performance-Trade-off.
 
     protected function init(): void {
         $this->disableCsrfValidation();

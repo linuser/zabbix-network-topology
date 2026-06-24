@@ -212,10 +212,15 @@ class NetworkTopologyData extends CController {
                         $host_icon_override[$hid] = $value;
                     }
                 } elseif ($name === 'nt:show' && $value !== '') {
+                    // Item-Key-Cap: realistisch nie >200 Zeichen. Schutz gegen
+                    // teure API-Filter-Listen wenn jemand pathologisch lange
+                    // Tag-Werte setzt (Host-Tag-Edit-Rechte vorausgesetzt).
+                    $v = trim($value);
+                    if (strlen($v) > 200) continue;
                     if (!isset($host_show_keys[$hid])) $host_show_keys[$hid] = [];
                     // Begrenzung pro Host: 4 (Tooltip-Platz). Weitere Tags ignorieren.
                     if (count($host_show_keys[$hid]) < 4) {
-                        $host_show_keys[$hid][] = trim($value);
+                        $host_show_keys[$hid][] = $v;
                     }
                 } elseif ($name === 'nt:link' && $value !== '') {
                     // Format: "Label|URL" — Pipe-getrennt. Wenn kein Pipe vorhanden,
@@ -270,12 +275,19 @@ class NetworkTopologyData extends CController {
         // Pro Host wird der Template-String mit URL-encoded Werten gefuellt
         // und an host_links angehaengt. Cap analog nt:link bei 6 Links/Host.
         $integration_templates = $this->loadIntegrationTemplates();
+        // primaryIp() sortiert die interfaces in-place (usort) — beim wiederholten
+        // Aufruf pro Template UND spaeter in der Host-Assembly nicht noetig.
+        // Einmal pro Host cachen.
+        $primary_ip_cache = [];
         if (!empty($integration_templates)) {
             foreach ($hosts as $hid => $h) {
                 if (!isset($host_links[$hid])) $host_links[$hid] = [];
+                if (!isset($primary_ip_cache[$hid])) {
+                    $primary_ip_cache[$hid] = $this->primaryIp($h['interfaces'] ?? []);
+                }
                 foreach ($integration_templates as $tpl) {
                     if (count($host_links[$hid]) >= 6) break;
-                    $ip = $this->primaryIp($h['interfaces'] ?? []);
+                    $ip = $primary_ip_cache[$hid];
                     $loc = '';
                     $inv = $h['inventory'] ?? null;
                     if (is_array($inv) && isset($inv['location'])) $loc = (string) $inv['location'];
@@ -833,7 +845,7 @@ class NetworkTopologyData extends CController {
                 'id'          => $hid,
                 'label'       => $h['name'] !== '' ? $h['name'] : $h['host'],
                 'host'        => $h['host'],
-                'ip'          => $this->primaryIp($ifaces),
+                'ip'          => $primary_ip_cache[$hid] ?? ($primary_ip_cache[$hid] = $this->primaryIp($ifaces)),
                 'iftype'      => $this->ifaceType($ifaces),
                 'severity'    => $host_severity[$hid] ?? 0,
                 'problems'    => $host_problems[$hid]  ?? 0,

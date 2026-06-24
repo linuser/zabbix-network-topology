@@ -154,9 +154,10 @@ export function parseQuery(text) {
 export function matchQuery(ast, fields) {
     if (!ast) return true;
     switch (ast.type) {
-        case 'match':
+        case 'match': {
             const hay = ast.field ? (fields[ast.field] || '') : (fields._any || '');
             return hay.indexOf(ast.value) >= 0;
+        }
         case 'not':
             return !matchQuery(ast.a, fields);
         case 'and':

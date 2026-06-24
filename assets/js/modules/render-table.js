@@ -972,18 +972,20 @@ export function renderTable(wrap, nodes, edges) {
     const realNodes = nodes.filter(function(n) {
         return !(n._isInternet || (n.id && String(n.id).indexOf('internet_') === 0));
     });
-    // _primaryGroup setzen (analog render-tech) — wird für Filter und Spalte genutzt
+    // _primaryGroup setzen (analog render-tech) — wird fuer Filter und Spalte
+    // genutzt. WICHTIG: pro Render neu berechnen statt nur wenn !_primaryGroup,
+    // sonst bleibt der Wert stale wenn der User die Hostgroup-Auswahl
+    // wechselt (gleiche Node-Objekte werden mit unveraenderten _primaryGroup
+    // zurueckgegeben → Filter passt nicht zur neuen Auswahl).
     const cfg = window.NT_CONFIG;
     const sel = (cfg && cfg.selected_group_names) || [];
     realNodes.forEach(function(n) {
-        if (!n._primaryGroup) {
-            // Erstes selektiertes Group dass der Host hat, sonst erstes seiner groups
-            const gs = n.groups || [];
-            for (let i = 0; i < sel.length; i++) {
-                if (gs.indexOf(sel[i]) >= 0) { n._primaryGroup = sel[i]; return; }
-            }
-            n._primaryGroup = gs[0] || '';
+        const gs = n.groups || [];
+        let primary = '';
+        for (let i = 0; i < sel.length; i++) {
+            if (gs.indexOf(sel[i]) >= 0) { primary = sel[i]; break; }
         }
+        n._primaryGroup = primary || gs[0] || '';
     });
 
     // Alle Gruppen einsammeln in denen mind. 1 Host Mitglied ist (nicht nur

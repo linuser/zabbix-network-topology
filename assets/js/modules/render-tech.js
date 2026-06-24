@@ -285,8 +285,8 @@ export function render(wrap, nodes, edges, dataUrl) {
     });
     cy.on('mousemove', 'edge', function(e) { moveTip(e); });
     cy.on('mouseout',  'edge', function()  { hideTip(); });
-    cy.on('tap', function() { hideTip(); });
     cy.on('tap', function(e) {
+        hideTip();
         if (e.target === cy) {
             if (pnl) pnl.style.display = 'none';
             hideCtx();

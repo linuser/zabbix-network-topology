@@ -58,12 +58,15 @@ class WidgetNetworkTopologyHealth extends CWidget {
 
     _loadAndRender() {
         var self = this;
+        var ids = this._groupids;
+        if (!ids || !ids.length) {
+            // Backend liefert ohne groupids nichts — UX-Hinweis statt 0/0
+            this._renderError('Bitte Host groups in der Widget-Konfiguration waehlen.');
+            return;
+        }
         var params = new URLSearchParams();
         params.append('action', 'network.topology.v6.data');
-        var ids = this._groupids;
-        if (ids && ids.length) {
-            for (var i = 0; i < ids.length; i++) params.append('groupids[]', String(ids[i]));
-        }
+        for (var i = 0; i < ids.length; i++) params.append('groupids[]', String(ids[i]));
         var url = 'zabbix.php?' + params.toString();
         fetch(url, {
             credentials: 'same-origin',

@@ -9,7 +9,8 @@ use Zabbix\Widgets\Fields\CWidgetFieldIntegerBox;
 
 /**
  * Widget-Konfiguration:
- *   - Host groups (multi-select) — leer = alle erlaubten Gruppen
+ *   - Host groups (multi-select) — REQUIRED. Leer = leeres Widget. Das
+ *     Hauptmodul-Backend liefert ohne groupids ein leeres Result.
  *   - Worst-first: per Default sortiert nach niedrigstem Score
  *   - Max groups: optionales Limit (z.B. nur Top 5 Worst anzeigen)
  *   - Show legend: Legende mit Score-Bereichen am Fuss anzeigen
