@@ -75,6 +75,7 @@ export function ensureBaseToolbar(wrap) {
         { id: 'nt-tab-tree',   lbl: 'Tabelle',    tab: 'tree' },
         { id: 'nt-tab-geo',    lbl: 'Geo',        tab: 'geo'  },
         { id: 'nt-tab-health', lbl: 'Health',     tab: 'health' },
+        { id: 'nt-tab-stats',  lbl: 'Stats',      tab: 'stats' },
     ];
     if (isAdmin) TABS.push({ id: 'nt-tab-diag', lbl: 'Diag', tab: 'diag', dataOptional: true });
 

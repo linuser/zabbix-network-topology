@@ -45,7 +45,8 @@ use API;
 class NetworkTopologyHistory extends CController {
 
     private const MAX_EVENTS = 50000;
-    private const MAX_RANGE_SECONDS = 7 * 86400 + 3600;   // 7 Tage + 1h Toleranz
+    private const MAX_RANGE_SECONDS = 31 * 86400 + 3600;   // 31 Tage + 1h Toleranz
+                                                            // (war 7d, dann fuer Stats-Tab erhoeht)
 
     protected function init(): void {
         $this->disableCsrfValidation();
