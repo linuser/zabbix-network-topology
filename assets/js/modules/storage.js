@@ -360,6 +360,23 @@ export function collectCurrentState() {
     };
 }
 
+// ── Filter-Presets fuer die Tabelle ──────────────────────────────────────
+// User-eigene benannte Filter-Kombinationen (Severities + Gruppen + Such-
+// Query + Offline-Toggle + Sortierung). Built-in-Presets ("Nur Firewalls"
+// etc.) liegen direkt in render-table.js — hier nur User-eigene.
+const NT_FILTER_PRESETS_KEY = 'nt_' + PFX + 'filter_presets';
+
+export function loadFilterPresets() {
+    try {
+        const v = JSON.parse(localStorage.getItem(NT_FILTER_PRESETS_KEY) || '[]');
+        return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+}
+export function saveFilterPresets(arr) {
+    try { localStorage.setItem(NT_FILTER_PRESETS_KEY, JSON.stringify(arr || [])); }
+    catch (e) {}
+}
+
 // ── Letzte Hostgroup-Auswahl ─────────────────────────────────────────────
 // Wird bei jedem erfolgreichen Render gespeichert. Beim Page-Load ohne
 // URL-Parameter wird die gespeicherte Auswahl wiederhergestellt — User

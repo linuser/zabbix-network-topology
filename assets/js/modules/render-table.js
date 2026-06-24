@@ -19,6 +19,7 @@ import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
 import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
 import { loadSnapshot, computeDiff, formatSnapshotAge } from './diff-mode.js';
+import { loadFilterPresets, saveFilterPresets } from './storage.js';
 import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY, NT_ITEMS_HIDE_EMPTY_KEY,
          NT_ITEMS_HEATMAP_KEY } from './storage.js';
 import { showDetail } from './detail-panel.js';
@@ -55,6 +56,121 @@ let _filterText = '';
 // (in query.js). passesFilter() ruft matchQuery() statt pro Host neu zu
 // parsen. null = kein Filter aktiv.
 let _filterQuery = null;
+
+// Built-in Filter-Presets (read-only). User-eigene liegen in localStorage
+// via storage.js loadFilterPresets/saveFilterPresets.
+// filter-Shape: { sev?: int[], groups?: string[], text?: string,
+//                 offline?: bool, sort?: string, sortDir?: 'asc'|'desc' }
+// undefined-Felder fallen auf Defaults zurueck wenn das Preset angewendet wird.
+const BUILTIN_FILTER_PRESETS = [
+    { name: 'Alle',          builtin: true, filter: {} },
+    { name: 'Nur Firewalls', builtin: true, filter: { text: 'type:firewall' }},
+    { name: 'Nur Server',    builtin: true, filter: { text: 'type:server'   }},
+    { name: 'Nur Switches',  builtin: true, filter: { text: 'type:switch'   }},
+    { name: 'Nur Storage',   builtin: true, filter: { text: 'type:storage'  }},
+    { name: 'Nur Offline',   builtin: true, filter: { offline: true }},
+    { name: 'Disaster',      builtin: true, filter: { sev: [5] }},
+    { name: 'Crit + High',   builtin: true, filter: { sev: [4, 5] }},
+];
+
+// Wrap/nodes/edges-Refs damit die Preset-Anwendung den vollen renderTable
+// triggern kann (Filter-Bar wird neu gebaut). Werden bei jedem renderTable
+// gesetzt.
+let _renderWrap = null;
+let _renderNodes = null;
+let _renderEdges = null;
+
+// Setzt alle Filter-Felder gemaess Preset.filter und triggert vollen Re-Render.
+// Fehlt ein Feld im Preset → Default-Wert (alle Sev an, keine Gruppen, kein Text,
+// nicht offline-only, Sortierung severity desc).
+function _applyFilterPreset(preset) {
+    const f = (preset && preset.filter) || {};
+    _filterStatuses    = new Set(Array.isArray(f.sev) ? f.sev : [0,1,2,3,4,5]);
+    _filterGroups      = new Set(Array.isArray(f.groups) ? f.groups : []);
+    _filterText        = typeof f.text === 'string' ? f.text : '';
+    _reparseTokens();
+    _filterOfflineOnly = !!f.offline;
+    _sortCol           = typeof f.sort === 'string' ? f.sort : 'severity';
+    _sortDir           = (f.sortDir === 'asc' || f.sortDir === 'desc') ? f.sortDir : 'desc';
+    if (_renderWrap && _renderNodes) renderTable(_renderWrap, _renderNodes, _renderEdges || []);
+}
+
+// Sammelt den aktuellen Filter-State als Preset-filter-Objekt.
+function _currentFilterState() {
+    const f = {};
+    const sev = Array.from(_filterStatuses).sort();
+    if (sev.length !== 6) f.sev = sev;                         // nur wenn nicht alle 6
+    if (_filterGroups.size > 0) f.groups = Array.from(_filterGroups).sort();
+    if (_filterText) f.text = _filterText;
+    if (_filterOfflineOnly) f.offline = true;
+    if (_sortCol && _sortCol !== 'severity') f.sort = _sortCol;
+    if (_sortDir && _sortDir !== 'desc') f.sortDir = _sortDir;
+    return f;
+}
+
+// Baut den Inhalt des Preset-Dropdowns neu auf — getrennt nach Built-ins
+// und User-eigenen, plus "Aktuelle speichern" am Ende.
+function _rebuildPresetPop(pop, theme) {
+    pop.innerHTML = '';
+    function row(label, color, onClick) {
+        const r = document.createElement('div');
+        r.style.cssText = 'padding:5px 10px;cursor:pointer;font-size:12px;color:'
+            + (color || theme.text) + ';border-radius:3px;display:flex;align-items:center;gap:8px';
+        r.innerHTML = label;
+        r.addEventListener('mouseenter', function() { r.style.background = theme.head; });
+        r.addEventListener('mouseleave', function() { r.style.background = ''; });
+        r.addEventListener('click', function(e) { e.stopPropagation(); pop.style.display = 'none'; onClick(); });
+        return r;
+    }
+    function header(text) {
+        const h = document.createElement('div');
+        h.textContent = text;
+        h.style.cssText = 'padding:6px 10px 2px;font-size:10px;color:' + theme.sub
+            + ';text-transform:uppercase;letter-spacing:0.05em;font-weight:700';
+        return h;
+    }
+    pop.appendChild(header('Standard'));
+    BUILTIN_FILTER_PRESETS.forEach(function(p) {
+        pop.appendChild(row(esc(p.name), theme.text, function() { _applyFilterPreset(p); }));
+    });
+    const user = loadFilterPresets();
+    if (user.length > 0) {
+        pop.appendChild(header('Eigene'));
+        user.forEach(function(p) {
+            const r = document.createElement('div');
+            r.style.cssText = 'padding:5px 10px;cursor:pointer;font-size:12px;color:' + theme.text
+                + ';border-radius:3px;display:flex;align-items:center;gap:8px';
+            r.innerHTML = '<span style="flex:1">' + esc(p.name) + '</span>'
+                + '<span data-del="1" title="Loeschen" style="color:' + theme.subSoft
+                + ';padding:0 4px;cursor:pointer">×</span>';
+            r.addEventListener('mouseenter', function() { r.style.background = theme.head; });
+            r.addEventListener('mouseleave', function() { r.style.background = ''; });
+            r.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (e.target.dataset && e.target.dataset.del) {
+                    if (!confirm('Preset "' + p.name + '" loeschen?')) return;
+                    const arr = loadFilterPresets().filter(function(x) { return x.name !== p.name; });
+                    saveFilterPresets(arr);
+                    _rebuildPresetPop(pop, theme);
+                    return;
+                }
+                pop.style.display = 'none';
+                _applyFilterPreset(p);
+            });
+            pop.appendChild(r);
+        });
+    }
+    const sep = document.createElement('div');
+    sep.style.cssText = 'height:1px;background:' + theme.borderSoft + ';margin:4px 0';
+    pop.appendChild(sep);
+    pop.appendChild(row('+ Aktuelle als Preset speichern…', theme.accent, function() {
+        const name = prompt('Name des Presets:');
+        if (!name || !name.trim()) return;
+        const arr = loadFilterPresets().filter(function(x) { return x.name !== name.trim(); });
+        arr.push({ name: name.trim(), filter: _currentFilterState() });
+        saveFilterPresets(arr);
+    }));
+}
 
 // Vorberechneter Diff-State (siehe diff-mode.js). Wird beim rerenderTable
 // aus dem aktuellen Snapshot + den aktuellen realNodes erzeugt. Pro Host-Row
@@ -525,6 +641,38 @@ function buildFilterBar(nodes, groupNames, theme) {
         bar.appendChild(grpWrap);
     }
 
+    // Filter-Preset-Dropdown — Built-ins + User-eigene. Klick auf Preset
+    // wendet Severities/Gruppen/Text/Offline/Sort an. "Aktuelle speichern"
+    // legt ein User-Preset mit dem aktuellen Filter-State an.
+    const presetWrap = document.createElement('div');
+    presetWrap.id = 'nt-table-preset-wrap';
+    presetWrap.style.cssText = 'position:relative;display:inline-block';
+    const presetBtn = document.createElement('button');
+    presetBtn.type = 'button';
+    presetBtn.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
+        + ';border-radius:' + NT_R.sm + ';font-size:12px;background:' + theme.surface
+        + ';color:' + theme.text + ';font-family:inherit;cursor:pointer';
+    presetBtn.textContent = 'Preset ▾';
+    presetWrap.appendChild(presetBtn);
+    const presetPop = document.createElement('div');
+    presetPop.id = 'nt-table-preset-pop';
+    presetPop.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9000;'
+        + 'background:' + theme.surface + ';border:1px solid ' + theme.border
+        + ';border-radius:' + NT_R.sm + ';box-shadow:0 6px 20px rgba(0,0,0,0.14);'
+        + 'min-width:200px;max-height:340px;overflow:auto;padding:4px;margin-top:4px';
+    presetWrap.appendChild(presetPop);
+    bar.appendChild(presetWrap);
+
+    presetBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const open = presetPop.style.display === 'block';
+        presetPop.style.display = open ? 'none' : 'block';
+        if (!open) _rebuildPresetPop(presetPop, theme);
+    });
+    document.addEventListener('click', function(e) {
+        if (!presetWrap.contains(e.target)) presetPop.style.display = 'none';
+    });
+
     // Suche — flach, kein Lupen-Glyph (Zabbix nutzt das nicht), schmaler Focus.
     const search = document.createElement('input');
     search.id = 'nt-table-search';
@@ -802,6 +950,9 @@ function buildTable(nodes, baseUrl, theme) {
 export function renderTable(wrap, nodes, edges) {
     if (window._ntEdgeAnim) { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
     if (window._ntCy) { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
+    // Refs fuer _applyFilterPreset() merken — der ruft renderTable() neu mit
+    // gleichen Args nach Preset-Anwendung.
+    _renderWrap = wrap; _renderNodes = nodes; _renderEdges = edges;
     _urlSync();
 
     // Theme aus Dark-Mode-State des Root-Containers ableiten - alle weiteren
