@@ -125,7 +125,7 @@ export function renderDiag(wrap) {
     const head = document.createElement('div');
     head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">Diagnose</h2>'
         + '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:18px">'
-        + 'Backend-Aufrufe der letzten Stunde aus APCu-Ring-Buffer (pro User). '
+        + 'Backend-Aufrufe der letzten Stunde aus APCu-Ring-Buffer (Super-Admin only). '
         + 'Latenz > 1000 ms rot, > 500 ms orange.</div>';
     root.appendChild(head);
 

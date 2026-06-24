@@ -79,6 +79,9 @@ class NetworkTopologyData extends CController {
             'selectParentTemplates' => ['name'],
             'selectInventory'       => ['location_lat', 'location_lon', 'location'],
             'selectTags'            => ['tag', 'value'],
+            // Seit Zabbix 7.0 verfuegbar — spart einen zweiten HostGroup.get
+            // Roundtrip plus N×M-Loop fuers Hostid→Groups-Mapping.
+            'selectHostGroups'      => ['name'],
             'monitored_hosts'       => true,
             'preservekeys'          => true
         ]);
@@ -91,19 +94,10 @@ class NetworkTopologyData extends CController {
         }
         $hostids = array_keys($hosts);
 
-        // ── 1b. HOST GROUPS via HostGroup API (Zabbix 7.4 compatible) ──────
-        $groups_with_hosts = API::HostGroup()->get([
-            'output'       => ['groupid', 'name'],
-            'hostids'      => $hostids,
-            'selectHosts'  => ['hostid'],
-            'preservekeys' => true
-        ]);
-        // Build hostid -> group names map
+        // hostid → ['Group A', 'Group B', ...] aus dem schon geholten Host.get
         $host_group_names = [];
-        foreach ($groups_with_hosts as $grp) {
-            foreach ($grp['hosts'] as $gh) {
-                $host_group_names[$gh['hostid']][] = $grp['name'];
-            }
+        foreach ($hosts as $hid => $h) {
+            $host_group_names[$hid] = array_column($h['hostgroups'] ?? [], 'name');
         }
 
         // ── 2. SEVERITY + ACKNOWLEDGED ────────────────────────────────────
@@ -138,10 +132,17 @@ class NetworkTopologyData extends CController {
         $host_ack_acked  = [];   // hid => Anzahl davon acknowledged
         $host_problem_list = []; // hid => [{name, severity, clock, acknowledged}, ...] (max 20/Host)
         if ($host_problems) {
+            // recent=true: nur aktuell offene Probleme (oder kürzlich geschlossene).
+            // Frueher 'false', was historische Problems zurueckgeliefert hat — bei
+            // vielen Hosts tausende Events von denen wir nur 20/Host nutzen.
+            // sortfield+limit als zweite Sicherung gegen runaway-Listen.
             $problems = API::Problem()->get([
                 'output'       => ['eventid', 'objectid', 'name', 'severity', 'clock', 'acknowledged'],
                 'hostids'      => array_keys($host_problems),
-                'recent'       => false,
+                'recent'       => true,
+                'sortfield'    => ['eventid'],
+                'sortorder'    => 'DESC',
+                'limit'        => max(500, count($host_problems) * 25),
                 'preservekeys' => false
             ]);
             // Probleme haben keinen direkten hostid — der Weg geht über

@@ -44,7 +44,11 @@ class NetworkTopologyDiag extends CController {
     }
 
     protected function checkPermissions(): bool {
-        return $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN;
+        // Nur Super-Admins duerfen den Diag-Buffer sehen. ZABBIX_ADMIN ist
+        // ein normaler Admin pro-Hostgroup; SUPER_ADMIN ist instance-wide.
+        // Der Buffer enthaelt Backend-Performance-Daten (Cache-Hit-Rate,
+        // Latenzen, Counts) die wir nicht jedem Hostgroup-Admin geben wollen.
+        return $this->getUserType() === USER_TYPE_SUPER_ADMIN;
     }
 
     protected function doAction(): void {

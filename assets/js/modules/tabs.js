@@ -77,7 +77,9 @@ export function ensureBaseToolbar(wrap) {
         { id: 'nt-tab-health', lbl: 'Health',     tab: 'health' },
         { id: 'nt-tab-stats',  lbl: 'Stats',      tab: 'stats' },
     ];
-    if (isAdmin) TABS.push({ id: 'nt-tab-diag', lbl: 'Diag', tab: 'diag', dataOptional: true });
+    // Diag-Tab nur fuer Super-Admins (Backend prueft USER_TYPE_SUPER_ADMIN ===)
+    const isSuperAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.is_super_admin);
+    if (isSuperAdmin) TABS.push({ id: 'nt-tab-diag', lbl: 'Diag', tab: 'diag', dataOptional: true });
 
     if (!document.getElementById('nt-tab-wrap')) {
         const tw = document.createElement('div');
@@ -100,7 +102,7 @@ export function ensureBaseToolbar(wrap) {
         bar.insertBefore(tw, bar.firstChild);
     }
     // Falls Diag-Tab nachtraeglich noetig ist (z.B. NT_CONFIG kommt spaeter): ergaenzen
-    if (isAdmin && !document.getElementById('nt-tab-diag')) {
+    if (isSuperAdmin && !document.getElementById('nt-tab-diag')) {
         const tw = document.getElementById('nt-tab-wrap');
         const b = document.createElement('button');
         b.id = 'nt-tab-diag'; b.textContent = 'Diag';

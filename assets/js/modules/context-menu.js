@@ -178,11 +178,15 @@ export function showCtx(cx, cy2, d) {
         linksHdr.textContent = 'Externe Links';
         _ctx.appendChild(linksHdr);
         d.links.forEach(function(link) {
-            // Label kürzen falls überlang (UI-Schutz, nicht Sicherheit —
-            // Backend stellt bereits sicher dass URL http(s) ist).
+            // Label kürzen falls überlang. Backend validiert URL bereits
+            // auf http(s)://, aber Defense-in-depth: noch ein Client-Check
+            // damit ein Backend-Bug oder ein manipulierter Link nicht zu
+            // javascript:/data:/file: URLs fuehrt.
             const lbl = (link.label || '').substring(0, 24);
+            const url = String(link.url || '');
+            if (!/^https?:\/\//i.test(url)) return;
             _ctx.appendChild(_ctxRow('\u{1F517} ' + lbl, '#0891b2', function() {
-                window.open(link.url, '_blank', 'noopener,noreferrer');
+                window.open(url, '_blank', 'noopener,noreferrer');
             }));
         });
     }

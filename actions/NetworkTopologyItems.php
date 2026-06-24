@@ -98,6 +98,21 @@ class NetworkTopologyItems extends CController {
             $this->respond(['error' => 'Pattern too short (min 3 non-wildcard chars)']);
             return;
         }
+        // Schutz gegen Pattern-DoS: zu viele Wildcards oder uebermaessige
+        // Laenge → Zabbix-LIKE-Filter wird teuer. Max 4 Wildcards + max 200
+        // Zeichen + keine Control-Chars (CR/LF/Tab kann Log-Injection sein).
+        if (strlen($pattern) > 200) {
+            $this->respond(['error' => 'Pattern too long (max 200 chars)']);
+            return;
+        }
+        if (substr_count($pattern, '*') > 4) {
+            $this->respond(['error' => 'Pattern has too many wildcards (max 4)']);
+            return;
+        }
+        if (preg_match('/[\x00-\x1F\x7F]/', $pattern)) {
+            $this->respond(['error' => 'Pattern contains control characters']);
+            return;
+        }
 
         // Permissions
         $allowed_groups = API::HostGroup()->get([

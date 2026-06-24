@@ -127,7 +127,10 @@ export function buildNodeElements(nodes) {
 export function buildEdgeElements(edges, nodes) {
     const elements = [];
     const nodeIds = {}, edgeSeen = {};
-    nodes.forEach(function(n) { nodeIds[n.id] = true; });
+    // nodeById-Map einmal bauen statt pro Edge .find() — bei 500 Hosts × 800
+    // Edges spart das ~800k Vergleiche pro Render.
+    const nodeById = {};
+    nodes.forEach(function(n) { nodeIds[n.id] = true; nodeById[String(n.id)] = n; });
 
     edges.forEach(function(e, i) {
         const src = String(e.source || e.from || '');
@@ -147,8 +150,8 @@ export function buildEdgeElements(edges, nodes) {
             return;
         }
 
-        const srcNode = nodes.find(function(n) { return String(n.id) === src; });
-        const tgtNode = nodes.find(function(n) { return String(n.id) === tgt; });
+        const srcNode = nodeById[src];
+        const tgtNode = nodeById[tgt];
         const tIn  = (srcNode && srcNode.traffic ? srcNode.traffic.in  : 0)
                    + (tgtNode && tgtNode.traffic ? tgtNode.traffic.in  : 0);
         const tOut = (srcNode && srcNode.traffic ? srcNode.traffic.out : 0)

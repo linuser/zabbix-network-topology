@@ -94,7 +94,7 @@ class NetworkTopologyHistory extends CController {
             return;
         }
         if (($to - $from) > self::MAX_RANGE_SECONDS) {
-            $this->respond(['error' => 'Time range exceeds max (7 days)']);
+            $this->respond(['error' => 'Time range exceeds max (' . (int)(self::MAX_RANGE_SECONDS / 86400) . ' days)']);
             return;
         }
         if (empty($groupids)) {

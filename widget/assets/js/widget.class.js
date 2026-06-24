@@ -41,6 +41,16 @@ class WidgetNetworkTopology extends CWidget {
         this._SEV_LBL = ['OK', 'Info', 'Warn', 'Avg', 'High', 'Krit'];
     }
 
+    // HTML-Escape fuer alle User-Daten die in innerHTML/title-Attribute landen.
+    // Hostnames kommen via LLDP/SNMP-sysName aus dem Netzwerk und sind nicht
+    // vertrauenswuerdig — ohne Escape waere ein boesartiger sysName ein
+    // Stored-XSS-Vektor fuer jeden Dashboard-Besucher.
+    _esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     onStart() {
         var root = this._target.querySelector('[data-view-mode]');
         if (root) {
@@ -386,38 +396,40 @@ class WidgetNetworkTopology extends CWidget {
             if (!nd) return;
             var st = self._hostState(nd);
 
-            // Status-Header mit der State-Farbe
+            // Status-Header mit der State-Farbe. Hostnames/IPs werden escaped —
+            // LLDP-sysName aus dem Netzwerk ist nicht vertrauenswuerdig.
             var html = '<div style="font-weight:600;margin-bottom:4px;color:'
-                + st.col + '">' + (nd.label || nd.host || '') + '</div>';
+                + st.col + '">' + self._esc(nd.label || nd.host || '') + '</div>';
             html += '<div style="color:#94a3b8;font-size:10px;margin-bottom:4px">'
-                + (nd.ip || '') + '</div>';
-            html += '<div>Status: <b style="color:' + st.col + '">' + st.lbl + '</b>';
+                + self._esc(nd.ip || '') + '</div>';
+            html += '<div>Status: <b style="color:' + st.col + '">' + self._esc(st.lbl) + '</b>';
             if (st.state === 'stale') {
-                html += ' <span style="color:#94a3b8">(' + st.ageMin + 'm)</span>';
+                html += ' <span style="color:#94a3b8">(' + Number(st.ageMin || 0) + 'm)</span>';
             }
             if (nd.problems) {
                 html += ' <span style="background:#e53742;color:#fff;border-radius:8px;'
-                     +  'padding:0 4px;font-size:9px">' + nd.problems + '</span>';
+                     +  'padding:0 4px;font-size:9px">' + Number(nd.problems || 0) + '</span>';
             }
             html += '</div>';
 
             // Bei Offline/Stale: Metriken als "stale" markieren — sind eingefrorene
-            // Werte vor dem Disconnect, kein Live-Stand
+            // Werte vor dem Disconnect, kein Live-Stand. Numerische Felder
+            // explizit zu Number gecastet (Defense-in-depth gegen Backend-Drift).
             var stale = (st.state === 'offline' || st.state === 'stale');
             var dimStyle = stale
                 ? ';opacity:0.6;text-decoration:line-through'
                 : '';
             if (nd.cpu != null) {
                 html += '<div style="' + dimStyle.substring(1) + '">CPU: <b>'
-                    + nd.cpu + '%</b></div>';
+                    + Number(nd.cpu) + '%</b></div>';
             }
             if (nd.memory != null) {
                 html += '<div style="' + dimStyle.substring(1) + '">Memory: <b>'
-                    + nd.memory + '%</b></div>';
+                    + Number(nd.memory) + '%</b></div>';
             }
             if (nd.ping != null) {
                 html += '<div style="' + dimStyle.substring(1) + '">Ping: <b>'
-                    + nd.ping + ' ms</b></div>';
+                    + Number(nd.ping) + ' ms</b></div>';
             }
             if (stale) {
                 html += '<div style="margin-top:4px;color:#fbbf24;font-size:9px;'
@@ -472,15 +484,19 @@ class WidgetNetworkTopology extends CWidget {
         var nodes = this._visibleNodes || this._nodes;
 
         // Sort: Offline > Stale > Severity desc — kritischste/toteste oben.
-        var sorted = nodes.slice().sort(function (a, b) {
+        // Internet-Cloud-Knoten ausnehmen (sind virtuell, kein echter Host).
+        var sorted = nodes.filter(function(n) { return !n._isInternet; }).sort(function (a, b) {
             var sa = self._hostState(a);
             var sb = self._hostState(b);
-            var rank = function (s) {
+            // Rank-Closure muss den Node + State des jeweiligen Vergleichs-Elements
+            // sehen — vorher griff sie aus dem aeusseren Scope auf a.severity zu,
+            // was beide Seiten gleich rankte. Fix: explizite Args.
+            var rank = function (node, s) {
                 if (s.state === 'offline') return 100;
                 if (s.state === 'stale')   return 80;
-                return Math.min(a.severity || 0, 5);
+                return Math.min(node.severity || 0, 5);
             };
-            return rank(sb) - rank(sa)
+            return rank(b, sb) - rank(a, sa)
                 || ((b.severity || 0) - (a.severity || 0))
                 || (a.label || '').localeCompare(b.label || '');
         });
@@ -495,18 +511,21 @@ class WidgetNetworkTopology extends CWidget {
                           : st.col;
             var dimOpacity = (st.state === 'offline' || st.state === 'stale') ? '0.65' : '1';
 
+            // Alle User-Daten (name, n.ip) werden mit _esc() escaped — Hostnames
+            // sind via LLDP-Discovery nicht vertrauenswuerdig. Numerische Felder
+            // explizit zu Number gecastet als Defense-in-depth.
             var probBadge = n.problems
                 ? '<span style="margin-left:auto;background:' + self._COL.critical
                     + ';color:#fff;border-radius:8px;padding:0 4px;font-size:9px">'
-                    + n.problems + '</span>'
+                    + Number(n.problems || 0) + '</span>'
                 : '';
-            var ipRow  = n.ip      ? '<div style="color:#94a3b8;margin-top:1px;font-size:9px">'  + n.ip      + '</div>' : '';
+            var ipRow  = n.ip      ? '<div style="color:#94a3b8;margin-top:1px;font-size:9px">'  + self._esc(n.ip) + '</div>' : '';
             // CPU bei Stale/Offline gedimmt (eingefrorener Wert)
             var dimMetricStyle = (st.state === 'offline' || st.state === 'stale')
                 ? 'color:' + self._COL.subSoft + ';text-decoration:line-through'
                 : 'color:' + self._COL.accent;
             var cpuRow = n.cpu != null
-                ? '<div style="' + dimMetricStyle + ';margin-top:2px">CPU ' + n.cpu + '%</div>'
+                ? '<div style="' + dimMetricStyle + ';margin-top:2px">CPU ' + Number(n.cpu) + '%</div>'
                 : '';
 
             var tile = document.createElement('div');
@@ -515,18 +534,18 @@ class WidgetNetworkTopology extends CWidget {
                 + ';background:white;font-size:10px;cursor:pointer;flex:1 1 110px;'
                 + 'opacity:' + dimOpacity + ';transition:opacity 0.12s';
             tile.title = name + (st.state === 'stale'
-                ? ' — letzter Wert vor ' + st.ageMin + 'm'
+                ? ' — letzter Wert vor ' + Number(st.ageMin || 0) + 'm'
                 : '');
             tile.innerHTML =
                 '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">'
                     + '<span style="width:6px;height:6px;border-radius:50%;background:'
                     +     borderCol + ';flex-shrink:0"></span>'
-                    + '<b style="color:' + borderCol + '">' + st.lbl + '</b>'
+                    + '<b style="color:' + borderCol + '">' + self._esc(st.lbl) + '</b>'
                     + probBadge
                 + '</div>'
                 + '<div style="font-weight:600;color:' + self._COL.text
                 +     ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap" '
-                +     'title="' + name + '">' + short + '</div>'
+                +     'title="' + self._esc(name) + '">' + self._esc(short) + '</div>'
                 + ipRow
                 + cpuRow;
 

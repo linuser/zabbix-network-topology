@@ -112,8 +112,9 @@ class NetworkTopologyView extends CController {
             'internet_label'    => trim($this->getInput('internet', '')),
             'wallboard'         => (int) $this->getInput('wallboard', 0) === 1,
             'user'              => [
-                'type'     => $this->getUserType(),
-                'can_edit' => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN
+                'type'           => $this->getUserType(),
+                'can_edit'       => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN,
+                'is_super_admin' => $this->getUserType() === USER_TYPE_SUPER_ADMIN
             ]
         ]);
 
