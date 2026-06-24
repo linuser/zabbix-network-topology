@@ -2,6 +2,42 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.21.1 — 2026-06-25
+
+Security- + Performance-Sweep nach zwei parallelen Audit-Reviews.
+Keine neuen Features, nur Hardening und Backend-Optimierungen.
+
+### Security
+- **Diag-Tab Super-Admin-only**: `checkPermissions() === USER_TYPE_SUPER_ADMIN` (vorher >= ZABBIX_ADMIN — jeder Hostgroup-Admin sah Backend-Performance-Daten). NT_CONFIG exponiert `is_super_admin`, Tab im UI nur für Super-Admins.
+- **Topology-Widget XSS-Fix**: Hostnames/IPs im Tooltip und Mgmt-Tiles via neuem `_esc()`-Helper escaped. LLDP-/SNMP-sysName aus dem Netzwerk war zuvor ein Stored-XSS-Vektor.
+- **Open-Redirect-Defense-in-Depth**: `context-menu.js` prüft client-side noch einmal `^https?://` für `nt:link`- und Integration-Macro-URLs (Backend tut's schon).
+- **Numerische Felder gecastet**: `Number()` vor innerHTML-Interpolation in Widget für `cpu/memory/ping/problems/ageMin` — falls Backend mal String liefert oder MITM manipuliert.
+- **Pattern-DoS-Schutz**: `NetworkTopologyItems` cappt Pattern auf 200 Chars / max 4 Wildcards / keine Control-Chars.
+- **APCu-TTL** `DiscoverPatterns` 300s → 60s — Permission-Drift-Schutz bei Hostgroup-Entzug.
+- **JSON-Hardening** Widget-Views: `JSON_HEX_TAG|HEX_AMP|HEX_APOS|HEX_QUOT` für data-* Attribute.
+- **URL-Param-Cap** `?groups=` mit `array_slice(0, 200)` gegen O(n²)-DoS.
+- **`nt:show`-Tag** 200-Chars-Cap.
+
+### Performance
+- **`API::Problem`** mit `recent=true` + `sortfield=eventid DESC` + `limit` — vorher zog historic Problems (tausende bei vielen Hosts) obwohl nur 20/Host genutzt werden.
+- **`selectHostGroups`** direkt im Host.get statt zweiter HostGroup.get-Roundtrip + N×M-Loop.
+- **`nodeById`-Map** in `build-elements.js` statt `nodes.find()` × Edges — bei 500 Hosts × 800 Edges 800k Vergleiche weg.
+- **LLDP-Short-Name-Map** vorberechnen statt linearem Scan pro Edge — 250k Vergleiche weg bei vergleichbarer Größe.
+- **Zwei Item.get-Calls verschmolzen** zu einem (`searchByAny=true` macht beide API-seitig identisch).
+- **`primaryIp` Cache** pro Host vermeidet doppelten `usort` der Interfaces.
+- **Spark Problem.get** mit `selectHosts` statt separatem Trigger.get (N+1 weg).
+
+### Memory / Bug Fixes
+- **Widget sort-closure** liest jetzt aus dem richtigen Scope (vorher beide Sort-Seiten gleich geranked).
+- **Edge-Animation** prüft `cy.destroyed()` + `document.hidden` — kein CPU-Burn bei verstecktem Tab, sauberer Stop bei Tab-Wechsel.
+- **`icons.js` LRU-Fix**: `delete` vor Re-Insert damit der Pruner nicht frische Einträge rausschmeisst (JS-Object-Insertion-Order-Falle).
+- **Minimap**: First-Init-Guard verhindert Listener-Akkumulation bei Re-Renders; Debounce-Timer wird in `hideMinimap()` ge-cleart.
+- **ESC-Keydown** nur einmal pro Page-Load registrieren (`window._ntEscListenerInstalled`-Flag).
+- **`_primaryGroup`-Cache** pro Render neu berechnen statt nur bei `!_primaryGroup` — Cache-Drift bei Group-Wechsel weg.
+- **Doppelter `cy.on('tap')`-Handler** in `render-tech.js` zusammengeführt.
+- **query.js TDZ-Fix**: `case 'match'` const in `{}`-Block.
+- **History-Error-Message** berechnet sich jetzt aus `MAX_RANGE_SECONDS` (vorher hardcoded "7 days" obwohl Konstante 31d war).
+
 ## v4.21.0 — 2026-06-24
 
 ### Added

@@ -2,7 +2,7 @@
     "manifest_version": 2.0,
     "id": "network_topology_v6",
     "name": "Network Topology v6 (Cytoscape)",
-    "version": "4.21.0",
+    "version": "4.21.1",
     "author": "PlaNet Fox | Alexander Fox",
     "description": "Interactive network topology map with Cytoscape.js, clustering and severity filter",
     "namespace": "NetworkTopologyV6",
