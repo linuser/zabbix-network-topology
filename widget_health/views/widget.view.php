@@ -1,0 +1,27 @@
+<?php declare(strict_types = 0);
+
+/**
+ * NT Health Score Widget - View
+ * Setzt data-* Attribute fuer das JS-Modul (widget.class.js).
+ *
+ * @var CView $this
+ * @var array $data
+ */
+
+(new CWidgetView($data))
+    ->addItem(
+        (new CDiv())
+            ->addClass('nt-health-widget-canvas')
+            ->setAttribute('data-data-url',    $data['data_url']    ?? '')
+            ->setAttribute('data-worst-first', !empty($data['worst_first']) ? '1' : '0')
+            ->setAttribute('data-max-groups',  (string) ($data['max_groups'] ?? 0))
+            ->setAttribute('data-show-legend', !empty($data['show_legend']) ? '1' : '0')
+            ->setAttribute('data-groupids',    json_encode($data['groupids'] ?? []))
+            ->addStyle('width:100%;height:100%;position:relative;min-height:80px;overflow:auto;')
+            ->addItem(
+                (new CDiv(_('Loading...')))
+                    ->addClass('nt-health-widget-loading')
+                    ->addStyle('position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#768d99;font-size:11px;')
+            )
+    )
+    ->show();
