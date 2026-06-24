@@ -1,0 +1,61 @@
+zabbix_export:
+  version: '7.0'
+  dashboards:
+    - uuid: a7c9e1b2f8d34a5c91e2f7c4a8b3d5e1
+      name: 'Network Topology — Overview'
+      display_period: '30'
+      auto_start: 'YES'
+      pages:
+        - name: 'Overview'
+          display_period: '0'
+          widgets:
+            - type: network_topology_v6_widget
+              name: 'Topology'
+              'y': '0'
+              x: '0'
+              width: '48'
+              height: '8'
+              fields:
+                - type: INTEGER
+                  name: view_mode
+                  value: '0'
+                - type: INTEGER
+                  name: show_lldp
+                  value: '1'
+                - type: INTEGER
+                  name: hide_offline
+                  value: '0'
+
+            - type: network_topology_v6_health_widget
+              name: 'Health Score'
+              'y': '8'
+              x: '0'
+              width: '24'
+              height: '5'
+              fields:
+                - type: INTEGER
+                  name: worst_first
+                  value: '1'
+                - type: INTEGER
+                  name: max_groups
+                  value: '0'
+                - type: INTEGER
+                  name: show_legend
+                  value: '1'
+
+            - type: problems
+              name: 'Active Problems'
+              'y': '8'
+              x: '24'
+              width: '24'
+              height: '5'
+              fields:
+                - type: INTEGER
+                  name: show
+                  value: '3'
+                - type: INTEGER
+                  name: show_lines
+                  value: '25'
+                - type: INTEGER
+                  name: sort_triggers
+                  value: '16'
