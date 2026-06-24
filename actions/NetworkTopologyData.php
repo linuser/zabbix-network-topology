@@ -343,8 +343,12 @@ class NetworkTopologyData extends CController {
             'search'       => ['key_' => [
                 // Traffic — Agent + SNMP
                 'net.if', 'ifInOctets', 'ifOutOctets', 'ifHCInOctets', 'ifHCOutOctets',
-                // LLDP
+                // LLDP (IEEE 802.1AB standard MIB)
                 'lldpRemSysName',
+                // CDP (Cisco Discovery Protocol, Cisco-spezifisch)
+                'cdpCacheDeviceId',
+                // Generische Neighbor-Discovery: Ubiquiti UniFi, MikroTik, custom
+                'neighbor.sysName', 'discovery.neighbor',
                 // CPU — Agent + SNMP variants
                 'system.cpu.util', 'hrProcessorLoad', 'ssCpuUser', 'ssCpuSystem',
                 'synoSystem.ssCpuIdle',
@@ -473,8 +477,18 @@ class NetworkTopologyData extends CController {
                     $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
                 }
                 $host_traffic[$hid]['out'] += (float) $val * 8;
-            } elseif ($key === 'lldpRemSysName' && !empty($val)) {
-                $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val];
+            } elseif (!empty($val) && (
+                    $key === 'lldpRemSysName'
+                 || strpos($key, 'cdpCacheDeviceId')  !== false   // Cisco CDP
+                 || strpos($key, 'neighbor.sysName')  !== false   // generisch / Ubiquiti
+                 || strpos($key, 'discovery.neighbor') !== false  // MikroTik & andere
+                 || preg_match('/(?:^|\.)(lldp.*sysname|cdp.*device)/i', $key)
+                 )) {
+                // Quelle merken (lldp/cdp/other) — Frontend kann das spaeter
+                // anzeigen oder zum Debuggen nutzen. Fuer den Match selber egal.
+                $src = (strpos($key, 'cdp') !== false) ? 'cdp'
+                     : (strpos($key, 'lldp') !== false) ? 'lldp' : 'other';
+                $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val, 'src' => $src];
             }
         }
 
@@ -667,18 +681,49 @@ class NetworkTopologyData extends CController {
         $edges          = [];
         $seen_edges     = [];
         $lldp_unmatched = [];
+
+        // Cleanup-Helper fuer Vendor-spezifische Neighbor-Strings:
+        //   Cisco IP-Phones: "SEP00112233AABB" → enthaelt MAC, kein Host-Match
+        //   Cisco APs:       "AP-corp-01.example.com(JAFXXXXXXX)" → Serial in Klammern
+        //   HP/Aruba:        "ProCurve_Switch_2530-24G" → manchmal SysDescr statt SysName
+        //   Ubiquiti:        "UAP-AC-PRO" oder "ubnt-12345"
+        //   reverse-DNS:     "ip-10-0-0-5.eu-central-1.compute.internal"
+        // Wir reduzieren auf den ersten "echten" Token vor Leerzeichen/Klammer.
+        $cleanNeighbor = static function(string $raw): string {
+            $s = trim($raw);
+            // Vor erstem Leerzeichen abschneiden ("hostname Description...")
+            $sp = strpos($s, ' ');  if ($sp !== false) $s = substr($s, 0, $sp);
+            // Vor offener Klammer abschneiden ("hostname(serial)")
+            $br = strpos($s, '(');  if ($br !== false) $s = substr($s, 0, $br);
+            // Trailing-Punkte (FQDN-Wurzel) entfernen
+            $s = rtrim($s, '.');
+            return trim($s);
+        };
+
         foreach ($lldp_raw as $item) {
-            // Wert kann komma-separierte Liste sein: "pve,HP24GARUBA"
-            $neighbors = array_map('trim', explode(',', $item['lastvalue']));
+            // Wert kann komma-separierte Liste sein: "pve,HP24GARUBA".
+            // CDP kann auch "\n"-separiert oder mit Pipe kommen.
+            $neighbors = preg_split('/[,\n\r\|]+/', $item['lastvalue']);
             foreach ($neighbors as $neighbor_raw) {
-                if (empty($neighbor_raw)) continue;
+                $neighbor_raw = $cleanNeighbor((string) $neighbor_raw);
+                if ($neighbor_raw === '') continue;
                 $lldp_val = strtolower($neighbor_raw);
-                // 1. Exakter Match
+
+                // 1. Exakter Match gegen host/visiblename/lowercase
                 $rhid = $name_map[$lldp_val] ?? null;
-                // 2. IP-Match
+
+                // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
                 if (!$rhid && isset($ip_map[$neighbor_raw])) {
                     $rhid = $ip_map[$neighbor_raw];
                 }
+
+                // 2b. reverse-DNS-Pattern wie "ip-10-0-0-5" oder "host-10-0-0-5"
+                //     → extrahiere die IP und versuche IP-Match
+                if (!$rhid && preg_match('/(?:^|[-_])(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})/', $lldp_val, $mm)) {
+                    $extracted_ip = str_replace('-', '.', $mm[1]);
+                    if (isset($ip_map[$extracted_ip])) $rhid = $ip_map[$extracted_ip];
+                }
+
                 // 3. Short-Hostname nur wenn eindeutig (O(1)-Lookup via Map)
                 if (!$rhid) {
                     $lldp_short = explode('.', $lldp_val)[0];
@@ -687,22 +732,41 @@ class NetworkTopologyData extends CController {
                         $rhid = array_key_first($candidates);
                     }
                 }
+
                 if (!$rhid || $rhid === $item['hostid']) {
                     if (!$rhid) {
-                        $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $item['hostid'] . ')';
+                        $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $item['hostid']
+                                          . ', src=' . ($item['src'] ?? '?') . ')';
                     }
                     continue;
                 }
                 $pair = [(string)$item['hostid'], (string)$rhid];
                 sort($pair);
                 $edge_key = implode('-', $pair);
+                $src = $item['src'] ?? 'other';
                 if (!isset($seen_edges[$edge_key])) {
-                    $seen_edges[$edge_key] = true;
+                    $seen_edges[$edge_key] = count($edges);
                     $edges[] = ['id' => 'e'.count($edges), 'from' => $item['hostid'],
-                                'to' => $rhid, 'iface' => $item['key_']];
+                                'to' => $rhid, 'iface' => $item['key_'],
+                                'src' => [$src => true]];
+                } else {
+                    // Edge schon bekannt (z.B. von LLDP) — Source ergaenzen
+                    // wenn jetzt CDP dieselbe Verbindung meldet (merge-Logik).
+                    $eidx = $seen_edges[$edge_key];
+                    if (!isset($edges[$eidx]['src'][$src])) {
+                        $edges[$eidx]['src'][$src] = true;
+                    }
                 }
             }
         }
+        // src-Map zu sortierter Liste konvertieren fuers Frontend ("lldp", "cdp")
+        foreach ($edges as &$_e) {
+            if (isset($_e['src']) && is_array($_e['src'])) {
+                $_e['src'] = array_keys($_e['src']);
+                sort($_e['src']);
+            }
+        }
+        unset($_e);
 
         // ── 5b. PROXY + PROXY-GROUP LOOKUP ────────────────────────────────
         // Hosts können via Proxy oder Proxy-Group (Zabbix 7+) monitored werden.

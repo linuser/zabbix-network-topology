@@ -214,9 +214,17 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
         const outSpark = outArr && outArr.length ? drawSparkline(outArr, '#f97316', 160, 26) : '';
         const haveData = inSpark || outSpark;
 
+        // Discovery-Source-Badge: LLDP/CDP/beides — falls vom Backend gemeldet
+        const srcArr = (edgeData.src && edgeData.src.length) ? edgeData.src : [];
+        const srcBadge = srcArr.length
+            ? ' <span style="font-size:9px;color:#fff;background:#64748b;border-radius:3px;'
+                + 'padding:1px 5px;margin-left:4px;letter-spacing:0.05em;text-transform:uppercase;font-weight:600">'
+                + esc(srcArr.join('+')) + '</span>'
+            : '';
         const header = '<div style="font-weight:700;font-size:11px;color:#0f172a;margin-bottom:6px;'
             + 'padding-bottom:5px;border-bottom:1px solid #f1f5f9">'
             + esc(srcLabel) + ' <span style="color:#94a3b8">↔</span> ' + esc(tgtLabel)
+            + srcBadge
             + '</div>';
 
         const liveRow = '<div style="display:flex;gap:10px;font-size:11px;color:#475569;margin-bottom:4px">'

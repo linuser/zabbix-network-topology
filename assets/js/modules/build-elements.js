@@ -162,7 +162,10 @@ export function buildEdgeElements(edges, nodes) {
                      : (tIn || tOut) ? '\u2193' + fmt(tIn / 2) + '\n\u2191' + fmt(tOut / 2) : '';
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
-                    trafficIn: tIn, trafficOut: tOut, tLabel: tLabel, isLLDP: true }
+                    trafficIn: tIn, trafficOut: tOut, tLabel: tLabel, isLLDP: true,
+                    // Discovery-Quelle(n): ['lldp'], ['cdp'], oder ['cdp','lldp']
+                    // wenn die Verbindung von beiden Protokollen gemeldet wurde
+                    src: e.src || [] }
         });
     });
     return elements;
