@@ -77,6 +77,7 @@ export function ensureBaseToolbar(wrap) {
         { id: 'nt-tab-health',     lbl: 'Health',     tab: 'health' },
         { id: 'nt-tab-stats',      lbl: 'Stats',      tab: 'stats' },
         { id: 'nt-tab-compliance', lbl: 'Compliance', tab: 'compliance', dataOptional: true },
+        { id: 'nt-tab-lldpq',       lbl: 'LLDP-Q',    tab: 'lldpq', dataOptional: true },
     ];
     // Diag-Tab nur fuer Super-Admins (Backend prueft USER_TYPE_SUPER_ADMIN ===)
     const isSuperAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.is_super_admin);

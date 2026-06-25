@@ -682,6 +682,17 @@ class NetworkTopologyData extends CController {
         $edges          = [];
         $seen_edges     = [];
         $lldp_unmatched = [];
+        // LLDP-Quality-Sammlung: pro Host-Reporter detailliertere Statistik
+        // fuer den Quality-Tab. Vereinheitlicht 4 Kategorien:
+        //   matched / unmatched / ambiguous / self
+        // Strukturierte Liste plus aggregat: { hostid → { matched: N, unmatched: [{raw,src}],
+        //   ambiguous: [{raw,src,candidates:[hid]}], self_loops: N } }
+        $lldp_quality = [];   // hostid → counters + lists
+        $ensureQ = function($hid) use (&$lldp_quality) {
+            if (!isset($lldp_quality[$hid])) {
+                $lldp_quality[$hid] = ['matched' => 0, 'unmatched' => [], 'ambiguous' => [], 'self' => 0];
+            }
+        };
 
         // Cleanup-Helper fuer Vendor-spezifische Neighbor-Strings:
         //   Cisco IP-Phones: "SEP00112233AABB" → enthaelt MAC, kein Host-Match
@@ -725,29 +736,47 @@ class NetworkTopologyData extends CController {
                     if (isset($ip_map[$extracted_ip])) $rhid = $ip_map[$extracted_ip];
                 }
 
-                // 3. Short-Hostname nur wenn eindeutig (O(1)-Lookup via Map)
+                // 3. Short-Hostname (O(1)-Lookup via Map) — unique vs ambiguous tracken
+                $ambiguous_candidates = null;
                 if (!$rhid) {
                     $lldp_short = explode('.', $lldp_val)[0];
                     $candidates = $short_name_map[$lldp_short] ?? [];
                     if (count($candidates) === 1) {
                         $rhid = array_key_first($candidates);
+                    } elseif (count($candidates) > 1) {
+                        // Ambiguous: Short-Name matched mehrere Hosts → fuer
+                        // Quality-Tab merken, aber nicht als Edge anlegen
+                        // (sonst zufaellige Zuordnung).
+                        $ambiguous_candidates = array_keys($candidates);
                     }
                 }
 
-                if (!$rhid || $rhid === $item['hostid']) {
-                    if (!$rhid) {
-                        $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $item['hostid']
-                                          . ', src=' . ($item['src'] ?? '?') . ')';
+                $rid = $item['hostid'];
+                $src = $item['src'] ?? 'other';
+                $ensureQ($rid);
+                if (!$rhid) {
+                    if ($ambiguous_candidates !== null) {
+                        $lldp_quality[$rid]['ambiguous'][] = [
+                            'raw' => $neighbor_raw, 'src' => $src, 'candidates' => $ambiguous_candidates
+                        ];
+                    } else {
+                        $lldp_quality[$rid]['unmatched'][] = ['raw' => $neighbor_raw, 'src' => $src];
+                        $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $rid . ', src=' . $src . ')';
                     }
                     continue;
                 }
-                $pair = [(string)$item['hostid'], (string)$rhid];
+                if ($rhid === $rid) {
+                    // Self-Loop ignorieren (Host meldet sich selbst als Nachbarn)
+                    $lldp_quality[$rid]['self']++;
+                    continue;
+                }
+                $lldp_quality[$rid]['matched']++;
+                $pair = [(string) $rid, (string) $rhid];
                 sort($pair);
                 $edge_key = implode('-', $pair);
-                $src = $item['src'] ?? 'other';
                 if (!isset($seen_edges[$edge_key])) {
                     $seen_edges[$edge_key] = count($edges);
-                    $edges[] = ['id' => 'e'.count($edges), 'from' => $item['hostid'],
+                    $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
                                 'to' => $rhid, 'iface' => $item['key_'],
                                 'src' => [$src => true]];
                 } else {
@@ -930,8 +959,26 @@ class NetworkTopologyData extends CController {
             ];
         }
 
+        // lldp_quality: hostid → counters → fuer das Frontend als Liste mit
+        // Host-Labels die Anzeige praktisch. Hosts ohne Daten weglassen.
+        $lldp_quality_out = [];
+        foreach ($lldp_quality as $hid => $q) {
+            if ($q['matched'] === 0 && empty($q['unmatched']) && empty($q['ambiguous']) && $q['self'] === 0) continue;
+            $h = $hosts[$hid] ?? null;
+            $lldp_quality_out[] = [
+                'id'    => (string) $hid,
+                'label' => $h ? (($h['name'] ?? '') !== '' ? $h['name'] : ($h['host'] ?? '')) : (string) $hid,
+                'matched'   => $q['matched'],
+                'unmatched' => $q['unmatched'],
+                'ambiguous' => $q['ambiguous'],
+                'self'      => $q['self'],
+            ];
+        }
+
         $_payload = json_encode(
-            ['nodes' => $nodes, 'edges' => $edges, 'lldp_unmatched' => $lldp_unmatched],
+            ['nodes' => $nodes, 'edges' => $edges,
+             'lldp_unmatched' => $lldp_unmatched,
+             'lldp_quality'   => $lldp_quality_out],
             JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         );
         NetworkTopologyDiag::record([
