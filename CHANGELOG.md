@@ -2,6 +2,23 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.24.0 — 2026-06-25
+
+### Added
+- **Interface-Health auf Edges**: Edges im Tech-Tab zeigen jetzt nicht nur Traffic-Volumen sondern auch den Zustand der Verbindung. Backend aggregiert pro Host:
+  - `ifOperStatus != 1` → `down_count`
+  - `ifInErrors`/`ifOutErrors` (auch Agent-Varianten `net.if.in[*,errors]`) → `errors_rate`
+  - `ifInDiscards`/`ifOutDiscards` (auch `net.if.in[*,dropped]`) → `discards_rate`
+- **Edge-Styling-Hierarchie** (überschreibt Traffic-Heatmap bei Issues):
+  - Down-Interface → rot dashed (`#dc2626`, pattern 4-4, dicker)
+  - Errors > 1/s → orange thicker
+  - Discards > 5/s → amber dashed
+  - sonst → Traffic-basierte Färbung wie gehabt
+- **Edge-Tooltip** zeigt zusätzliche Zeile mit `⬇ N down · err X/s · drop X/s` wenn Werte > Threshold.
+
+### Caveat
+Aggregat über alle Interfaces beider Endpunkte — exakte Port-zu-Edge-Zuordnung fehlt (würde LLD-basierte LLDP-Port-Items voraussetzen). Bei Hosts mit vielen Interfaces können False-Positives entstehen ("Interface 23 hat Errors → ALLE Edges des Hosts werden orange"). Im Zweifel die genauen Port-Stats in Zabbix selbst nachschauen.
+
 ## v4.23.0 — 2026-06-25
 
 ### Added

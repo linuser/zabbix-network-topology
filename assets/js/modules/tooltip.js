@@ -232,9 +232,26 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
             + '<span><span style="color:#f97316">↑</span> <b>' + fmt(tOut) + '</b></span>'
             + '</div>';
 
+        // Interface-Health (wenn vom Backend geliefert) als zweite Zeile.
+        // Werte sind aggregat ueber alle Interfaces beider Endpunkte —
+        // exakte Port-Zuordnung fehlt (siehe LLDP-Quality-Tab).
+        const ifDown = edgeData.ifaceDown || 0;
+        const ifErr  = edgeData.ifaceErr  || 0;
+        const ifDrop = edgeData.ifaceDrop || 0;
+        let healthRow = '';
+        if (ifDown > 0 || ifErr > 0.1 || ifDrop > 0.1) {
+            const parts = [];
+            if (ifDown > 0) parts.push('<span style="color:#dc2626;font-weight:600">⬇ ' + ifDown + ' down</span>');
+            if (ifErr  > 0.1) parts.push('<span style="color:#f97316">err ' + ifErr.toFixed(1)  + '/s</span>');
+            if (ifDrop > 0.1) parts.push('<span style="color:#f59e0b">drop ' + ifDrop.toFixed(1) + '/s</span>');
+            healthRow = '<div style="display:flex;gap:10px;font-size:10px;'
+                + 'margin-bottom:4px;padding-bottom:3px;border-bottom:1px dotted #f1f5f9">'
+                + parts.join(' · ') + '</div>';
+        }
+
         if (!haveData && (sparkSrc || sparkTgt)) {
             // Daten geholt, aber keine Traffic-Items vorhanden
-            return header + liveRow + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
+            return header + liveRow + healthRow + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
                 + 'Kein Traffic-Verlauf verfuegbar (keine net.if-/ifIn/ifOut-Items)</div>';
         }
 
@@ -248,7 +265,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                 + '</div>'
             : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">⌛ Lade Verlauf...</div>';
 
-        return header + liveRow + sparkBlock;
+        return header + liveRow + healthRow + sparkBlock;
     }
 
     _tip.style.width = '210px';

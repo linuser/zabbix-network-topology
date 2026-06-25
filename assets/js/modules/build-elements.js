@@ -81,6 +81,7 @@ export function buildNodeElements(nodes) {
             isGroup: false,
             severity: n.severity || 0,
             cpu: n.cpu, memory: n.memory, ping: n.ping, traffic: n.traffic,
+            iface_health: n.iface_health || null,
             type: n.type, host: n.host, ip: n.ip, iftype: n.iftype,
             groups: n.groups, _primaryGroup: n._primaryGroup,
             problems: n.problems || 0,
@@ -160,12 +161,31 @@ export function buildEdgeElements(edges, nodes) {
         const tgtDead = (tgtNode || {}).severity || 0;
         const tLabel = (srcDead >= 5 || tgtDead >= 5) ? '\u26A0 No Connection'
                      : (tIn || tOut) ? '\u2193' + fmt(tIn / 2) + '\n\u2191' + fmt(tOut / 2) : '';
+        // Edge-Health aus den iface_health-Aggregaten beider Endpunkte:
+        // worst-case (max) → wenn EITHER seite Down-Interfaces oder Errors meldet,
+        // ist die Verbindung suspekt. False-positives moeglich wenn der Reporter
+        // viele Interfaces hat — Tooltip zeigt detaillierte Werte.
+        const srcH = (srcNode && srcNode.iface_health) || null;
+        const tgtH = (tgtNode && tgtNode.iface_health) || null;
+        let downCnt = 0, errorsRate = 0, discardsRate = 0;
+        if (srcH) {
+            downCnt      += srcH.down || 0;
+            errorsRate    = Math.max(errorsRate,   srcH.errors   || 0);
+            discardsRate  = Math.max(discardsRate, srcH.discards || 0);
+        }
+        if (tgtH) {
+            downCnt      += tgtH.down || 0;
+            errorsRate    = Math.max(errorsRate,   tgtH.errors   || 0);
+            discardsRate  = Math.max(discardsRate, tgtH.discards || 0);
+        }
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
                     trafficIn: tIn, trafficOut: tOut, tLabel: tLabel, isLLDP: true,
                     // Discovery-Quelle(n): ['lldp'], ['cdp'], oder ['cdp','lldp']
                     // wenn die Verbindung von beiden Protokollen gemeldet wurde
-                    src: e.src || [] }
+                    src: e.src || [],
+                    // Interface-Health-Aggregat fuer Edge-Styling + Tooltip
+                    ifaceDown: downCnt, ifaceErr: errorsRate, ifaceDrop: discardsRate }
         });
     });
     return elements;

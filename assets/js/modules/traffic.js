@@ -21,6 +21,11 @@ function trafficTier(bitsPerSec) {
     return                         { w: 8,   col: '#ef4444', tcol: '#b91c1c', dash: false };
 }
 
+// Schwellen fuer Interface-Health-Override. Errors/Discards sind nach
+// Zabbix-Preprocessing 'change per second' — 1 Error/sec ist schon viel.
+const HEALTH_ERR_THRESHOLD  = 1;
+const HEALTH_DROP_THRESHOLD = 5;
+
 export function applyTrafficHeatmap(cy) {
     if (!cy) return;
     cy.edges().forEach(function(edge) {
@@ -29,12 +34,32 @@ export function applyTrafficHeatmap(cy) {
         const tOut = edge.data('trafficOut') || 0;
         const total = Math.max(tIn, tOut);   // Spitzenwert entscheidet
         const t = trafficTier(total);
-        edge.style('width',      t.w);
-        edge.style('line-color', t.col);
+
+        // Interface-Health-Override: wenn einer der Endpunkte Down-Interfaces
+        // oder hohe Error/Discard-Raten meldet, ueberschreiben wir das Traffic-
+        // Styling mit einer Health-Warnung. Hierarchie:
+        //   down > 0     → rot dashed (link/port down)
+        //   errors > T   → orange (CRC, framing etc.)
+        //   discards > T → orange dashed (queue full)
+        const ifDown = edge.data('ifaceDown') || 0;
+        const ifErr  = edge.data('ifaceErr')  || 0;
+        const ifDrop = edge.data('ifaceDrop') || 0;
+
+        let w = t.w, col = t.col, dashPat = t.dash ? [4, 8] : [6, 5], op = t.dash ? 0.75 : 0.9;
+        if (ifDown > 0) {
+            w = Math.max(w, 4); col = '#dc2626'; dashPat = [4, 4]; op = 0.95;
+        } else if (ifErr > HEALTH_ERR_THRESHOLD) {
+            w = Math.max(w, 4); col = '#f97316'; dashPat = [6, 5]; op = 0.9;
+        } else if (ifDrop > HEALTH_DROP_THRESHOLD) {
+            w = Math.max(w, 3); col = '#f59e0b'; dashPat = [3, 5]; op = 0.9;
+        }
+
+        edge.style('width',      w);
+        edge.style('line-color', col);
         edge.style('color',      t.tcol);
-        edge.style('line-style',       'dashed');
-        edge.style('line-dash-pattern', t.dash ? [4, 8] : [6, 5]);
-        edge.style('opacity',           t.dash ? 0.75 : 0.9);
+        edge.style('line-style', 'dashed');
+        edge.style('line-dash-pattern', dashPat);
+        edge.style('opacity', op);
     });
 }
 

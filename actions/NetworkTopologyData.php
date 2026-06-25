@@ -343,6 +343,10 @@ class NetworkTopologyData extends CController {
             'search'       => ['key_' => [
                 // Traffic — Agent + SNMP
                 'net.if', 'ifInOctets', 'ifOutOctets', 'ifHCInOctets', 'ifHCOutOctets',
+                // Interface-Health: oper-status + errors + discards (SNMP IF-MIB
+                // plus Agent net.if.*[*,errors|dropped] Varianten)
+                'ifOperStatus', 'ifInErrors', 'ifOutErrors',
+                'ifInDiscards', 'ifOutDiscards',
                 // LLDP (IEEE 802.1AB standard MIB)
                 'lldpRemSysName',
                 // CDP (Cisco Discovery Protocol, Cisco-spezifisch)
@@ -435,6 +439,12 @@ class NetworkTopologyData extends CController {
 
         // ── 4. PROCESS ITEMS ──────────────────────────────────────────────
         $host_traffic   = [];
+        // Interface-Health pro Host: aggregiert ueber alle Interfaces.
+        //   down_count    Anzahl Interfaces mit ifOperStatus != 1 (up)
+        //   errors_rate   Summe in+out Errors/sec ueber alle Interfaces
+        //   discards_rate Summe in+out Discards/sec ueber alle Interfaces
+        //   iface_count   Anzahl beobachteter Interfaces (Kontext)
+        $host_iface     = [];   // hid => ['down'=>N, 'errors'=>X, 'discards'=>X, 'count'=>N]
         $lldp_raw       = [];
         $host_cpu       = [];
         $host_mem_used  = [];   // bytes (used)
@@ -477,6 +487,20 @@ class NetworkTopologyData extends CController {
                     $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
                 }
                 $host_traffic[$hid]['out'] += (float) $val * 8;
+            } elseif (strpos($key, 'ifOperStatus') !== false) {
+                // ifOperStatus per Interface: 1=up, alle anderen Werte = irgendeine
+                // Form von down/testing/notPresent. Wir zaehlen alles != 1 als down.
+                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
+                $host_iface[$hid]['count']++;
+                if ((int) $val !== 1) $host_iface[$hid]['down']++;
+            } elseif (strpos($key, 'ifInErrors') !== false || strpos($key, 'ifOutErrors') !== false
+                  || preg_match('/net\.if\.(?:in|out)\[.*,errors\]/', $key)) {
+                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
+                $host_iface[$hid]['errors'] += (float) $val;
+            } elseif (strpos($key, 'ifInDiscards') !== false || strpos($key, 'ifOutDiscards') !== false
+                  || preg_match('/net\.if\.(?:in|out)\[.*,dropped\]/', $key)) {
+                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
+                $host_iface[$hid]['discards'] += (float) $val;
             } elseif (!empty($val) && (
                     $key === 'lldpRemSysName'
                  || strpos($key, 'cdpCacheDeviceId')  !== false   // Cisco CDP
@@ -942,6 +966,10 @@ class NetworkTopologyData extends CController {
                 'proxy_name'       => $proxy_names[(string)($h['proxyid'] ?? '0')] ?? '',
                 'proxy_group_name' => $pgroup_names[(string)($h['proxy_groupid'] ?? '0')] ?? '',
                 'traffic'     => $host_traffic[$hid]  ?? ['in' => 0.0, 'out' => 0.0],
+                // Interface-Health aggregat (Edge-Coloring + Tooltip).
+                // Werte sind pro Sekunde (nach Zabbix-Preprocessing 'change per second')
+                // oder als absolute Counter — Frontend zeigt nur "> threshold".
+                'iface_health' => $host_iface[$hid] ?? ['down'=>0, 'errors'=>0.0, 'discards'=>0.0, 'count'=>0],
                 'cpu'         => $host_cpu[$hid]       ?? null,
                 'memory'      => $host_memory[$hid]    ?? null,
                 'ping'        => $host_ping[$hid]      ?? null,
