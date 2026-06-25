@@ -2,6 +2,27 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.23.0 — 2026-06-25
+
+### Added
+- **CDP-Support**: zusätzlich zu LLDP (`lldpRemSysName`) werden jetzt `cdpCacheDeviceId` (Cisco), `neighbor.sysName`, `discovery.neighbor` (Ubiquiti/MikroTik/custom) sowie generischer Regex `(lldp.*sysname|cdp.*device)` für vendor-spezifische Items erkannt.
+- **Discovery-Source-Tracking**: jede Edge speichert die Quelle (`src: ['lldp']`, `['cdp']`, oder `['cdp','lldp']` wenn beide Protokolle dieselbe Verbindung melden). Edge-Tooltip im Tech-Tab zeigt ein farbiges Badge.
+- **Merge-Dedup statt erstes-gewinnt**: Wenn LLDP und CDP dieselbe Verbindung erkennen → eine Edge mit beiden Sources.
+- **LLDP-Q Tab**: neuer Tab "LLDP-Q" mit Aggregat-Header (Match-Quote farbig + Counts) und zwei Tabellen:
+  - **Pro-Reporter**: Reporter-Host mit Matched/Unmatched/Ambiguous/Self-Counts plus inline Beispiele
+  - **Top-Unmatched-Neighbors**: distinct gemeldete Namen sortiert nach Häufigkeit, mit Source-Badge und Reporter-Liste
+  Zabbix selbst klassifiziert LLDP-Nachbarn nicht als "unbekannt" — diese Bewertung macht jetzt das Modul aus den rohen Item-Values.
+
+### Changed
+- **Neighbor-Trennzeichen**: `,` `\n` `\r` `|` werden jetzt alle als Separator akzeptiert (CDP-Output ist oft mehrzeilig).
+- **`cleanNeighbor()`-Cleanup**: schneidet Vendor-Suffixe ab — alles ab erstem Leerzeichen (`hostname Description`), ab `(` (`hostname(serial)` — Cisco), Trailing-Punkte (FQDN-Wurzel). Damit matchen Cisco-IP-Phones, HP-Aruba SysDescr-Mixups, Ubiquiti-Strings besser.
+- **Reverse-DNS-Pattern**: `ip-10-0-0-5.example.com` oder `host-10-0-0-5` wird auf IP extrahiert und gegen `ip_map` gemappt.
+- **Ambiguous-Tracking**: Short-Name-Match mit >1 Kandidaten wird jetzt explizit als "ambiguous" markiert statt silent als unmatched verbucht (sonst zufällige Edge-Zuordnung).
+- **`lldp_unmatched`-Log** enthält jetzt einen `src`-Marker (`lldp`/`cdp`/`other`) zum Debuggen.
+
+### Backend
+- `NetworkTopologyData` liefert neues Feld `lldp_quality[hostid]` mit strukturierten Quality-Daten pro Reporter.
+
 ## v4.22.0 — 2026-06-25
 
 ### Added
