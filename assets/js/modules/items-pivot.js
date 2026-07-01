@@ -110,6 +110,39 @@ function _renderSparklineIntoSlots(container, itemid, values, theme) {
     if (!slots.length) return;
     const svg = _buildSparklineSvg(values, theme);
     slots.forEach(function(el) { el.innerHTML = svg; });
+    // Trend-Indikator: first vs last (nach ausreisserfreier Glaettung —
+    // Median der ersten 3 vs. Median der letzten 3 Punkte).
+    const trend = _buildTrendArrow(values);
+    if (trend) {
+        const trendSlots = container.querySelectorAll('.nt-pivot-trend[data-itemid="' + itemid + '"]');
+        trendSlots.forEach(function(el) { el.innerHTML = trend; });
+    }
+}
+
+// Trend-Arrow ↑/↓/→ mit Farbe. Ueber first-vs-last-Median (glaettet Ausreisser).
+// Schwelle: |Delta/Base| > 5% zaehlt als Trend, sonst neutral (→).
+function _buildTrendArrow(values) {
+    if (!values || values.length < 3) return '';
+    function median3(arr) {
+        if (arr.length === 0) return null;
+        const s = arr.slice().sort(function(a, b) { return a - b; });
+        return s[Math.floor(s.length / 2)];
+    }
+    const head = values.slice(0, Math.min(3, values.length));
+    const tail = values.slice(-Math.min(3, values.length));
+    const first = median3(head);
+    const last  = median3(tail);
+    if (first == null || last == null || !isFinite(first) || !isFinite(last)) return '';
+    const base = Math.abs(first) || 1;
+    const rel  = (last - first) / base;
+    const THRESHOLD = 0.05;
+    let sym = '→', col = '#94a3b8';   // neutral
+    if (rel > THRESHOLD)      { sym = '↑'; col = '#dc2626'; }   // steigend = rot
+    else if (rel < -THRESHOLD) { sym = '↓'; col = '#16a34a'; }   // fallend = gruen
+    const pct = Math.round(Math.abs(rel) * 100);
+    const title = 'Trend 1h: ' + (rel >= 0 ? '+' : '−') + pct + '%';
+    return '<span title="' + title + '" style="color:' + col + ';font-weight:700;'
+        + 'font-size:11px;margin-right:2px">' + sym + '</span>';
 }
 
 function _buildSparklineSvg(values, theme) {
@@ -850,6 +883,12 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             // Sparkline-Placeholder-Span (leer). Wird nach dem Fetch via
             // updateSparkline() gefuellt. data-itemid liefert den Key fuer
             // das Batch-Ergebnis.
+            // Trend-Placeholder direkt daneben — wird beim gleichen Fetch
+            // aus first-vs-last-Median berechnet.
+            const trendSlot = (im && im.id)
+                ? '<span class="nt-pivot-trend" data-itemid="' + esc(im.id)
+                    + '" style="display:inline-block;min-width:12px;text-align:center"></span>'
+                : '';
             const sparkSlot = (im && im.id)
                 ? '<span class="nt-pivot-spark" data-itemid="' + esc(im.id)
                     + '" style="display:inline-block;width:56px;height:14px;vertical-align:middle;margin-right:4px;opacity:0.7"></span>'
@@ -861,7 +900,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
                         + 'style="display:flex;align-items:center;justify-content:flex-end;'
                         + 'padding:5px 8px;color:' + cellColor
                         + ';text-decoration:none" title="' + esc(tt) + '">'
-                        + sparkSlot + '<span>' + esc(fmtVal(v, c.unit)) + '</span></a>'
+                        + sparkSlot + trendSlot + '<span>' + esc(fmtVal(v, c.unit)) + '</span></a>'
                     : '<span style="display:block;padding:5px 8px;color:' + cellColor + '">'
                         + esc(fmtVal(v, c.unit)) + '</span>')
                 + '</td>';

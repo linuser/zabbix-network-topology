@@ -1185,6 +1185,23 @@ export function renderTable(wrap, nodes, edges) {
         });
         row2.appendChild(heatmapBtn);
 
+        // CSV-Export der aktuellen Pivot-Sicht (Hosts + Item-Spalten + Aggregate).
+        // Nutzt _itemsData + die aktuelle Filter/Sort-Kombination — genau das
+        // was der User gerade sieht landet in der Datei.
+        const csvBtn = document.createElement('button');
+        csvBtn.type = 'button';
+        csvBtn.id = 'nt-items-csv';
+        csvBtn.textContent = '⬇ CSV';
+        csvBtn.title = 'Aktuelle Pivot-Sicht als CSV downloaden';
+        csvBtn.style.cssText = 'padding:5px 10px;border:1px solid ' + theme.border
+            + ';border-radius:6px;background:' + theme.surface + ';color:' + theme.sub
+            + ';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;'
+            + 'letter-spacing:0.02em;transition:all 0.15s';
+        csvBtn.addEventListener('click', function() {
+            _exportPivotCsv();
+        });
+        row2.appendChild(csvBtn);
+
         const counter = document.createElement('span');
         counter.id = 'nt-items-count';
         counter.style.cssText = 'font-size:11px;color:' + theme.subSoft
@@ -1290,6 +1307,114 @@ export function renderTable(wrap, nodes, edges) {
                     renderPivotInto(area, counter);
                 });
             });
+        }
+
+        // CSV-Export: baut aus _itemsData eine CSV-Datei mit denselben
+        // Zeilen/Spalten die der User gerade sieht (Hostname-Filter, Sort,
+        // Hide-Empty werden respektiert). Includes Header + Footer (P50/P95/
+        // P99 etc.) — audit-friendly.
+        function _exportPivotCsv() {
+            if (!_itemsData || !_itemsData.columns) return;
+            const cols = _itemsData.columns;
+            const allIds = Object.keys(_itemsData.hosts || {});
+            let visibleIds = allIds;
+            if (_itemsQuery) {
+                const byId = {};
+                realNodes.forEach(function(n) { byId[String(n.id)] = n; });
+                visibleIds = allIds.filter(function(hid) {
+                    const n = byId[String(hid)];
+                    if (n) return matchQuery(_itemsQuery, nodeToQueryFields(n));
+                    const hn = (_itemsData.hosts[hid] || '').toLowerCase();
+                    return matchQuery(_itemsQuery, { _any: hn, host: hn, label: hn });
+                });
+            }
+            const sortedIds = sortPivotHostIds(_itemsData, visibleIds);
+
+            function esc(s) {
+                s = String(s == null ? '' : s);
+                // RFC 4180 Escaping: doublequote quotes, wrap if contains comma/quote/newline
+                if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+                return s;
+            }
+            function fmt(v, unit) {
+                if (v == null || !isFinite(v)) return '';
+                // Numerisch mit Punkt als Dezimaltrenner (CSV-Standard, macht
+                // Excel keine Sorge auch wenn Locale-Import es evtl. anders will).
+                let n = Number(v);
+                if (Number.isInteger(n)) return String(n);
+                if (Math.abs(n) >= 100) return n.toFixed(1);
+                return n.toFixed(3);
+            }
+
+            // Header-Zeile
+            const header = ['Host'].concat(cols.map(function(c) {
+                return (c.label || c.key) + (c.unit ? ' (' + c.unit + ')' : '');
+            })).concat(['Avg']);
+            const lines = [header.map(esc).join(',')];
+
+            // Body: pro Host eine Zeile
+            const aggregateLocal = function(values, mode) {
+                const nums = values.filter(function(x) {
+                    return typeof x === 'number' && isFinite(x);
+                });
+                if (!nums.length) return null;
+                if (mode === 'sum') return nums.reduce(function(a, b) { return a + b; }, 0);
+                if (mode === 'max') return Math.max.apply(null, nums);
+                if (mode === 'min') return Math.min.apply(null, nums);
+                if (mode === 'p50' || mode === 'p95' || mode === 'p99') {
+                    const sorted = nums.slice().sort(function(a, b) { return a - b; });
+                    const pct = mode === 'p50' ? 0.5 : mode === 'p95' ? 0.95 : 0.99;
+                    const idx = pct * (sorted.length - 1);
+                    const lo = Math.floor(idx), hi = Math.ceil(idx);
+                    if (lo === hi) return sorted[lo];
+                    const w = idx - lo;
+                    return sorted[lo] * (1 - w) + sorted[hi] * w;
+                }
+                return nums.reduce(function(a, b) { return a + b; }, 0) / nums.length;
+            };
+
+            sortedIds.forEach(function(hid) {
+                const row = _itemsData.rows[hid] || {};
+                const rowVals = [];
+                const cells = cols.map(function(c) {
+                    const v = row[c.key];
+                    if (v != null) rowVals.push(v);
+                    return fmt(v);
+                });
+                const avg = aggregateLocal(rowVals, 'avg');
+                const csvRow = [_itemsData.hosts[hid] || hid].concat(cells).concat([fmt(avg)]);
+                lines.push(csvRow.map(esc).join(','));
+            });
+
+            // Footer: Sum / Avg / P50 / P95 / P99 / Max
+            ['Sum', 'Avg', 'P50', 'P95', 'P99', 'Max'].forEach(function(lbl) {
+                const mode = lbl.toLowerCase();
+                const cells = cols.map(function(c) {
+                    const colVals = sortedIds.map(function(hid) {
+                        return _itemsData.rows[hid] && _itemsData.rows[hid][c.key];
+                    });
+                    return fmt(aggregateLocal(colVals, mode));
+                });
+                const flat = [];
+                sortedIds.forEach(function(hid) {
+                    cols.forEach(function(c) {
+                        const v = _itemsData.rows[hid] && _itemsData.rows[hid][c.key];
+                        if (v != null) flat.push(v);
+                    });
+                });
+                lines.push([lbl].concat(cells).concat([fmt(aggregateLocal(flat, mode))]).map(esc).join(','));
+            });
+
+            const csv = lines.join('\n') + '\n';
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href = url;
+            a.download = 'nt-pivot-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
         }
 
         // Sortierung der Host-IDs nach Spalte oder Hostname.
