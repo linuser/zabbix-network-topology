@@ -142,7 +142,7 @@ class NetworkTopologyItems extends CController {
         // Zabbix unterstützt 'searchWildcardsEnabled' für Wildcard-Match
         // im 'search' Parameter.
         $items = API::Item()->get([
-            'output'   => ['itemid', 'hostid', 'key_', 'name', 'units', 'value_type', 'lastvalue', 'lastclock'],
+            'output'   => ['itemid', 'hostid', 'key_', 'name', 'description', 'units', 'value_type', 'lastvalue', 'lastclock'],
             'hostids'  => $hostids,
             'search'   => ['key_' => $pattern],
             'searchWildcardsEnabled' => true,
@@ -165,6 +165,11 @@ class NetworkTopologyItems extends CController {
         // Sonst nimm den ganzen Key.
         $columns_map = [];   // colKey → ['key' => ..., 'label' => ..., 'unit' => ...]
         $rows = [];          // hostid → [colKey => value, ...]
+        // Fuer Tooltip + Sparkline-Lazyfetch: pro (hid, colKey) merken wir uns
+        // die itemid + item_name + description. Nur der Item-Eintrag der auch
+        // den Wert lieferte (worst-case wenn mehrere Items denselben colKey
+        // matchen) wird gespeichert.
+        $item_meta = [];      // hid → colKey → [id, name, desc]
 
         foreach ($items as $it) {
             $hid    = $it['hostid'];
@@ -201,6 +206,12 @@ class NetworkTopologyItems extends CController {
                 // Discoverys), nehmen wir den höheren Wert (worst-case).
                 if (!isset($rows[$hid][$col_key]) || $val > $rows[$hid][$col_key]) {
                     $rows[$hid][$col_key] = $val;
+                    $item_meta[$hid][$col_key] = [
+                        'id'   => (string) $it['itemid'],
+                        'name' => (string) ($it['name'] ?? ''),
+                        'desc' => (string) ($it['description'] ?? ''),
+                        'vt'   => $vtype,
+                    ];
                 }
             }
         }
@@ -219,6 +230,10 @@ class NetworkTopologyItems extends CController {
             'columns' => $columns,
             'rows'    => $rows ?: new \stdClass(),
             'hosts'   => $host_meta ?: new \stdClass(),
+            // item_meta pro (hid, colKey): itemid + name + description +
+            // value_type. Frontend nutzt das fuer Zellen-Tooltip und
+            // fuer Sparkline-Lazyfetch via network.topology.v6.item_history
+            'item_meta' => $item_meta ?: new \stdClass(),
             'truncated' => count($items) >= self::MAX_ITEMS,
         ];
         NetworkTopologyDiag::record([

@@ -48,6 +48,102 @@ const PRESETS = [
 
 let _data = null;            // letzte Antwort vom Backend
 
+// ── Sparkline-Cache + Lazyfetch fuer die Pivot-Zellen ─────────────────────
+// Cache lebt fuer die Session — TTL 60s. Vermeidet dass ein Auto-Refresh
+// dieselben itemids erneut fetcht.
+const _sparkPivotCache = new Map();   // itemid → { data: number[], ts: ms }
+const _SPARK_TTL_MS = 60000;
+
+// Sammelt itemids aus allen visible Cells und macht einen Batch-Request.
+// Danach werden die SVG-Placeholders befuellt.
+function _fetchAndRenderSparklines(container, baseUrl, theme) {
+    if (!container) return;
+    const slots = container.querySelectorAll('.nt-pivot-spark[data-itemid]');
+    if (!slots.length) return;
+    const wanted = [];
+    const now = Date.now();
+    const cachedByItem = {};
+    slots.forEach(function(el) {
+        const iid = el.dataset.itemid;
+        if (!iid) return;
+        const cached = _sparkPivotCache.get(iid);
+        if (cached && (now - cached.ts) < _SPARK_TTL_MS) {
+            cachedByItem[iid] = cached.data;
+        } else {
+            if (wanted.indexOf(iid) < 0) wanted.push(iid);
+        }
+    });
+    // Cached direkt rendern
+    Object.keys(cachedByItem).forEach(function(iid) {
+        _renderSparklineIntoSlots(container, iid, cachedByItem[iid], theme);
+    });
+    if (!wanted.length) return;
+
+    // Batch-Fetch (bis zu 500 itemids per Backend-Cap)
+    const chunks = [];
+    for (let i = 0; i < wanted.length; i += 500) chunks.push(wanted.slice(i, i + 500));
+    chunks.forEach(function(chunk) {
+        const params = new URLSearchParams();
+        params.append('action', 'network.topology.v6.item_history');
+        chunk.forEach(function(iid) { params.append('itemids[]', iid); });
+        const url = baseUrl + 'zabbix.php?' + params.toString();
+        fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(byIid) {
+                if (!byIid || byIid.error) return;
+                Object.keys(byIid).forEach(function(iid) {
+                    const arr = byIid[iid] || [];
+                    _sparkPivotCache.set(iid, { data: arr, ts: Date.now() });
+                    _renderSparklineIntoSlots(container, iid, arr, theme);
+                });
+            })
+            .catch(function() { /* silent — Sparklines sind Nice-to-have */ });
+    });
+}
+
+function _renderSparklineIntoSlots(container, itemid, values, theme) {
+    // CSS-Selector-Escape fuer itemid (Zahlen sind safe, aber defensiv)
+    const slots = container.querySelectorAll('.nt-pivot-spark[data-itemid="' + itemid + '"]');
+    if (!slots.length) return;
+    const svg = _buildSparklineSvg(values, theme);
+    slots.forEach(function(el) { el.innerHTML = svg; });
+}
+
+function _buildSparklineSvg(values, theme) {
+    if (!values || values.length < 2) return '';
+    const W = 56, H = 14, PAD = 1;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < values.length; i++) {
+        if (!isFinite(values[i])) continue;
+        if (values[i] < mn) mn = values[i];
+        if (values[i] > mx) mx = values[i];
+    }
+    if (!isFinite(mn) || !isFinite(mx)) return '';
+    const range = mx - mn || 1;
+    const step = (W - PAD * 2) / Math.max(1, values.length - 1);
+    const pts = values.map(function(v, i) {
+        const x = PAD + i * step;
+        const y = PAD + (H - PAD * 2) * (1 - (v - mn) / range);
+        return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    // Farbe nach Trend: letzte 3 Punkte steigend → rot, fallend → gruen, sonst blau
+    const col = (function() {
+        const n = values.length;
+        if (n < 3) return theme && theme.link ? theme.link : '#3b82f6';
+        const a = values[n - 3], b = values[n - 1];
+        if (b > a * 1.05) return '#dc2626';   // stark steigend
+        if (b < a * 0.95) return '#16a34a';   // stark fallend
+        return theme && theme.link ? theme.link : '#3b82f6';
+    })();
+    return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H
+        + '" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">'
+        + '<polyline points="' + pts + '" fill="none" stroke="' + col
+        + '" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
 function buildBaseUrl() {
     const p = window.location.pathname;
     const i = p.indexOf('/zabbix.php');
@@ -564,6 +660,17 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         if (nums.length === 0) return null;
         if (mode === 'sum') return nums.reduce(function(a, b) { return a + b; }, 0);
         if (mode === 'max') return Math.max.apply(null, nums);
+        if (mode === 'min') return Math.min.apply(null, nums);
+        // Percentiles: linear-interpolated position im sortierten Array
+        if (mode === 'p50' || mode === 'p95' || mode === 'p99') {
+            const sorted = nums.slice().sort(function(a, b) { return a - b; });
+            const pct = mode === 'p50' ? 0.5 : mode === 'p95' ? 0.95 : 0.99;
+            const idx = pct * (sorted.length - 1);
+            const lo = Math.floor(idx), hi = Math.ceil(idx);
+            if (lo === hi) return sorted[lo];
+            const w = idx - lo;
+            return sorted[lo] * (1 - w) + sorted[hi] * w;
+        }
         return nums.reduce(function(a, b) { return a + b; }, 0) / nums.length;
     };
 
@@ -714,25 +821,47 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             + 'style="color:' + t.link + ';text-decoration:none">' + esc(hostname) + '</a></td>';
 
         const rowVals = [];
+        const meta = (data.item_meta && data.item_meta[hid]) || {};
         cols.forEach(function(c) {
             const v = row[c.key];
             if (v != null) rowVals.push(v);
-            // Drill-Down-URL pro Zelle: Latest Data fuer Host gefiltert nach
-            // Spalten-Label (z.B. "sda"). Zabbix 7.x nimmt 'name' als
-            // Substring-Filter ueber den Item-Namen.
-            const cellLink = window.location.origin + baseUrl
-                + 'zabbix.php?action=latest.view&filter_set=1'
-                + '&hostids%5B%5D=' + encodeURIComponent(hid)
-                + '&name=' + encodeURIComponent(cleanLabel(c.label) || c.key);
+            const im = meta[c.key];   // {id, name, desc, vt} vom Backend
+            // Drill-Down-URL pro Zelle: wenn wir eine itemid haben, direkt
+            // zum Item-Detail. Sonst fallback auf Latest-Data mit Host+Name.
+            let cellLink;
+            if (im && im.id) {
+                cellLink = window.location.origin + baseUrl
+                    + 'zabbix.php?action=latest.view&filter_set=1&itemids%5B%5D='
+                    + encodeURIComponent(im.id);
+            } else {
+                cellLink = window.location.origin + baseUrl
+                    + 'zabbix.php?action=latest.view&filter_set=1'
+                    + '&hostids%5B%5D=' + encodeURIComponent(hid)
+                    + '&name=' + encodeURIComponent(cleanLabel(c.label) || c.key);
+            }
             const cellColor = (v == null ? t.subSoft : t.text);
             const bg = cellBg(v, c.unit, _colStats[c.key]);
+            // Tooltip: Item-Name + Description (falls vorhanden) — deutlich
+            // hilfreicher als "In Latest Data oeffnen".
+            const ttParts = [];
+            if (im && im.name) ttParts.push(im.name);
+            if (im && im.desc) ttParts.push('— ' + im.desc);
+            const tt = ttParts.length ? ttParts.join('\n') : 'In Latest Data oeffnen';
+            // Sparkline-Placeholder-Span (leer). Wird nach dem Fetch via
+            // updateSparkline() gefuellt. data-itemid liefert den Key fuer
+            // das Batch-Ergebnis.
+            const sparkSlot = (im && im.id)
+                ? '<span class="nt-pivot-spark" data-itemid="' + esc(im.id)
+                    + '" style="display:inline-block;width:56px;height:14px;vertical-align:middle;margin-right:4px;opacity:0.7"></span>'
+                : '';
             html += '<td style="padding:0;text-align:right;font-family:' + monoFam + ';'
                 + 'font-size:12px' + bg + '">'
                 + (v != null
                     ? '<a href="' + esc(cellLink) + '" target="_blank" rel="noopener noreferrer" '
-                        + 'style="display:block;padding:5px 8px;color:' + cellColor
-                        + ';text-decoration:none" title="In Latest Data oeffnen">'
-                        + esc(fmtVal(v, c.unit)) + '</a>'
+                        + 'style="display:flex;align-items:center;justify-content:flex-end;'
+                        + 'padding:5px 8px;color:' + cellColor
+                        + ';text-decoration:none" title="' + esc(tt) + '">'
+                        + sparkSlot + '<span>' + esc(fmtVal(v, c.unit)) + '</span></a>'
                     : '<span style="display:block;padding:5px 8px;color:' + cellColor + '">'
                         + esc(fmtVal(v, c.unit)) + '</span>')
                 + '</td>';
@@ -749,11 +878,13 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     });
     table.appendChild(tbody);
 
-    // Footer: Sum / Avg / Max pro Item-Spalte
+    // Footer: Sum / Avg / P50 / P95 / P99 / Max pro Item-Spalte.
+    // Perzentile sind bei skewed Verteilungen aussagekraeftiger als Avg/Max
+    // allein — bei 100 Hosts ist P95=80% schmerzhafter als Avg=45% mit Max=99%.
     if (hostIds.length > 0) {
         const tfoot = document.createElement('tfoot');
-        ['sum', 'avg', 'max'].forEach(function(mode, idx) {
-            const lblMap = { sum: 'Sum', avg: 'Avg', max: 'Max' };
+        ['sum', 'avg', 'p50', 'p95', 'p99', 'max'].forEach(function(mode, idx) {
+            const lblMap = { sum: 'Sum', avg: 'Avg', p50: 'P50', p95: 'P95', p99: 'P99', max: 'Max' };
             let row = '<tr style="background:' + t.head
                 + ';border-top:' + (idx === 0 ? '2px solid ' + t.border : '1px solid ' + t.borderSoft) + '">'
                 + '<td style="padding:5px 8px;font-size:11px;font-weight:700;'
@@ -792,6 +923,16 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             tfoot.insertAdjacentHTML('beforeend', row);
         });
         table.appendChild(tfoot);
+    }
+
+    // Sparkline-Lazyfetch: alle itemids der sichtbaren Zellen einsammeln,
+    // in einem Batch history holen, dann die Placeholder-Spans befuellen.
+    // Wichtig: erst NACHDEM die Tabelle im DOM ist — sonst greift querySelector
+    // nicht. Wir triggern nach dem naechsten Frame (rAF).
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function() { _fetchAndRenderSparklines(container, baseUrl, t); });
+    } else {
+        setTimeout(function() { _fetchAndRenderSparklines(container, baseUrl, t); }, 0);
     }
 
     // Truncated-Hinweis

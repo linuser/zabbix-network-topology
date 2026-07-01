@@ -39,6 +39,10 @@
         "network.topology.v6.compliance": {
             "class": "NetworkTopologyCompliance",
             "layout": "layout.json"
+        },
+        "network.topology.v6.item_history": {
+            "class": "NetworkTopologyItemHistory",
+            "layout": "layout.json"
         }
     }
 }
