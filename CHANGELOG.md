@@ -2,6 +2,41 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.25.0 — 2026-07-04
+
+### Added (Items-Pivot-Ausbau, Fortsetzung)
+- **Sparkline pro Zelle**: 1h-Verlauf (20 Punkte) links neben dem Wert, trend-farbig (rot steigend / grün fallend / blau neutral). Lazy-Batch-Fetch via neuer Action `network.topology.v6.item_history` (Chunks à 50 Items, Permission-gefiltert), 60s-Cache im Frontend.
+- **Trend-Indikator ↑↓→** pro Zelle aus denselben History-Daten: Median der ersten 3 vs. letzten 3 Punkte, Schwelle 5%, Tooltip zeigt %-Änderung.
+- **P50/P95/P99** zusätzlich zu Sum/Avg/Max im Pivot-Footer (linear interpolierte Perzentile).
+- **Zellen-Tooltip** mit Item-Name + Description (Backend liefert `item_meta` mit itemid/name/desc), Zellen-Link geht jetzt direkt auf die konkrete itemid.
+- **CSV-Export** der Pivot-Sicht: respektiert Filter/Sort/Hide-Empty, RFC-4180-Escaping + Formel-Injection-Schutz, Footer mit allen 6 Aggregaten.
+- **Live-Autocomplete** beim Pattern-Tippen: "142 Items matchen · z.B. …" nach 400ms Debounce, via neuer countOutput-Action `network.topology.v6.item_count`.
+- **Preset-Descriptions** im Dropdown (was liefert das Pattern, wann ist es nützlich).
+- **Anomalie-Marker ◆** (lila): Zellen > 2σ̂ vom Spalten-Median (robuste MAD-Statistik, ≥5 Werte nötig).
+- **deploy.sh**: automatisiertes Deploy-Skript mit PHP-FPM-/UI-Pfad-Autodetect, Staging + atomarem Swap.
+
+### Fixed (Audit-Runde 2 — zwei parallele Reviews über den Code seit v4.21.1)
+- **iface_health war bei Standard-Zabbix-7-Templates komplett leer**: der generische `net.if`-Traffic-Branch schluckte die modernen Template-Keys (`net.if.status[ifOperStatus.1]`, `net.if.in.errors[...]`) bevor die Health-Branches griffen.
+- **LLDP-Q-Tab war immer leer**: `lldp_quality` wurde vom Fetch nie in `_ntLastData` übernommen. Zusätzlich doppelter Header entfernt.
+- **Down-Detection entrauscht**: `ifOperStatus`+`ifAdminStatus` via Bracket-Param korreliert (admin-down = gewollt), notPresent/unknown ignoriert, Edge färbt erst ab ≥50% down-Ratio rot (vorher färbte ein unbenutzter Switch-Port jede Edge).
+- **cleanNeighbor-Regression**: Raw-Exact-Match vor dem Vendor-Cleanup — SysNames mit Leerzeichen ("Core Switch 1") wurden sonst zerschnitten und unmatched.
+- **Compliance stale-Problem-Check**: serverseitig `time_till=cutoff` statt Client-Filter (eventid-DESC+Limit warf genau die ältesten Events weg → False-Negatives); `recent=true` entfernt.
+- **ItemHistory-Starvation**: chatty Items (1s-Intervall) fraßen das globale History-Limit — jetzt Chunks mit proportionalem Limit.
+- **Listener-Leak** der Pattern-Combo (ein document-Listener pro Items-Render, Wallboard: unbegrenzt).
+- **Popup-Blocker**: Audit-Report öffnet das Fenster synchron im Click, Inhalt kommt async.
+- **deploy.sh**: Remote-Variablen waren undefined (quoted Heredoc); grep unter pipefail starb stumm; rm-vor-unzip konnte das Modul ohne Rollback löschen.
+- Health-Tab Karten-Layout lief rechts über ("PROBL" abgeschnitten).
+
+### Security
+- **CSV-Formel-Injection** neutralisiert (führende `= + - @` bekommen `'`-Präfix; Zahlen inkl. negativer bleiben unangetastet).
+- **Compliance-Tab + Action auf ZABBIX_ADMIN** gegated (Security-Posture-Karte war für Read-only-User eine Recon-Hilfe) + 60s-APCu-Cache gegen Endpoint-Hammering.
+- **deploy.sh**: `--`-Separator für ssh/scp + Guard gegen Option-Injection via Server-Argument.
+- Verifiziert sauber: ItemHistory-Permission-Filterung (Client-itemids laufen durch permission-gefiltertes Item.get), alle neuen XSS-Sinks escaped, alle neuen Actions mit requireAjax + Validierung.
+
+### Changed
+- **Dedup nach utils.js**: `buildBaseUrl()`, `mkTabTheme()`, `aggregateValues()` (waren 2-4× kopiert und drifteten bereits); `COMPLIANCE_CHECKS` + `fetchComplianceData()` als Single Source in render-compliance.js.
+- Manifest: neue Actions `item_history` + `item_count` → **"Scan directory" nach dem Update nötig**.
+
 ## v4.24.0 — 2026-06-25
 
 ### Added
