@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.26.1 — 2026-07-04
+
+### Fixed
+- **What-if-Simulation zählte Inseln als „abgeschnitten"**: Hosts ganz ohne LLDP/CDP-Kanten (bzw. Segmente ohne Pfad zum Uplink) wurden bei jeder Simulation rot markiert und mitgezählt, obwohl sie auch ohne Ausfall nie am Uplink hingen — egal welchen Host man ausfallen ließ. Jetzt rechnet die Simulation vorab eine Baseline-Erreichbarkeit; als abgeschnitten gilt nur, wer vorher erreichbar war und es durch den Ausfall nicht mehr ist.
+
 ## v4.26.0 — 2026-07-04
 
 ### Added

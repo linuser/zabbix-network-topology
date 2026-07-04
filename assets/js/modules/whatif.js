@@ -11,6 +11,11 @@
 //   3. der Nicht-simulierte Host mit dem hoechsten Degree (mit Toast-Hinweis,
 //      damit klar ist worauf sich "abgeschnitten" bezieht)
 //
+// "Abgeschnitten" = war in der Baseline (BFS ohne Ausfaelle) vom Uplink aus
+// erreichbar und ist es mit den simulierten Ausfaellen nicht mehr. Inseln
+// ohne LLDP/CDP-Kanten waren nie erreichbar und zaehlen deshalb nicht mit —
+// sonst wuerden sie jedem beliebigen simulierten Host angelastet.
+//
 // Markierung via Cytoscape-Klassen (Underlays) statt Inline-Styles — die
 // Traffic-Heatmap und highlight.js setzen Inline-opacity/line-color, die
 // wuerden Klassen-Styles auf denselben Properties ueberschreiben. Underlay
@@ -44,8 +49,9 @@ export function clearSimulation(cy) {
     _removeBanner();
 }
 
-// Uplink-Referenz bestimmen (siehe Header). Liefert Collection, ggf. leer.
-function _findRoots(cy) {
+// Uplink-Referenz bestimmen (siehe Header). excludeSimulated=true filtert
+// tote Hosts raus (fuer die Sim-BFS); die Baseline nutzt die volle Menge.
+function _findRoots(cy, excludeSimulated) {
     let roots = cy.nodes('[?_isInternet]');
     if (roots.length === 0) {
         roots = cy.nodes('[!isGroup]').filter(function(n) {
@@ -53,7 +59,43 @@ function _findRoots(cy) {
             return t2 === 'firewall' || t2 === 'router';
         });
     }
+    if (!excludeSimulated) return roots;
     return roots.filter(function(n) { return !_simulated.has(n.id()); });
+}
+
+// Fallback-Referenz: Host mit dem hoechsten Degree (Collection aus 1 Node).
+function _highestDegree(cy, excludeSimulated) {
+    let best = null, bestDeg = -1;
+    cy.nodes('[!isGroup]').forEach(function(n) {
+        if (excludeSimulated && _simulated.has(n.id())) return;
+        const d = n.degree(false);
+        if (d > bestDeg) { bestDeg = d; best = n; }
+    });
+    return best;
+}
+
+// BFS von den Roots aus; blocked (Set oder null) gilt als tot und
+// blockiert sowohl das Seeding als auch den Weg.
+function _reachable(cy, roots, blocked) {
+    const visited = {};
+    const queue = [];
+    roots.forEach(function(n) {
+        if (blocked && blocked.has(n.id())) return;
+        visited[n.id()] = true;
+        queue.push(n.id());
+    });
+    while (queue.length) {
+        const cur = queue.shift();
+        cy.getElementById(cur).connectedEdges().forEach(function(edge) {
+            const s = edge.source().id();
+            const t2 = edge.target().id();
+            const nbr = (s === cur) ? t2 : s;
+            if (visited[nbr] || (blocked && blocked.has(nbr))) return;
+            visited[nbr] = true;
+            queue.push(nbr);
+        });
+    }
+    return visited;
 }
 
 export function recomputeSimulation(cy) {
@@ -61,42 +103,31 @@ export function recomputeSimulation(cy) {
     cy.elements().removeClass('nt-sim-dead nt-sim-cut');
     if (_simulated.size === 0) { _removeBanner(); return; }
 
-    let roots = _findRoots(cy);
+    // Baseline: was haengt OHNE Ausfaelle am Uplink? Nur wer hier drin ist
+    // kann durch die Simulation etwas verlieren.
+    let baseRoots = _findRoots(cy, false);
+    if (baseRoots.length === 0) {
+        baseRoots = _highestDegree(cy, false);
+        if (!baseRoots) { _removeBanner(); return; }
+    }
+    const baseline = _reachable(cy, baseRoots, null);
+
+    let roots = _findRoots(cy, true);
     if (roots.length === 0) {
         // Fallback 3: hoechster Degree unter den Ueberlebenden. Toast macht
         // transparent worauf sich die Erreichbarkeit bezieht.
-        let best = null, bestDeg = -1;
-        cy.nodes('[!isGroup]').forEach(function(n) {
-            if (_simulated.has(n.id())) return;
-            const d = n.degree(false);
-            if (d > bestDeg) { bestDeg = d; best = n; }
-        });
+        const best = _highestDegree(cy, true);
         if (!best) { _removeBanner(); return; }
         roots = best;
         toast(t('whatif.root_fallback', { host: best.data('label') || best.id() }), 'info');
     }
-
-    // BFS von allen Roots; simulierte Hosts blockieren den Weg.
-    const visited = {};
-    const queue = [];
-    roots.forEach(function(n) { visited[n.id()] = true; queue.push(n.id()); });
-    while (queue.length) {
-        const cur = queue.shift();
-        cy.getElementById(cur).connectedEdges().forEach(function(edge) {
-            const s = edge.source().id();
-            const t2 = edge.target().id();
-            const nbr = (s === cur) ? t2 : s;
-            if (visited[nbr] || _simulated.has(nbr)) return;
-            visited[nbr] = true;
-            queue.push(nbr);
-        });
-    }
+    const visited = _reachable(cy, roots, _simulated);
 
     let cutCount = 0;
     cy.nodes('[!isGroup]').forEach(function(n) {
         const id = n.id();
         if (_simulated.has(id)) { n.addClass('nt-sim-dead'); return; }
-        if (!visited[id]) { n.addClass('nt-sim-cut'); cutCount++; }
+        if (baseline[id] && !visited[id]) { n.addClass('nt-sim-cut'); cutCount++; }
     });
 
     _showBanner(cy, cutCount);
