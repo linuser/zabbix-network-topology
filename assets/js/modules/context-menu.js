@@ -17,6 +17,9 @@ import { getPathStart, isPathActive, setPathStart,
          applyPathHighlight, clearPathState } from './path-highlight.js';
 import { resetHighlight } from './highlight.js';
 import { toast } from './toast.js';
+import { isSimulated, isSimActive, simulatedCount,
+         toggleSimulatedHost, clearSimulation } from './whatif.js';
+import { t } from './i18n.js';
 
 const _ctx = document.createElement('div');
 _ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #ddd;'
@@ -259,6 +262,26 @@ export function showCtx(cx, cy2, d) {
         }));
         _ctx.appendChild(_ctxRow('\u{2716} Pfad-Start zur\u00FCcksetzen', '#64748b', function() {
             clearPathState(window._ntCy);
+        }));
+    }
+
+    // What-if-Ausfallsimulation: Host als tot simulieren \u2192 whatif.js rechnet
+    // per BFS aus welche Hosts dadurch vom Uplink abgeschnitten waeren.
+    // Mehrere Hosts stapelbar (beide Core-Switches gleichzeitig testen).
+    const simSep = document.createElement('div');
+    simSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+    _ctx.appendChild(simSep);
+    _ctx.appendChild(_ctxRow(
+        isSimulated(hostId) ? t('whatif.restore') : t('whatif.simulate'),
+        '#ea580c',
+        function() {
+            const cy = window._ntCy; if (!cy) return;
+            toggleSimulatedHost(cy, hostId);
+        }
+    ));
+    if (isSimActive()) {
+        _ctx.appendChild(_ctxRow(t('whatif.end_all', { n: simulatedCount() }), '#64748b', function() {
+            clearSimulation(window._ntCy);
         }));
     }
 

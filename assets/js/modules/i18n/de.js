@@ -48,4 +48,12 @@ export default {
     'health.legend.warn':     'Achtung',
     'health.legend.critical': 'Kritisch',
     'health.legend.formula':  'Formel: 100 − offline·40 − stale·15 − critical·25 − unacked·20 (% der Gruppe)',
+
+    // What-if-Ausfallsimulation
+    'whatif.simulate':      '⚡ Ausfall simulieren',
+    'whatif.restore':       '⚡ Host wiederherstellen',
+    'whatif.end_all':       '✕ Simulation beenden ({n} simuliert)',
+    'whatif.banner':        'Simulation: {failed} ausgefallen → {cut} Hosts abgeschnitten',
+    'whatif.end':           'Beenden',
+    'whatif.root_fallback': 'Keine Internet-Wolke/Firewall im Graph — Erreichbarkeit bezieht sich auf "{host}" (hoechster Vernetzungsgrad)',
 };

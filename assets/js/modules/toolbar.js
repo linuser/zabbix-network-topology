@@ -20,6 +20,7 @@ import { NT_LLDP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY,
          loadTapholdMs, saveTapholdMs } from './storage.js';
 import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
+import { isSimActive, clearSimulation } from './whatif.js';
 import { isLinkModeActive, enterLinkMode, exitLinkMode } from './manual-links.js';
 import { setupExportMenu } from './export.js';
 import { addHistoryButton } from './history-mode.js';
@@ -443,10 +444,11 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         document.addEventListener('keydown', function(e) {
             if (e.key !== 'Escape') return;
             if (isLinkModeActive()) { exitLinkMode(); return; }
-            // ESC clears Pfad-Highlight (path-highlight.js) — Connected-Component
-            // Reset bleibt dem Background-Click ueberlassen.
             const cyRef = window._ntCy;
-            if (cyRef && (isPathActive() || getPathStart())) clearPathState(cyRef);
+            // ESC-Kette: erst Pfad-Highlight, dann Ausfall-Simulation —
+            // ein ESC beendet EINEN Modus, nicht alle auf einmal.
+            if (cyRef && (isPathActive() || getPathStart())) { clearPathState(cyRef); return; }
+            if (cyRef && isSimActive()) clearSimulation(cyRef);
         });
     }
 

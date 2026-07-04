@@ -25,6 +25,7 @@ import {
 import { aggregateByGroup } from './aggregation.js';
 import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
 import { isPathActive, clearPathState } from './path-highlight.js';
+import { clearSimulation, isSimActive, recomputeSimulation } from './whatif.js';
 import { showTip, hideTip, moveTip, showEdgeTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
@@ -120,6 +121,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     // ── Cleanup vorheriger Tab-State ───────────────────────────────────────
     if (window._ntEdgeAnim)     { clearInterval(window._ntEdgeAnim);     window._ntEdgeAnim     = null; }
     if (window._ntCy)           { try { clearPathState(window._ntCy); } catch (e) {}
+                                  try { clearSimulation(window._ntCy); } catch (e) {}
                                   try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     window._ntToolbarDone = false;
     const oldSev    = document.getElementById('nt-sev-filter');   if (oldSev)    oldSev.remove();
@@ -456,6 +458,10 @@ export function render(wrap, nodes, edges, dataUrl) {
                     e.data('tLabel', edgeLabel(window._ntCy, e.source().id(), e.target().id()));
                 });
                 applyTrafficHeatmap(window._ntCy);
+                // Laufende Ausfall-Simulation neu rechnen — der In-Place-
+                // Update aendert zwar keine Edges, aber der Banner-Count
+                // und die Klassen sollen den frischen Stand reflektieren.
+                if (isSimActive()) recomputeSimulation(window._ntCy);
             });
     }, 30000);
 }

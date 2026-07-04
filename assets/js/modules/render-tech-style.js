@@ -63,5 +63,17 @@ export function buildCytoscapeStyle(dark) {
             'underlay-opacity': 0.45, 'underlay-shape': 'ellipse',
             'opacity': 1, 'z-index': 999,
         }},
+        // What-if-Ausfallsimulation (whatif.js): grauer Halo = simuliert tot,
+        // roter Halo = dadurch vom Uplink abgeschnitten. Bewusst Underlays —
+        // Inline-Styles (Heatmap/Highlight) ueberschreiben opacity/line-color,
+        // Underlay-Properties setzt niemand inline.
+        { selector: 'node.nt-sim-dead', style: {
+            'underlay-color': '#475569', 'underlay-padding': 10,
+            'underlay-opacity': 0.55, 'underlay-shape': 'ellipse',
+        }},
+        { selector: 'node.nt-sim-cut', style: {
+            'underlay-color': '#dc2626', 'underlay-padding': 9,
+            'underlay-opacity': 0.4, 'underlay-shape': 'ellipse',
+        }},
     ];
 }

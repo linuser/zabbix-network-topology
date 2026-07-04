@@ -1,0 +1,132 @@
+// whatif.js — Ausfall-Simulation ("darf ich den Switch rebooten?").
+//
+// Rechtsklick auf Host → "Ausfall simulieren": der Host gilt als tot, und
+// alle Hosts die dadurch ihre Verbindung zum Netz-Uplink verlieren werden
+// rot markiert. Mehrere Hosts gleichzeitig simulierbar (z.B. beide Core-
+// Switches) — jede Aenderung rechnet die Erreichbarkeit neu.
+//
+// Referenzpunkt ("Uplink") in absteigender Prioritaet:
+//   1. Internet-Wolke (_isInternet) — existiert nur im Hierarchie-Layout
+//   2. alle Firewall-/Router-Nodes (gleiche Heuristik wie injectInternetCloud)
+//   3. der Nicht-simulierte Host mit dem hoechsten Degree (mit Toast-Hinweis,
+//      damit klar ist worauf sich "abgeschnitten" bezieht)
+//
+// Markierung via Cytoscape-Klassen (Underlays) statt Inline-Styles — die
+// Traffic-Heatmap und highlight.js setzen Inline-opacity/line-color, die
+// wuerden Klassen-Styles auf denselben Properties ueberschreiben. Underlay
+// wird nirgends inline gesetzt und ueberlebt beide.
+//
+// Lebenszyklus analog path-highlight: Re-Render/Tab-Wechsel beendet die
+// Simulation (render-tech cleanup), ESC ebenso (toolbar), sonst Banner-Button.
+
+import { toast } from './toast.js';
+import { t } from './i18n.js';
+
+let _simulated = new Set();   // host-ids die als ausgefallen gelten
+
+export function isSimActive() { return _simulated.size > 0; }
+export function isSimulated(id) { return _simulated.has(String(id)); }
+export function simulatedCount() { return _simulated.size; }
+
+// Host in die Simulation aufnehmen / wieder rausnehmen, dann neu rechnen.
+export function toggleSimulatedHost(cy, hostId) {
+    const id = String(hostId);
+    if (_simulated.has(id)) _simulated.delete(id);
+    else _simulated.add(id);
+    recomputeSimulation(cy);
+}
+
+export function clearSimulation(cy) {
+    _simulated.clear();
+    if (cy && !(cy.destroyed && cy.destroyed())) {
+        cy.elements().removeClass('nt-sim-dead nt-sim-cut');
+    }
+    _removeBanner();
+}
+
+// Uplink-Referenz bestimmen (siehe Header). Liefert Collection, ggf. leer.
+function _findRoots(cy) {
+    let roots = cy.nodes('[?_isInternet]');
+    if (roots.length === 0) {
+        roots = cy.nodes('[!isGroup]').filter(function(n) {
+            const t2 = n.data('type');
+            return t2 === 'firewall' || t2 === 'router';
+        });
+    }
+    return roots.filter(function(n) { return !_simulated.has(n.id()); });
+}
+
+export function recomputeSimulation(cy) {
+    if (!cy || (cy.destroyed && cy.destroyed())) return;
+    cy.elements().removeClass('nt-sim-dead nt-sim-cut');
+    if (_simulated.size === 0) { _removeBanner(); return; }
+
+    let roots = _findRoots(cy);
+    if (roots.length === 0) {
+        // Fallback 3: hoechster Degree unter den Ueberlebenden. Toast macht
+        // transparent worauf sich die Erreichbarkeit bezieht.
+        let best = null, bestDeg = -1;
+        cy.nodes('[!isGroup]').forEach(function(n) {
+            if (_simulated.has(n.id())) return;
+            const d = n.degree(false);
+            if (d > bestDeg) { bestDeg = d; best = n; }
+        });
+        if (!best) { _removeBanner(); return; }
+        roots = best;
+        toast(t('whatif.root_fallback', { host: best.data('label') || best.id() }), 'info');
+    }
+
+    // BFS von allen Roots; simulierte Hosts blockieren den Weg.
+    const visited = {};
+    const queue = [];
+    roots.forEach(function(n) { visited[n.id()] = true; queue.push(n.id()); });
+    while (queue.length) {
+        const cur = queue.shift();
+        cy.getElementById(cur).connectedEdges().forEach(function(edge) {
+            const s = edge.source().id();
+            const t2 = edge.target().id();
+            const nbr = (s === cur) ? t2 : s;
+            if (visited[nbr] || _simulated.has(nbr)) return;
+            visited[nbr] = true;
+            queue.push(nbr);
+        });
+    }
+
+    let cutCount = 0;
+    cy.nodes('[!isGroup]').forEach(function(n) {
+        const id = n.id();
+        if (_simulated.has(id)) { n.addClass('nt-sim-dead'); return; }
+        if (!visited[id]) { n.addClass('nt-sim-cut'); cutCount++; }
+    });
+
+    _showBanner(cy, cutCount);
+}
+
+// ── Banner: laufende Simulation sichtbar machen + Ausstieg anbieten ────────
+function _removeBanner() {
+    const b = document.getElementById('nt-whatif-banner');
+    if (b) b.remove();
+}
+
+function _showBanner(cy, cutCount) {
+    _removeBanner();
+    const wrap = document.getElementById('nt-canvas-wrap');
+    if (!wrap) return;
+    const banner = document.createElement('div');
+    banner.id = 'nt-whatif-banner';
+    banner.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);'
+        + 'z-index:60;background:#7c2d12;color:#fff;padding:7px 14px;border-radius:6px;'
+        + 'font-size:12px;font-family:sans-serif;display:flex;align-items:center;gap:12px;'
+        + 'box-shadow:0 4px 16px rgba(0,0,0,0.3)';
+    const txt = document.createElement('span');
+    txt.textContent = t('whatif.banner', { failed: _simulated.size, cut: cutCount });
+    banner.appendChild(txt);
+    const btn = document.createElement('button');
+    btn.textContent = t('whatif.end');
+    btn.style.cssText = 'background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);'
+        + 'color:#fff;border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer;'
+        + 'font-family:inherit';
+    btn.addEventListener('click', function() { clearSimulation(cy); });
+    banner.appendChild(btn);
+    wrap.appendChild(banner);
+}
