@@ -1064,6 +1064,52 @@ class NetworkTopologyData extends CController {
             ];
         }
 
+        // ── Health-Score (Server-Spiegel der Formel aus render-health.js) ──
+        // 100 − offline%·40 − stale%·15 − critical%·25 − unacked%·20 pro
+        // Gruppe; avg/min ueber alle Gruppen. Der Sender-Cron pusht beides
+        // an Trapper-Items (nt.health.score / .min) → echte Zabbix-Historie
+        // + Trigger. Formel-Aenderungen HIER und in render-health.js
+        // synchron halten.
+        $g_stats = [];
+        $now_ts  = time();
+        foreach ($nodes as $n) {
+            foreach ($n['groups'] as $gname) {
+                if ($gname === '') continue;
+                if (!isset($g_stats[$gname])) {
+                    $g_stats[$gname] = ['total'=>0, 'offline'=>0, 'stale'=>0, 'critical'=>0, 'unacked'=>0];
+                }
+                $gs =& $g_stats[$gname];
+                $gs['total']++;
+                if ($n['unavailable']) {
+                    $gs['offline']++;
+                }
+                elseif ($n['last_seen'] > 0 && ($now_ts - $n['last_seen']) > 300) {
+                    $gs['stale']++;
+                }
+                if ($n['severity'] >= 4) $gs['critical']++;
+                if ($n['problems'] > 0 && !$n['acknowledged']) $gs['unacked']++;
+                unset($gs);
+            }
+        }
+        $health = ['avg' => null, 'min' => null];
+        if ($g_stats) {
+            $sum = 0;
+            $min = 100;
+            foreach ($g_stats as $gs) {
+                $tot = max(1, $gs['total']);
+                $score = 100
+                    - ($gs['offline']  / $tot) * 40
+                    - ($gs['stale']    / $tot) * 15
+                    - ($gs['critical'] / $tot) * 25
+                    - ($gs['unacked']  / $tot) * 20;
+                $score = (int) round(max(0, min(100, $score)));
+                $sum += $score;
+                if ($score < $min) $min = $score;
+            }
+            $health['avg'] = (int) round($sum / count($g_stats));
+            $health['min'] = $min;
+        }
+
         // ── Topology-Change-Detection ─────────────────────────────────────
         // Aktuellen Edge-Stand gegen die APCu-Baseline diffen und die
         // Baseline weiterrollen. Kein Baseline-Eintrag (Erstaufruf oder
@@ -1109,7 +1155,8 @@ class NetworkTopologyData extends CController {
             ['nodes' => $nodes, 'edges' => $edges,
              'lldp_unmatched' => $lldp_unmatched,
              'lldp_quality'   => $lldp_quality_out,
-             'topo_changes'   => $topo_changes],
+             'topo_changes'   => $topo_changes,
+             'health'         => $health],
             JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         );
         NetworkTopologyDiag::record([

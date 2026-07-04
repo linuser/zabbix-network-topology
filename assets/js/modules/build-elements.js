@@ -20,7 +20,7 @@
 // render-tech.js sich aufs Cytoscape-Init und die Event-Handler konzentrieren
 // kann.
 
-import { fmt } from './utils.js';
+import { fmt, linkCapacity } from './utils.js';
 import { makeNodeImage } from './icons.js';
 
 // Synthetische Internet-Wolke + Edges injizieren, falls nötig.
@@ -186,7 +186,7 @@ export function buildEdgeElements(edges, nodes) {
         // Tooltip nennt die Basis explizit.
         const spdA = (srcNode && srcNode.link_speed) || 0;
         const spdB = (tgtNode && tgtNode.link_speed) || 0;
-        const capBps = (spdA > 0 && spdB > 0) ? Math.min(spdA, spdB) : (spdA || spdB || 0);
+        const capBps = linkCapacity(spdA, spdB);
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
                     trafficIn: tIn, trafficOut: tOut, tLabel: tLabel, isLLDP: true,

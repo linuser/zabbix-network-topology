@@ -18,6 +18,13 @@ export function fmt(b) {
     return b.toFixed(0) + ' b/s';
 }
 
+// linkCapacity — Edge-Kapazitaet aus den Max-Link-Speeds beider Endpunkte:
+// Engpass = min der beiden (>0), sonst der einzige bekannte Wert, sonst 0.
+// Genutzt von build-elements (Weathermap) und render-stats (Forecast).
+export function linkCapacity(spdA, spdB) {
+    return (spdA > 0 && spdB > 0) ? Math.min(spdA, spdB) : (spdA || spdB || 0);
+}
+
 // buildBaseUrl — Zabbix-Basis-Pfad (alles vor "zabbix.php"). War 4× in
 // den Tab-Modulen dupliziert.
 export function buildBaseUrl() {

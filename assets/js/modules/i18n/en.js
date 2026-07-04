@@ -58,4 +58,30 @@ export default {
     'toolbar.off':            'off',
     'topo.added':             'Topology: new link {a} ↔ {b}',
     'topo.removed':           'Topology: link {a} ↔ {b} disappeared',
+
+    // Capacity forecast (stats tab)
+    'fc.title':      'Capacity forecast',
+    'fc.caveat':     'Linear projection from Zabbix trends (hourly averages) based on the weathermap capacities. Traffic is host-aggregated — without port mapping this is an estimate, not an oracle.',
+    'fc.period':     'Period:',
+    'fc.days_unit':  'days',
+    'fc.loading':    'Loading trends ({days} days)…',
+    'fc.summary':    '{links} links with known capacity · based on {days} days of trends · threshold: 80%',
+    'fc.nolinks':    'No links with known capacity — ifSpeed/ifHighSpeed items missing on the edge endpoints.',
+    'fc.nodata':     'No trend data found for the link endpoints (trends enabled? period too short?).',
+    'fc.col.link':   'Link',
+    'fc.col.cap':    'Capacity',
+    'fc.col.util':   'Utilization',
+    'fc.col.trend':  'Trend/week',
+    'fc.col.eta':    '80% reached',
+    'fc.eta.now':    'above 80% now',
+    'fc.eta.days':   'in ~{d} days',
+    'fc.eta.gt1y':   'in over a year',
+    'fc.eta.stable': 'stable / falling',
+    'fc.more':       '+{n} more links (due later or stable)',
+
+    // Health score history
+    'health.hist.title': 'Score history {days} days · current avg {avg}',
+    'health.hist.hint':  'Score history not set up: import templates/nt_health_score_template.yaml and run tools/topo-change-sender.sh as a cron — the sender pushes the score automatically.',
+    'health.hist.avg':   'avg score',
+    'health.hist.min':   'worst group',
 };

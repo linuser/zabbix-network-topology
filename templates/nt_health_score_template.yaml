@@ -1,0 +1,42 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - name: Templates
+  templates:
+    - uuid: b7e4d2c1a09f48e3b6d5c4a3f2e1d0c9
+      template: 'NT Health Score'
+      name: 'NT Health Score'
+      description: |
+        Empfaengt den Topology-Health-Score des Network-Topology-v6-Moduls
+        via zabbix_sender (tools/topo-change-sender.sh als Cron — derselbe
+        Cron pusht auch die Topologie-Aenderungen).
+
+        Score 0-100, Formel wie im Health-Tab des Moduls:
+          100 - offline%*40 - stale%*15 - critical%*25 - unacked%*20
+        pro Hostgroup. Gesendet werden der Durchschnitt ueber alle Gruppen
+        (nt.health.score) und die schlechteste Gruppe (nt.health.score.min).
+      groups:
+        - name: Templates
+      items:
+        - uuid: c8f5e3d2b1a04f9e8d7c6b5a4e3d2c1b
+          name: 'NT: Health score (avg)'
+          type: TRAP
+          key: nt.health.score
+          value_type: FLOAT
+          history: 90d
+          trends: 365d
+          description: 'Durchschnitts-Score ueber alle Hostgroups (0-100). Gefuellt vom Sender-Cron.'
+          triggers:
+            - uuid: d9a6f4e3c2b15a0f9e8d7c6b5a4f3e2d
+              expression: 'last(/NT Health Score/nt.health.score)<70'
+              name: 'Network health score low: {ITEM.LASTVALUE1}'
+              priority: WARNING
+              description: 'Topology-Health-Score unter 70 — Details im Health-Tab des Network-Topology-Moduls (offline/stale/critical/unacked pro Gruppe).'
+        - uuid: e0b7a5f4d3c26b1a0f9e8d7c6b5a4f3e
+          name: 'NT: Health score (worst group)'
+          type: TRAP
+          key: nt.health.score.min
+          value_type: FLOAT
+          history: 90d
+          trends: 365d
+          description: 'Score der schlechtesten Hostgroup (0-100) — bei Bedarf eigene Trigger anlegen (z.B. <40 = HIGH).'

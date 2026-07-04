@@ -2,6 +2,17 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.27.0 — 2026-07-05
+
+### Added
+- **Kapazitäts-Forecast** (Stats-Tab): für jeden Link mit bekannter Weathermap-Kapazität holt eine neue Backend-Action `capacity_forecast` die Zabbix-**Trends** (30/60/90 Tage, stündliche Mittelwerte) der Traffic-Items, legt pro Host+Richtung eine lineare Regression durch und das Frontend rechnet daraus die Edge-Prognose: aktuelle Auslastung, Trend in %-Punkten/Woche und **„80 % erreicht in ~N Tagen"** — kritischste Links zuerst, farbcodiert (<30 d rot, <90 d orange). Host-aggregierter Traffic wie im Weathermap-Modus → Schätzung, der Caveat steht im UI. APCu-Cache 30 min, Item-Klassifikation gespiegelt aus der data-Action (SNMP-Octets ×8, net.if via Item-Name).
+- **Health-Score-Historie**: die data-Action liefert jetzt `health {avg, min}` (Server-Spiegel der Health-Tab-Formel). Der Sender-Cron pusht beides an neue Trapper-Items `nt.health.score` / `nt.health.score.min` → echte Zabbix-Historie, Graphen und Trigger („Network health score low", <70 Warning) via neuem Template `templates/nt_health_score_template.yaml`. Der Health-Tab zeigt den 14-Tage-Verlauf als Chart (Ø-Score + schlechteste Gruppe, Schwellenlinien 40/65/85) über die neue Action `health_history`; ohne eingerichteten Sender erscheint stattdessen ein Einrichtungs-Hinweis.
+- `tools/topo-change-sender.sh` pusht den Health-Score automatisch mit (rückwärtskompatibel: fehlen Items oder liefert das Backend kein `health`, läuft der Topo-Teil unverändert).
+
+### Changed
+- `linkCapacity()` nach utils.js (war in build-elements inline, jetzt auch vom Forecast genutzt).
+- Manifest: neue Actions `capacity_forecast` + `health_history` → **„Scan directory" nach dem Update nötig**.
+
 ## v4.26.1 — 2026-07-04
 
 ### Fixed

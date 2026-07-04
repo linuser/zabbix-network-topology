@@ -13,7 +13,7 @@
 // Rendern: Karten-Grid, sortiert nach worst Score zuerst. Jede Karte zeigt
 // den Score gross + farbig (rot/orange/gelb/gruen) plus die Detail-Zahlen.
 
-import { esc, mkTabTheme } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
 import { t } from './i18n.js';
 
 const STALE_S = 300;
@@ -123,6 +123,89 @@ function _card(s, theme) {
         + '</div>';
 }
 
+// ── Score-Historie ─────────────────────────────────────────────────────────
+// Verlaufs-Chart aus den Trapper-Items nt.health.score / .min, die der
+// Sender-Cron fuellt (tools/topo-change-sender.sh + Template
+// nt_health_score_template.yaml). Nicht eingerichtet → dezenter Hinweis.
+
+const HIST_DAYS = 14;
+
+function _loadScoreHistory(box, theme) {
+    const params = new URLSearchParams();
+    params.append('action', 'network.topology.v6.health_history');
+    params.append('days', String(HIST_DAYS));
+    fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(),
+          { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!box.isConnected) return;
+            if (data.error || !data.item_found || !(data.avg || []).length) {
+                box.innerHTML = '<div style="font-size:11px;color:' + theme.subSoft + '">'
+                    + esc(t('health.hist.hint')) + '</div>';
+                return;
+            }
+            box.innerHTML = _histChart(data, theme);
+        })
+        .catch(function() { /* Historie ist Nice-to-have */ });
+}
+
+function _histChart(data, theme) {
+    const avg = data.avg, mn = data.min || [];
+    const W = 720, H = 110, padL = 30, padR = 8, padT = 8, padB = 18;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const from = avg[0][0];
+    const to   = avg[avg.length - 1][0];
+    const span = Math.max(1, to - from);
+    function pts(series) {
+        return series.map(function(p) {
+            const x = padL + (p[0] - from) / span * iw;
+            const v = Math.max(0, Math.min(100, p[1]));
+            const y = padT + ih * (1 - v / 100);
+            return x.toFixed(1) + ',' + y.toFixed(1);
+        }).join(' ');
+    }
+    // Schwellen-Linien bei 40/65/85 — gleiche Grenzen wie die Karten-Farben.
+    let grid = '';
+    [[85, COL_OK], [65, COL_WARN], [40, COL_BAD]].forEach(function(g) {
+        const y = padT + ih * (1 - g[0] / 100);
+        grid += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y
+              + '" stroke="' + g[1] + '" stroke-width="0.5" opacity="0.45" stroke-dasharray="3 3"/>'
+              + '<text x="' + (padL - 5) + '" y="' + (y + 3) + '" text-anchor="end" font-size="8" '
+              + 'font-family="monospace" fill="' + theme.sub + '">' + g[0] + '</text>';
+    });
+    function dlbl(ts) {
+        const d = new Date(ts * 1000);
+        return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + '.';
+    }
+    const lastAvg = Math.round(avg[avg.length - 1][1]);
+    // Platzhalter darf HTML enthalten (farbiges <b>) — eigene Zahl, kein User-Input.
+    const title = t('health.hist.title', {
+        days: data.days || HIST_DAYS,
+        avg:  '<b style="color:' + _scoreColor(lastAvg) + '">' + lastAvg + '</b>',
+    });
+    let svg = '<svg width="' + W + '" height="' + H + '" style="display:block">' + grid
+        + '<polyline fill="none" stroke="' + theme.accent + '" stroke-width="1.8" points="' + pts(avg) + '"/>';
+    if (mn.length) {
+        svg += '<polyline fill="none" stroke="' + COL_CRIT + '" stroke-width="1.2" '
+             + 'stroke-dasharray="4 3" opacity="0.7" points="' + pts(mn) + '"/>';
+    }
+    svg += '<text x="' + padL + '" y="' + (H - 5) + '" font-size="9" font-family="monospace" fill="'
+         + theme.sub + '">' + dlbl(from) + '</text>'
+         + '<text x="' + (W - padR) + '" y="' + (H - 5) + '" text-anchor="end" font-size="9" '
+         + 'font-family="monospace" fill="' + theme.sub + '">' + dlbl(to) + '</text>'
+         + '</svg>';
+    let leg = '<div style="font-size:10px;color:' + theme.sub + ';display:flex;gap:12px;margin-top:2px">'
+        + '<span><span style="display:inline-block;width:14px;height:2px;background:' + theme.accent
+        + ';vertical-align:middle;margin-right:4px"></span>' + esc(t('health.hist.avg')) + '</span>';
+    if (mn.length) {
+        leg += '<span><span style="display:inline-block;width:14px;height:2px;background:' + COL_CRIT
+             + ';opacity:0.7;vertical-align:middle;margin-right:4px"></span>' + esc(t('health.hist.min')) + '</span>';
+    }
+    leg += '</div>';
+    return '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:4px">' + title + '</div>'
+        + '<div style="overflow-x:auto">' + svg + leg + '</div>';
+}
+
 export function renderHealth(wrap, nodes) {
     if (window._ntCy)       { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     if (window._ntEdgeAnim) { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
@@ -171,6 +254,12 @@ export function renderHealth(wrap, nodes) {
         })
         + '</div>';
     root.appendChild(head);
+
+    // Score-Verlauf (async — Hinweis oder Chart, je nach Sender-Setup)
+    const hist = document.createElement('div');
+    hist.style.cssText = 'margin-bottom:18px';
+    root.appendChild(hist);
+    _loadScoreHistory(hist, theme);
 
     const grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill, minmax(380px, 1fr));gap:12px';

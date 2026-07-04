@@ -63,4 +63,30 @@ export default {
     'toolbar.off':            'aus',
     'topo.added':             'Topologie: neue Verbindung {a} ↔ {b}',
     'topo.removed':           'Topologie: Verbindung {a} ↔ {b} verschwunden',
+
+    // Kapazitäts-Forecast (Stats-Tab)
+    'fc.title':      'Kapazitäts-Forecast',
+    'fc.caveat':     'Lineare Prognose aus Zabbix-Trends (Stunden-Mittelwerte) auf Basis der Weathermap-Kapazitäten. Traffic ist host-aggregiert — ohne Port-Mapping eine Schätzung, kein Orakel.',
+    'fc.period':     'Zeitraum:',
+    'fc.days_unit':  'Tage',
+    'fc.loading':    'Lade Trends ({days} Tage)…',
+    'fc.summary':    '{links} Links mit bekannter Kapazität · Basis: {days} Tage Trends · Schwelle: 80 %',
+    'fc.nolinks':    'Keine Links mit bekannter Kapazität — es fehlen ifSpeed-/ifHighSpeed-Items auf den Edge-Endpunkten.',
+    'fc.nodata':     'Keine Trend-Daten für die Link-Endpunkte gefunden (Trends aktiviert? Zeitraum zu kurz?).',
+    'fc.col.link':   'Link',
+    'fc.col.cap':    'Kapazität',
+    'fc.col.util':   'Auslastung',
+    'fc.col.trend':  'Trend/Woche',
+    'fc.col.eta':    '80 % erreicht',
+    'fc.eta.now':    'jetzt über 80 %',
+    'fc.eta.days':   'in ~{d} Tagen',
+    'fc.eta.gt1y':   'in über einem Jahr',
+    'fc.eta.stable': 'stabil / fallend',
+    'fc.more':       '+{n} weitere Links (später fällig oder stabil)',
+
+    // Health-Score-Historie
+    'health.hist.title': 'Score-Verlauf {days} Tage · aktuell Ø {avg}',
+    'health.hist.hint':  'Score-Historie nicht eingerichtet: templates/nt_health_score_template.yaml importieren und tools/topo-change-sender.sh als Cron laufen lassen — der Sender pusht den Score automatisch mit.',
+    'health.hist.avg':   'Ø Score',
+    'health.hist.min':   'schlechteste Gruppe',
 };

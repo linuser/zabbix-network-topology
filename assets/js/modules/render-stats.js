@@ -11,7 +11,8 @@
 // zeigen wir einen Hinweis. "Pre"-Events (vor Range-Start bereits offen)
 // werden ausgeklammert — sie zaehlen nicht als neue Events.
 
-import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl, fmt, linkCapacity } from './utils.js';
+import { t } from './i18n.js';
 
 const RANGES = [
     { lbl: '7 Tage',  days: 7 },
@@ -263,6 +264,54 @@ export function renderStats(wrap, nodes) {
     grid.appendChild(trigBox);
     root.appendChild(grid);
 
+    // ── Kapazitaets-Forecast (Zabbix-Trends × Weathermap-Kapazitaeten) ────
+    const fcRoot = document.createElement('div');
+    fcRoot.style.cssText = 'margin-top:28px;padding-top:18px;border-top:1px solid ' + theme.border;
+    fcRoot.innerHTML = '<h3 style="margin:0 0 4px;font-size:13px;color:' + theme.sub
+        + ';text-transform:uppercase;letter-spacing:0.04em">' + esc(t('fc.title')) + '</h3>'
+        + '<div style="font-size:11px;color:' + theme.subSoft + ';margin-bottom:10px;max-width:760px">'
+        + esc(t('fc.caveat')) + '</div>';
+    const fcCtl = document.createElement('div');
+    fcCtl.style.cssText = 'display:flex;gap:6px;margin-bottom:12px;align-items:center';
+    const fcLbl = document.createElement('span');
+    fcLbl.textContent = t('fc.period');
+    fcLbl.style.cssText = 'font-size:12px;color:' + theme.sub + ';font-weight:600;margin-right:4px';
+    fcCtl.appendChild(fcLbl);
+    let _fcDays = 30;
+    const fcBtns = [];
+    [30, 60, 90].forEach(function(d) {
+        const b = document.createElement('button');
+        b.textContent = d + ' ' + t('fc.days_unit');
+        b.dataset.days = String(d);
+        b.style.cssText = 'padding:4px 10px;border:1px solid ' + theme.border + ';'
+            + 'border-radius:4px;background:' + theme.surface + ';color:' + theme.text + ';'
+            + 'cursor:pointer;font-size:12px;font-family:inherit';
+        if (d === _fcDays) {
+            b.style.background = theme.accent;
+            b.style.color = '#fff';
+            b.style.borderColor = theme.accent;
+        }
+        b.addEventListener('click', function() {
+            _fcDays = d;
+            fcBtns.forEach(function(fb) {
+                const on = fb.dataset.days == d;
+                fb.style.background  = on ? theme.accent : theme.surface;
+                fb.style.color       = on ? '#fff' : theme.text;
+                fb.style.borderColor = on ? theme.accent : theme.border;
+            });
+            loadForecast();
+        });
+        fcBtns.push(b);
+        fcCtl.appendChild(b);
+    });
+    const fcStatus = document.createElement('div');
+    fcStatus.style.cssText = 'font-size:12px;color:' + theme.sub + ';margin-bottom:8px';
+    const fcSlot = document.createElement('div');
+    fcRoot.appendChild(fcCtl);
+    fcRoot.appendChild(fcStatus);
+    fcRoot.appendChild(fcSlot);
+    root.appendChild(fcRoot);
+
     wrap.appendChild(root);
 
     let _seq = 0;
@@ -329,4 +378,157 @@ export function renderStats(wrap, nodes) {
     }
 
     loadAndRender();
+
+    // ── Kapazitaets-Forecast: Links mit bekannter Kapazitaet einsammeln,
+    // Trends vom Backend regressen lassen, Edge-ETA bis zur 80%-Schwelle
+    // rechnen. Edge-Semantik wie die Live-Anzeige: beide Endpunkte zaehlen
+    // dieselben Bytes → (A+B)/2; fehlt eine Seite, ist deren Wert allein
+    // die beste Schaetzung (ohne Halbierung).
+    let _fcSeq = 0;
+    function loadForecast() {
+        const d = window._ntLastData || {};
+        const nodesArr = d.nodes || nodes || [];
+        const speed = {}, labelOf = {};
+        nodesArr.forEach(function(n) {
+            speed[String(n.id)]   = n.link_speed || 0;
+            labelOf[String(n.id)] = n.label || n.host || String(n.id);
+        });
+        const links = [], seenE = {};
+        (d.edges || []).forEach(function(e) {
+            const a = String(e.source || e.from || ''), b = String(e.target || e.to || '');
+            if (!a || !b || a === b) return;
+            const k = [a, b].sort().join('|');
+            if (seenE[k]) return;
+            seenE[k] = true;
+            const cap = linkCapacity(speed[a] || 0, speed[b] || 0);
+            if (cap > 0) links.push({ a: a, b: b, cap: cap });
+        });
+        if (links.length === 0) {
+            fcStatus.textContent = '';
+            fcSlot.innerHTML = '<div style="color:' + theme.subSoft + ';font-style:italic;font-size:12px">'
+                + esc(t('fc.nolinks')) + '</div>';
+            return;
+        }
+        const hostSet = {};
+        links.forEach(function(l) { hostSet[l.a] = true; hostSet[l.b] = true; });
+
+        const cfg = window.NT_CONFIG || {};
+        const params = new URLSearchParams();
+        params.append('action', 'network.topology.v6.capacity_forecast');
+        params.append('days', String(_fcDays));
+        ((cfg && cfg.selected_groupids) || []).forEach(function(g) { params.append('groupids[]', String(g)); });
+        Object.keys(hostSet).forEach(function(h) { params.append('hostids[]', h); });
+
+        fcStatus.textContent = t('fc.loading', { days: _fcDays });
+        fcSlot.innerHTML = '';
+        const seq = ++_fcSeq;
+        fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(),
+              { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (seq !== _fcSeq || !fcSlot.isConnected) return;
+                if (data.error) {
+                    fcStatus.innerHTML = '<span style="color:#dc2626">' + esc(data.error) + '</span>';
+                    return;
+                }
+                renderForecast(links, labelOf, data.hosts || {});
+            })
+            .catch(function(e) {
+                if (seq !== _fcSeq) return;
+                fcStatus.innerHTML = '<span style="color:#dc2626">' + esc(e.message) + '</span>';
+            });
+    }
+
+    function renderForecast(links, labelOf, fcHosts) {
+        const rows = [];
+        links.forEach(function(l) {
+            const fa = fcHosts[l.a] || null, fb = fcHosts[l.b] || null;
+            if (!fa && !fb) return;
+            function dir(key) {
+                const A = fa && fa[key], B = fb && fb[key];
+                if (A && B) return { now: (A.now + B.now) / 2, slope: (A.slope + B.slope) / 2 };
+                return A || B || null;
+            }
+            const din = dir('in'), dout = dir('out');
+            if (!din && !dout) return;
+            const nowMax  = Math.max(din ? din.now : 0, dout ? dout.now : 0);
+            const target  = 0.8 * l.cap;
+            let eta = null, etaSlope = null;
+            [din, dout].forEach(function(dd) {
+                if (!dd) return;
+                let e = null;
+                if (dd.now >= target) e = 0;
+                else if (dd.slope > 0) e = (target - dd.now) / dd.slope / 86400;
+                if (e !== null && (eta === null || e < eta)) { eta = e; etaSlope = dd.slope; }
+            });
+            const domSlope = (etaSlope !== null) ? etaSlope
+                : Math.max(din ? din.slope : -Infinity, dout ? dout.slope : -Infinity);
+            rows.push({
+                label:  (labelOf[l.a] || l.a) + ' ↔ ' + (labelOf[l.b] || l.b),
+                cap:    l.cap,
+                util:   nowMax / l.cap * 100,
+                weekPP: isFinite(domSlope) ? domSlope * 604800 / l.cap * 100 : 0,
+                eta:    eta,
+            });
+        });
+        if (rows.length === 0) {
+            fcStatus.textContent = '';
+            fcSlot.innerHTML = '<div style="color:' + theme.subSoft + ';font-style:italic;font-size:12px">'
+                + esc(t('fc.nodata')) + '</div>';
+            return;
+        }
+        // Kritischste zuerst: frueheste 80%-ETA, dann hoechste Auslastung.
+        rows.sort(function(a, b) {
+            if ((a.eta === null) !== (b.eta === null)) return a.eta === null ? 1 : -1;
+            if (a.eta !== null && b.eta !== null && a.eta !== b.eta) return a.eta - b.eta;
+            return b.util - a.util;
+        });
+        fcStatus.textContent = t('fc.summary', { links: rows.length, days: _fcDays });
+        const shown = rows.slice(0, 20);
+        fcSlot.innerHTML = buildTopTable(shown, theme,
+            [esc(t('fc.col.link')), esc(t('fc.col.cap')), esc(t('fc.col.util')),
+             esc(t('fc.col.trend')), esc(t('fc.col.eta'))],
+            function(r) {
+                return [
+                    esc(r.label),
+                    { text: esc(fmt(r.cap)), style: 'font-family:monospace;white-space:nowrap' },
+                    { text: '<b style="color:' + _utilColor(r.util) + '">' + r.util.toFixed(1) + '%</b>',
+                      style: 'text-align:right;font-family:monospace' },
+                    { text: (r.weekPP >= 0 ? '+' : '') + r.weekPP.toFixed(2) + ' pp',
+                      style: 'text-align:right;font-family:monospace;color:'
+                          + (r.weekPP > 0.5 ? '#f97316' : theme.sub) },
+                    _etaCell(r.eta),
+                ];
+            })
+            + (rows.length > shown.length
+                ? '<div style="font-size:11px;color:' + theme.subSoft + ';margin-top:6px">'
+                    + esc(t('fc.more', { n: rows.length - shown.length })) + '</div>'
+                : '');
+    }
+
+    // Farbstufen grob analog Weathermap-Skala.
+    function _utilColor(u) {
+        if (u < 40) return '#16a34a';
+        if (u < 55) return '#eab308';
+        if (u < 70) return '#f59e0b';
+        if (u < 85) return '#f97316';
+        return '#dc2626';
+    }
+
+    function _etaCell(eta) {
+        if (eta === null) {
+            return { text: '<span style="color:' + theme.subSoft + '">' + esc(t('fc.eta.stable')) + '</span>' };
+        }
+        if (eta <= 0.5) {
+            return { text: '<b style="color:#dc2626">' + esc(t('fc.eta.now')) + '</b>' };
+        }
+        const days = Math.round(eta);
+        if (days > 365) {
+            return { text: '<span style="color:' + theme.subSoft + '">' + esc(t('fc.eta.gt1y')) + '</span>' };
+        }
+        const col = days <= 30 ? '#dc2626' : (days <= 90 ? '#f97316' : '#ca8a04');
+        return { text: '<b style="color:' + col + '">' + esc(t('fc.eta.days', { d: days })) + '</b>' };
+    }
+
+    loadForecast();
 }
