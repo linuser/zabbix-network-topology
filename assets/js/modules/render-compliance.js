@@ -20,9 +20,11 @@
 // nicht. Aggregat-Counter sind unabhaengig — zaehlen wie viele Hosts
 // von einem Check betroffen sind.
 
-import { esc } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
 
-const CHECKS = [
+// Check-Definitionen (exportiert — der Audit-Report in export.js rendert
+// dieselbe Tabelle und importiert sie von hier statt eigener Kopie).
+export const COMPLIANCE_CHECKS = [
     { key: 'snmp_v2',         lbl: 'SNMP v1/v2c',     short: 'SNMP v2',  level: 'bad'  },
     { key: 'snmp_v3',         lbl: 'SNMP v3',          short: 'SNMP v3', level: 'good' },
     { key: 'no_tls',          lbl: 'Agent ohne TLS',   short: 'no TLS',  level: 'bad'  },
@@ -33,23 +35,28 @@ const CHECKS = [
     { key: 'stale_problem',   lbl: 'Stale Krit-Problem', short: 'stale', level: 'bad'  },
     { key: 'mtnc_no_comment', lbl: 'Wartung ohne Kommentar', short: 'mtnc?', level: 'info' },
 ];
+const CHECKS = COMPLIANCE_CHECKS;
+
+// Compliance-Daten vom Backend holen (exportiert — auch der Audit-Report
+// nutzt diesen Fetch). null bei Fehler/fehlender Group-Auswahl.
+export function fetchComplianceData() {
+    const cfg = window.NT_CONFIG || {};
+    const groupids = (cfg && cfg.selected_groupids) || [];
+    if (!groupids.length) return Promise.resolve(null);
+    const params = new URLSearchParams();
+    params.append('action', 'network.topology.v6.compliance');
+    groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
+    const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
+    return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(d) { return (d && !d.error) ? d : null; })
+        .catch(function() { return null; });
+}
 
 const COL_GOOD = '#16a34a';
 const COL_INFO = '#0891b2';
 const COL_BAD  = '#dc2626';
 const COL_NONE = '#cbd5e1';
-
-function _theme(dark) {
-    return dark
-        ? { bg:'#0d1117', surface:'#161b22', head:'#1c2128', text:'#e6edf3', sub:'#8b949e',
-            subSoft:'#6e7681', border:'#30363d', borderSoft:'#21262d', hover:'#21262d' }
-        : { bg:'#ffffff', surface:'#f8fafc', head:'#f1f5f9', text:'#1f2c33', sub:'#64748b',
-            subSoft:'#94a3b8', border:'#dfe4e7', borderSoft:'#eef2f5', hover:'#f1f5f9' };
-}
-
-function buildBaseUrl() {
-    return window.location.pathname.replace('zabbix.php', '');
-}
 
 function _checkColor(check) {
     return check.level === 'good' ? COL_GOOD
@@ -64,14 +71,14 @@ function _checkSymbol(check, hit) {
     return '<span style="color:' + COL_BAD + ';font-weight:700">✗</span>';
 }
 
-function _aggregateCards(agg, total, theme, onlyIssues, onIssueToggle) {
+function _aggregateCards(agg, total, theme, onlyIssues) {
     const cards = CHECKS.map(function(c) {
         const n = agg[c.key] || 0;
         const col = _checkColor(c);
         const pct = total > 0 ? Math.round(100 * n / total) : 0;
-        return '<div data-check="' + esc(c.key) + '" style="background:' + theme.surface
+        return '<div style="background:' + theme.surface
             + ';border:1px solid ' + theme.border + ';border-radius:4px;padding:8px 10px;'
-            + 'display:flex;flex-direction:column;cursor:pointer;transition:background 0.12s">'
+            + 'display:flex;flex-direction:column">'
             + '<div style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase;'
             +   'letter-spacing:0.05em">' + esc(c.lbl) + '</div>'
             + '<div style="display:flex;align-items:baseline;gap:6px;margin-top:2px">'
@@ -132,7 +139,7 @@ export function renderCompliance(wrap) {
 
     const dark = !!(document.getElementById('nt-root')
                  && document.getElementById('nt-root').classList.contains('nt-dark'));
-    const theme = _theme(dark);
+    const theme = mkTabTheme(dark);
 
     Array.from(wrap.children).forEach(function(ch) {
         if (ch.id !== 'nt-loading') wrap.removeChild(ch);
@@ -166,18 +173,13 @@ export function renderCompliance(wrap) {
         return;
     }
 
-    const params = new URLSearchParams();
-    params.append('action', 'network.topology.v6.compliance');
-    groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
-    const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
-
     let _onlyIssues = false;
 
-    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(function(r) { return r.json(); })
+    fetchComplianceData()
         .then(function(data) {
-            if (data.error) {
-                aggBox.innerHTML = '<div style="color:' + COL_BAD + '">' + esc(data.error) + '</div>';
+            if (!data) {
+                aggBox.innerHTML = '<div style="color:' + COL_BAD + '">'
+                    + 'Compliance-Daten nicht verfuegbar (Berechtigung oder Backend-Fehler).</div>';
                 return;
             }
             const allHosts = data.hosts || [];

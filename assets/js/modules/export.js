@@ -16,6 +16,7 @@
 import { esc, fmt } from './utils.js';
 import { loadLinks } from './storage.js';
 import { statsByGroup, scoreColor, scoreLabel } from './render-health.js';
+import { COMPLIANCE_CHECKS, fetchComplianceData } from './render-compliance.js';
 
 const SEV_LBL = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
 const SEV_COLORS = {
@@ -331,18 +332,16 @@ function buildAuditHtml(complianceData) {
     // (network.topology.v6.compliance Action). Sonst leer.
     let complianceSection = '';
     if (complianceData && complianceData.aggregate) {
-        const checks = [
-            { key: 'snmp_v2',         lbl: 'SNMP v1/v2c',             level: 'bad'  },
-            { key: 'snmp_v3',         lbl: 'SNMP v3 (positiv)',       level: 'good' },
-            { key: 'no_tls',          lbl: 'Agent ohne TLS',          level: 'bad'  },
-            { key: 'no_proxy',        lbl: 'Kein Proxy',              level: 'info' },
-            { key: 'no_inventory',    lbl: 'Inventory aus',           level: 'info' },
-            { key: 'no_location',     lbl: 'Kein Standort',           level: 'info' },
-            { key: 'no_template',     lbl: 'Kein Template',           level: 'bad'  },
-            { key: 'stale_problem',   lbl: 'Krit. Problem > ' + (complianceData.cutoff_days || 7) + 'd',
-              level: 'bad'  },
-            { key: 'mtnc_no_comment', lbl: 'Wartung ohne Kommentar',  level: 'info' },
-        ];
+        // Check-Definitionen aus render-compliance.js (Single Source) —
+        // nur das stale_problem-Label wird hier mit dem dynamischen
+        // Cutoff aus der Backend-Response angereichert.
+        const checks = COMPLIANCE_CHECKS.map(function(c) {
+            if (c.key === 'stale_problem') {
+                return { key: c.key, level: c.level,
+                         lbl: 'Krit. Problem > ' + (complianceData.cutoff_days || 7) + 'd' };
+            }
+            return c;
+        });
         const colOf = function(lvl) { return lvl === 'bad' ? '#dc2626' : lvl === 'good' ? '#16a34a' : '#0891b2'; };
         const tot   = complianceData.total || 0;
         complianceSection = '<section><h2>Compliance (' + tot + ' Hosts)</h2>'
@@ -475,21 +474,10 @@ export function setupExportMenu(bar, isFirstRun) {
 
     // Audit-Report: strukturierter Bericht (Hostgroups + Kritische + Offline/Stale
     // + Top-Probleme + Proxy + Compliance). Kein Map-Screenshot — fokussiert auf
-    // Audit-relevante Daten. Compliance-Daten werden asynchron vom Backend
-    // gefetcht; bei Fehler/Timeout faellt der Report auf "ohne Compliance" zurueck.
-    function _fetchCompliance() {
-        const cfg = window.NT_CONFIG || {};
-        const groupids = (cfg && cfg.selected_groupids) || [];
-        if (!groupids.length) return Promise.resolve(null);
-        const params = new URLSearchParams();
-        params.append('action', 'network.topology.v6.compliance');
-        groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
-        const url = window.location.pathname.replace('zabbix.php', '') + 'zabbix.php?' + params.toString();
-        return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function(r) { return r.json(); })
-            .then(function(d) { return (d && !d.error) ? d : null; })
-            .catch(function() { return null; });
-    }
+    // Audit-relevante Daten. Compliance-Fetch kommt aus render-compliance.js
+    // (Single Source); bei Fehler/fehlender Berechtigung (Endpoint ist Admin-
+    // only) faellt der Report auf "ohne Compliance-Sektion" zurueck.
+    const _fetchCompliance = fetchComplianceData;
 
     mItem('&#128203;', 'Audit-Report (Drucken)', function() {
         // Fenster SYNCHRON im Click oeffnen (User-Activation) — window.open()

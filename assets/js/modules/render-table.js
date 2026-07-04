@@ -14,7 +14,7 @@
 //
 // Sortierung: Klick auf Spalten-Header. Default: Status-DESC (kritischste oben).
 
-import { esc, fmt } from './utils.js';
+import { esc, fmt, aggregateValues } from './utils.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
 import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
@@ -1315,7 +1315,7 @@ export function renderTable(wrap, nodes, edges) {
         // P99 etc.) — audit-friendly.
         function _exportPivotCsv() {
             if (!_itemsData || !_itemsData.columns) return;
-            const cols = _itemsData.columns;
+            let cols = _itemsData.columns;
             const allIds = Object.keys(_itemsData.hosts || {});
             let visibleIds = allIds;
             if (_itemsQuery) {
@@ -1328,7 +1328,25 @@ export function renderTable(wrap, nodes, edges) {
                     return matchQuery(_itemsQuery, { _any: hn, host: hn, label: hn });
                 });
             }
-            const sortedIds = sortPivotHostIds(_itemsData, visibleIds);
+            let sortedIds = sortPivotHostIds(_itemsData, visibleIds);
+
+            // Hide-Empty analog zur sichtbaren Tabelle: Spalten ohne einen
+            // einzigen Wert raus, danach Zeilen die komplett leer sind.
+            // (Der Doc-Kommentar oben versprach das schon — jetzt stimmt's.)
+            if (_itemsHideEmpty) {
+                cols = cols.filter(function(c) {
+                    return sortedIds.some(function(hid) {
+                        const v = _itemsData.rows[hid] && _itemsData.rows[hid][c.key];
+                        return v != null;
+                    });
+                });
+                sortedIds = sortedIds.filter(function(hid) {
+                    return cols.some(function(c) {
+                        const v = _itemsData.rows[hid] && _itemsData.rows[hid][c.key];
+                        return v != null;
+                    });
+                });
+            }
 
             function esc(s) {
                 s = String(s == null ? '' : s);
@@ -1358,26 +1376,9 @@ export function renderTable(wrap, nodes, edges) {
             })).concat(['Avg']);
             const lines = [header.map(esc).join(',')];
 
-            // Body: pro Host eine Zeile
-            const aggregateLocal = function(values, mode) {
-                const nums = values.filter(function(x) {
-                    return typeof x === 'number' && isFinite(x);
-                });
-                if (!nums.length) return null;
-                if (mode === 'sum') return nums.reduce(function(a, b) { return a + b; }, 0);
-                if (mode === 'max') return Math.max.apply(null, nums);
-                if (mode === 'min') return Math.min.apply(null, nums);
-                if (mode === 'p50' || mode === 'p95' || mode === 'p99') {
-                    const sorted = nums.slice().sort(function(a, b) { return a - b; });
-                    const pct = mode === 'p50' ? 0.5 : mode === 'p95' ? 0.95 : 0.99;
-                    const idx = pct * (sorted.length - 1);
-                    const lo = Math.floor(idx), hi = Math.ceil(idx);
-                    if (lo === hi) return sorted[lo];
-                    const w = idx - lo;
-                    return sorted[lo] * (1 - w) + sorted[hi] * w;
-                }
-                return nums.reduce(function(a, b) { return a + b; }, 0) / nums.length;
-            };
+            // Body: pro Host eine Zeile. Aggregat-Logik kommt aus utils.js
+            // (aggregateValues) — war hier als Kopie dupliziert.
+            const aggregateLocal = aggregateValues;
 
             sortedIds.forEach(function(hid) {
                 const row = _itemsData.rows[hid] || {};

@@ -10,7 +10,7 @@
 // Presets sind in PRESETS definiert — typische Item-Key-Muster für die
 // häufigsten Wallboard-Sichten.
 
-import { esc } from './utils.js';
+import { esc, buildBaseUrl, aggregateValues } from './utils.js';
 
 const PRESETS = [
     // Filesystem
@@ -198,11 +198,8 @@ function _buildSparklineSvg(values, theme) {
         + '" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 }
 
-function buildBaseUrl() {
-    const p = window.location.pathname;
-    const i = p.indexOf('/zabbix.php');
-    return i > 0 ? p.substring(0, i + 1) : '/';
-}
+// buildBaseUrl kommt aus utils.js (war hier als leicht abweichende
+// indexOf-Variante dupliziert — gleiche Semantik).
 
 // Wert formatieren je nach Unit. Nichts Schlaues — units sind in Zabbix
 // frei wählbar, wir machen nur die häufigsten Fälle.
@@ -311,6 +308,7 @@ const FALLBACK_THEME = {
     border: '#e2e8f0', borderSoft: '#f1f5f9',
     text: '#1e293b', textStrong: '#0f172a', sub: '#64748b', subSoft: '#94a3b8',
     accent: '#2563eb', link: '#2563eb',
+    hover: '#f1f5f9',   // renderList nutzt t.hover — fehlte (→ "undefined" im Style)
 };
 
 // Renders the items-pivot toolbar (preset-dropdown + custom-pattern + apply).
@@ -643,6 +641,9 @@ export function buildPivotToolbar(onApply, theme) {
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (seq !== _probeSeq) return;   // outdated
+                    // Farbe in JEDEM Pfad zuruecksetzen — nach einem 0-Treffer
+                    // blieb das Orange sonst an nachfolgenden Hints kleben.
+                    countHint.style.color = t.subSoft;
                     if (!d || d.error) { countHint.textContent = ''; return; }
                     if (d.hint) { countHint.textContent = d.hint; return; }
                     if (d.count === 0) {
@@ -650,7 +651,6 @@ export function buildPivotToolbar(onApply, theme) {
                         countHint.style.color = '#f59e0b';
                         return;
                     }
-                    countHint.style.color = t.subSoft;
                     const sample = (d.sample || []).slice(0, 3).join('  ·  ');
                     countHint.textContent = d.count + ' Items matchen'
                         + (sample ? '   z.B. ' + sample : '');
@@ -774,30 +774,10 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
 
     const baseUrl = buildBaseUrl();
 
-    // Aggregat-Helper: Sum / Avg / Max ueber non-null numerische Werte.
-    // Filter strikt auf 'number' damit numeric-Strings (z.B. "12.5") nicht
-    // im Sum-Modus zu String-Konkatenation fuehren ("0" + "12.5" = "012.5").
-    // isFinite filtert auch Infinity/-Infinity raus.
-    const aggregate = function(values, mode) {
-        const nums = values.filter(function(v) {
-            return typeof v === 'number' && isFinite(v);
-        });
-        if (nums.length === 0) return null;
-        if (mode === 'sum') return nums.reduce(function(a, b) { return a + b; }, 0);
-        if (mode === 'max') return Math.max.apply(null, nums);
-        if (mode === 'min') return Math.min.apply(null, nums);
-        // Percentiles: linear-interpolated position im sortierten Array
-        if (mode === 'p50' || mode === 'p95' || mode === 'p99') {
-            const sorted = nums.slice().sort(function(a, b) { return a - b; });
-            const pct = mode === 'p50' ? 0.5 : mode === 'p95' ? 0.95 : 0.99;
-            const idx = pct * (sorted.length - 1);
-            const lo = Math.floor(idx), hi = Math.ceil(idx);
-            if (lo === hi) return sorted[lo];
-            const w = idx - lo;
-            return sorted[lo] * (1 - w) + sorted[hi] * w;
-        }
-        return nums.reduce(function(a, b) { return a + b; }, 0) / nums.length;
-    };
+    // Aggregat-Helper kommt aus utils.js (aggregateValues — war hier und im
+    // CSV-Export dupliziert). Lokaler Alias damit die Render-Callbacks
+    // unveraendert bleiben.
+    const aggregate = aggregateValues;
 
     // Mixed-Units-Detection fuer die Aggregat-Spalte: nur wenn alle Spalten
     // dieselbe Unit haben, ist der Avg-Wert sinnvoll formatierbar. Bei

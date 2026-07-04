@@ -18,6 +18,51 @@ export function fmt(b) {
     return b.toFixed(0) + ' b/s';
 }
 
+// buildBaseUrl — Zabbix-Basis-Pfad (alles vor "zabbix.php"). War 4× in
+// den Tab-Modulen dupliziert.
+export function buildBaseUrl() {
+    return window.location.pathname.replace('zabbix.php', '');
+}
+
+// mkTabTheme — gemeinsame Farb-Palette der "einfachen" Tabs (Diag / Health /
+// Compliance / LLDP-Q / Stats). War 4× dupliziert und driftete bereits
+// (hover vs. accent je nach Modul). Superset beider Varianten.
+// Die Tabelle (render-table.js) hat bewusst ihr eigenes, umfangreicheres
+// Zabbix-Native-Theme — das bleibt getrennt.
+export function mkTabTheme(dark) {
+    return dark
+        ? { bg:'#0d1117', surface:'#161b22', head:'#1c2128', hover:'#21262d',
+            text:'#e6edf3', sub:'#8b949e', subSoft:'#6e7681',
+            border:'#30363d', borderSoft:'#21262d', accent:'#0275b8' }
+        : { bg:'#ffffff', surface:'#f8fafc', head:'#f1f5f9', hover:'#f1f5f9',
+            text:'#1f2c33', sub:'#64748b', subSoft:'#94a3b8',
+            border:'#dfe4e7', borderSoft:'#eef2f5', accent:'#0275b8' };
+}
+
+// aggregateValues — Sum/Avg/Min/Max/P50/P95/P99 ueber non-null numerische
+// Werte. Strikte number-Filterung damit numeric-Strings ("12.5") im
+// Sum-Modus keine String-Konkatenation ausloesen. Perzentile linear
+// interpoliert. War 2× dupliziert (items-pivot + CSV-Export).
+export function aggregateValues(values, mode) {
+    const nums = values.filter(function(v) {
+        return typeof v === 'number' && isFinite(v);
+    });
+    if (nums.length === 0) return null;
+    if (mode === 'sum') return nums.reduce(function(a, b) { return a + b; }, 0);
+    if (mode === 'max') return Math.max.apply(null, nums);
+    if (mode === 'min') return Math.min.apply(null, nums);
+    if (mode === 'p50' || mode === 'p95' || mode === 'p99') {
+        const sorted = nums.slice().sort(function(a, b) { return a - b; });
+        const pct = mode === 'p50' ? 0.5 : mode === 'p95' ? 0.95 : 0.99;
+        const idx = pct * (sorted.length - 1);
+        const lo = Math.floor(idx), hi = Math.ceil(idx);
+        if (lo === hi) return sorted[lo];
+        const w = idx - lo;
+        return sorted[lo] * (1 - w) + sorted[hi] * w;
+    }
+    return nums.reduce(function(a, b) { return a + b; }, 0) / nums.length;
+}
+
 // fmtItemValue — formatiert einen Item-Wert mit seinen Zabbix-Units.
 // Numerische Werte mit großen Zahlen werden abgekürzt (1234567 → 1.23M).
 // Für Bytes-Units (B) wird in passende Größenordnungen umgerechnet.

@@ -11,7 +11,7 @@
 // zeigen wir einen Hinweis. "Pre"-Events (vor Range-Start bereits offen)
 // werden ausgeklammert — sie zaehlen nicht als neue Events.
 
-import { esc } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
 
 const RANGES = [
     { lbl: '7 Tage',  days: 7 },
@@ -22,18 +22,6 @@ const DEFAULT_DAYS = 7;
 
 const SEV_COLORS = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
 const SEV_LBL    = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
-
-function _theme(dark) {
-    return dark
-        ? { bg:'#0d1117', surface:'#161b22', text:'#e6edf3', sub:'#8b949e',
-            subSoft:'#6e7681', border:'#30363d', borderSoft:'#21262d', accent:'#0275b8' }
-        : { bg:'#ffffff', surface:'#f8fafc', text:'#1f2c33', sub:'#64748b',
-            subSoft:'#94a3b8', border:'#dfe4e7', borderSoft:'#eef2f5', accent:'#0275b8' };
-}
-
-function buildBaseUrl() {
-    return window.location.pathname.replace('zabbix.php', '');
-}
 
 // Aggregation: nimm das Backend-Format { events: {hostid: [{ts,sev,name,val,pre?}]}, from, to }
 // und baue daraus die drei Statistiken (perDay, perHost, perTrigger).
@@ -197,7 +185,7 @@ export function renderStats(wrap, nodes) {
 
     const dark = !!(document.getElementById('nt-root')
                  && document.getElementById('nt-root').classList.contains('nt-dark'));
-    const theme = _theme(dark);
+    const theme = mkTabTheme(dark);
 
     Array.from(wrap.children).forEach(function(ch) {
         if (ch.id !== 'nt-loading') wrap.removeChild(ch);

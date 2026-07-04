@@ -15,7 +15,6 @@ class WidgetNetworkTopologyHealth extends CWidget {
 
     onInitialize() {
         this._timer       = null;
-        this._dataUrl     = '';
         this._groupids    = [];
         this._worstFirst  = true;
         this._maxGroups   = 0;
@@ -33,9 +32,8 @@ class WidgetNetworkTopologyHealth extends CWidget {
     }
 
     onStart() {
-        var root = this._target.querySelector('[data-data-url]');
+        var root = this._target.querySelector('.nt-health-widget-canvas');
         if (root) {
-            this._dataUrl    = root.dataset.dataUrl   || 'zabbix.php?action=network.topology.v6.data';
             this._worstFirst = root.dataset.worstFirst !== '0';
             this._maxGroups  = parseInt(root.dataset.maxGroups || '0', 10) || 0;
             this._showLegend = root.dataset.showLegend !== '0';

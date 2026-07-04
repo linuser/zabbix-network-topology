@@ -16,19 +16,11 @@
 // Wichtig: Zabbix selbst kennt keine "unbekannter Nachbar"-Klassifikation.
 // Diese Bewertung machen wir hier im Modul aus dem rohen Item-Value.
 
-import { esc } from './utils.js';
+import { esc, mkTabTheme } from './utils.js';
 
 const COL_GOOD = '#16a34a';
 const COL_WARN = '#f59e0b';
 const COL_BAD  = '#dc2626';
-
-function _theme(dark) {
-    return dark
-        ? { bg:'#0d1117', surface:'#161b22', head:'#1c2128', text:'#e6edf3', sub:'#8b949e',
-            subSoft:'#6e7681', border:'#30363d', borderSoft:'#21262d', accent:'#0275b8' }
-        : { bg:'#ffffff', surface:'#f8fafc', head:'#f1f5f9', text:'#1f2c33', sub:'#64748b',
-            subSoft:'#94a3b8', border:'#dfe4e7', borderSoft:'#eef2f5', accent:'#0275b8' };
-}
 
 function _srcBadge(src) {
     const colors = { lldp: '#0891b2', cdp: '#a855f7', other: '#64748b' };
@@ -173,7 +165,7 @@ export function renderLldpQuality(wrap) {
 
     const dark = !!(document.getElementById('nt-root')
                  && document.getElementById('nt-root').classList.contains('nt-dark'));
-    const theme = _theme(dark);
+    const theme = mkTabTheme(dark);
 
     Array.from(wrap.children).forEach(function(ch) {
         if (ch.id !== 'nt-loading') wrap.removeChild(ch);

@@ -23,9 +23,6 @@ class WidgetView extends CControllerDashboardWidgetView {
             'worst_first' => (bool) ($this->fields_values['worst_first'] ?? true),
             'max_groups'  => (int)  ($this->fields_values['max_groups']  ?? 0),
             'show_legend' => (bool) ($this->fields_values['show_legend'] ?? true),
-            'data_url'    => (new \CUrl('zabbix.php'))
-                ->setArgument('action', 'network.topology.v6.data')
-                ->getUrl(),
             'user' => ['debug_mode' => $this->getDebugMode()]
         ]));
     }

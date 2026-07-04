@@ -12,7 +12,6 @@
     ->addItem(
         (new CDiv())
             ->addClass('nt-health-widget-canvas')
-            ->setAttribute('data-data-url',    $data['data_url']    ?? '')
             ->setAttribute('data-worst-first', !empty($data['worst_first']) ? '1' : '0')
             ->setAttribute('data-max-groups',  (string) ($data['max_groups'] ?? 0))
             ->setAttribute('data-show-legend', !empty($data['show_legend']) ? '1' : '0')
