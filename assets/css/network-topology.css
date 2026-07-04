@@ -89,6 +89,26 @@
     font-family: sans-serif;
 }
 
+/* ── Footer (Autor / Version / Lizenz) ───────────────────── */
+.nt-footer {
+    flex-shrink: 0;
+    padding: 3px 12px;
+    font-size: 10px;
+    color: #94a3b8;
+    background: #fff;
+    border-top: 1px solid #eef2f5;
+    font-family: sans-serif;
+    letter-spacing: 0.02em;
+    text-align: right;
+}
+#nt-root.nt-dark .nt-footer {
+    background: #161b22;
+    border-top-color: #21262d;
+    color: #6e7681;
+}
+/* Wallboard: jeder Pixel Vertikalplatz zaehlt */
+body.nt-wallboard .nt-footer { display: none; }
+
 /* Firefox scrollbar */
 #nt-detail { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
 /* WebKit scrollbar */

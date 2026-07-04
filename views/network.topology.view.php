@@ -126,6 +126,21 @@ $selected_data = array_map(
             ->addItem(
                 (new CDiv())->setId('nt-detail')->addClass('nt-detail')
             )
+            ->addItem(
+                // Footer: Autor + Version + Lizenz. Version kommt aus
+                // manifest.json (unten geparst). Im Wallboard-Mode blendet
+                // CSS (body.nt-wallboard) die Zeile aus — dort zaehlt jeder
+                // Pixel Vertikalplatz.
+                (new CDiv())
+                    ->setId('nt-footer')
+                    ->addClass('nt-footer')
+                    ->addItem(new CSpan(
+                        'Network Topology v6 ' . (static function() {
+                            $m = @json_decode((string) @file_get_contents(dirname(__DIR__) . '/manifest.json'), true);
+                            return 'v' . (is_array($m) && !empty($m['version']) ? $m['version'] : '?');
+                        })() . ' — © Alexander Fox | PlaNet Fox — MIT License'
+                    ))
+            )
     )
     ->show();
 ?>
@@ -185,7 +200,10 @@ window.NT_CONFIG = <?= json_encode([
     // User-ID f\u00FCr Multi-User-Trennung der localStorage-Keys.
     // F\u00E4llt auf 0 zur\u00FCck, falls CWebUser nicht verf\u00FCgbar \u2014 dann teilt
     // sich der Browser wie fr\u00FCher die Daten (non-breaking Fallback).
-    'user_id'    => (string) (\CWebUser::$data['userid'] ?? 0)
+    'user_id'    => (string) (\CWebUser::$data['userid'] ?? 0),
+    // Zabbix-User-Sprache ("de_DE", "en_US", "default") \u2014 i18n.js mappt
+    // das auf de/en, bei "default" entscheidet die Browser-Sprache.
+    'lang'       => (string) (\CWebUser::$data['lang'] ?? 'default')
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert

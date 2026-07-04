@@ -14,6 +14,7 @@
 // den Score gross + farbig (rot/orange/gelb/gruen) plus die Detail-Zahlen.
 
 import { esc, mkTabTheme } from './utils.js';
+import { t } from './i18n.js';
 
 const STALE_S = 300;
 const COL_OK   = '#16a34a';   // 85-100
@@ -29,10 +30,10 @@ function _scoreColor(s) {
 }
 
 function _scoreLabel(s) {
-    if (s >= 85) return 'Gesund';
-    if (s >= 65) return 'OK';
-    if (s >= 40) return 'Achtung';
-    return 'Kritisch';
+    if (s >= 85) return t('health.lbl.healthy');
+    if (s >= 65) return t('health.lbl.ok');
+    if (s >= 40) return t('health.lbl.warn');
+    return t('health.lbl.critical');
 }
 
 // Stats pro Hostgroup aus den Nodes ableiten.
@@ -110,13 +111,13 @@ function _card(s, theme) {
         +   '<div style="font-size:13px;font-weight:700;color:' + theme.text
         +     ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(s.name) + '">'
         +     esc(s.name)
-        +     ' <span style="font-weight:400;color:' + theme.sub + '">· ' + s.total + ' Hosts</span></div>'
+        +     ' <span style="font-weight:400;color:' + theme.sub + '">· ' + s.total + ' ' + esc(t('health.hosts')) + '</span></div>'
         +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-        +     metric(s.offline,  'Offline',  COL_CRIT)
-        +     metric(s.stale,    'Stale',    COL_WARN)
-        +     metric(s.critical, 'Critical', COL_CRIT)
-        +     metric(s.unacked,  'Unacked',  COL_BAD)
-        +     metric(s.problems, 'Probl.',   theme.text)
+        +     metric(s.offline,  t('health.m.offline'),  COL_CRIT)
+        +     metric(s.stale,    t('health.m.stale'),    COL_WARN)
+        +     metric(s.critical, t('health.m.critical'), COL_CRIT)
+        +     metric(s.unacked,  t('health.m.unacked'),  COL_BAD)
+        +     metric(s.problems, t('health.m.problems'), theme.text)
         +   '</div>'
         + '</div>'
         + '</div>';
@@ -144,7 +145,7 @@ export function renderHealth(wrap, nodes) {
 
     if (stats.length === 0) {
         root.innerHTML = '<div style="color:' + theme.subSoft + ';padding:40px;text-align:center">'
-            + 'Keine Hostgroups in den aktuellen Daten.</div>';
+            + esc(t('health.empty')) + '</div>';
         wrap.appendChild(root);
         return;
     }
@@ -158,11 +159,16 @@ export function renderHealth(wrap, nodes) {
     const avg = Math.round(tot.score / stats.length);
     const head = document.createElement('div');
     head.style.marginBottom = '20px';
-    head.innerHTML = '<h2 style="margin:0 0 8px;font-size:16px">Topology Health</h2>'
+    // Platzhalter-Werte duerfen HTML enthalten (farbige <b>) — sie kommen
+    // ausschliesslich aus eigenen Zahlen/Farb-Konstanten, kein User-Input.
+    head.innerHTML = '<h2 style="margin:0 0 8px;font-size:16px">' + esc(t('health.title')) + '</h2>'
         + '<div style="font-size:12px;color:' + theme.sub + '">'
-        +   stats.length + ' Gruppen · Ø Score <b style="color:' + _scoreColor(avg) + '">' + avg + '</b>'
-        +   ' · Min Score <b style="color:' + _scoreColor(tot.minScore) + '">' + tot.minScore + '</b>'
-        +   ' · ' + tot.problems + ' offene Probleme insgesamt'
+        + t('health.summary', {
+            groups:   stats.length,
+            avg:      '<b style="color:' + _scoreColor(avg) + '">' + avg + '</b>',
+            min:      '<b style="color:' + _scoreColor(tot.minScore) + '">' + tot.minScore + '</b>',
+            problems: tot.problems,
+        })
         + '</div>';
     root.appendChild(head);
 
@@ -176,11 +182,11 @@ export function renderHealth(wrap, nodes) {
     legend.style.cssText = 'margin-top:24px;padding-top:12px;border-top:1px solid ' + theme.border
         + ';font-size:11px;color:' + theme.sub + ';display:flex;gap:14px;flex-wrap:wrap';
     legend.innerHTML = ''
-        + '<span><b style="color:' + COL_OK   + '">85-100</b> Gesund</span>'
-        + '<span><b style="color:' + COL_WARN + '">65-85</b> OK</span>'
-        + '<span><b style="color:' + COL_BAD  + '">40-65</b> Achtung</span>'
-        + '<span><b style="color:' + COL_CRIT + '">&lt;40</b> Kritisch</span>'
-        + '<span style="margin-left:auto">Formel: 100 − offline·40 − stale·15 − critical·25 − unacked·20 (% der Gruppe)</span>';
+        + '<span><b style="color:' + COL_OK   + '">85-100</b> ' + esc(t('health.legend.healthy'))  + '</span>'
+        + '<span><b style="color:' + COL_WARN + '">65-85</b> '  + esc(t('health.legend.ok'))       + '</span>'
+        + '<span><b style="color:' + COL_BAD  + '">40-65</b> '  + esc(t('health.legend.warn'))     + '</span>'
+        + '<span><b style="color:' + COL_CRIT + '">&lt;40</b> ' + esc(t('health.legend.critical')) + '</span>'
+        + '<span style="margin-left:auto">' + esc(t('health.legend.formula')) + '</span>';
     root.appendChild(legend);
 
     wrap.appendChild(root);

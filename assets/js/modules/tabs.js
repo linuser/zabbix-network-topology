@@ -20,6 +20,7 @@
 
 import { grpColor } from './severity.js';
 import { saveSnapshot, loadSnapshot, clearSnapshot, formatSnapshotAge } from './diff-mode.js';
+import { t } from './i18n.js';
 
 // State-Bridge: Hauptmodul setzt _getActiveTab beim init().
 let _getActiveTab = function() { return 'tech'; };
@@ -70,20 +71,20 @@ export function ensureBaseToolbar(wrap) {
     // das Backend prueft nochmal, aber wir zeigen den Tab im UI gleich nicht an.
     const isAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.can_edit);
     const TABS = [
-        { id: 'nt-tab-tech',       lbl: 'Technisch',  tab: 'tech' },
-        { id: 'nt-tab-mgmt',       lbl: 'Management', tab: 'mgmt' },
-        { id: 'nt-tab-tree',       lbl: 'Tabelle',    tab: 'tree' },
-        { id: 'nt-tab-geo',        lbl: 'Geo',        tab: 'geo'  },
-        { id: 'nt-tab-health',     lbl: 'Health',     tab: 'health' },
-        { id: 'nt-tab-stats',      lbl: 'Stats',      tab: 'stats' },
-        { id: 'nt-tab-lldpq',       lbl: 'LLDP-Q',    tab: 'lldpq', dataOptional: true },
+        { id: 'nt-tab-tech',       lbl: t('tabs.tech'),   tab: 'tech' },
+        { id: 'nt-tab-mgmt',       lbl: t('tabs.mgmt'),   tab: 'mgmt' },
+        { id: 'nt-tab-tree',       lbl: t('tabs.table'),  tab: 'tree' },
+        { id: 'nt-tab-geo',        lbl: t('tabs.geo'),    tab: 'geo'  },
+        { id: 'nt-tab-health',     lbl: t('tabs.health'), tab: 'health' },
+        { id: 'nt-tab-stats',      lbl: t('tabs.stats'),  tab: 'stats' },
+        { id: 'nt-tab-lldpq',      lbl: t('tabs.lldpq'),  tab: 'lldpq', dataOptional: true },
     ];
     // Compliance zeigt Security-Posture pro Host ("Agent ohne TLS", SNMP-
     // Versionen) — nur fuer Admins. Backend prueft >= ZABBIX_ADMIN nochmal.
-    if (isAdmin) TABS.push({ id: 'nt-tab-compliance', lbl: 'Compliance', tab: 'compliance', dataOptional: true });
+    if (isAdmin) TABS.push({ id: 'nt-tab-compliance', lbl: t('tabs.compliance'), tab: 'compliance', dataOptional: true });
     // Diag-Tab nur fuer Super-Admins (Backend prueft USER_TYPE_SUPER_ADMIN ===)
     const isSuperAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.is_super_admin);
-    if (isSuperAdmin) TABS.push({ id: 'nt-tab-diag', lbl: 'Diag', tab: 'diag', dataOptional: true });
+    if (isSuperAdmin) TABS.push({ id: 'nt-tab-diag', lbl: t('tabs.diag'), tab: 'diag', dataOptional: true });
 
     if (!document.getElementById('nt-tab-wrap')) {
         const tw = document.createElement('div');
@@ -109,7 +110,7 @@ export function ensureBaseToolbar(wrap) {
     if (isSuperAdmin && !document.getElementById('nt-tab-diag')) {
         const tw = document.getElementById('nt-tab-wrap');
         const b = document.createElement('button');
-        b.id = 'nt-tab-diag'; b.textContent = 'Diag';
+        b.id = 'nt-tab-diag'; b.textContent = t('tabs.diag');
         b.className = 'btn-alt btn-small';
         b.style.margin = '0';
         b.addEventListener('click', function() {
@@ -164,7 +165,7 @@ export function ensureBaseToolbar(wrap) {
         bClear.className = 'btn-alt btn-small';
         bClear.style.marginLeft = '2px';
         bClear.textContent = '✕';
-        bClear.title = 'Snapshot loeschen';
+        bClear.title = t('toolbar.snapshot.del');
         bClear.addEventListener('click', function() {
             clearSnapshot();
             ensureBaseToolbar(wrap);
@@ -178,8 +179,8 @@ export function ensureBaseToolbar(wrap) {
     const bSnapEl  = document.getElementById('nt-btn-snap');
     const bClearEl = document.getElementById('nt-btn-snap-clear');
     if (bSnapEl) {
-        bSnapEl.textContent = snap ? ('Diff seit ' + formatSnapshotAge(snap)) : 'Snapshot';
-        bSnapEl.title = snap ? 'Neuen Snapshot setzen (ersetzt den alten)' : 'Aktuellen Stand merken — danach sieht man was sich veraendert hat';
+        bSnapEl.textContent = snap ? t('toolbar.snapshot.diff', { age: formatSnapshotAge(snap) }) : t('toolbar.snapshot');
+        bSnapEl.title = snap ? t('toolbar.snapshot.new') : t('toolbar.snapshot.set');
     }
     if (bClearEl) bClearEl.style.display = snap ? '' : 'none';
 
@@ -410,9 +411,9 @@ function regroupToolbar() {
     if (!bar) return;
 
     // Menu-Shells anlegen (idempotent). Reihenfolge im DOM: Anzeige, Layout, Tools.
-    const mView   = _mkMenuShell('nt-menu-view',   'Anzeige');
-    const mLayout = _mkMenuShell('nt-menu-layout', 'Layout');
-    const mTools  = _mkMenuShell('nt-menu-tools',  'Tools');
+    const mView   = _mkMenuShell('nt-menu-view',   t('toolbar.menu.view'));
+    const mLayout = _mkMenuShell('nt-menu-layout', t('toolbar.menu.layout'));
+    const mTools  = _mkMenuShell('nt-menu-tools',  t('toolbar.menu.tools'));
     if (!mView.parentNode)   bar.appendChild(mView);
     if (!mLayout.parentNode) bar.appendChild(mLayout);
     if (!mTools.parentNode)  bar.appendChild(mTools);
