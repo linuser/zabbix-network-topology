@@ -142,18 +142,24 @@ fi
 echo "→ Installiere auf $SERVER"
 ssh "$SERVER" bash -s <<REMOTE_INSTALL
 set -e
+# Variablen hier lokal expandiert (unquoted Heredoc) — die inneren Bloecke
+# nutzen sie remote als Shell-Variablen. Vorher waren die inneren Heredocs
+# gequotet und \$REMOTE_MAIN blieb literal → remote undefined → unzip "".
+R_MAIN="$REMOTE_MAIN"
+R_WIDGET="$REMOTE_WIDGET"
+R_HEALTH="$REMOTE_HEALTH"
 cd "$REMOTE_MODULES"
 $([[ "$MODE" == "main" || "$MODE" == "all" ]] && cat <<'MAIN'
 sudo rm -rf network_topology_v6
-sudo unzip -q "$REMOTE_MAIN"
+sudo unzip -q "$R_MAIN"
 sudo chown -R root:root network_topology_v6
 MAIN
 )
 $([[ "$MODE" == "widgets" || "$MODE" == "all" ]] && cat <<'WIDGETS'
 sudo rm -rf network_topology_v6_widget network_topology_v6_health_widget
 sudo mkdir network_topology_v6_widget network_topology_v6_health_widget
-sudo unzip -q "$REMOTE_WIDGET" -d network_topology_v6_widget
-sudo unzip -q "$REMOTE_HEALTH" -d network_topology_v6_health_widget
+sudo unzip -q "$R_WIDGET" -d network_topology_v6_widget
+sudo unzip -q "$R_HEALTH" -d network_topology_v6_health_widget
 sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget
 WIDGETS
 )
