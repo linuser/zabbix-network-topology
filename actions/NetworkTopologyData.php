@@ -349,6 +349,10 @@ class NetworkTopologyData extends CController {
                 // Agent-Varianten net.if.*[*,errors|dropped] via Regex unten)
                 'ifOperStatus', 'ifAdminStatus', 'ifInErrors', 'ifOutErrors',
                 'ifInDiscards', 'ifOutDiscards',
+                // Link-Kapazitaet fuer den Weathermap-Modus (ifSpeed = bps
+                // 32bit, ifHighSpeed = Mbps 64bit; matcht auch die modernen
+                // net.if.speed[ifHighSpeed.X]-Template-Keys via Substring)
+                'ifHighSpeed', 'ifSpeed',
                 // LLDP (IEEE 802.1AB standard MIB)
                 'lldpRemSysName',
                 // CDP (Cisco Discovery Protocol, Cisco-spezifisch)
@@ -449,6 +453,7 @@ class NetworkTopologyData extends CController {
         $host_iface     = [];   // hid => ['down'=>N, 'errors'=>X, 'discards'=>X, 'count'=>N]
         $iface_oper     = [];   // hid => [ifaceParam => operStatus]  (Roh-Sammlung)
         $iface_admin    = [];   // hid => [ifaceParam => adminStatus] (fuer Korrelation)
+        $host_speed     = [];   // hid => max Link-Speed in bps (Weathermap-Kapazitaet)
         $lldp_raw       = [];
         $host_cpu       = [];
         $host_mem_used  = [];   // bytes (used)
@@ -488,6 +493,22 @@ class NetworkTopologyData extends CController {
                   || preg_match('/net\.if\.(?:in|out)\[[^\]]*,dropped\]/', $key)) {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
                 $host_iface[$hid]['discards'] += (float) $val;
+            } elseif (strpos($key, 'ifHighSpeed') !== false) {
+                // ifHighSpeed = Mbps. ABER: das Zabbix-Standard-Template
+                // multipliziert per Preprocessing schon auf bps. Heuristik:
+                // Werte < 1e7 sind Mbps (800G-Link = 8e5 Mbps), Werte >= 1e7
+                // sind bereits bps (kleinster realer bps-Wert: 10M = 1e7).
+                $sp = (float) $val;
+                if ($sp > 0) {
+                    if ($sp < 1.0e7) $sp *= 1.0e6;
+                    if (!isset($host_speed[$hid]) || $sp > $host_speed[$hid]) $host_speed[$hid] = $sp;
+                }
+            } elseif (strpos($key, 'ifSpeed') !== false) {
+                // ifSpeed = bps direkt (32bit-Counter, capped bei ~4.3G)
+                $sp = (float) $val;
+                if ($sp > 0 && (!isset($host_speed[$hid]) || $sp > $host_speed[$hid])) {
+                    $host_speed[$hid] = $sp;
+                }
             } elseif (strpos($key, 'net.if') === 0) {
                 // Zabbix agent traffic (bits/s)
                 $name = strtolower($item['name']);
@@ -1008,6 +1029,8 @@ class NetworkTopologyData extends CController {
                 // Werte sind pro Sekunde (nach Zabbix-Preprocessing 'change per second')
                 // oder als absolute Counter — Frontend zeigt nur "> threshold".
                 'iface_health' => $host_iface[$hid] ?? ['down'=>0, 'errors'=>0.0, 'discards'=>0.0, 'count'=>0],
+                // Max Link-Speed (bps) — Weathermap-Kapazitaet. 0 = unbekannt.
+                'link_speed'  => $host_speed[$hid] ?? 0,
                 'cpu'         => $host_cpu[$hid]       ?? null,
                 'memory'      => $host_memory[$hid]    ?? null,
                 'ping'        => $host_ping[$hid]      ?? null,
@@ -1041,10 +1064,52 @@ class NetworkTopologyData extends CController {
             ];
         }
 
+        // ── Topology-Change-Detection ─────────────────────────────────────
+        // Aktuellen Edge-Stand gegen die APCu-Baseline diffen und die
+        // Baseline weiterrollen. Kein Baseline-Eintrag (Erstaufruf oder
+        // php-fpm-Restart) → seed + leerer Diff, kein False-Alarm.
+        // Key ist user+groups-scoped: verschiedene User sehen permission-
+        // bedingt verschiedene Subgraphen und wuerden sich sonst gegenseitig
+        // die Baseline verrollen. Der Sender-Cron (eigener Monitoring-User)
+        // rollt damit unabhaengig von UI-Usern.
+        $topo_changes = ['added' => [], 'removed' => []];
+        $host_label = static function($hid) use ($hosts) {
+            $h = $hosts[$hid] ?? null;
+            if (!$h) return (string) $hid;
+            return ($h['name'] ?? '') !== '' ? $h['name'] : ($h['host'] ?? (string) $hid);
+        };
+        if (function_exists('apcu_fetch')) {
+            $uid = (int) (\CWebUser::$data['userid'] ?? 0);
+            $gk  = array_map('strval', $groupids);
+            sort($gk);
+            $topo_key = 'nt_topo_' . $uid . '_' . md5(implode(',', $gk));
+            $current = [];   // "idA|idB" → [labelA, labelB]
+            foreach ($edges as $e) {
+                if (!empty($e['_isInternetEdge'])) continue;
+                $pair = [(string) $e['from'], (string) $e['to']];
+                sort($pair);
+                $current[$pair[0] . '|' . $pair[1]] = [$host_label($pair[0]), $host_label($pair[1])];
+            }
+            $ok = false;
+            $baseline = ($uid > 0) ? apcu_fetch($topo_key, $ok) : false;
+            if ($ok && is_array($baseline)) {
+                foreach ($current as $k => $lbls) {
+                    if (!isset($baseline[$k])) $topo_changes['added'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
+                }
+                foreach ($baseline as $k => $lbls) {
+                    if (!isset($current[$k])) $topo_changes['removed'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
+                }
+            }
+            if ($uid > 0) {
+                apcu_store($topo_key, $current, 7 * 86400);
+            }
+        }
+
         $_payload = json_encode(
             ['nodes' => $nodes, 'edges' => $edges,
              'lldp_unmatched' => $lldp_unmatched,
-             'lldp_quality'   => $lldp_quality_out],
+             'lldp_quality'   => $lldp_quality_out,
+             'topo_changes'   => $topo_changes],
             JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         );
         NetworkTopologyDiag::record([

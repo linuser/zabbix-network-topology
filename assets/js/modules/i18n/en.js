@@ -51,4 +51,11 @@ export default {
     'whatif.banner':        'Simulation: {failed} failed → {cut} hosts cut off',
     'whatif.end':           'End',
     'whatif.root_fallback': 'No internet cloud/firewall in graph — reachability is relative to "{host}" (highest degree)',
+    // Weathermap + topology change
+    'toolbar.weathermap':     'Weathermap: {state}',
+    'toolbar.weathermap.tip': 'Edge color by utilization % (traffic / link capacity from ifSpeed) instead of absolute traffic',
+    'toolbar.on':             'on',
+    'toolbar.off':            'off',
+    'topo.added':             'Topology: new link {a} ↔ {b}',
+    'topo.removed':           'Topology: link {a} ↔ {b} disappeared',
 };

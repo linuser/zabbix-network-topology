@@ -56,4 +56,11 @@ export default {
     'whatif.banner':        'Simulation: {failed} ausgefallen → {cut} Hosts abgeschnitten',
     'whatif.end':           'Beenden',
     'whatif.root_fallback': 'Keine Internet-Wolke/Firewall im Graph — Erreichbarkeit bezieht sich auf "{host}" (hoechster Vernetzungsgrad)',
+    // Weathermap + Topology-Change
+    'toolbar.weathermap':     'Weathermap: {state}',
+    'toolbar.weathermap.tip': 'Edge-Farbe nach Auslastungs-% (Traffic / Link-Kapazitaet aus ifSpeed) statt absolutem Traffic',
+    'toolbar.on':             'an',
+    'toolbar.off':            'aus',
+    'topo.added':             'Topologie: neue Verbindung {a} ↔ {b}',
+    'topo.removed':           'Topologie: Verbindung {a} ↔ {b} verschwunden',
 };

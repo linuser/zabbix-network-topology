@@ -82,6 +82,7 @@ export function buildNodeElements(nodes) {
             severity: n.severity || 0,
             cpu: n.cpu, memory: n.memory, ping: n.ping, traffic: n.traffic,
             iface_health: n.iface_health || null,
+            link_speed: n.link_speed || 0,
             type: n.type, host: n.host, ip: n.ip, iftype: n.iftype,
             groups: n.groups, _primaryGroup: n._primaryGroup,
             problems: n.problems || 0,
@@ -180,6 +181,12 @@ export function buildEdgeElements(edges, nodes) {
             discardsRate  = Math.max(discardsRate, tgtH.discards || 0);
             if (tgtH.count > 0) downRatio = Math.max(downRatio, (tgtH.down || 0) / tgtH.count);
         }
+        // Weathermap-Kapazitaet: Engpass = min der Max-Link-Speeds beider
+        // Endpunkte (>0). Ohne Port-Mapping ist das eine Schaetzung — der
+        // Tooltip nennt die Basis explizit.
+        const spdA = (srcNode && srcNode.link_speed) || 0;
+        const spdB = (tgtNode && tgtNode.link_speed) || 0;
+        const capBps = (spdA > 0 && spdB > 0) ? Math.min(spdA, spdB) : (spdA || spdB || 0);
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
                     trafficIn: tIn, trafficOut: tOut, tLabel: tLabel, isLLDP: true,
@@ -191,7 +198,9 @@ export function buildEdgeElements(edges, nodes) {
                     // Edge-Coloring — der Roh-Count wuerde bei einem Switch
                     // mit vielen unbenutzten Ports jede Edge rot faerben.
                     ifaceDown: downCnt, ifaceErr: errorsRate, ifaceDrop: discardsRate,
-                    ifaceDownRatio: downRatio }
+                    ifaceDownRatio: downRatio,
+                    // Link-Kapazitaet in bps (0 = unbekannt) fuer Weathermap
+                    capBps: capBps }
         });
     });
     return elements;

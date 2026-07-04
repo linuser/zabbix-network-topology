@@ -227,9 +227,21 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
             + srcBadge
             + '</div>';
 
+        // Auslastung wenn Kapazitaet bekannt (Weathermap-Basis): Traffic ist
+        // die Summe beider Endpunkte → /2 fuer die Link-Schaetzung.
+        const capBps = edgeData.capBps || 0;
+        let utilPart = '';
+        if (capBps > 0) {
+            const pct = Math.min(999, (Math.max(tIn, tOut) / 2 / capBps) * 100);
+            const pctCol = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f97316' : '#16a34a';
+            utilPart = '<span style="color:#94a3b8">·</span>'
+                + '<span><b style="color:' + pctCol + '">' + pct.toFixed(1) + '%</b>'
+                + ' <span style="color:#94a3b8">/ ' + fmt(capBps) + '</span></span>';
+        }
         const liveRow = '<div style="display:flex;gap:10px;font-size:11px;color:#475569;margin-bottom:4px">'
             + '<span><span style="color:#06b6d4">↓</span> <b>' + fmt(tIn) + '</b></span>'
             + '<span><span style="color:#f97316">↑</span> <b>' + fmt(tOut) + '</b></span>'
+            + utilPart
             + '</div>';
 
         // Interface-Health (wenn vom Backend geliefert) als zweite Zeile.

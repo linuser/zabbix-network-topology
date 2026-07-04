@@ -26,6 +26,35 @@ function trafficTier(bitsPerSec) {
 const HEALTH_ERR_THRESHOLD  = 1;
 const HEALTH_DROP_THRESHOLD = 5;
 
+// ── Weathermap-Modus ───────────────────────────────────────────────────────
+// Klassische PHP-Weathermap-Skala: Farbe nach Auslastungs-% statt absolutem
+// Traffic. 51 Mbps sind auf einem 1G-Link 5% (gruen), auf einem 100M-Link
+// 51% (gelb) — genau die Info die absolute Faerbung verschluckt.
+// Kapazitaet kommt als edge.data('capBps') aus min(ifSpeed beider Endpunkte).
+let _weathermap = false;
+export function setWeathermapMode(on) { _weathermap = !!on; }
+export function isWeathermapMode()    { return _weathermap; }
+
+function utilizationTier(pct) {
+    if (pct < 1)   return { w: 2,   col: '#94a3b8' };   // idle
+    if (pct < 10)  return { w: 3,   col: '#3b82f6' };   // blau
+    if (pct < 25)  return { w: 4,   col: '#22c55e' };   // gruen
+    if (pct < 40)  return { w: 4.5, col: '#a3e635' };   // lime
+    if (pct < 55)  return { w: 5,   col: '#facc15' };   // gelb
+    if (pct < 70)  return { w: 6,   col: '#f97316' };   // orange
+    if (pct < 85)  return { w: 7,   col: '#ef4444' };   // rot
+    return           { w: 8,   col: '#a21caf' };        // magenta (>85, Weathermap-Klassiker)
+}
+
+// Auslastung einer Edge in % — Traffic ist die SUMME beider Endpunkte
+// (siehe build-elements), daher /2 fuer die Link-Schaetzung.
+function edgeUtilizationPct(edge) {
+    const cap = edge.data('capBps') || 0;
+    if (cap <= 0) return null;
+    const t = Math.max(edge.data('trafficIn') || 0, edge.data('trafficOut') || 0) / 2;
+    return Math.min(999, (t / cap) * 100);
+}
+
 export function applyTrafficHeatmap(cy) {
     if (!cy) return;
     cy.edges().forEach(function(edge) {
@@ -33,7 +62,19 @@ export function applyTrafficHeatmap(cy) {
         const tIn  = edge.data('trafficIn')  || 0;
         const tOut = edge.data('trafficOut') || 0;
         const total = Math.max(tIn, tOut);   // Spitzenwert entscheidet
-        const t = trafficTier(total);
+        let t = trafficTier(total);
+
+        // Weathermap-Modus: Auslastungs-% statt absoluter Traffic — sofern
+        // die Kapazitaet bekannt ist. Edges ohne Kapazitaet fallen auf die
+        // absolute Skala zurueck. Zusaetzlich zeigt das Edge-Label die %.
+        let wmPct = null;
+        if (_weathermap) {
+            wmPct = edgeUtilizationPct(edge);
+            if (wmPct !== null) {
+                const u = utilizationTier(wmPct);
+                t = { w: u.w, col: u.col, tcol: u.col, dash: total <= 0 };
+            }
+        }
 
         // Interface-Health-Override: wenn einer der Endpunkte Down-Interfaces
         // oder hohe Error/Discard-Raten meldet, ueberschreiben wir das Traffic-
@@ -63,6 +104,14 @@ export function applyTrafficHeatmap(cy) {
         edge.style('line-style', 'dashed');
         edge.style('line-dash-pattern', dashPat);
         edge.style('opacity', op);
+
+        // Label: im Weathermap-Modus die Auslastung inline, sonst zurueck
+        // auf das Stylesheet-Mapping (data(tLabel) mit Traffic-Werten).
+        if (_weathermap && wmPct !== null) {
+            edge.style('label', wmPct < 1 ? '' : (wmPct.toFixed(0) + '%'));
+        } else {
+            edge.removeStyle('label');
+        }
     });
 }
 

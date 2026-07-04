@@ -1,0 +1,45 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - name: Templates
+  templates:
+    - uuid: 3f1c2a9be4d94b0f8a7c6d5e4f3a2b1c
+      template: 'NT Topology Change'
+      name: 'NT Topology Change'
+      description: |
+        Empfaengt Topologie-Aenderungen des Network-Topology-v6-Moduls via
+        zabbix_sender (tools/topo-change-sender.sh als Cron).
+
+        Items sind Trapper — der Sender pusht:
+          nt.topo.changes       Anzahl neue+verschwundene LLDP/CDP-Edges
+                                seit dem letzten Poll
+          nt.topo.changes.text  menschenlesbare Liste ("+ A <-> B; - C <-> D")
+
+        Der Trigger feuert bei changes > 0 und recovert beim naechsten
+        0-Poll — jede Umsteck-Aktion wird ein eigenes Event.
+      groups:
+        - name: Templates
+      items:
+        - uuid: 8a2b3c4d5e6f47081920a1b2c3d4e5f6
+          name: 'NT: Topology changes since last poll'
+          type: TRAP
+          key: nt.topo.changes
+          value_type: UNSIGNED
+          history: 31d
+          trends: 365d
+          description: 'Anzahl neue + verschwundene Edges seit letztem Sender-Poll.'
+          triggers:
+            - uuid: 9b3c4d5e6f708192a0b1c2d3e4f5a6b7
+              expression: 'last(/NT Topology Change/nt.topo.changes)>0'
+              name: 'Network topology changed: {ITEM.LASTVALUE1} link(s)'
+              priority: WARNING
+              description: 'LLDP/CDP-Topologie hat sich geaendert — Details im Text-Item nt.topo.changes.text.'
+              manual_close: 'YES'
+        - uuid: a4b5c6d7e8f90a1b2c3d4e5f60718293
+          name: 'NT: Topology change details'
+          type: TRAP
+          key: nt.topo.changes.text
+          value_type: TEXT
+          history: 31d
+          trends: '0'
+          description: 'Menschenlesbare Liste der Aenderungen ("+ A <-> B; - C <-> D"), "-" wenn keine.'

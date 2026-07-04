@@ -2,6 +2,17 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.26.0 — 2026-07-04
+
+### Added
+- **What-if-Ausfallsimulation**: Rechtsklick auf Host → „⚡ Ausfall simulieren". BFS vom Netz-Uplink zeigt alle dadurch abgeschnittenen Hosts (roter Halo); der simulierte Host bekommt einen grauen. Mehrere Hosts stapelbar, Banner mit Live-Count + Beenden-Button, ESC/Re-Render räumen auf. Uplink-Referenz: Internet-Wolke → Firewalls/Router → höchster Vernetzungsgrad (mit Toast-Hinweis).
+- **Weathermap-Modus** (Anzeige-Menü): Edge-Farbe nach **Auslastungs-%** statt absolutem Traffic — 51 Mbps sind auf 1G-Link 5% grün, auf 100M-Link 51% gelb. Klassische Weathermap-Skala (blau→grün→gelb→orange→rot→magenta >85%), Auslastung als Edge-Label, Persistenz in localStorage. Kapazität aus `ifSpeed`/`ifHighSpeed` (auch moderne `net.if.speed[ifHighSpeed.X]`-Template-Keys); Edge-Kapazität = min beider Endpunkte (ohne Port-Mapping eine Schätzung — Tooltip zeigt „x% / 1 Gb/s" explizit). Health-Overrides (down/errors) behalten Vorrang. Edges ohne Speed-Items fallen auf die absolute Skala zurück.
+- **Topology-Change-Detection**: Backend difft bei jedem Daten-Fetch den LLDP/CDP-Edge-Stand gegen eine APCu-Baseline (user+groups-scoped, rollt pro Poll). UI meldet Änderungen als Toasts („Topologie: neue Verbindung A ↔ B"). Für echte Zabbix-Events: `tools/topo-change-sender.sh` (Cron, Login-Dance + zabbix_sender, da Modul-Actions Frontend-Session brauchen) + `templates/nt_topology_change_template.yaml` (2 Trapper-Items + Trigger). Wichtig: dedizierter Monitoring-User, sonst verrollt der Cron die Baseline der UI-User.
+- Tooltip zeigt bei bekannter Kapazität die Link-Auslastung („5.1% / 1.0 Gb/s").
+
+### Notes
+- Baseline liegt in APCu — php-fpm-Restart re-seedet ohne False-Alarm, Änderungen im Restart-Fenster werden nicht gemeldet.
+
 ## v4.25.0 — 2026-07-04
 
 ### Added (Items-Pivot-Ausbau, Fortsetzung)

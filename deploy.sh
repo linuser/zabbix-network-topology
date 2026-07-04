@@ -125,6 +125,7 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     rsync -a \
         --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
         --exclude 'widget' --exclude 'widget_health' --exclude 'dashboards' \
+        --exclude 'tools' --exclude 'templates' \
         --exclude '.DS_Store' --exclude '*.zip' --exclude 'dist' \
         --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' \
         "$SCRIPT_DIR/" "$STAGE/network_topology_v6/"

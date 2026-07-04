@@ -14,13 +14,15 @@
 //     Zirkulardependenz (render-tech.js → toolbar.js → render-tech.js).
 //     Lösung: setRenderCallback() injiziert die render-Funktion vom Hauptmodul.
 
-import { NT_LLDP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY,
+import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY,
          clearPositions, savePositions, savePinned, loadLinks, saveLinks,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
 import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isSimActive, clearSimulation } from './whatif.js';
+import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
+import { t } from './i18n.js';
 import { isLinkModeActive, enterLinkMode, exitLinkMode } from './manual-links.js';
 import { setupExportMenu } from './export.js';
 import { addHistoryButton } from './history-mode.js';
@@ -416,6 +418,26 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         cy.edges('[?isLLDP]').style('display', _lldpVisible ? 'element' : 'none');
         bLldp.textContent = _lldpVisible ? ' LLDP: an' : ' LLDP: aus';
         bLldp.style.opacity = _lldpVisible ? '1' : '0.5';
+    });
+
+    // Weathermap-Modus: Edge-Farbe nach Auslastungs-% (Traffic / Link-
+    // Kapazitaet aus ifSpeed) statt absolutem Traffic. Der Klassiker.
+    let _wmOn = false;
+    try { _wmOn = localStorage.getItem(NT_WEATHERMAP_KEY) === '1'; } catch (e) {}
+    setWeathermapMode(_wmOn);
+    const bWm = mkbtn('nt-btn-weathermap', '', null);
+    const _setWmLabel = function() {
+        bWm.textContent = t('toolbar.weathermap', { state: _wmOn ? t('toolbar.on') : t('toolbar.off') });
+        bWm.style.opacity = _wmOn ? '1' : '0.5';
+        bWm.title = t('toolbar.weathermap.tip');
+    };
+    _setWmLabel();
+    bWm.addEventListener('click', function() {
+        _wmOn = !_wmOn;
+        try { localStorage.setItem(NT_WEATHERMAP_KEY, _wmOn ? '1' : '0'); } catch (e) {}
+        setWeathermapMode(_wmOn);
+        _setWmLabel();
+        applyTrafficHeatmap(window._ntCy);
     });
 
     // Export-Menü (PNG/PDF/HTML/Mail) — eigenständiges Modul

@@ -214,6 +214,7 @@ const _GRAPH_ONLY_SELECTORS = [
     '#nt-btn-groupview',  // Gruppieren
     '#nt-cluster-wrap',   // Cluster-Mode-Toggle
     '#nt-btn-lldp',       // LLDP an/aus
+    '#nt-btn-weathermap', // Weathermap-Modus (Auslastungs-%)
     '#nt-btn-link',       // Link-Mode
     '#nt-btn-unlink',     // Links entfernen
     '#nt-preset-wrap',    // Presets + Save/Erase/Trash
@@ -423,6 +424,7 @@ function regroupToolbar() {
     _moveIntoMenu('nt-btn-fullscreen', 'nt-menu-view');
     _moveIntoMenu('nt-btn-labels',     'nt-menu-view');   // Tech-only, im Mgmt/Tabelle leer
     _moveIntoMenu('nt-btn-reset',      'nt-menu-view');
+    _moveIntoMenu('nt-btn-weathermap', 'nt-menu-view');
 
     _moveIntoMenu('nt-layout-wrap',    'nt-menu-layout');
     _moveIntoMenu('nt-btn-groupview',  'nt-menu-layout');

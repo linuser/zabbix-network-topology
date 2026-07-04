@@ -24,6 +24,7 @@ import { renderHealth } from './modules/render-health.js';
 import { renderStats } from './modules/render-stats.js';
 import { renderCompliance } from './modules/render-compliance.js';
 import { renderLldpQuality } from './modules/render-lldp-quality.js';
+import { notifyTopoChanges } from './modules/topo-notify.js';
 import { setupToolbar, setRenderCallback as setToolbarRenderCallback } from './modules/toolbar.js';
 import { setRenderCallback as setPresetsRenderCallback } from './modules/presets-ui.js';
 import { setHistoryRenderCallback, getHistorySeverities, isHistoryActive, setLiveRefreshHooks } from './modules/history-mode.js';
@@ -225,6 +226,7 @@ function init() {
             // _ntLastData (ohne dieses Feld waere der Tab immer leer).
             window._ntLastData = { nodes: data.nodes || [], edges: data.edges || [],
                                    lldp_quality: data.lldp_quality || [], url: url };
+            notifyTopoChanges(data.topo_changes);
             switchTab(_activeTab, wrap, data.nodes || [], data.edges || [], url);
 
             // Letzte Auswahl persistieren — nur wenn der Fetch tatsächlich

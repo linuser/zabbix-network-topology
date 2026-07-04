@@ -26,6 +26,7 @@ import { aggregateByGroup } from './aggregation.js';
 import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
 import { isPathActive, clearPathState } from './path-highlight.js';
 import { clearSimulation, isSimActive, recomputeSimulation } from './whatif.js';
+import { notifyTopoChanges } from './topo-notify.js';
 import { showTip, hideTip, moveTip, showEdgeTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
@@ -425,6 +426,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                     window._ntLastData.nodes = data.nodes;
                     window._ntLastData.edges = data.edges || [];
                     window._ntLastData.lldp_quality = data.lldp_quality || [];
+                    notifyTopoChanges(data.topo_changes);
                 }
                 // In Group-View komplett re-rendern (Aggregate können sich
                 // strukturell ändern, In-Place-Update wäre fragil)
