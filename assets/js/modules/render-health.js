@@ -91,33 +91,40 @@ function _card(s, theme) {
     const lbl = _scoreLabel(s.score);
     function metric(num, txt, color) {
         const c = num > 0 ? color : theme.subSoft;
-        return '<div style="display:flex;flex-direction:column;align-items:center;min-width:46px">'
-            + '<span style="font-size:18px;font-weight:700;color:' + c + ';font-family:monospace">'
+        return '<div style="display:flex;flex-direction:column;align-items:center;min-width:42px">'
+            + '<span style="font-size:17px;font-weight:700;color:' + c + ';font-family:monospace">'
             + num + '</span>'
-            + '<span style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase;letter-spacing:0.04em">'
+            + '<span style="font-size:9px;color:' + theme.sub + ';text-transform:uppercase;letter-spacing:0.03em">'
             + esc(txt) + '</span>'
             + '</div>';
     }
+    // Layout-Rechnung: Score 74 + gap 14 + 5 Metriken à >=42 + 4 gaps à 8
+    // + Padding 28 ≈ 380px — passt in die minmax(400px)-Grid-Spalte. Die
+    // Metrik-Zeile hat zusaetzlich flex-wrap als Sicherheitsnetz fuer lange
+    // Zahlen (z.B. 4-stellige Problem-Counts), statt rechts aus der Karte
+    // zu laufen.
     return '<div style="background:' + theme.surface + ';border:1px solid ' + theme.border
-        + ';border-left:4px solid ' + col + ';border-radius:6px;padding:14px 16px;'
-        + 'display:flex;align-items:center;gap:18px;min-width:380px">'
+        + ';border-left:4px solid ' + col + ';border-radius:6px;padding:12px 14px;'
+        + 'display:flex;align-items:center;gap:14px;min-width:0;overflow:hidden">'
         // Score-Wert links
-        + '<div style="display:flex;flex-direction:column;align-items:center;min-width:74px">'
+        + '<div style="display:flex;flex-direction:column;align-items:center;min-width:70px;flex-shrink:0">'
         +   '<span style="font-size:34px;font-weight:700;color:' + col + ';line-height:1;font-family:monospace">'
         +     s.score + '</span>'
         +   '<span style="font-size:10px;color:' + col + ';font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-top:3px">'
         +     esc(lbl) + '</span>'
         + '</div>'
         // Name + Metriken
-        + '<div style="flex:1;display:flex;flex-direction:column;gap:6px">'
-        +   '<div style="font-size:13px;font-weight:700;color:' + theme.text + '">' + esc(s.name)
+        + '<div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0">'
+        +   '<div style="font-size:13px;font-weight:700;color:' + theme.text
+        +     ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(s.name) + '">'
+        +     esc(s.name)
         +     ' <span style="font-weight:400;color:' + theme.sub + '">· ' + s.total + ' Hosts</span></div>'
-        +   '<div style="display:flex;gap:14px">'
+        +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
         +     metric(s.offline,  'Offline',  COL_CRIT)
         +     metric(s.stale,    'Stale',    COL_WARN)
         +     metric(s.critical, 'Critical', COL_CRIT)
         +     metric(s.unacked,  'Unacked',  COL_BAD)
-        +     metric(s.problems, 'Probleme', theme.text)
+        +     metric(s.problems, 'Probl.',   theme.text)
         +   '</div>'
         + '</div>'
         + '</div>';

@@ -90,25 +90,32 @@ class NetworkTopologyItemHistory extends CController {
         $timeFrom = $now - self::TIME_WINDOW;
         $out      = [];
 
+        // Chunks à 50 Items mit proportionalem Limit (120 Samples/Item = 1h
+        // bei 30s-Intervall). Ein globales Limit ueber ALLE itemids liess
+        // chatty Items (1s-Intervall) das Budget fressen — Sparklines zeigten
+        // dann nur die ersten Minuten der Stunde und andere Items gingen
+        // komplett leer aus.
         foreach ($by_type as $vt => $ids) {
             if (!$ids) continue;
-            $hist = API::History()->get([
-                'output'    => ['itemid', 'clock', 'value'],
-                'itemids'   => $ids,
-                'history'   => $vt,
-                'time_from' => $timeFrom,
-                'time_till' => $now,
-                'sortfield' => 'clock',
-                'sortorder' => 'ASC',
-                'limit'     => max(500, count($ids) * self::SAMPLE_N),
-            ]);
-            $tmp = [];
-            foreach ($hist as $h) {
-                $tmp[$h['itemid']][] = ($vt === ITEM_VALUE_TYPE_FLOAT)
-                    ? (float) $h['value'] : (int) $h['value'];
-            }
-            foreach ($tmp as $iid => $arr) {
-                $out[(string) $iid] = $this->sample($arr, self::SAMPLE_N);
+            foreach (array_chunk($ids, 50) as $chunk) {
+                $hist = API::History()->get([
+                    'output'    => ['itemid', 'clock', 'value'],
+                    'itemids'   => $chunk,
+                    'history'   => $vt,
+                    'time_from' => $timeFrom,
+                    'time_till' => $now,
+                    'sortfield' => 'clock',
+                    'sortorder' => 'ASC',
+                    'limit'     => count($chunk) * 120,
+                ]);
+                $tmp = [];
+                foreach ($hist as $h) {
+                    $tmp[$h['itemid']][] = ($vt === ITEM_VALUE_TYPE_FLOAT)
+                        ? (float) $h['value'] : (int) $h['value'];
+                }
+                foreach ($tmp as $iid => $arr) {
+                    $out[(string) $iid] = $this->sample($arr, self::SAMPLE_N);
+                }
             }
         }
         // Items ohne History bekommen ein leeres Array — Frontend rendert dann

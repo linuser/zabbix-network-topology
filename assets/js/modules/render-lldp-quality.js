@@ -194,8 +194,6 @@ export function renderLldpQuality(wrap) {
 
     const data = window._ntLastData || {};
     const perHost = data.lldp_quality || [];
-    root.innerHTML = root.innerHTML;   // reset (head already there)
-    root.appendChild(head);
 
     root.appendChild(_makeDiv(_aggregateBlock(perHost, theme)));
     root.appendChild(_makeDiv(_perHostTable(perHost, theme)));

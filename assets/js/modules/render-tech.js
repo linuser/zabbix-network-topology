@@ -422,6 +422,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                     window._ntLastData = window._ntLastData || {};
                     window._ntLastData.nodes = data.nodes;
                     window._ntLastData.edges = data.edges || [];
+                    window._ntLastData.lldp_quality = data.lldp_quality || [];
                 }
                 // In Group-View komplett re-rendern (Aggregate können sich
                 // strukturell ändern, In-Place-Update wäre fragil)

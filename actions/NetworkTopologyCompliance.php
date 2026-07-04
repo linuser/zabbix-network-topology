@@ -59,7 +59,11 @@ class NetworkTopologyCompliance extends CController {
     }
 
     protected function checkPermissions(): bool {
-        return $this->getUserType() >= USER_TYPE_ZABBIX_USER;
+        // Admin+: der Endpoint liefert eine Security-Posture-Karte pro Host
+        // ("Agent ohne TLS", "SNMP v1/v2c", "stale Krit-Problem") — fuer
+        // Read-only-User waere das eine Recon-Hilfe (welche Hosts sind am
+        // schwaechsten konfiguriert). Frontend blendet den Tab analog aus.
+        return $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN;
     }
 
     protected function doAction(): void {
@@ -71,6 +75,25 @@ class NetworkTopologyCompliance extends CController {
         }
         if (count($groupids) > self::MAX_GROUPS) {
             $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
+        }
+
+        // Kurzer APCu-Cache (60s, user-scoped): 1 Host.get ueber bis zu 100
+        // Gruppen mit selectInterfaces/Inventory/Templates + Problem.get +
+        // Maintenance.get ist teuer genug dass ein authentifizierter User den
+        // Endpoint nicht im Sekundentakt haemmern soll.
+        $cache_ids = array_map('strval', $groupids);
+        sort($cache_ids);
+        $uid = (int) (\CWebUser::$data['userid'] ?? 0);
+        $cache_key = ($uid > 0 && function_exists('apcu_fetch'))
+            ? 'nt_compl_' . $uid . '_' . md5(implode(',', $cache_ids))
+            : '';
+        if ($cache_key !== '') {
+            $ok = false;
+            $cached = apcu_fetch($cache_key, $ok);
+            if ($ok && is_array($cached)) {
+                $this->respond($cached);
+                return;
+            }
         }
 
         // Hosts mit allen benoetigten Feldern in einem Call.
@@ -89,7 +112,11 @@ class NetworkTopologyCompliance extends CController {
             'preservekeys'          => true
         ]);
 
-        // Kritische Probleme (sev>=4) ueber alle Hosts — clock fuer Stale-Check
+        // Kritische Probleme (sev>=4) aelter als Cutoff. Server-seitig via
+        // time_till gefiltert statt client-seitig: mit eventid-DESC-Sort +
+        // Limit flogen sonst genau die AELTESTEN (= stale) Events zuerst
+        // raus → False-Negatives bei vielen Problemen. recent=true entfernt:
+        // das schloss kuerzlich-resolvte Events ein, wir wollen nur OFFENE.
         $hostids = array_keys($hosts);
         $stale_problem_hosts = [];   // hid => true wenn mind. ein altes krit Problem
         if ($hostids) {
@@ -98,14 +125,11 @@ class NetworkTopologyCompliance extends CController {
                 'output'      => ['clock'],
                 'hostids'     => $hostids,
                 'severities'  => [4, 5],
-                'recent'      => true,
+                'time_till'   => $cutoff,
                 'selectHosts' => ['hostid'],
-                'sortfield'   => ['eventid'],
-                'sortorder'   => 'DESC',
                 'limit'       => max(1000, count($hostids) * 5),
             ]);
             foreach ($problems as $p) {
-                if ((int) $p['clock'] >= $cutoff) continue;
                 foreach ($p['hosts'] ?? [] as $ph) {
                     $stale_problem_hosts[$ph['hostid']] = true;
                 }
@@ -225,6 +249,10 @@ class NetworkTopologyCompliance extends CController {
             'total'     => count($out_hosts),
             'cutoff_days' => self::STALE_PROBLEM_DAYS,
         ];
+
+        if ($cache_key !== '' && function_exists('apcu_store')) {
+            apcu_store($cache_key, $payload, 60);
+        }
 
         NetworkTopologyDiag::record([
             'action'     => 'compliance',

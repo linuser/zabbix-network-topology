@@ -38,15 +38,18 @@ export function applyTrafficHeatmap(cy) {
         // Interface-Health-Override: wenn einer der Endpunkte Down-Interfaces
         // oder hohe Error/Discard-Raten meldet, ueberschreiben wir das Traffic-
         // Styling mit einer Health-Warnung. Hierarchie:
-        //   down > 0     → rot dashed (link/port down)
-        //   errors > T   → orange (CRC, framing etc.)
-        //   discards > T → orange dashed (queue full)
-        const ifDown = edge.data('ifaceDown') || 0;
+        //   downRatio >= 0.5 → rot dashed (Mehrheit der Ports down = Incident;
+        //                      Roh-Count wuerde bei Switches mit unbenutzten
+        //                      Ports jede Edge einfaerben — Tooltip zeigt den
+        //                      Count weiterhin)
+        //   errors > T       → orange (CRC, framing etc.)
+        //   discards > T     → orange dashed (queue full)
+        const ifDownRatio = edge.data('ifaceDownRatio') || 0;
         const ifErr  = edge.data('ifaceErr')  || 0;
         const ifDrop = edge.data('ifaceDrop') || 0;
 
         let w = t.w, col = t.col, dashPat = t.dash ? [4, 8] : [6, 5], op = t.dash ? 0.75 : 0.9;
-        if (ifDown > 0) {
+        if (ifDownRatio >= 0.5) {
             w = Math.max(w, 4); col = '#dc2626'; dashPat = [4, 4]; op = 0.95;
         } else if (ifErr > HEALTH_ERR_THRESHOLD) {
             w = Math.max(w, 4); col = '#f97316'; dashPat = [6, 5]; op = 0.9;

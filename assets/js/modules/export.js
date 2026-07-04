@@ -492,15 +492,19 @@ export function setupExportMenu(bar, isFirstRun) {
     }
 
     mItem('&#128203;', 'Audit-Report (Drucken)', function() {
+        // Fenster SYNCHRON im Click oeffnen (User-Activation) — window.open()
+        // im .then() nach dem Fetch wuerde der Popup-Blocker schlucken
+        // (v.a. Firefox bei langsamem Backend). Inhalt kommt async nach.
+        const w = window.open();
+        if (!w) return;
+        w.document.write('<p style="font-family:sans-serif;color:#64748b">Report wird erstellt…</p>');
         _fetchCompliance().then(function(compl) {
             const h = buildAuditHtml(compl);
-            if (!h) return;
-            const w = window.open();
-            if (w) {
-                w.document.write(h);
-                w.document.close();
-                setTimeout(function() { w.print(); }, 800);
-            }
+            if (!h) { w.close(); return; }
+            w.document.open();
+            w.document.write(h);
+            w.document.close();
+            setTimeout(function() { w.print(); }, 800);
         });
     });
 

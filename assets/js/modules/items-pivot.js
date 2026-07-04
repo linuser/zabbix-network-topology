@@ -68,27 +68,37 @@ const _sparkPivotCache = new Map();   // itemid → { data: number[], ts: ms }
 const _SPARK_TTL_MS = 60000;
 
 // Sammelt itemids aus allen visible Cells und macht einen Batch-Request.
-// Danach werden die SVG-Placeholders befuellt.
+// Danach werden die SVG-Placeholders befuellt. Slots werden EINMAL gescannt
+// und als Map itemid→[elements] gehalten — vorher lief pro itemid ein
+// querySelectorAll ueber die ganze Tabelle (O(items × Zellen)); das
+// eliminiert nebenbei die Selector-String-Interpolation komplett.
 function _fetchAndRenderSparklines(container, baseUrl, theme) {
     if (!container) return;
-    const slots = container.querySelectorAll('.nt-pivot-spark[data-itemid]');
-    if (!slots.length) return;
-    const wanted = [];
-    const now = Date.now();
-    const cachedByItem = {};
-    slots.forEach(function(el) {
+    const sparkSlots = new Map();   // itemid → [el, ...]
+    const trendSlots = new Map();
+    container.querySelectorAll('.nt-pivot-spark[data-itemid]').forEach(function(el) {
         const iid = el.dataset.itemid;
         if (!iid) return;
+        if (!sparkSlots.has(iid)) sparkSlots.set(iid, []);
+        sparkSlots.get(iid).push(el);
+    });
+    if (!sparkSlots.size) return;
+    container.querySelectorAll('.nt-pivot-trend[data-itemid]').forEach(function(el) {
+        const iid = el.dataset.itemid;
+        if (!iid) return;
+        if (!trendSlots.has(iid)) trendSlots.set(iid, []);
+        trendSlots.get(iid).push(el);
+    });
+
+    const wanted = [];
+    const now = Date.now();
+    sparkSlots.forEach(function(_els, iid) {
         const cached = _sparkPivotCache.get(iid);
         if (cached && (now - cached.ts) < _SPARK_TTL_MS) {
-            cachedByItem[iid] = cached.data;
+            _renderSparklineIntoSlots(sparkSlots, trendSlots, iid, cached.data, theme);
         } else {
-            if (wanted.indexOf(iid) < 0) wanted.push(iid);
+            wanted.push(iid);
         }
-    });
-    // Cached direkt rendern
-    Object.keys(cachedByItem).forEach(function(iid) {
-        _renderSparklineIntoSlots(container, iid, cachedByItem[iid], theme);
     });
     if (!wanted.length) return;
 
@@ -110,25 +120,23 @@ function _fetchAndRenderSparklines(container, baseUrl, theme) {
                 Object.keys(byIid).forEach(function(iid) {
                     const arr = byIid[iid] || [];
                     _sparkPivotCache.set(iid, { data: arr, ts: Date.now() });
-                    _renderSparklineIntoSlots(container, iid, arr, theme);
+                    _renderSparklineIntoSlots(sparkSlots, trendSlots, iid, arr, theme);
                 });
             })
             .catch(function() { /* silent — Sparklines sind Nice-to-have */ });
     });
 }
 
-function _renderSparklineIntoSlots(container, itemid, values, theme) {
-    // CSS-Selector-Escape fuer itemid (Zahlen sind safe, aber defensiv)
-    const slots = container.querySelectorAll('.nt-pivot-spark[data-itemid="' + itemid + '"]');
-    if (!slots.length) return;
+function _renderSparklineIntoSlots(sparkSlots, trendSlots, itemid, values, theme) {
+    const els = sparkSlots.get(itemid);
+    if (!els || !els.length) return;
     const svg = _buildSparklineSvg(values, theme);
-    slots.forEach(function(el) { el.innerHTML = svg; });
+    els.forEach(function(el) { el.innerHTML = svg; });
     // Trend-Indikator: first vs last (nach ausreisserfreier Glaettung —
     // Median der ersten 3 vs. Median der letzten 3 Punkte).
     const trend = _buildTrendArrow(values);
     if (trend) {
-        const trendSlots = container.querySelectorAll('.nt-pivot-trend[data-itemid="' + itemid + '"]');
-        trendSlots.forEach(function(el) { el.innerHTML = trend; });
+        (trendSlots.get(itemid) || []).forEach(function(el) { el.innerHTML = trend; });
     }
 }
 
@@ -520,7 +528,15 @@ export function buildPivotToolbar(onApply, theme) {
     filterIn.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') { closePopup(); trigger.focus(); }
     });
-    document.addEventListener('click', function(e) {
+    // Outside-Click schliesst das Popup. Selbst-entfernend sobald die Toolbar
+    // aus dem DOM ist — renderItemsMode() baut sie bei jedem Render neu, ohne
+    // Cleanup wuerden die document-Listener unbegrenzt akkumulieren
+    // (Wallboard-Betrieb: ein Leak pro Auto-Refresh).
+    document.addEventListener('click', function _outside(e) {
+        if (!document.contains(combo)) {
+            document.removeEventListener('click', _outside);
+            return;
+        }
         if (!combo.contains(e.target)) closePopup();
     });
     // Initial-Liste mit Loading-Placeholder rendern; Discovery-Fetch pflegt

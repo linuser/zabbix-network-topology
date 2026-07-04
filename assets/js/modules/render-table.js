@@ -1332,6 +1332,12 @@ export function renderTable(wrap, nodes, edges) {
 
             function esc(s) {
                 s = String(s == null ? '' : s);
+                // CSV-Formel-Injection neutralisieren: Zellen die mit = + - @
+                // oder Tab/CR beginnen wuerde Excel/LibreOffice als Formel
+                // ausfuehren ("=cmd|..." im Host-Visiblename). Fuehrendes '
+                // macht sie zu Text. Reine Zahlen (auch negative wie -12.5
+                // von Temperatur-Items) bleiben unangetastet.
+                if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s;
                 // RFC 4180 Escaping: doublequote quotes, wrap if contains comma/quote/newline
                 if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
                 return s;

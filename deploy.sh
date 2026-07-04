@@ -49,6 +49,14 @@ fi
 readonly SERVER="$1"
 readonly MODE="${2:-main}"
 
+# Argument-Injection-Guard: ein SERVER-Argument das mit "-" beginnt wuerde
+# ssh/scp als Option interpretieren (-oProxyCommand=... → lokale Command-
+# Execution). Zusaetzlich nutzen alle ssh/scp-Aufrufe unten "--".
+if [[ "$SERVER" == -* ]]; then
+    echo "❌ Ungueltiger Server-Name: $SERVER" >&2
+    exit 1
+fi
+
 case "$MODE" in
     main|widgets|all) ;;
     *) echo "❌ Ungueltiger Modus: $MODE (main|widgets|all)" >&2; exit 1 ;;
@@ -56,14 +64,14 @@ esac
 
 # ── SSH-Reachability testen ────────────────────────────────────────────────
 echo "→ Test SSH-Zugang: $SERVER"
-if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$SERVER" "true" 2>/dev/null; then
+if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -- "$SERVER" "true" 2>/dev/null; then
     echo "❌ SSH zu $SERVER fehlgeschlagen. Public-Key im ~/.ssh/authorized_keys?" >&2
     exit 1
 fi
 
 # ── Remote-Umgebung autodetecten ───────────────────────────────────────────
 echo "→ Autodetect PHP-FPM-Service + Zabbix-UI-Pfad auf $SERVER"
-REMOTE_ENV=$(ssh "$SERVER" bash <<'REMOTE_EOF'
+REMOTE_ENV=$(ssh -- "$SERVER" bash <<'REMOTE_EOF'
 set -e
 # PHP-FPM-Service: die genaue Version finden (php8.2-fpm, php8.3-fpm, ...)
 fpm=$(systemctl list-units --type=service --all 2>/dev/null \
@@ -89,8 +97,11 @@ echo "UI=${ui:-NONE}"
 REMOTE_EOF
 )
 
-FPM_SERVICE=$(echo "$REMOTE_ENV" | grep '^FPM=' | cut -d= -f2)
-UI_PATH=$(echo "$REMOTE_ENV" | grep '^UI=' | cut -d= -f2)
+# "|| true": unter set -euo pipefail wuerde ein fehlender Treffer (partieller
+# SSH-Output) das Skript stumm killen — die freundlichen ❌-Checks darunter
+# waeren sonst unerreichbar.
+FPM_SERVICE=$(echo "$REMOTE_ENV" | grep '^FPM=' | cut -d= -f2 || true)
+UI_PATH=$(echo "$REMOTE_ENV" | grep '^UI=' | cut -d= -f2 || true)
 
 if [[ "$FPM_SERVICE" == "NONE" || -z "$FPM_SERVICE" ]]; then
     echo "❌ Kein php-fpm-Service auf $SERVER gefunden." >&2
@@ -132,15 +143,15 @@ fi
 
 # ── SCP zum Server ─────────────────────────────────────────────────────────
 echo "→ SCP zum Server"
-if [[ "$MODE" == "main"    || "$MODE" == "all" ]]; then scp -q "$TMP_MAIN"   "$SERVER:$REMOTE_MAIN"; fi
+if [[ "$MODE" == "main"    || "$MODE" == "all" ]]; then scp -q -- "$TMP_MAIN"   "$SERVER:$REMOTE_MAIN"; fi
 if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
-    scp -q "$TMP_WIDGET" "$SERVER:$REMOTE_WIDGET"
-    scp -q "$TMP_HEALTH" "$SERVER:$REMOTE_HEALTH"
+    scp -q -- "$TMP_WIDGET" "$SERVER:$REMOTE_WIDGET"
+    scp -q -- "$TMP_HEALTH" "$SERVER:$REMOTE_HEALTH"
 fi
 
 # ── Installieren auf dem Server ────────────────────────────────────────────
 echo "→ Installiere auf $SERVER"
-ssh "$SERVER" bash -s <<REMOTE_INSTALL
+ssh -- "$SERVER" bash -s <<REMOTE_INSTALL
 set -e
 # Variablen hier lokal expandiert (unquoted Heredoc) — die inneren Bloecke
 # nutzen sie remote als Shell-Variablen. Vorher waren die inneren Heredocs
@@ -149,17 +160,26 @@ R_MAIN="$REMOTE_MAIN"
 R_WIDGET="$REMOTE_WIDGET"
 R_HEALTH="$REMOTE_HEALTH"
 cd "$REMOTE_MODULES"
+# Staging-Pattern: erst nach TEMP entpacken, dann atomar tauschen. Vorher
+# lief "rm -rf" VOR unzip — schlug unzip fehl (kaputtes/fehlendes Zip),
+# war das laufende Modul geloescht, kein Rollback.
 $([[ "$MODE" == "main" || "$MODE" == "all" ]] && cat <<'MAIN'
+STAGE=$(mktemp -d /tmp/nt_stage.XXXXXX)
+sudo unzip -q "$R_MAIN" -d "$STAGE"
 sudo rm -rf network_topology_v6
-sudo unzip -q "$R_MAIN"
+sudo mv "$STAGE/network_topology_v6" network_topology_v6
+sudo rm -rf "$STAGE"
 sudo chown -R root:root network_topology_v6
 MAIN
 )
 $([[ "$MODE" == "widgets" || "$MODE" == "all" ]] && cat <<'WIDGETS'
+STAGE_W=$(mktemp -d /tmp/nt_stage_w.XXXXXX)
+sudo unzip -q "$R_WIDGET" -d "$STAGE_W/network_topology_v6_widget"
+sudo unzip -q "$R_HEALTH" -d "$STAGE_W/network_topology_v6_health_widget"
 sudo rm -rf network_topology_v6_widget network_topology_v6_health_widget
-sudo mkdir network_topology_v6_widget network_topology_v6_health_widget
-sudo unzip -q "$R_WIDGET" -d network_topology_v6_widget
-sudo unzip -q "$R_HEALTH" -d network_topology_v6_health_widget
+sudo mv "$STAGE_W/network_topology_v6_widget" network_topology_v6_widget
+sudo mv "$STAGE_W/network_topology_v6_health_widget" network_topology_v6_health_widget
+sudo rm -rf "$STAGE_W"
 sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget
 WIDGETS
 )

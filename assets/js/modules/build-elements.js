@@ -167,16 +167,18 @@ export function buildEdgeElements(edges, nodes) {
         // viele Interfaces hat — Tooltip zeigt detaillierte Werte.
         const srcH = (srcNode && srcNode.iface_health) || null;
         const tgtH = (tgtNode && tgtNode.iface_health) || null;
-        let downCnt = 0, errorsRate = 0, discardsRate = 0;
+        let downCnt = 0, errorsRate = 0, discardsRate = 0, downRatio = 0;
         if (srcH) {
             downCnt      += srcH.down || 0;
             errorsRate    = Math.max(errorsRate,   srcH.errors   || 0);
             discardsRate  = Math.max(discardsRate, srcH.discards || 0);
+            if (srcH.count > 0) downRatio = Math.max(downRatio, (srcH.down || 0) / srcH.count);
         }
         if (tgtH) {
             downCnt      += tgtH.down || 0;
             errorsRate    = Math.max(errorsRate,   tgtH.errors   || 0);
             discardsRate  = Math.max(discardsRate, tgtH.discards || 0);
+            if (tgtH.count > 0) downRatio = Math.max(downRatio, (tgtH.down || 0) / tgtH.count);
         }
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
@@ -184,8 +186,12 @@ export function buildEdgeElements(edges, nodes) {
                     // Discovery-Quelle(n): ['lldp'], ['cdp'], oder ['cdp','lldp']
                     // wenn die Verbindung von beiden Protokollen gemeldet wurde
                     src: e.src || [],
-                    // Interface-Health-Aggregat fuer Edge-Styling + Tooltip
-                    ifaceDown: downCnt, ifaceErr: errorsRate, ifaceDrop: discardsRate }
+                    // Interface-Health-Aggregat fuer Edge-Styling + Tooltip.
+                    // downRatio (worst-case beider Endpunkte) steuert das
+                    // Edge-Coloring — der Roh-Count wuerde bei einem Switch
+                    // mit vielen unbenutzten Ports jede Edge rot faerben.
+                    ifaceDown: downCnt, ifaceErr: errorsRate, ifaceDrop: discardsRate,
+                    ifaceDownRatio: downRatio }
         });
     });
     return elements;

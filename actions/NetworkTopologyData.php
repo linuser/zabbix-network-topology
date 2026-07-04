@@ -343,9 +343,11 @@ class NetworkTopologyData extends CController {
             'search'       => ['key_' => [
                 // Traffic — Agent + SNMP
                 'net.if', 'ifInOctets', 'ifOutOctets', 'ifHCInOctets', 'ifHCOutOctets',
-                // Interface-Health: oper-status + errors + discards (SNMP IF-MIB
-                // plus Agent net.if.*[*,errors|dropped] Varianten)
-                'ifOperStatus', 'ifInErrors', 'ifOutErrors',
+                // Interface-Health: oper-/admin-status + errors + discards
+                // (SNMP IF-MIB, moderne net.if.*-Template-Keys enthalten die
+                // MIB-Namen im Bracket und matchen ueber dieselben Substrings,
+                // Agent-Varianten net.if.*[*,errors|dropped] via Regex unten)
+                'ifOperStatus', 'ifAdminStatus', 'ifInErrors', 'ifOutErrors',
                 'ifInDiscards', 'ifOutDiscards',
                 // LLDP (IEEE 802.1AB standard MIB)
                 'lldpRemSysName',
@@ -445,6 +447,8 @@ class NetworkTopologyData extends CController {
         //   discards_rate Summe in+out Discards/sec ueber alle Interfaces
         //   iface_count   Anzahl beobachteter Interfaces (Kontext)
         $host_iface     = [];   // hid => ['down'=>N, 'errors'=>X, 'discards'=>X, 'count'=>N]
+        $iface_oper     = [];   // hid => [ifaceParam => operStatus]  (Roh-Sammlung)
+        $iface_admin    = [];   // hid => [ifaceParam => adminStatus] (fuer Korrelation)
         $lldp_raw       = [];
         $host_cpu       = [];
         $host_mem_used  = [];   // bytes (used)
@@ -464,7 +468,27 @@ class NetworkTopologyData extends CController {
             $key = $item['key_'];
             $val = $item['lastvalue'];
 
-            if (strpos($key, 'net.if') === 0) {
+            // WICHTIG: Health-Branches VOR dem generischen net.if-Traffic-Branch.
+            // Moderne SNMP-Template-Keys wie net.if.status[ifOperStatus.1] und
+            // net.if.in.errors[ifInErrors.1] beginnen mit "net.if" — der
+            // Traffic-Branch wuerde sie sonst schlucken und iface_health bliebe
+            // fuer Standard-Zabbix-7-Templates leer.
+            if (strpos($key, 'ifOperStatus') !== false) {
+                // Oper-Status pro Interface. Bracket-Param als Korrelations-
+                // Key zu ifAdminStatus, damit admin-down (absichtlich
+                // deaktivierte Ports) unten nicht als "Link down" zaehlt.
+                $iface_oper[$hid][$this->ifaceParam($key)] = (int) $val;
+            } elseif (strpos($key, 'ifAdminStatus') !== false) {
+                $iface_admin[$hid][$this->ifaceParam($key)] = (int) $val;
+            } elseif (strpos($key, 'ifInErrors') !== false || strpos($key, 'ifOutErrors') !== false
+                  || preg_match('/net\.if\.(?:in|out)\[[^\]]*,errors\]/', $key)) {
+                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
+                $host_iface[$hid]['errors'] += (float) $val;
+            } elseif (strpos($key, 'ifInDiscards') !== false || strpos($key, 'ifOutDiscards') !== false
+                  || preg_match('/net\.if\.(?:in|out)\[[^\]]*,dropped\]/', $key)) {
+                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
+                $host_iface[$hid]['discards'] += (float) $val;
+            } elseif (strpos($key, 'net.if') === 0) {
                 // Zabbix agent traffic (bits/s)
                 $name = strtolower($item['name']);
                 if (!isset($host_traffic[$hid])) {
@@ -487,20 +511,6 @@ class NetworkTopologyData extends CController {
                     $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
                 }
                 $host_traffic[$hid]['out'] += (float) $val * 8;
-            } elseif (strpos($key, 'ifOperStatus') !== false) {
-                // ifOperStatus per Interface: 1=up, alle anderen Werte = irgendeine
-                // Form von down/testing/notPresent. Wir zaehlen alles != 1 als down.
-                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
-                $host_iface[$hid]['count']++;
-                if ((int) $val !== 1) $host_iface[$hid]['down']++;
-            } elseif (strpos($key, 'ifInErrors') !== false || strpos($key, 'ifOutErrors') !== false
-                  || preg_match('/net\.if\.(?:in|out)\[.*,errors\]/', $key)) {
-                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
-                $host_iface[$hid]['errors'] += (float) $val;
-            } elseif (strpos($key, 'ifInDiscards') !== false || strpos($key, 'ifOutDiscards') !== false
-                  || preg_match('/net\.if\.(?:in|out)\[.*,dropped\]/', $key)) {
-                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
-                $host_iface[$hid]['discards'] += (float) $val;
             } elseif (!empty($val) && (
                     $key === 'lldpRemSysName'
                  || strpos($key, 'cdpCacheDeviceId')  !== false   // Cisco CDP
@@ -514,6 +524,21 @@ class NetworkTopologyData extends CController {
                     ? 'cdp'
                     : ((strpos($key, 'lldp') !== false) ? 'lldp' : 'other');
                 $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val, 'src' => $src];
+            }
+        }
+
+        // Oper/Admin-Korrelation → down-Count pro Host. Ein Interface zaehlt
+        // nur als down wenn oper=down(2)/lowerLayerDown(7) UND es nicht
+        // absichtlich deaktiviert ist (admin=down(2)). notPresent(6)/unknown(4)
+        // zaehlen weder als up noch down (typisch: ungenutzte Ports).
+        foreach ($iface_oper as $hid => $params) {
+            if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
+            foreach ($params as $param => $oper) {
+                if ($oper === 4 || $oper === 6) continue;
+                $admin = $iface_admin[$hid][$param] ?? 1;
+                if ($admin === 2) continue;   // admin-down: gewollt, kein Issue
+                $host_iface[$hid]['count']++;
+                if ($oper === 2 || $oper === 7) $host_iface[$hid]['down']++;
             }
         }
 
@@ -740,13 +765,26 @@ class NetworkTopologyData extends CController {
             // Wert kann komma-separierte Liste sein: "pve,HP24GARUBA".
             // CDP kann auch "\n"-separiert oder mit Pipe kommen.
             $neighbors = preg_split('/[,\n\r\|]+/', $item['lastvalue']);
-            foreach ($neighbors as $neighbor_raw) {
-                $neighbor_raw = $cleanNeighbor((string) $neighbor_raw);
+            foreach ($neighbors as $neighbor_full) {
+                // 0. Exact-Match auf den ROHEN Wert zuerst — SysNames/Visible-
+                // Names mit Leerzeichen ("Core Switch 1") matchten bis v4.21.1
+                // exakt; cleanNeighbor() wuerde sie am Leerzeichen zerschneiden
+                // (Regression). Cleanup nur als Fallback fuer Vendor-Suffixe.
+                $neighbor_full = trim((string) $neighbor_full);
+                if ($neighbor_full === '') continue;
+                $rhid = $name_map[strtolower($neighbor_full)] ?? null;
+                if (!$rhid && isset($ip_map[$neighbor_full])) {
+                    $rhid = $ip_map[$neighbor_full];
+                }
+
+                $neighbor_raw = $rhid ? $neighbor_full : $cleanNeighbor($neighbor_full);
                 if ($neighbor_raw === '') continue;
                 $lldp_val = strtolower($neighbor_raw);
 
-                // 1. Exakter Match gegen host/visiblename/lowercase
-                $rhid = $name_map[$lldp_val] ?? null;
+                // 1. Exakter Match gegen cleaned host/visiblename/lowercase
+                if (!$rhid) {
+                    $rhid = $name_map[$lldp_val] ?? null;
+                }
 
                 // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
                 if (!$rhid && isset($ip_map[$neighbor_raw])) {
@@ -1058,6 +1096,22 @@ class NetworkTopologyData extends CController {
             $out[] = ['name' => $name, 'label' => $label, 'url' => $url];
         }
         return $out;
+    }
+
+    /**
+     * Extrahiert den Bracket-Parameter eines Item-Keys als Korrelations-Key
+     * fuer Interface-Items ("ifOperStatus[eth0]" → "eth0",
+     * "net.if.status[ifOperStatus.3]" → "ifOperStatus.3" → normalisiert "3").
+     * Ohne Bracket: ganzer Key.
+     */
+    private function ifaceParam(string $key): string {
+        $p = strpos($key, '[');
+        if ($p === false) return $key;
+        $q = strrpos($key, ']');
+        $param = substr($key, $p + 1, ($q !== false ? $q : strlen($key)) - $p - 1);
+        // "ifOperStatus.3" / "ifAdminStatus.3" → "3", damit Oper und Admin
+        // desselben Interfaces trotz MIB-Name-Praefix korrelieren.
+        return preg_replace('/^if(?:Oper|Admin)Status\./', '', $param);
     }
 
     // Returns IP from primary interface, prefers Agent but falls back to SNMP/JMX/IPMI
