@@ -15,35 +15,48 @@ import { esc } from './utils.js';
 const PRESETS = [
     // Filesystem
     { id: 'disks',      lbl: 'Filesystem Auslastung (%)',
-      pattern: 'vfs.fs.size[*,pused]', unit: '%' },
+      pattern: 'vfs.fs.size[*,pused]', unit: '%',
+      desc: 'Prozentuale Belegung pro Mount-Point. Zeigt Root, /var, /home usw.' },
     { id: 'disks_used', lbl: 'Filesystem Used (Bytes)',
-      pattern: 'vfs.fs.size[*,used]', unit: 'B' },
+      pattern: 'vfs.fs.size[*,used]', unit: 'B',
+      desc: 'Absoluter Verbrauch pro Mount-Point in Bytes.' },
     // Block-Device IO (Standard Linux-Template, Zabbix 7.x)
     { id: 'dev_util',   lbl: 'Disk Utilization (%)',
-      pattern: 'vfs.dev.util[*]',         unit: '%' },
+      pattern: 'vfs.dev.util[*]', unit: '%',
+      desc: 'Anteil der Zeit in dem das Block-Device Requests bearbeitet — >80% = Bottleneck.' },
     { id: 'dev_rrate',  lbl: 'Disk Read Rate (r/s)',
-      pattern: 'vfs.dev.read.rate[*]',    unit: '' },
+      pattern: 'vfs.dev.read.rate[*]', unit: '',
+      desc: 'Lese-Operationen pro Sekunde (IOPS) pro Block-Device.' },
     { id: 'dev_wrate',  lbl: 'Disk Write Rate (w/s)',
-      pattern: 'vfs.dev.write.rate[*]',   unit: '' },
+      pattern: 'vfs.dev.write.rate[*]', unit: '',
+      desc: 'Schreib-Operationen pro Sekunde pro Block-Device.' },
     { id: 'dev_queue',  lbl: 'Disk Queue Size',
-      pattern: 'vfs.dev.queue_size[*]',   unit: '' },
+      pattern: 'vfs.dev.queue_size[*]', unit: '',
+      desc: 'Durchschnittliche Anzahl anhaengender IO-Requests — hoher Wert = Backlog.' },
     { id: 'dev_rawait', lbl: 'Disk Read Wait (ms)',
-      pattern: 'vfs.dev.read.await[*]',   unit: 'ms' },
+      pattern: 'vfs.dev.read.await[*]', unit: 'ms',
+      desc: 'Durchschnittliche Wait-Time pro Read (Queue + Service). >20ms = langsam.' },
     { id: 'dev_wawait', lbl: 'Disk Write Wait (ms)',
-      pattern: 'vfs.dev.write.await[*]',  unit: 'ms' },
+      pattern: 'vfs.dev.write.await[*]', unit: 'ms',
+      desc: 'Durchschnittliche Wait-Time pro Write. Trend zeigt IO-Sattigung frueh.' },
     // System
     { id: 'mem',        lbl: 'Memory (Bytes)',
-      pattern: 'vm.memory.size[*]',   unit: 'B' },
+      pattern: 'vm.memory.size[*]', unit: 'B',
+      desc: 'Speicher-Aufschluesselung: total, available, used, cached, buffers usw.' },
     { id: 'cpu',        lbl: 'CPU-Util (%)',
-      pattern: 'system.cpu.util*',    unit: '%' },
+      pattern: 'system.cpu.util*', unit: '%',
+      desc: 'CPU-Auslastung nach Modus (user, system, iowait, idle, ...).' },
     // Network
     { id: 'netin',      lbl: 'Network In (bps)',
-      pattern: 'net.if.in[*]',        unit: 'bps' },
+      pattern: 'net.if.in[*]', unit: 'bps',
+      desc: 'Eingehender Traffic pro Interface, Bits/s. Bandbreiten-Sattigung sichtbar.' },
     { id: 'netout',     lbl: 'Network Out (bps)',
-      pattern: 'net.if.out[*]',       unit: 'bps' },
+      pattern: 'net.if.out[*]', unit: 'bps',
+      desc: 'Ausgehender Traffic pro Interface, Bits/s.' },
     // Connectivity
     { id: 'ping',       lbl: 'Ping-Loss + RTT',
-      pattern: 'icmpping*',           unit: '' },
+      pattern: 'icmpping*', unit: '',
+      desc: 'ICMP-Roundtrip + Loss-Rate. Zeigt Netzwerk-Probleme pro Host auf einen Blick.' },
 ];
 
 let _data = null;            // letzte Antwort vom Backend
@@ -379,7 +392,8 @@ export function buildPivotToolbar(onApply, theme) {
               });
         _items.push({ type: 'header', label: 'Standard-Presets' });
         visiblePresets.forEach(function(p) {
-            _items.push({ type: 'item', label: p.lbl, value: p.pattern });
+            _items.push({ type: 'item', label: p.lbl, value: p.pattern,
+                          desc: p.desc || '' });
         });
         _items.push({ type: 'item',
                       label: '\u2014 Custom-Pattern \u2014',
@@ -430,20 +444,33 @@ export function buildPivotToolbar(onApply, theme) {
                 pendingHeader = null;
             }
             const row = document.createElement('div');
-            row.style.cssText = 'padding:4px 10px;cursor:' + (it.disabled ? 'default' : 'pointer')
+            row.style.cssText = 'padding:5px 10px;cursor:' + (it.disabled ? 'default' : 'pointer')
                 + ';font-size:12px;color:' + (it.disabled ? t.subSoft : t.text)
-                + ';display:flex;align-items:baseline;gap:8px'
+                + ';display:flex;flex-direction:column;gap:2px'
                 + (it.disabled ? ';font-style:italic' : '');
+            const topRow = document.createElement('div');
+            topRow.style.cssText = 'display:flex;align-items:baseline;gap:8px';
             const lab = document.createElement('span');
             lab.textContent = it.label;
             lab.style.flex = '1';
-            row.appendChild(lab);
+            topRow.appendChild(lab);
             if (it.sub) {
                 const sub = document.createElement('span');
                 sub.textContent = it.sub;
                 sub.style.cssText = 'color:' + t.subSoft + ';font-size:11px;'
                     + 'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
-                row.appendChild(sub);
+                topRow.appendChild(sub);
+            }
+            row.appendChild(topRow);
+            // Preset-Description als Sub-Zeile — nur bei Preset-Items (nicht
+            // bei Custom-Pattern oder Discovery-Hinweisen). Hilft dem User
+            // ohne Zabbix-Doku-Suche zu verstehen was das Pattern liefert.
+            if (it.desc && !it.disabled) {
+                const dl = document.createElement('div');
+                dl.textContent = it.desc;
+                dl.style.cssText = 'font-size:10px;color:' + t.subSoft
+                    + ';line-height:1.3;padding-left:0';
+                row.appendChild(dl);
             }
             if (!it.disabled) {
                 row.addEventListener('mouseenter', function() {
@@ -551,14 +578,11 @@ export function buildPivotToolbar(onApply, theme) {
         const matchPreset = PRESETS.find(function(p) { return p.pattern === v; });
         if (matchPreset) {
             trigger.firstChild.nodeValue = matchPreset.lbl;
-            return;
+        } else {
+            const matchDisc = (_disc.patterns || []).find(function(p) { return p.stem === v; });
+            trigger.firstChild.nodeValue = matchDisc ? matchDisc.stem : '— Custom-Pattern —';
         }
-        const matchDisc = (_disc.patterns || []).find(function(p) { return p.stem === v; });
-        if (matchDisc) {
-            trigger.firstChild.nodeValue = matchDisc.stem;
-            return;
-        }
-        trigger.firstChild.nodeValue = '— Custom-Pattern —';
+        _scheduleCountProbe(v);
     });
     apply.addEventListener('click', function() {
         if (onApply) onApply(pat.value);
@@ -566,6 +590,58 @@ export function buildPivotToolbar(onApply, theme) {
     pat.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' && onApply) onApply(pat.value);
     });
+
+    // ── Live-Autocomplete: matching-Count + Sample-Keys unterm Input ────────
+    // Debounced 400ms; Sequence-Counter verwirft outdated Responses (schnelles
+    // Tippen). Zeigt "142 Items matchen" plus bis zu 5 Beispiel-Keys.
+    const countHint = document.createElement('div');
+    countHint.id = 'nt-items-count-hint';
+    countHint.style.cssText = 'flex-basis:100%;font-size:11px;color:' + t.subSoft
+        + ';padding:2px 0 0 0;min-height:14px;font-family:'
+        + 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    wrap.appendChild(countHint);
+
+    let _probeTimer = null;
+    let _probeSeq = 0;
+    function _scheduleCountProbe(pattern) {
+        if (_probeTimer) clearTimeout(_probeTimer);
+        const p = (pattern || '').trim();
+        if (!p || p.replace(/\*/g, '').length < 2) {
+            countHint.textContent = '';
+            return;
+        }
+        countHint.textContent = '…';
+        _probeTimer = setTimeout(function() {
+            const cfg = window.NT_CONFIG || {};
+            const groupids = cfg.selected_groupids || [];
+            if (!groupids.length) { countHint.textContent = ''; return; }
+            const params = new URLSearchParams();
+            params.append('action', 'network.topology.v6.item_count');
+            params.append('pattern', p);
+            groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
+            const seq = ++_probeSeq;
+            fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (seq !== _probeSeq) return;   // outdated
+                    if (!d || d.error) { countHint.textContent = ''; return; }
+                    if (d.hint) { countHint.textContent = d.hint; return; }
+                    if (d.count === 0) {
+                        countHint.textContent = '0 Items matchen — Pattern pruefen';
+                        countHint.style.color = '#f59e0b';
+                        return;
+                    }
+                    countHint.style.color = t.subSoft;
+                    const sample = (d.sample || []).slice(0, 3).join('  ·  ');
+                    countHint.textContent = d.count + ' Items matchen'
+                        + (sample ? '   z.B. ' + sample : '');
+                })
+                .catch(function() { if (seq === _probeSeq) countHint.textContent = ''; });
+        }, 400);
+    }
 
     return wrap;
 }
@@ -714,6 +790,34 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     // dann ohne Unit (raw Zahl).
     const _unitSet = new Set(cols.map(function(c) { return c.unit || ''; }));
     const _aggUnit = (_unitSet.size === 1 ? (cols[0] && cols[0].unit) : '') || '';
+
+    // Anomalie-Detection pro Spalte: robuste Streuung via Median + MAD
+    // (Median Absolute Deviation). Klassisches mean±2σ waere von genau den
+    // Ausreissern verzerrt die wir finden wollen — MAD ist robust dagegen.
+    // MAD·1.4826 approximiert σ bei Normalverteilung; |v−median| > 2·σ̂
+    // markiert die Zelle. Braucht ≥5 Werte + echte Streuung (MAD > 0),
+    // sonst waere bei 3 Hosts jede Abweichung "anomal".
+    const _anomalyStats = {};   // colKey → { median, sigma } | null
+    cols.forEach(function(c) {
+        const vals = [];
+        hostIds.forEach(function(hid) {
+            const v = rows[hid] && rows[hid][c.key];
+            if (typeof v === 'number' && isFinite(v)) vals.push(v);
+        });
+        if (vals.length < 5) { _anomalyStats[c.key] = null; return; }
+        const sorted = vals.slice().sort(function(a, b) { return a - b; });
+        const median = sorted[Math.floor(sorted.length / 2)];
+        const devs = sorted.map(function(v) { return Math.abs(v - median); })
+                           .sort(function(a, b) { return a - b; });
+        const mad = devs[Math.floor(devs.length / 2)];
+        if (mad <= 0) { _anomalyStats[c.key] = null; return; }
+        _anomalyStats[c.key] = { median: median, sigma: mad * 1.4826 };
+    });
+    function isAnomaly(v, colKey) {
+        const s = _anomalyStats[colKey];
+        if (!s || typeof v !== 'number' || !isFinite(v)) return false;
+        return Math.abs(v - s.median) > 2 * s.sigma;
+    }
 
     // Heatmap-Stats: pro Spalte min/max ueber non-null Werte. Wird einmal
     // pro Render berechnet und unten in cellBg() abgerufen.
@@ -874,11 +978,24 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             }
             const cellColor = (v == null ? t.subSoft : t.text);
             const bg = cellBg(v, c.unit, _colStats[c.key]);
+            // Anomalie: Wert weicht > 2σ̂ (MAD-basiert) vom Spalten-Median ab.
+            // Lila Marker + linker Balken — bewusst NICHT rot/orange, damit es
+            // sich von Threshold-/Heatmap-Faerbung unterscheidet ("ungewoehnlich"
+            // heisst nicht zwingend "schlecht").
+            const anomalous = isAnomaly(v, c.key);
+            const anomalyBorder = anomalous ? ';box-shadow:inset 3px 0 0 #a855f7' : '';
+            const anomalyMark = anomalous
+                ? '<span title="Anomalie: weicht deutlich vom Spalten-Median ab" '
+                    + 'style="color:#a855f7;font-weight:700;margin-right:2px">◆</span>'
+                : '';
             // Tooltip: Item-Name + Description (falls vorhanden) — deutlich
             // hilfreicher als "In Latest Data oeffnen".
             const ttParts = [];
             if (im && im.name) ttParts.push(im.name);
             if (im && im.desc) ttParts.push('— ' + im.desc);
+            if (anomalous && _anomalyStats[c.key]) {
+                ttParts.push('◆ Anomalie: Spalten-Median ' + fmtVal(_anomalyStats[c.key].median, c.unit));
+            }
             const tt = ttParts.length ? ttParts.join('\n') : 'In Latest Data oeffnen';
             // Sparkline-Placeholder-Span (leer). Wird nach dem Fetch via
             // updateSparkline() gefuellt. data-itemid liefert den Key fuer
@@ -894,13 +1011,14 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
                     + '" style="display:inline-block;width:56px;height:14px;vertical-align:middle;margin-right:4px;opacity:0.7"></span>'
                 : '';
             html += '<td style="padding:0;text-align:right;font-family:' + monoFam + ';'
-                + 'font-size:12px' + bg + '">'
+                + 'font-size:12px' + bg + anomalyBorder + '">'
                 + (v != null
                     ? '<a href="' + esc(cellLink) + '" target="_blank" rel="noopener noreferrer" '
                         + 'style="display:flex;align-items:center;justify-content:flex-end;'
                         + 'padding:5px 8px;color:' + cellColor
                         + ';text-decoration:none" title="' + esc(tt) + '">'
-                        + sparkSlot + trendSlot + '<span>' + esc(fmtVal(v, c.unit)) + '</span></a>'
+                        + sparkSlot + trendSlot + anomalyMark
+                        + '<span>' + esc(fmtVal(v, c.unit)) + '</span></a>'
                     : '<span style="display:block;padding:5px 8px;color:' + cellColor + '">'
                         + esc(fmtVal(v, c.unit)) + '</span>')
                 + '</td>';
