@@ -22,6 +22,8 @@ import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isSimActive, clearSimulation } from './whatif.js';
 import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
+import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
+import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
 import { t } from './i18n.js';
 import { isLinkModeActive, enterLinkMode, exitLinkMode } from './manual-links.js';
 import { setupExportMenu } from './export.js';
@@ -440,6 +442,27 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         applyTrafficHeatmap(window._ntCy);
     });
 
+    // Port-Labels: LLDP-Port des Reporters an den Edge-Enden (Best-Effort)
+    const bPorts = mkbtn('nt-btn-portlabels', '', null);
+    const _setPortsLabel = function() {
+        bPorts.textContent = t('toolbar.portlabels', { state: portLabelsOn() ? t('toolbar.on') : t('toolbar.off') });
+        bPorts.style.opacity = portLabelsOn() ? '1' : '0.5';
+        bPorts.title = t('toolbar.portlabels.tip');
+    };
+    _setPortsLabel();
+    bPorts.addEventListener('click', function() {
+        setPortLabels(!portLabelsOn());
+        _setPortsLabel();
+        applyPortLabels(window._ntCy);
+    });
+
+    // Root-Cause-Analyse: Offline-Hosts in Ursache vs. Folge trennen
+    const bRc = mkbtn('nt-btn-rootcause', t('rc.button'), null);
+    bRc.title = t('rc.button.tip');
+    bRc.addEventListener('click', function() {
+        toggleRootCause(window._ntCy);
+    });
+
     // Export-Menü (PNG/PDF/HTML/Mail) — eigenständiges Modul
     setupExportMenu(bar, isFirstRun);
 
@@ -467,10 +490,11 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             if (e.key !== 'Escape') return;
             if (isLinkModeActive()) { exitLinkMode(); return; }
             const cyRef = window._ntCy;
-            // ESC-Kette: erst Pfad-Highlight, dann Ausfall-Simulation —
+            // ESC-Kette: Pfad-Highlight → Ausfall-Simulation → Root-Cause —
             // ein ESC beendet EINEN Modus, nicht alle auf einmal.
             if (cyRef && (isPathActive() || getPathStart())) { clearPathState(cyRef); return; }
-            if (cyRef && isSimActive()) clearSimulation(cyRef);
+            if (cyRef && isSimActive()) { clearSimulation(cyRef); return; }
+            if (cyRef && isRootCauseActive()) clearRootCause(cyRef);
         });
     }
 

@@ -79,6 +79,16 @@ export default {
     'fc.eta.stable': 'stable / falling',
     'fc.more':       '+{n} more links (due later or stable)',
 
+    // Port labels + root cause
+    'toolbar.portlabels':     'Port labels: {state}',
+    'toolbar.portlabels.tip': "Show the reporter's LLDP port at the edge ends (best effort from the item key)",
+    'rc.button':      '🔍 Root cause',
+    'rc.button.tip':  'Split offline hosts into cause vs. consequence (reachability from the uplink)',
+    'rc.none':        'No offline hosts — nothing to analyze.',
+    'rc.banner':      'Root cause: {causes} cause(s) → {victims} downstream outages · {problems} problems behind them',
+    'rc.cause_toast': '{host}: {n} hosts offline behind it',
+    'rc.end':         'End',
+
     // Health score history
     'health.hist.title': 'Score history {days} days · current avg {avg}',
     'health.hist.hint':  'Score history not set up: import templates/nt_health_score_template.yaml and run tools/topo-change-sender.sh as a cron — the sender pushes the score automatically.',

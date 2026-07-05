@@ -187,8 +187,12 @@ export function buildEdgeElements(edges, nodes) {
         const spdA = (srcNode && srcNode.link_speed) || 0;
         const spdB = (tgtNode && tgtNode.link_speed) || 0;
         const capBps = linkCapacity(spdA, spdB);
+        // Port-Labels (Best-Effort aus dem LLDP-Item-Key des Reporters):
+        // Backend liefert edge.ports = {hostid: port} pro gemeldeter Seite.
+        const ports = e.ports || {};
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
+                    portSrc: ports[src] || '', portTgt: ports[tgt] || '',
                     trafficIn: tIn, trafficOut: tOut, tLabel: tLabel, isLLDP: true,
                     // Discovery-Quelle(n): ['lldp'], ['cdp'], oder ['cdp','lldp']
                     // wenn die Verbindung von beiden Protokollen gemeldet wurde

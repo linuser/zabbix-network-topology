@@ -215,6 +215,8 @@ const _GRAPH_ONLY_SELECTORS = [
     '#nt-cluster-wrap',   // Cluster-Mode-Toggle
     '#nt-btn-lldp',       // LLDP an/aus
     '#nt-btn-weathermap', // Weathermap-Modus (Auslastungs-%)
+    '#nt-btn-portlabels', // Port-Labels an Edge-Enden
+    '#nt-btn-rootcause',  // Root-Cause-Analyse
     '#nt-btn-link',       // Link-Mode
     '#nt-btn-unlink',     // Links entfernen
     '#nt-preset-wrap',    // Presets + Save/Erase/Trash
@@ -425,6 +427,7 @@ function regroupToolbar() {
     _moveIntoMenu('nt-btn-labels',     'nt-menu-view');   // Tech-only, im Mgmt/Tabelle leer
     _moveIntoMenu('nt-btn-reset',      'nt-menu-view');
     _moveIntoMenu('nt-btn-weathermap', 'nt-menu-view');
+    _moveIntoMenu('nt-btn-portlabels', 'nt-menu-view');
 
     _moveIntoMenu('nt-layout-wrap',    'nt-menu-layout');
     _moveIntoMenu('nt-btn-groupview',  'nt-menu-layout');
@@ -435,6 +438,7 @@ function regroupToolbar() {
     _moveIntoMenu('nt-btn-link',       'nt-menu-tools');
     _moveIntoMenu('nt-btn-unlink',     'nt-menu-tools');
     _moveIntoMenu('nt-btn-history',    'nt-menu-tools');
+    _moveIntoMenu('nt-btn-rootcause',  'nt-menu-tools');
     _moveIntoMenu('nt-preset-wrap',    'nt-menu-tools');
 
     // Layout-Menu wird in Mgmt/Tabelle/Geo komplett ausgeblendet (alle

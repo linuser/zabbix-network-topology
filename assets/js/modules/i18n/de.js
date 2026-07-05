@@ -84,6 +84,16 @@ export default {
     'fc.eta.stable': 'stabil / fallend',
     'fc.more':       '+{n} weitere Links (später fällig oder stabil)',
 
+    // Port-Labels + Root-Cause
+    'toolbar.portlabels':     'Port-Labels: {state}',
+    'toolbar.portlabels.tip': 'LLDP-Port des Reporters an den Edge-Enden anzeigen (Best-Effort aus dem Item-Key)',
+    'rc.button':      '🔍 Root-Cause',
+    'rc.button.tip':  'Offline-Hosts in Ursache vs. Folge trennen (Erreichbarkeit vom Uplink aus)',
+    'rc.none':        'Keine Offline-Hosts — nichts zu analysieren.',
+    'rc.banner':      'Root-Cause: {causes} Ursache(n) → {victims} Folge-Ausfälle · {problems} Probleme dahinter',
+    'rc.cause_toast': '{host}: {n} Hosts dahinter offline',
+    'rc.end':         'Beenden',
+
     // Health-Score-Historie
     'health.hist.title': 'Score-Verlauf {days} Tage · aktuell Ø {avg}',
     'health.hist.hint':  'Score-Historie nicht eingerichtet: templates/nt_health_score_template.yaml importieren und tools/topo-change-sender.sh als Cron laufen lassen — der Sender pusht den Score automatisch mit.',

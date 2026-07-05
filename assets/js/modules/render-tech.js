@@ -26,6 +26,8 @@ import { aggregateByGroup } from './aggregation.js';
 import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
 import { isPathActive, clearPathState } from './path-highlight.js';
 import { clearSimulation, isSimActive, recomputeSimulation } from './whatif.js';
+import { clearRootCause, isRootCauseActive, runRootCause } from './root-cause.js';
+import { applyPortLabels } from './port-labels.js';
 import { notifyTopoChanges } from './topo-notify.js';
 import { showTip, hideTip, moveTip, showEdgeTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
@@ -123,6 +125,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     if (window._ntEdgeAnim)     { clearInterval(window._ntEdgeAnim);     window._ntEdgeAnim     = null; }
     if (window._ntCy)           { try { clearPathState(window._ntCy); } catch (e) {}
                                   try { clearSimulation(window._ntCy); } catch (e) {}
+                                  try { clearRootCause(window._ntCy); } catch (e) {}
                                   try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     window._ntToolbarDone = false;
     const oldSev    = document.getElementById('nt-sev-filter');   if (oldSev)    oldSev.remove();
@@ -355,7 +358,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     });
 
     startEdgeAnimation(cy, nodes);
-    setTimeout(function() { applyTrafficHeatmap(cy); }, 1800);
+    setTimeout(function() { applyTrafficHeatmap(cy); applyPortLabels(cy); }, 1800);
 
     setupMinimap(cy, wrap);
     applyManualLinks(cy);
@@ -404,6 +407,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                 savePositions(window._ntCy);
                 window._ntCy.fit(window._ntCy.nodes(), 40);
                 applyTrafficHeatmap(window._ntCy);
+                applyPortLabels(window._ntCy);
             }
         }, 800);
     });
@@ -453,6 +457,12 @@ export function render(wrap, nodes, edges, dataUrl) {
                     if ('acknowledged' in u) node.data('acknowledged', !!u.acknowledged);
                     if ('maintenance'  in u) node.data('maintenance',  !!u.maintenance);
                     if ('extra_items'  in u) node.data('extra_items',  u.extra_items || []);
+                    // Offline-Status mitziehen — das rote X (bgImage) und die
+                    // Root-Cause-Analyse brauchen frische unavailable-Flags,
+                    // sonst stimmen beide erst nach dem naechsten Voll-Render.
+                    if ('unavailable'  in u) node.data('unavailable',  !!u.unavailable);
+                    if ('down_since'   in u) node.data('down_since',   u.down_since || 0);
+                    if ('last_seen'    in u) node.data('last_seen',    u.last_seen  || 0);
                     node.data('bgImage', makeNodeImage(node.data()));
                 });
                 updateBadge(data.nodes || []);
@@ -464,6 +474,9 @@ export function render(wrap, nodes, edges, dataUrl) {
                 // Update aendert zwar keine Edges, aber der Banner-Count
                 // und die Klassen sollen den frischen Stand reflektieren.
                 if (isSimActive()) recomputeSimulation(window._ntCy);
+                // Aktive Root-Cause-Analyse mit frischen Offline-Flags neu
+                // rechnen (nicht-verbose: keine Toast-Flut alle 30s).
+                if (isRootCauseActive()) runRootCause(window._ntCy, false);
             });
     }, 30000);
 }

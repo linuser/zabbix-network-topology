@@ -37,6 +37,9 @@ export function buildCytoscapeStyle(dark) {
             'text-background-opacity': 0.88, 'text-background-padding': '2px',
             'color': dark ? '#94a3b8' : '#16a34a',
             'line-cap': 'round', 'text-rotation': 'none', 'text-margin-y': -12,
+            // Port-Labels an den Edge-Enden (port-labels.js setzt source-/
+            // target-label inline; hier nur die Offsets weg vom Node)
+            'source-text-offset': 26, 'target-text-offset': 26,
         }},
         { selector: 'edge.dead-edge', style: {
             'width': 1.5, 'line-color': '#94a3b8', 'line-style': 'dashed',
@@ -74,6 +77,16 @@ export function buildCytoscapeStyle(dark) {
         { selector: 'node.nt-sim-cut', style: {
             'underlay-color': '#dc2626', 'underlay-padding': 9,
             'underlay-opacity': 0.4, 'underlay-shape': 'ellipse',
+        }},
+        // Root-Cause-Analyse (root-cause.js): kraeftig rot = Ursache des
+        // Ausfalls, amber = Folge-Ausfall dahinter.
+        { selector: 'node.nt-rc-cause', style: {
+            'underlay-color': '#b91c1c', 'underlay-padding': 13,
+            'underlay-opacity': 0.5, 'underlay-shape': 'ellipse',
+        }},
+        { selector: 'node.nt-rc-victim', style: {
+            'underlay-color': '#f59e0b', 'underlay-padding': 8,
+            'underlay-opacity': 0.3, 'underlay-shape': 'ellipse',
         }},
     ];
 }

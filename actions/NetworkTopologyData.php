@@ -854,6 +854,20 @@ class NetworkTopologyData extends CController {
                     continue;
                 }
                 $lldp_quality[$rid]['matched']++;
+                // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
+                // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
+                // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
+                // die Mitte ist der lokale Port des Reporters. Keys wie
+                // lldp.rem.sysname[eth0] liefern den Namen direkt. Comma-
+                // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
+                $port = '';
+                if (strpos($item['key_'], '[') !== false) {
+                    $port = $this->ifaceParam($item['key_']);
+                    if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $port, $pm)) {
+                        $port = $pm[2];
+                    }
+                    if (strlen($port) > 24) $port = substr($port, 0, 24);
+                }
                 $pair = [(string) $rid, (string) $rhid];
                 sort($pair);
                 $edge_key = implode('-', $pair);
@@ -861,13 +875,20 @@ class NetworkTopologyData extends CController {
                     $seen_edges[$edge_key] = count($edges);
                     $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
                                 'to' => $rhid, 'iface' => $item['key_'],
-                                'src' => [$src => true]];
+                                'src' => [$src => true],
+                                // Reporter-Hostid → lokaler Port. Meldet die
+                                // Gegenseite dieselbe Edge, ergaenzt der
+                                // Merge-Zweig unten ihre Port-Sicht.
+                                'ports' => $port !== '' ? [(string) $rid => $port] : []];
                 } else {
                     // Edge schon bekannt (z.B. von LLDP) — Source ergaenzen
                     // wenn jetzt CDP dieselbe Verbindung meldet (merge-Logik).
                     $eidx = $seen_edges[$edge_key];
                     if (!isset($edges[$eidx]['src'][$src])) {
                         $edges[$eidx]['src'][$src] = true;
+                    }
+                    if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
+                        $edges[$eidx]['ports'][(string) $rid] = $port;
                     }
                 }
             }
