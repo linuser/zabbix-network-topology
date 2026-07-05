@@ -8,6 +8,8 @@
 // und überlebt Tab-Wechsel und Reload. Leer = kein Filter, alle sichtbar.
 
 import { loadSevFilter, saveSevFilter } from './storage.js';
+import { esc } from './utils.js';
+import { t } from './i18n.js';
 
 // Modul-State: Set<number> der aktiven Severity-Levels.
 const _sevFilter = loadSevFilter();
@@ -51,11 +53,11 @@ export function buildSevFilter(bar, cy) {
     wrap.style.cssText = 'display:flex;align-items:center;gap:5px;margin-left:10px;'
         + 'padding-left:8px;border-left:1px solid #e2e8f0;flex-shrink:0';
 
-    [{ sev: 0, col: '#22c55e', lbl: 'OK' },
-     { sev: 2, col: '#06b6d4', lbl: 'Info' },
-     { sev: 3, col: '#f59e0b', lbl: 'Warn' },
-     { sev: 4, col: '#f97316', lbl: 'Avg' },
-     { sev: 5, col: '#ef4444', lbl: 'High' }].forEach(function(sd) {
+    [{ sev: 0, col: '#22c55e', lbl: t('sev.ok') },
+     { sev: 2, col: '#06b6d4', lbl: t('sev.info') },
+     { sev: 3, col: '#f59e0b', lbl: t('sev.warn') },
+     { sev: 4, col: '#f97316', lbl: t('sev.avg') },
+     { sev: 5, col: '#ef4444', lbl: t('sev.high') }].forEach(function(sd) {
         const pill = document.createElement('button');
         pill.dataset.sev = sd.sev;
         pill.style.cssText = 'display:flex;align-items:center;gap:3px;padding:2px 7px;'
@@ -63,7 +65,7 @@ export function buildSevFilter(bar, cy) {
             + ';background:transparent;cursor:pointer;font-size:11px;color:' + sd.col
             + ';font-weight:600';
         pill.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:'
-            + sd.col + ';display:inline-block"></span>' + sd.lbl;
+            + sd.col + ';display:inline-block"></span>' + esc(sd.lbl);
 
         // Wenn aus localStorage geladen schon aktiv → optisch markieren
         if (_sevFilter.has(sd.sev)) {
@@ -93,9 +95,9 @@ export function buildSevFilter(bar, cy) {
     // sind ausgeblendet" \u2014 das ist ein recht aggressiver Filter.
     const offBtn = document.createElement('button');
     offBtn.id = 'nt-offline-only';
-    offBtn.title = 'Nur offline Hosts anzeigen';
+    offBtn.title = t('sev.offline.tip');
     offBtn.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;'
-        + 'background:#9ca3af;display:inline-block;margin-right:3px"></span>Offline';
+        + 'background:#9ca3af;display:inline-block;margin-right:3px"></span>' + esc(t('sev.offline'));
     const _setOffStyle = function() {
         const a = _offlineOnly;
         offBtn.style.cssText = 'display:flex;align-items:center;padding:2px 7px;'
@@ -121,7 +123,7 @@ export function buildSevFilter(bar, cy) {
 
     const clr = document.createElement('button');
     clr.textContent = '\u2715';
-    clr.title = 'Filter zur\u00FCcksetzen';
+    clr.title = t('sev.reset.tip');
     clr.style.cssText = 'padding:2px 5px;border-radius:10px;border:0.5px solid #e2e8f0;'
         + 'background:transparent;cursor:pointer;font-size:11px;color:#94a3b8';
     clr.addEventListener('click', function() {

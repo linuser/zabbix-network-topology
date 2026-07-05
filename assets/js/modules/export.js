@@ -17,6 +17,7 @@ import { esc, fmt } from './utils.js';
 import { loadLinks } from './storage.js';
 import { statsByGroup, scoreColor, scoreLabel } from './render-health.js';
 import { COMPLIANCE_CHECKS, fetchComplianceData } from './render-compliance.js';
+import { t } from './i18n.js';
 
 const SEV_LBL = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
 const SEV_COLORS = {
@@ -67,7 +68,7 @@ function buildReportHtml(opts) {
                 + '</tr>';
         }).join('');
 
-    const meta = now + ' &nbsp;|&nbsp; ' + nodes.length + ' Hosts &nbsp;|&nbsp; ' + links.length + ' Links';
+    const meta = t('export.report.meta', { date: now, hosts: nodes.length, links: links.length });
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>NT Report</title>'
         + '<style>'
@@ -177,7 +178,7 @@ function buildAuditHtml(complianceData) {
     // Proxy-Uebersicht: Hosts pro Proxy-Name (+ "Server (kein Proxy)")
     const byProxy = {};
     nodes.forEach(function(n) {
-        const p = (n.proxy_name && n.proxy_name.trim()) ? n.proxy_name : 'Server (kein Proxy)';
+        const p = (n.proxy_name && n.proxy_name.trim()) ? n.proxy_name : t('export.audit.noproxy');
         if (!byProxy[p]) byProxy[p] = { name: p, total: 0, offline: 0, problems: 0 };
         byProxy[p].total++;
         if (n.unavailable) byProxy[p].offline++;
@@ -206,21 +207,21 @@ function buildAuditHtml(complianceData) {
     }
 
     const summarySection = '<section>'
-        + '<h2>Zusammenfassung</h2>'
+        + '<h2>' + t('export.audit.summary') + '</h2>'
         + '<table class="summary"><tbody>'
-        +   '<tr><th>Hosts gesamt</th><td>' + nodes.length + '</td></tr>'
+        +   '<tr><th>' + t('export.audit.hosts_total') + '</th><td>' + nodes.length + '</td></tr>'
         +   '<tr><th>Offline</th><td' + (countOff   > 0 ? ' class="bad"' : '') + '>' + countOff   + '</td></tr>'
         +   '<tr><th>Stale</th><td'   + (countStale > 0 ? ' class="warn"' : '') + '>' + countStale + '</td></tr>'
-        +   '<tr><th>Kritisch (Sev ≥ 4)</th><td' + (countCrit > 0 ? ' class="bad"' : '') + '>' + countCrit + '</td></tr>'
-        +   '<tr><th>Unacked Probleme</th><td' + (countUnack > 0 ? ' class="warn"' : '') + '>' + countUnack + '</td></tr>'
-        +   '<tr><th>Probleme gesamt</th><td>' + totalProbs + '</td></tr>'
+        +   '<tr><th>' + t('export.audit.crit_sev') + '</th><td' + (countCrit > 0 ? ' class="bad"' : '') + '>' + countCrit + '</td></tr>'
+        +   '<tr><th>' + t('export.audit.unacked') + '</th><td' + (countUnack > 0 ? ' class="warn"' : '') + '>' + countUnack + '</td></tr>'
+        +   '<tr><th>' + t('export.audit.problems_total') + '</th><td>' + totalProbs + '</td></tr>'
         + '</tbody></table>'
         + '</section>';
 
     const top10Section = top10.length === 0
         ? ''
-        : '<section><h2>Top 10 Problemhosts</h2>'
-            + '<table><thead>' + th(['#', 'Host', 'IP', 'Severity', 'Status', 'Probleme', 'Acked', 'Proxy']) + '</thead><tbody>'
+        : '<section><h2>' + t('export.audit.top10') + '</h2>'
+            + '<table><thead>' + th(['#', 'Host', 'IP', 'Severity', 'Status', t('export.audit.col.problems'), 'Acked', 'Proxy']) + '</thead><tbody>'
             + top10.map(function(x, i) {
                 const n = x.n;
                 const status = x.isOff ? '<b style="color:#dc2626">OFFLINE</b>'
@@ -239,11 +240,11 @@ function buildAuditHtml(complianceData) {
             }).join('')
             + '</tbody></table>'
             + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
-            + 'Ranking: severity·10 + probleme·2 + offline·50 + stale·15 + unacked·20'
+            + t('export.audit.ranking')
             + '</div></section>';
 
     const groupsSection = '<section><h2>Hostgroups (' + groupStats.length + ')</h2>'
-        + '<table><thead>' + th(['Gruppe', 'Hosts', 'Offline', 'Stale', 'Critical', 'Unacked', 'Score']) + '</thead><tbody>'
+        + '<table><thead>' + th([t('export.audit.col.group'), 'Hosts', 'Offline', 'Stale', 'Critical', 'Unacked', 'Score']) + '</thead><tbody>'
         + groupStats.map(function(g) {
             const col = scoreColor(g.score);
             return tr([
@@ -260,8 +261,8 @@ function buildAuditHtml(complianceData) {
 
     const critSection = critHosts.length === 0
         ? ''
-        : '<section><h2>Kritische Hosts (' + critHosts.length + ')</h2>'
-            + '<table><thead>' + th(['Host', 'IP', 'Severity', 'Probleme', 'Acked', 'Proxy']) + '</thead><tbody>'
+        : '<section><h2>' + t('export.audit.crit_hosts', { n: critHosts.length }) + '</h2>'
+            + '<table><thead>' + th(['Host', 'IP', 'Severity', t('export.audit.col.problems'), 'Acked', 'Proxy']) + '</thead><tbody>'
             + critHosts.slice(0, 100).map(function(n) {
                 return tr([
                     esc(n.label || n.host || ''),
@@ -272,7 +273,7 @@ function buildAuditHtml(complianceData) {
                     esc(n.proxy_name || '—'),
                 ]);
             }).join('')
-            + (critHosts.length > 100 ? '<tr><td colspan="6"><i>… und ' + (critHosts.length - 100) + ' weitere</i></td></tr>' : '')
+            + (critHosts.length > 100 ? '<tr><td colspan="6"><i>' + t('export.audit.more', { n: critHosts.length - 100 }) + '</i></td></tr>' : '')
             + '</tbody></table></section>';
 
     const offlineSection = (offline.length === 0 && stale.length === 0)
@@ -280,7 +281,7 @@ function buildAuditHtml(complianceData) {
         : '<section><h2>Offline &amp; Stale</h2>'
             + (offline.length > 0
                 ? '<h3>Offline (' + offline.length + ')</h3>'
-                + '<table><thead>' + th(['Host', 'IP', 'Letzter Wert vor', 'Proxy', 'Fehler']) + '</thead><tbody>'
+                + '<table><thead>' + th(['Host', 'IP', t('export.audit.col.last_seen'), 'Proxy', t('export.audit.col.error')]) + '</thead><tbody>'
                 + offline.map(function(n) {
                     return tr([
                         esc(n.label || n.host || ''),
@@ -294,7 +295,7 @@ function buildAuditHtml(complianceData) {
                 : '')
             + (stale.length > 0
                 ? '<h3>Stale (' + stale.length + ')</h3>'
-                + '<table><thead>' + th(['Host', 'IP', 'Letzter Wert vor', 'Proxy']) + '</thead><tbody>'
+                + '<table><thead>' + th(['Host', 'IP', t('export.audit.col.last_seen'), 'Proxy']) + '</thead><tbody>'
                 + stale.map(function(n) {
                     return tr([
                         esc(n.label || n.host || ''),
@@ -309,15 +310,15 @@ function buildAuditHtml(complianceData) {
 
     const topProbsSection = topProblems.length === 0
         ? ''
-        : '<section><h2>Top-Probleme (' + topProblems.length + ')</h2>'
-            + '<table><thead>' + th(['Trigger', 'Severity', 'Betroffene Hosts']) + '</thead><tbody>'
+        : '<section><h2>' + t('export.audit.top_problems', { n: topProblems.length }) + '</h2>'
+            + '<table><thead>' + th(['Trigger', 'Severity', t('export.audit.col.affected')]) + '</thead><tbody>'
             + topProblems.map(function(p) {
                 return tr([esc(p.name), sevPill(p.sev), p.count]);
             }).join('')
             + '</tbody></table></section>';
 
-    const proxySection = '<section><h2>Proxy-Uebersicht (' + proxyList.length + ')</h2>'
-        + '<table><thead>' + th(['Proxy', 'Hosts', 'Offline', 'Probleme']) + '</thead><tbody>'
+    const proxySection = '<section><h2>' + t('export.audit.proxies', { n: proxyList.length }) + '</h2>'
+        + '<table><thead>' + th(['Proxy', 'Hosts', 'Offline', t('export.audit.col.problems')]) + '</thead><tbody>'
         + proxyList.map(function(p) {
             return tr([
                 '<b>' + esc(p.name) + '</b>',
@@ -338,18 +339,18 @@ function buildAuditHtml(complianceData) {
         const checks = COMPLIANCE_CHECKS.map(function(c) {
             if (c.key === 'stale_problem') {
                 return { key: c.key, level: c.level,
-                         lbl: 'Krit. Problem > ' + (complianceData.cutoff_days || 7) + 'd' };
+                         lbl: t('export.audit.stale_problem', { days: complianceData.cutoff_days || 7 }) };
             }
             return c;
         });
         const colOf = function(lvl) { return lvl === 'bad' ? '#dc2626' : lvl === 'good' ? '#16a34a' : '#0891b2'; };
         const tot   = complianceData.total || 0;
-        complianceSection = '<section><h2>Compliance (' + tot + ' Hosts)</h2>'
-            + '<table><thead>' + th(['Check', 'Level', 'Betroffene Hosts', '%']) + '</thead><tbody>'
+        complianceSection = '<section><h2>' + t('export.audit.compliance', { n: tot }) + '</h2>'
+            + '<table><thead>' + th(['Check', 'Level', t('export.audit.col.affected'), '%']) + '</thead><tbody>'
             + checks.map(function(c) {
                 const n   = complianceData.aggregate[c.key] || 0;
                 const pct = tot > 0 ? Math.round(100 * n / tot) : 0;
-                const lvlLbl = c.level === 'bad' ? '✗ Issue' : c.level === 'good' ? '✓ Gut' : 'i Info';
+                const lvlLbl = c.level === 'bad' ? t('export.audit.lvl_bad') : c.level === 'good' ? t('export.audit.lvl_good') : t('export.audit.lvl_info');
                 return tr([
                     '<b>' + esc(c.lbl) + '</b>',
                     { text: '<span style="color:' + colOf(c.level) + ';font-weight:600">' + lvlLbl + '</span>' },
@@ -359,8 +360,7 @@ function buildAuditHtml(complianceData) {
             }).join('')
             + '</tbody></table>'
             + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
-            + 'Schlechte (✗) Findings sind echte Issues; Info (i) kontextabhaengig; '
-            + 'Gut (✓) positiv markiert.</div></section>';
+            + t('export.audit.lvl_note') + '</div></section>';
     }
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>NT Audit Report</title>'
@@ -383,7 +383,7 @@ function buildAuditHtml(complianceData) {
         + '@media print{@page{size:A4;margin:12mm}h1{page-break-after:avoid}h2{page-break-after:avoid}}'
         + '</style></head><body>'
         + '<h1>Network Topology — Audit Report</h1>'
-        + '<div class="meta">' + esc(now) + ' &nbsp;·&nbsp; ' + nodes.length + ' Hosts</div>'
+        + '<div class="meta">' + t('export.audit.meta', { date: esc(now), hosts: nodes.length }) + '</div>'
         + summarySection + top10Section + groupsSection + critSection + offlineSection + topProbsSection + proxySection + complianceSection
         + '</body></html>';
 }
@@ -399,8 +399,8 @@ export function ntShowExportOverlay(png, printMode) {
         + 'background:rgba(0,0,0,0.88);z-index:99999;display:flex;flex-direction:column;'
         + 'align-items:center;justify-content:center;cursor:pointer';
     const hint = printMode
-        ? 'Cmd+P zum Drucken / Als PDF sichern &nbsp;·&nbsp; Klick zum Schliessen'
-        : 'Rechtsklick auf Bild → "Bild sichern unter..." &nbsp;·&nbsp; Klick zum Schliessen';
+        ? t('export.overlay.print')
+        : t('export.overlay.png');
     ov.innerHTML = '<div style="color:#ccc;font-family:sans-serif;font-size:12px;'
         + 'margin-bottom:12px;text-align:center">' + hint + '</div>'
         + '<img src="' + png + '" style="max-width:95vw;max-height:85vh;display:block;'
@@ -450,7 +450,7 @@ export function setupExportMenu(bar, isFirstRun) {
         }), false);
     });
 
-    mItem('&#128196;', 'PDF (Drucken)', function() {
+    mItem('&#128196;', t('export.menu.pdf'), function() {
         const h = buildReportHtml({ includeMap: true });
         if (!h) return;
         const w = window.open();
@@ -461,7 +461,7 @@ export function setupExportMenu(bar, isFirstRun) {
         }
     });
 
-    mItem('&#128190;', 'HTML speichern', function() {
+    mItem('&#128190;', t('export.menu.html'), function() {
         const h = buildReportHtml({ includeMap: true });
         if (!h) return;
         const a = document.createElement('a');
@@ -479,13 +479,13 @@ export function setupExportMenu(bar, isFirstRun) {
     // only) faellt der Report auf "ohne Compliance-Sektion" zurueck.
     const _fetchCompliance = fetchComplianceData;
 
-    mItem('&#128203;', 'Audit-Report (Drucken)', function() {
+    mItem('&#128203;', t('export.menu.audit_pdf'), function() {
         // Fenster SYNCHRON im Click oeffnen (User-Activation) — window.open()
         // im .then() nach dem Fetch wuerde der Popup-Blocker schlucken
         // (v.a. Firefox bei langsamem Backend). Inhalt kommt async nach.
         const w = window.open();
         if (!w) return;
-        w.document.write('<p style="font-family:sans-serif;color:#64748b">Report wird erstellt…</p>');
+        w.document.write('<p style="font-family:sans-serif;color:#64748b">' + t('export.generating') + '</p>');
         _fetchCompliance().then(function(compl) {
             const h = buildAuditHtml(compl);
             if (!h) { w.close(); return; }
@@ -496,7 +496,7 @@ export function setupExportMenu(bar, isFirstRun) {
         });
     });
 
-    mItem('&#128221;', 'Audit-Report (HTML)', function() {
+    mItem('&#128221;', t('export.menu.audit_html'), function() {
         _fetchCompliance().then(function(compl) {
             const h = buildAuditHtml(compl);
             if (!h) return;

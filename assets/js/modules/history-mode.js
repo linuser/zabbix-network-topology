@@ -23,6 +23,8 @@
 //   - Re-Render via _ntRender() — der Render holt sich die berechneten
 //     Severities aus _ntHistoryActive
 
+import { t } from './i18n.js';
+
 let _active = false;
 let _bar = null;
 let _slider = null;
@@ -168,7 +170,7 @@ async function applyRange(rangeSec) {
     if (seq !== _fetchSeq) return;   // neuere Anfrage in flight → diese verwerfen
     if (_bar) _bar.style.opacity = '1';
     if (!data) {
-        if (_timeLabel) _timeLabel.textContent = 'Fehler beim Laden';
+        if (_timeLabel) _timeLabel.textContent = t('hist.load_error');
         return;
     }
     _eventsCache = data;
@@ -187,7 +189,7 @@ function buildBar() {
 
     // Icon + Label
     const lbl = document.createElement('span');
-    lbl.innerHTML = '\u{1F551} <strong>Historie</strong>';
+    lbl.innerHTML = '\u{1F551} <strong>' + t('hist.title') + '</strong>';
     lbl.style.cssText = 'font-size:13px;color:#78350f';
     bar.appendChild(lbl);
 
@@ -230,13 +232,13 @@ function buildBar() {
     play.textContent = '\u25B6';   // ▶
     play.style.cssText = 'padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;'
         + 'background:#fff;cursor:pointer;font-size:13px;color:#475569';
-    play.title = 'Wiedergabe / Pause';
+    play.title = t('hist.play_pause');
     bar.appendChild(play);
     _playBtn = play;
 
     // Verlassen
     const close = document.createElement('button');
-    close.textContent = '\u2715 Schliessen';
+    close.textContent = t('hist.close');
     close.style.cssText = 'padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;'
         + 'background:#fff;cursor:pointer;font-size:12px;color:#475569;margin-left:auto';
     bar.appendChild(close);
@@ -352,8 +354,8 @@ export function addHistoryButton(bar, isFirstRun) {
     b.id = 'nt-btn-history';
     b.className = 'btn-alt btn-small';
     b.style.marginLeft = '4px';
-    b.textContent = '\u{1F551} Historie';
-    b.title = 'History-Modus: Trigger-Status zur ausgewaehlten Zeit anzeigen';
+    b.textContent = t('hist.button');
+    b.title = t('hist.button.tip');
     b.addEventListener('click', toggleHistoryMode);
     bar.appendChild(b);
 }

@@ -2,6 +2,17 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.28.0 — 2026-07-05
+
+### Added
+- **Root-Cause-Ansicht** (Tools-Menü „🔍 Root-Cause"): trennt Offline-Hosts in **Ursache** vs. **Folge**. Zweifache BFS vom Uplink (dieselbe Referenz wie die What-if-Simulation) — Baseline ohne Ausfälle vs. Erreichbarkeit mit Offline-Hosts als Blocker. Ursache = Offline-Host mit noch erreichbarem Nachbarn (Frontier) oder selbst Uplink; Folge = Offline-Host dahinter. Rote/amber Underlays, Banner mit Ursachen/Folgen/Problemzahl, Toasts für die Top-3-Ursachen. ESC-Kette (Pfad → Sim → Root-Cause), Auto-Refresh rechnet aktiv neu. Verfügbare Hosts und Graph-Inseln werden nie angelastet.
+- **LLDP-Port-Labels an Edges** (Anzeige-Menü, Best-Effort): Backend hängt an jede LLDP/CDP-Edge den Bracket-Parameter des meldenden Item-Keys (`ports = {reporter_hostid: port}`); bei LLDP-MIB-Triples wie `0.24.1` wird die Portnummer extrahiert. Neues Leaf-Modul setzt `source-`/`target-label` inline.
+
+### Changed
+- **i18n-Vollmigration**: ~226 verbleibende hartcodierte UI-Strings in 19 Modulen (Tabelle, Toolbar, Export/Audit-Report, Detail-Panel, Kontextmenü, Presets, Stats, Management, Legende, Tooltip, History u. a.) auf `t()` umgestellt. DE/EN-Dictionaries jetzt deckungsgleich (305 Keys je Sprache), verifiziert ohne fehlende Keys/Drift/Duplikate. Damit ist das gesamte Modul-UI zweisprachig.
+- Auto-Refresh zieht `unavailable`/`down_since`/`last_seen` in die Node-Daten (Offline-X + Root-Cause aktualisieren ohne Voll-Render).
+- Manifest: keine neuen Actions.
+
 ## v4.27.0 — 2026-07-05
 
 ### Added

@@ -7,11 +7,13 @@
 // Eingabe-Nodes brauchen das _primaryGroup-Feld (wird in render() via
 // primaryGroup() aus severity.js gesetzt).
 
+import { t } from './i18n.js';
+
 export function aggregateByGroup(nodes, edges) {
     // Hosts nach Gruppe bündeln
     const groups = {};
     nodes.forEach(function(n) {
-        const g = n._primaryGroup || '\u2014 Ohne Gruppe \u2014';
+        const g = n._primaryGroup || t('agg.no_group');
         if (!groups[g]) groups[g] = [];
         groups[g].push(n);
     });

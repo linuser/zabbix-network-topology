@@ -10,6 +10,7 @@
 //   _sparkPending — hostid -> true, verhindert parallele Fetches
 
 import { esc, fmt, fmtItemValue } from './utils.js';
+import { t } from './i18n.js';
 
 const _tip = document.createElement('div');
 _tip.id = 'nt-ring-tip';
@@ -106,7 +107,7 @@ export function showTip(evt, d) {
         const pills = [];
         if (d.maintenance) pills.push('<span style="display:inline-block;background:#fef3c7;color:#92400e;'
             + 'padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">'
-            + '\u{1F527} Wartung</span>');
+            + '\u{1F527} ' + esc(t('tip.maintenance')) + '</span>');
         if (d.acknowledged) pills.push('<span style="display:inline-block;background:#dcfce7;color:#166534;'
             + 'padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">'
             + '\u2714 Acked</span>');
@@ -151,9 +152,9 @@ export function showTip(evt, d) {
                 const sinceStr = dd > 0 ? dd + 'd ' + Math.floor(hh % 24) + 'h'
                               : (hh > 0 ? hh + 'h ' + mm + 'm' : mm + 'm');
                 return '<div style="font-size:10px;color:#f59e0b;margin-top:5px;padding-top:4px;border-top:1px solid #f1f5f9">'
-                    + '\u23F1 Problem seit: <b>' + sinceStr + '</b></div>';
+                    + '\u23F1 ' + t('tip.problem_since', { t: '<b>' + esc(sinceStr) + '</b>' }) + '</div>';
             })() : '')
-            + (spark ? '' : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">\u231B Lade Verlauf...</div>');
+            + (spark ? '' : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">\u231B ' + esc(t('tip.loading_history')) + '</div>');
     }
 
     _tip.style.width = '240px';
@@ -264,7 +265,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
         if (!haveData && (sparkSrc || sparkTgt)) {
             // Daten geholt, aber keine Traffic-Items vorhanden
             return header + liveRow + healthRow + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
-                + 'Kein Traffic-Verlauf verfuegbar (keine net.if-/ifIn/ifOut-Items)</div>';
+                + esc(t('tip.no_traffic_history')) + '</div>';
         }
 
         const sparkBlock = haveData
@@ -273,9 +274,9 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                     + '<span style="color:#06b6d4">↓ In</span>' + inSpark + '</div>' : '')
                 + (outSpark ? '<div style="display:flex;align-items:center;gap:6px">'
                     + '<span style="color:#f97316">↑ Out</span>' + outSpark + '</div>' : '')
-                + '<div style="font-size:9px;color:#cbd5e1;margin-top:3px">letzte 1h</div>'
+                + '<div style="font-size:9px;color:#cbd5e1;margin-top:3px">' + esc(t('tip.last_1h')) + '</div>'
                 + '</div>'
-            : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">⌛ Lade Verlauf...</div>';
+            : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">⌛ ' + esc(t('tip.loading_history')) + '</div>';
 
         return header + liveRow + healthRow + sparkBlock;
     }

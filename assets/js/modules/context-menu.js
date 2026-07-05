@@ -66,14 +66,14 @@ export function showCtx(cx, cy2, d) {
         header.textContent = d.label;
         const sub = document.createElement('div');
         sub.style.cssText = 'font-size:10px;font-weight:400;color:#64748b;margin-top:2px';
-        sub.textContent = (d._childCount || 0) + ' Hosts';
+        sub.textContent = t('ctx.hosts', { n: d._childCount || 0 });
         header.appendChild(sub);
         _ctx.appendChild(header);
 
         if (d._topProblems && d._topProblems.length) {
             const probHdr = document.createElement('div');
             probHdr.style.cssText = 'padding:6px 12px 2px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px';
-            probHdr.textContent = 'Top Probleme';
+            probHdr.textContent = t('ctx.top_problems');
             _ctx.appendChild(probHdr);
             const SEV_LBL_LOC = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
             d._topProblems.forEach(function(p) {
@@ -94,7 +94,7 @@ export function showCtx(cx, cy2, d) {
         sepA.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:6px';
         _ctx.appendChild(sepA);
 
-        _ctx.appendChild(_ctxRow('\u{1F4CB} Diese Ansicht aufl\u00F6sen', '#3b82f6', function() {
+        _ctx.appendChild(_ctxRow(t('ctx.resolve_view'), '#3b82f6', function() {
             try { localStorage.setItem(NT_GROUP_VIEW_KEY, '0'); } catch (e) {}
             if (_onResolveAggregate) _onResolveAggregate();
         }));
@@ -157,9 +157,9 @@ export function showCtx(cx, cy2, d) {
         [' Graphs',               zbxUrl('charts.view',  hostId)],
     ];
     if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
-        items.push(['\u270F\uFE0F Bearbeiten', window.location.origin + base
+        items.push([t('ctx.edit'), window.location.origin + base
             + 'zabbix.php?action=popup&popup=host.edit&hostid=' + encodeURIComponent(hostId)]);
-        items.push(['\u2699\uFE0F Hosts (Liste)', window.location.origin + base
+        items.push([t('ctx.hosts_list'), window.location.origin + base
             + 'zabbix.php?action=host.list'
             + '&filter_name=' + encodeURIComponent(d.host || d.label)
             + '&filter_set=1']);
@@ -178,7 +178,7 @@ export function showCtx(cx, cy2, d) {
         linksHdr.style.cssText = 'padding:6px 12px 2px;font-size:10px;color:#64748b;'
             + 'text-transform:uppercase;letter-spacing:0.5px;'
             + 'border-top:1px solid #f1f5f9;margin-top:4px';
-        linksHdr.textContent = 'Externe Links';
+        linksHdr.textContent = t('ctx.ext_links');
         _ctx.appendChild(linksHdr);
         d.links.forEach(function(link) {
             // Label kürzen falls überlang. Backend validiert URL bereits
@@ -199,7 +199,7 @@ export function showCtx(cx, cy2, d) {
     _ctx.appendChild(sep);
 
     // Pin
-    const pinLabel = d.pinned ? ' Unpin' : ' Pin (fixieren)';
+    const pinLabel = ' ' + (d.pinned ? t('ctx.unpin') : t('ctx.pin'));
     _ctx.appendChild(_ctxRow(pinLabel, '#3b82f6', function() {
         const cy = window._ntCy; if (!cy) return;
         const node = cy.getElementById(hostId);
@@ -213,12 +213,12 @@ export function showCtx(cx, cy2, d) {
     }));
 
     // Notiz
-    const noteLabel = d.note ? ' Notiz bearbeiten' : ' Notiz hinzuf\u00FCgen';
+    const noteLabel = ' ' + (d.note ? t('ctx.note_edit') : t('ctx.note_add'));
     _ctx.appendChild(_ctxRow(noteLabel, '#f59e0b', function() {
         const cy = window._ntCy; if (!cy) return;
         const node = cy.getElementById(hostId);
         if (!node.length) return;
-        const text = prompt('Notiz f\u00FCr ' + d.label + ' (leer = l\u00F6schen):', node.data('note') || '');
+        const text = prompt(t('ctx.note_prompt', { host: d.label }), node.data('note') || '');
         if (text === null) return;
         const notes = saveNote(hostId, text);
         node.data('note', notes[hostId] || '');
@@ -237,30 +237,30 @@ export function showCtx(cx, cy2, d) {
 
     const startId = getPathStart();
     if (isPathActive()) {
-        _ctx.appendChild(_ctxRow('\u{2716} Pfad ausblenden', '#64748b', function() {
+        _ctx.appendChild(_ctxRow(t('ctx.path_hide'), '#64748b', function() {
             clearPathState(window._ntCy);
         }));
     } else if (!startId) {
-        _ctx.appendChild(_ctxRow('\u{1F517} Pfad von hier starten', '#0891b2', function() {
+        _ctx.appendChild(_ctxRow(t('ctx.path_start'), '#0891b2', function() {
             const cy = window._ntCy; if (!cy) return;
             resetHighlight(cy);   // Connected-Component-Dim aus, sonst Konflikt
             setPathStart(hostId);
         }));
     } else if (startId === hostId) {
-        _ctx.appendChild(_ctxRow('\u{2716} Pfad-Start zur\u00FCcksetzen', '#64748b', function() {
+        _ctx.appendChild(_ctxRow(t('ctx.path_reset'), '#64748b', function() {
             clearPathState(window._ntCy);
         }));
     } else {
-        _ctx.appendChild(_ctxRow('\u{1F517} Pfad zu hier', '#0891b2', function() {
+        _ctx.appendChild(_ctxRow(t('ctx.path_to'), '#0891b2', function() {
             const cy = window._ntCy; if (!cy) return;
             resetHighlight(cy);
             const ok = applyPathHighlight(cy, startId, hostId);
             if (!ok) {
-                toast('Kein Pfad zwischen den Hosts gefunden.', 'warn');
+                toast(t('ctx.path_none'), 'warn');
                 clearPathState(cy);
             }
         }));
-        _ctx.appendChild(_ctxRow('\u{2716} Pfad-Start zur\u00FCcksetzen', '#64748b', function() {
+        _ctx.appendChild(_ctxRow(t('ctx.path_reset'), '#64748b', function() {
             clearPathState(window._ntCy);
         }));
     }

@@ -11,52 +11,56 @@
 // häufigsten Wallboard-Sichten.
 
 import { esc, buildBaseUrl, aggregateValues } from './utils.js';
+// i18n-t() hier als tr importiert: in buildPivotToolbar/renderPivotTable ist
+// 't' bereits die lokale Theme-Variable — ein direkter t-Import wuerde dort
+// verschattet.
+import { t as tr } from './i18n.js';
 
 const PRESETS = [
     // Filesystem
-    { id: 'disks',      lbl: 'Filesystem Auslastung (%)',
+    { id: 'disks',      lbl: tr('items.preset.disks.lbl'),
       pattern: 'vfs.fs.size[*,pused]', unit: '%',
-      desc: 'Prozentuale Belegung pro Mount-Point. Zeigt Root, /var, /home usw.' },
-    { id: 'disks_used', lbl: 'Filesystem Used (Bytes)',
+      desc: tr('items.preset.disks.desc') },
+    { id: 'disks_used', lbl: tr('items.preset.disks_used.lbl'),
       pattern: 'vfs.fs.size[*,used]', unit: 'B',
-      desc: 'Absoluter Verbrauch pro Mount-Point in Bytes.' },
+      desc: tr('items.preset.disks_used.desc') },
     // Block-Device IO (Standard Linux-Template, Zabbix 7.x)
-    { id: 'dev_util',   lbl: 'Disk Utilization (%)',
+    { id: 'dev_util',   lbl: tr('items.preset.dev_util.lbl'),
       pattern: 'vfs.dev.util[*]', unit: '%',
-      desc: 'Anteil der Zeit in dem das Block-Device Requests bearbeitet — >80% = Bottleneck.' },
-    { id: 'dev_rrate',  lbl: 'Disk Read Rate (r/s)',
+      desc: tr('items.preset.dev_util.desc') },
+    { id: 'dev_rrate',  lbl: tr('items.preset.dev_rrate.lbl'),
       pattern: 'vfs.dev.read.rate[*]', unit: '',
-      desc: 'Lese-Operationen pro Sekunde (IOPS) pro Block-Device.' },
-    { id: 'dev_wrate',  lbl: 'Disk Write Rate (w/s)',
+      desc: tr('items.preset.dev_rrate.desc') },
+    { id: 'dev_wrate',  lbl: tr('items.preset.dev_wrate.lbl'),
       pattern: 'vfs.dev.write.rate[*]', unit: '',
-      desc: 'Schreib-Operationen pro Sekunde pro Block-Device.' },
-    { id: 'dev_queue',  lbl: 'Disk Queue Size',
+      desc: tr('items.preset.dev_wrate.desc') },
+    { id: 'dev_queue',  lbl: tr('items.preset.dev_queue.lbl'),
       pattern: 'vfs.dev.queue_size[*]', unit: '',
-      desc: 'Durchschnittliche Anzahl anhaengender IO-Requests — hoher Wert = Backlog.' },
-    { id: 'dev_rawait', lbl: 'Disk Read Wait (ms)',
+      desc: tr('items.preset.dev_queue.desc') },
+    { id: 'dev_rawait', lbl: tr('items.preset.dev_rawait.lbl'),
       pattern: 'vfs.dev.read.await[*]', unit: 'ms',
-      desc: 'Durchschnittliche Wait-Time pro Read (Queue + Service). >20ms = langsam.' },
-    { id: 'dev_wawait', lbl: 'Disk Write Wait (ms)',
+      desc: tr('items.preset.dev_rawait.desc') },
+    { id: 'dev_wawait', lbl: tr('items.preset.dev_wawait.lbl'),
       pattern: 'vfs.dev.write.await[*]', unit: 'ms',
-      desc: 'Durchschnittliche Wait-Time pro Write. Trend zeigt IO-Sattigung frueh.' },
+      desc: tr('items.preset.dev_wawait.desc') },
     // System
-    { id: 'mem',        lbl: 'Memory (Bytes)',
+    { id: 'mem',        lbl: tr('items.preset.mem.lbl'),
       pattern: 'vm.memory.size[*]', unit: 'B',
-      desc: 'Speicher-Aufschluesselung: total, available, used, cached, buffers usw.' },
-    { id: 'cpu',        lbl: 'CPU-Util (%)',
+      desc: tr('items.preset.mem.desc') },
+    { id: 'cpu',        lbl: tr('items.preset.cpu.lbl'),
       pattern: 'system.cpu.util*', unit: '%',
-      desc: 'CPU-Auslastung nach Modus (user, system, iowait, idle, ...).' },
+      desc: tr('items.preset.cpu.desc') },
     // Network
-    { id: 'netin',      lbl: 'Network In (bps)',
+    { id: 'netin',      lbl: tr('items.preset.netin.lbl'),
       pattern: 'net.if.in[*]', unit: 'bps',
-      desc: 'Eingehender Traffic pro Interface, Bits/s. Bandbreiten-Sattigung sichtbar.' },
-    { id: 'netout',     lbl: 'Network Out (bps)',
+      desc: tr('items.preset.netin.desc') },
+    { id: 'netout',     lbl: tr('items.preset.netout.lbl'),
       pattern: 'net.if.out[*]', unit: 'bps',
-      desc: 'Ausgehender Traffic pro Interface, Bits/s.' },
+      desc: tr('items.preset.netout.desc') },
     // Connectivity
-    { id: 'ping',       lbl: 'Ping-Loss + RTT',
+    { id: 'ping',       lbl: tr('items.preset.ping.lbl'),
       pattern: 'icmpping*', unit: '',
-      desc: 'ICMP-Roundtrip + Loss-Rate. Zeigt Netzwerk-Probleme pro Host auf einen Blick.' },
+      desc: tr('items.preset.ping.desc') },
 ];
 
 let _data = null;            // letzte Antwort vom Backend
@@ -161,7 +165,7 @@ function _buildTrendArrow(values) {
     if (rel > THRESHOLD)      { sym = '↑'; col = '#dc2626'; }   // steigend = rot
     else if (rel < -THRESHOLD) { sym = '↓'; col = '#16a34a'; }   // fallend = gruen
     const pct = Math.round(Math.abs(rel) * 100);
-    const title = 'Trend 1h: ' + (rel >= 0 ? '+' : '−') + pct + '%';
+    const title = tr('items.trend_1h', { sign: (rel >= 0 ? '+' : '−'), pct: pct });
     return '<span title="' + title + '" style="color:' + col + ';font-weight:700;'
         + 'font-size:11px;margin-right:2px">' + sym + '</span>';
 }
@@ -320,7 +324,7 @@ export function buildPivotToolbar(onApply, theme) {
     wrap.style.cssText = 'display:flex;align-items:center;gap:10px;padding:0;flex-wrap:wrap';
 
     const lbl = document.createElement('span');
-    lbl.textContent = 'Preset';
+    lbl.textContent = tr('items.preset_label');
     lbl.style.cssText = 'font-size:11px;color:' + t.sub
         + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em';
     wrap.appendChild(lbl);
@@ -355,7 +359,7 @@ export function buildPivotToolbar(onApply, theme) {
         + 'box-shadow:0 2px 8px rgba(0,0,0,0.10);overflow:hidden';
     const filterIn = document.createElement('input');
     filterIn.type = 'text';
-    filterIn.placeholder = 'Suchen...';
+    filterIn.placeholder = tr('items.search_ph');
     filterIn.style.cssText = 'width:100%;box-sizing:border-box;padding:5px 10px;'
         + 'border:none;border-bottom:1px solid ' + t.borderSoft + ';outline:none;'
         + 'font-size:12px;background:' + t.head + ';color:' + t.text
@@ -396,23 +400,23 @@ export function buildPivotToolbar(onApply, theme) {
             : PRESETS.filter(function(p) {
                 return patternMatchesAnyStem(p.pattern, stems);
               });
-        _items.push({ type: 'header', label: 'Standard-Presets' });
+        _items.push({ type: 'header', label: tr('items.header.presets') });
         visiblePresets.forEach(function(p) {
             _items.push({ type: 'item', label: p.lbl, value: p.pattern,
                           desc: p.desc || '' });
         });
         _items.push({ type: 'item',
-                      label: '\u2014 Custom-Pattern \u2014',
+                      label: tr('items.custom_pattern'),
                       value: '__custom__' });
-        _items.push({ type: 'header', label: '\u{1F50D} Auf deinen Hosts gefunden' });
+        _items.push({ type: 'header', label: tr('items.header.discovered') });
         if (_disc.loading) {
-            _items.push({ type: 'item', label: '\u23f3 Lade Patterns...',
+            _items.push({ type: 'item', label: tr('items.loading_patterns'),
                           value: null, disabled: true });
         } else if (_disc.error) {
-            _items.push({ type: 'item', label: 'Fehler: ' + _disc.error,
+            _items.push({ type: 'item', label: tr('items.error', { msg: _disc.error }),
                           value: null, disabled: true });
         } else if (_disc.patterns.length === 0) {
-            _items.push({ type: 'item', label: 'Keine Patterns gefunden',
+            _items.push({ type: 'item', label: tr('items.no_patterns'),
                           value: null, disabled: true });
         } else {
             _disc.patterns.forEach(function(p) {
@@ -421,7 +425,7 @@ export function buildPivotToolbar(onApply, theme) {
             });
             if (_disc.truncated) {
                 _items.push({ type: 'item',
-                              label: '\u26a0 Scan abgeschnitten \u2014 Counts ggf. niedriger',
+                              label: tr('items.scan_truncated'),
                               value: null, disabled: true });
             }
         }
@@ -487,7 +491,7 @@ export function buildPivotToolbar(onApply, theme) {
                 });
                 row.addEventListener('click', function() {
                     if (it.value === '__custom__') {
-                        trigger.firstChild.nodeValue = '\u2014 Custom-Pattern \u2014';
+                        trigger.firstChild.nodeValue = tr('items.custom_pattern');
                         pat.value = '';
                         closePopup();
                         pat.focus();
@@ -502,7 +506,7 @@ export function buildPivotToolbar(onApply, theme) {
         });
         if (listBox.children.length === 0) {
             const empty = document.createElement('div');
-            empty.textContent = 'Keine Treffer';
+            empty.textContent = tr('items.no_matches');
             empty.style.cssText = 'padding:14px;text-align:center;color:' + t.subSoft
                 + ';font-size:12px;font-style:italic';
             listBox.appendChild(empty);

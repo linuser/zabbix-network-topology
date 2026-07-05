@@ -11,6 +11,7 @@
 // (v3.6 → v4.0) wurde sie auf eine reine Orchestrierungs-Schicht reduziert.
 
 import { esc } from './modules/utils.js';
+import { t } from './modules/i18n.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
@@ -203,7 +204,7 @@ function init() {
             return;
         }
         if (spin) spin.innerHTML = '<span style="color:#64748b">'
-            + '&#8592; Bitte Host-Gruppen w\u00E4hlen und Apply klicken.</span>';
+            + esc(t('app.pick_groups')) + '</span>';
         return;
     }
 
@@ -212,7 +213,7 @@ function init() {
     // (z.B. nach Permission-Entzug) — die würden beim nächsten Page-Load
     // via Auto-Restore wieder zur leeren Karte führen.
 
-    if (spin) spin.innerHTML = '<span style="color:#64748b">Lade Topologie...</span>';
+    if (spin) spin.innerHTML = '<span style="color:#64748b">' + esc(t('app.loading')) + '</span>';
 
     // Daten holen und initial rendern
     const params = new URLSearchParams();
@@ -255,7 +256,7 @@ function init() {
             }
         })
         .catch(function(err) {
-            spin.innerHTML = '<span style="color:#ef4444">Error: ' + esc(err.message) + '</span>';
+            spin.innerHTML = '<span style="color:#ef4444">' + esc(t('app.error', { msg: err.message })) + '</span>';
         });
 }
 window._ntInit = init;

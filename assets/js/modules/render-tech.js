@@ -15,6 +15,7 @@
 //   _posSaveTimer — debounce-Timer für drag-save
 
 import { esc, fmt } from './utils.js';
+import { t } from './i18n.js';
 import { SEV_COL, primaryGroup } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import {
@@ -67,10 +68,10 @@ function updateBadge(nodes) {
         else if (s >= 5) down++;
         else warn++;
     });
-    badge.innerHTML = '<b>' + nodes.length + '</b> Hosts &nbsp;|&nbsp; '
-        + '<span style="color:#22c55e"><b>' + ok   + '</b> OK</span> &nbsp;|&nbsp; '
-        + '<span style="color:#f59e0b"><b>' + warn + '</b> Warn</span> &nbsp;|&nbsp; '
-        + '<span style="color:#ef4444"><b>' + down + '</b> Down</span>';
+    badge.innerHTML = '<b>' + nodes.length + '</b> ' + esc(t('tech.badge.hosts')) + ' &nbsp;|&nbsp; '
+        + '<span style="color:#22c55e"><b>' + ok   + '</b> ' + esc(t('tech.badge.ok'))   + '</span> &nbsp;|&nbsp; '
+        + '<span style="color:#f59e0b"><b>' + warn + '</b> ' + esc(t('tech.badge.warn')) + '</span> &nbsp;|&nbsp; '
+        + '<span style="color:#ef4444"><b>' + down + '</b> ' + esc(t('tech.badge.down')) + '</span>';
 }
 
 // ── ntShowExportOverlay: wird vom Export-Menü in setupToolbar aufgerufen ──
@@ -80,7 +81,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     const pnl = document.getElementById('nt-detail');
     if (!nodes.length) {
         wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
-                       + 'height:100%;color:#999">No hosts found.</div>';
+                       + 'height:100%;color:#999">' + esc(t('tech.no_hosts')) + '</div>';
         return;
     }
 
@@ -235,7 +236,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                 node.style('underlay-opacity', 0.35);
                 node.style('underlay-padding', 8);
                 const bLinkBtn = document.getElementById('nt-btn-link');
-                if (bLinkBtn) bLinkBtn.textContent = 'Ziele klicken (ESC = fertig)';
+                if (bLinkBtn) bLinkBtn.textContent = t('tech.link.targets');
                 cy.nodes('[!isGroup]').forEach(function(n) {
                     if (n.id() !== node.id()) n.style('opacity', 0.25);
                 });

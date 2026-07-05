@@ -16,6 +16,7 @@
 
 import { esc, fmt, aggregateValues } from './utils.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
+import { t } from './i18n.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
 import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
 import { loadSnapshot, computeDiff, formatSnapshotAge } from './diff-mode.js';
@@ -38,8 +39,8 @@ const TYPE_ICON = {
 const TYPE_LBL = {
     firewall: 'Firewall', router: 'Router', switch: 'Switch',
     wireless: 'WAP', server: 'Server', storage: 'Storage',
-    hypervisor: 'Hypervisor', camera: 'Kamera', printer: 'Drucker',
-    ups: 'USV', homeauto: 'Smart Home', mailserver: 'Mail',
+    hypervisor: 'Hypervisor', camera: t('table.type.camera'), printer: t('table.type.printer'),
+    ups: t('table.type.ups'), homeauto: 'Smart Home', mailserver: 'Mail',
     webserver: 'Web', container: 'Container', monitoring: 'Monitoring',
     linux: 'Linux', windows: 'Windows', macos: 'macOS', internet: 'Internet',
 };
@@ -63,12 +64,12 @@ let _filterQuery = null;
 //                 offline?: bool, sort?: string, sortDir?: 'asc'|'desc' }
 // undefined-Felder fallen auf Defaults zurueck wenn das Preset angewendet wird.
 const BUILTIN_FILTER_PRESETS = [
-    { name: 'Alle',          builtin: true, filter: {} },
-    { name: 'Nur Firewalls', builtin: true, filter: { text: 'type:firewall' }},
-    { name: 'Nur Server',    builtin: true, filter: { text: 'type:server'   }},
-    { name: 'Nur Switches',  builtin: true, filter: { text: 'type:switch'   }},
-    { name: 'Nur Storage',   builtin: true, filter: { text: 'type:storage'  }},
-    { name: 'Nur Offline',   builtin: true, filter: { offline: true }},
+    { name: t('table.preset.all'),            builtin: true, filter: {} },
+    { name: t('table.preset.only_firewalls'), builtin: true, filter: { text: 'type:firewall' }},
+    { name: t('table.preset.only_servers'),   builtin: true, filter: { text: 'type:server'   }},
+    { name: t('table.preset.only_switches'),  builtin: true, filter: { text: 'type:switch'   }},
+    { name: t('table.preset.only_storage'),   builtin: true, filter: { text: 'type:storage'  }},
+    { name: t('table.preset.only_offline'),   builtin: true, filter: { offline: true }},
     { name: 'Disaster',      builtin: true, filter: { sev: [5] }},
     { name: 'Crit + High',   builtin: true, filter: { sev: [4, 5] }},
 ];
@@ -129,26 +130,26 @@ function _rebuildPresetPop(pop, theme) {
             + ';text-transform:uppercase;letter-spacing:0.05em;font-weight:700';
         return h;
     }
-    pop.appendChild(header('Standard'));
+    pop.appendChild(header(t('table.preset.builtin')));
     BUILTIN_FILTER_PRESETS.forEach(function(p) {
         pop.appendChild(row(esc(p.name), theme.text, function() { _applyFilterPreset(p); }));
     });
     const user = loadFilterPresets();
     if (user.length > 0) {
-        pop.appendChild(header('Eigene'));
+        pop.appendChild(header(t('table.preset.custom')));
         user.forEach(function(p) {
             const r = document.createElement('div');
             r.style.cssText = 'padding:5px 10px;cursor:pointer;font-size:12px;color:' + theme.text
                 + ';border-radius:3px;display:flex;align-items:center;gap:8px';
             r.innerHTML = '<span style="flex:1">' + esc(p.name) + '</span>'
-                + '<span data-del="1" title="Loeschen" style="color:' + theme.subSoft
+                + '<span data-del="1" title="' + esc(t('table.preset.delete')) + '" style="color:' + theme.subSoft
                 + ';padding:0 4px;cursor:pointer">×</span>';
             r.addEventListener('mouseenter', function() { r.style.background = theme.head; });
             r.addEventListener('mouseleave', function() { r.style.background = ''; });
             r.addEventListener('click', function(e) {
                 e.stopPropagation();
                 if (e.target.dataset && e.target.dataset.del) {
-                    if (!confirm('Preset "' + p.name + '" loeschen?')) return;
+                    if (!confirm(t('table.preset.delete_confirm', { name: p.name }))) return;
                     const arr = loadFilterPresets().filter(function(x) { return x.name !== p.name; });
                     saveFilterPresets(arr);
                     _rebuildPresetPop(pop, theme);
@@ -163,8 +164,8 @@ function _rebuildPresetPop(pop, theme) {
     const sep = document.createElement('div');
     sep.style.cssText = 'height:1px;background:' + theme.borderSoft + ';margin:4px 0';
     pop.appendChild(sep);
-    pop.appendChild(row('+ Aktuelle als Preset speichern…', theme.accent, function() {
-        const name = prompt('Name des Presets:');
+    pop.appendChild(row(esc(t('table.preset.save_current')), theme.accent, function() {
+        const name = prompt(t('table.preset.name_prompt'));
         if (!name || !name.trim()) return;
         const arr = loadFilterPresets().filter(function(x) { return x.name !== name.trim(); });
         arr.push({ name: name.trim(), filter: _currentFilterState() });
@@ -370,10 +371,10 @@ function fmtMs(v) {
 function proxyTooltip(n) {
     const pn = n.proxy_name || '';
     const pg = n.proxy_group_name || '';
-    if (!pn && !pg) return 'Server (kein Proxy)';
-    if (pn && pg)   return 'Proxy: ' + pn + ' [grp:' + pg + ']';
-    if (pn)         return 'Proxy: ' + pn;
-    return 'Proxy-Group: ' + pg;
+    if (!pn && !pg) return t('table.proxy.none');
+    if (pn && pg)   return t('table.proxy.with_group', { name: pn, group: pg });
+    if (pn)         return t('table.proxy.name', { name: pn });
+    return t('table.proxy.group', { name: pg });
 }
 
 // Bits/s in lesbare Einheit. Backend liefert die Werte in bps (bits/s),
@@ -408,7 +409,7 @@ function buildProblemDetailRow(n, colspan, theme) {
             + 'style="padding:14px 18px 14px 22px;background:' + theme.detailBg
             + ';border-bottom:1px solid ' + theme.borderSoft
             + ';color:' + theme.subSoft + ';font-size:12px">'
-            + 'Keine Detail-Daten verf\u00fcgbar.</td></tr>';
+            + esc(t('table.no_detail_data')) + '</td></tr>';
     }
     let body = '';
     list.forEach(function(p) {
@@ -427,7 +428,7 @@ function buildProblemDetailRow(n, colspan, theme) {
             +     ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
             +     esc(p.name || '') + '</span>'
             + (p.acknowledged
-                ? '<span title="Best\u00e4tigt" style="color:#16a34a;font-size:11px;'
+                ? '<span title="' + esc(t('table.prob.acked')) + '" style="color:#16a34a;font-size:11px;'
                     + 'font-weight:700;flex-shrink:0">\u2714</span>'
                 : '')
             + (age
@@ -576,7 +577,7 @@ function buildFilterBar(nodes, groupNames, theme) {
     offBtn.type = 'button';
     offBtn.id = 'nt-table-offline-only';
     offBtn.textContent = '\u25CF Offline';
-    offBtn.title = 'Nur unavailable Hosts anzeigen';
+    offBtn.title = t('table.offline_only_tip');
     const _setOffStyle = function() {
         const active = _filterOfflineOnly;
         offBtn.style.cssText = 'padding:2px 8px;border:1px solid '
@@ -599,7 +600,7 @@ function buildFilterBar(nodes, groupNames, theme) {
         grpWrap.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap';
 
         const grpLabel = document.createElement('span');
-        grpLabel.textContent = 'Gruppe:';
+        grpLabel.textContent = t('table.filter.group');
         grpLabel.style.cssText = 'font-size:12px;color:' + theme.sub + ';font-weight:600';
         grpWrap.appendChild(grpLabel);
 
@@ -627,8 +628,8 @@ function buildFilterBar(nodes, groupNames, theme) {
         optAll.value = '';
         const remaining = groupNames.length - _filterGroups.size;
         optAll.textContent = _filterGroups.size > 0
-            ? '+ Gruppe (' + remaining + ')'
-            : 'Alle (' + groupNames.length + ')';
+            ? t('table.group.add', { n: remaining })
+            : t('table.group.all', { n: groupNames.length });
         grpSel.appendChild(optAll);
         groupNames.forEach(function(g) {
             if (_filterGroups.has(g)) return;   // schon als Chip aktiv
@@ -677,21 +678,8 @@ function buildFilterBar(nodes, groupNames, theme) {
     const search = document.createElement('input');
     search.id = 'nt-table-search';
     search.type = 'text';
-    search.placeholder = 'Suche — host:web, type:switch, group:dc1, ...';
-    search.title = 'Query-Syntax:\n'
-        + '  web                       match in Hostname/Label/IP\n'
-        + '  -wartung                  NOT (Wort darf nicht vorkommen)\n'
-        + '  host:web                  Hostname/Label\n'
-        + '  ip:10.0                   IP-Adresse\n'
-        + '  proxy:zbx-px              Proxy-Name (nur per Prefix!)\n'
-        + '  group:dc1                 Hostgroup-Name\n'
-        + '  type:switch               Geraete-Type\n'
-        + '  iftype:snmp               Interface-Type\n'
-        + '  "with spaces"             quoted (auch field:"foo bar")\n'
-        + '  a OR b                    ODER (uppercase Keyword)\n'
-        + '  (a OR b) c                Gruppierung mit Klammern\n'
-        + 'Bare Tokens (ohne :) matchen Host/Label/IP — nicht Proxy/Gruppe/Type.\n'
-        + 'Mehrere Tokens ohne OR = UND (Standard).';
+    search.placeholder = t('table.search.placeholder');
+    search.title = t('table.search.help');
     search.value = _filterText;
     search.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
         + ';border-radius:' + NT_R.sm + ';font-size:12px;width:240px;background:' + theme.inputBg
@@ -725,16 +713,16 @@ function _diffBadgeHtml(id) {
         + 'border-radius:50%;color:#fff;font-size:10px;font-weight:700;'
         + 'text-align:center;margin-right:5px;vertical-align:middle';
     if (_diff.new.has(sid)) {
-        return '<span title="Neu seit Snapshot" style="' + base + ';background:#06b6d4">+</span>';
+        return '<span title="' + esc(t('table.diff.new')) + '" style="' + base + ';background:#06b6d4">+</span>';
     }
     if (_diff.up.has(sid)) {
         const ch = _diff.sevByHost.get(sid);
-        const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : 'Schlimmer seit Snapshot';
+        const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : t('table.diff.worse');
         return '<span title="' + esc(tt) + '" style="' + base + ';background:#dc2626">↑</span>';
     }
     if (_diff.down.has(sid)) {
         const ch = _diff.sevByHost.get(sid);
-        const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : 'Besser seit Snapshot';
+        const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : t('table.diff.better');
         return '<span title="' + esc(tt) + '" style="' + base + ';background:#16a34a">↓</span>';
     }
     return '';
@@ -745,7 +733,7 @@ function rowHtml(n, baseUrl, theme) {
     const sevCol = SEV_COL[sev];
     const sevLbl = SEV_LBL[sev];
     const ti = TYPE_ICON[n.type] || '\u2753';
-    const tl = TYPE_LBL[n.type] || (n.type || 'Unbekannt');
+    const tl = TYPE_LBL[n.type] || (n.type || t('table.type.unknown'));
     const grp = n._primaryGroup || '';
     const grpCol = grp ? grpColor(grp) : theme.subSoft;
     // Zabbix-tighter Density (war 11x14, Zabbix list-table nutzt ca. 5x8).
@@ -803,7 +791,7 @@ function rowHtml(n, baseUrl, theme) {
         ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
             + 'border-radius:' + NT_R.pill + ';background:rgba(245,158,11,0.13);'
             + 'color:#92400e;font-size:11px;font-weight:700"'
-            + ' title="Letzter Wert vor ' + Math.floor(_ageSec / 60) + 'm">'
+            + ' title="' + esc(t('table.stale_tip', { m: Math.floor(_ageSec / 60) })) + '">'
             + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
             + 'background:#f59e0b"></span>STALE</span>'
         : '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
@@ -863,7 +851,7 @@ function rowHtml(n, baseUrl, theme) {
             + (n.problems > 0
                 ? '<button type="button" data-toggle-problems="' + esc(String(n.id)) + '" '
                     + 'data-no-detail="1" '
-                    + 'title="Probleme aufklappen" '
+                    + 'title="' + esc(t('table.expand_problems')) + '" '
                     + 'style="display:inline-flex;align-items:center;gap:3px;padding:1px 8px;'
                     + 'border:none;border-radius:' + NT_R.pill + ';background:' + theme.problemBg
                     + ';color:' + theme.problemText + ';font-size:11px;font-weight:700;'
@@ -878,10 +866,10 @@ function rowHtml(n, baseUrl, theme) {
         // anzeigen der auf "Forbidden" landet.
         + '<td style="padding:5px;text-align:right;white-space:nowrap">'
             + actBtn(latestUrl, '\u{1F4CA}', 'Latest Data')
-            + actBtn(probUrl,   '\u26A0',    'Probleme')
+            + actBtn(probUrl,   '\u26A0',    t('table.problems'))
             + actBtn(chartsUrl, '\u{1F4C8}', 'Graphs')
             + (window.NT_CONFIG && window.NT_CONFIG.can_edit
-                ? actBtn(editUrl, '\u2699\uFE0F', 'Bearbeiten')
+                ? actBtn(editUrl, '\u2699\uFE0F', t('table.act.edit'))
                 : '')
             + '</td>'
         + '</tr>';
@@ -892,13 +880,13 @@ function buildTable(nodes, baseUrl, theme) {
         { id: 'severity', lbl: 'Status',    align: 'left'  },
         { id: 'host',     lbl: 'Host',      align: 'left'  },
         { id: 'type',     lbl: 'Type',      align: 'left'  },
-        { id: 'group',    lbl: 'Gruppe',    align: 'left'  },
+        { id: 'group',    lbl: t('table.col.group'), align: 'left'  },
         { id: 'ip',       lbl: 'IP',        align: 'left'  },
         { id: 'cpu',      lbl: 'CPU',       align: 'right' },
         { id: 'memory',   lbl: 'Memory',    align: 'right' },
         { id: 'ping',     lbl: 'Ping',      align: 'right' },
         { id: 'traffic',  lbl: 'Traffic',   align: 'right' },
-        { id: 'problems', lbl: 'Probleme',  align: 'right' },
+        { id: 'problems', lbl: t('table.problems'), align: 'right' },
         // Actions-Spalte: nicht sortierbar, deshalb data-sort weggelassen
         { id: '_actions', lbl: '',          align: 'right', noSort: true },
     ];
@@ -936,7 +924,7 @@ function buildTable(nodes, baseUrl, theme) {
             + 'style="padding:48px;text-align:center;color:' + theme.subSoft
             + ';font-size:13px;font-weight:500">'
             + '<div style="font-size:32px;margin-bottom:10px;opacity:0.4">\u{1F50D}</div>'
-            + 'Keine Hosts entsprechen den Filtern.</td></tr></tbody>';
+            + esc(t('table.no_match')) + '</td></tr></tbody>';
     }
 
     return {
@@ -964,7 +952,7 @@ export function renderTable(wrap, nodes, edges) {
     if (!nodes.length) {
         wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
                        + 'height:100%;color:' + theme.subSoft + ';background:' + theme.bg
-                       + '">Keine Hosts gefunden.</div>';
+                       + '">' + esc(t('table.no_hosts')) + '</div>';
         return;
     }
 
@@ -1046,8 +1034,8 @@ export function renderTable(wrap, nodes, edges) {
         const counter = document.getElementById('nt-table-count');
         if (counter) {
             let txt = r.visible === r.total
-                ? r.total + ' Hosts'
-                : r.visible + ' / ' + r.total + ' Hosts';
+                ? t('table.count.all', { n: r.total })
+                : t('table.count.filtered', { shown: r.visible, total: r.total });
             if (_diff) {
                 const parts = [];
                 if (_diff.new.size)  parts.push('<span style="color:#06b6d4;font-weight:700">+' + _diff.new.size + '</span>');
@@ -1055,8 +1043,8 @@ export function renderTable(wrap, nodes, edges) {
                 if (_diff.up.size)   parts.push('<span style="color:#dc2626;font-weight:700">↑' + _diff.up.size + '</span>');
                 if (_diff.down.size) parts.push('<span style="color:#16a34a;font-weight:700">↓' + _diff.down.size + '</span>');
                 const diffTxt = parts.length
-                    ? ' · seit ' + formatSnapshotAge(snap) + ': ' + parts.join(' ')
-                    : ' · seit ' + formatSnapshotAge(snap) + ': keine Aenderung';
+                    ? ' · ' + esc(t('table.diff.since', { age: formatSnapshotAge(snap) })) + ': ' + parts.join(' ')
+                    : ' · ' + esc(t('table.diff.since', { age: formatSnapshotAge(snap) })) + ': ' + esc(t('table.diff.none'));
                 counter.innerHTML = esc(txt) + '<span style="color:#94a3b8">' + diffTxt + '</span>';
             } else {
                 counter.textContent = txt;
@@ -1095,7 +1083,7 @@ export function renderTable(wrap, nodes, edges) {
         const row2 = document.createElement('div');
         row2.style.cssText = 'display:flex;align-items:center;gap:10px;margin-top:8px';
         const searchLbl = document.createElement('span');
-        searchLbl.textContent = 'Suche Host';
+        searchLbl.textContent = t('table.items.search_label');
         searchLbl.style.cssText = 'font-size:11px;color:' + theme.sub
             + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em';
         row2.appendChild(searchLbl);
@@ -1103,13 +1091,8 @@ export function renderTable(wrap, nodes, edges) {
         const searchIn = document.createElement('input');
         searchIn.type = 'text';
         searchIn.id = 'nt-items-hostsearch';
-        searchIn.placeholder = 'Hosts filtern — host:web, group:dc1, ...';
-        searchIn.title = 'Gleiche Query-Syntax wie Hosts-Modus:\n'
-            + '  web                    match in Host/Label/IP\n'
-            + '  -wartung               NOT\n'
-            + '  host:web / ip:10.0 / proxy:zbx-px / group:dc1 / type:switch\n'
-            + '  a OR b / (a OR b) c    OR + Klammern\n'
-            + '  "with spaces"          quoted';
+        searchIn.placeholder = t('table.items.search_placeholder');
+        searchIn.title = t('table.items.search_help');
         searchIn.value = _itemsSearch;
         // Native Autocomplete via <datalist> — Browser-Default-Dropdown
         // mit Vorschlaegen aus den verfuegbaren Hostnamen. Keine Custom-Lib
@@ -1150,8 +1133,8 @@ export function renderTable(wrap, nodes, edges) {
                 + ';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;'
                 + 'letter-spacing:0.02em;transition:all 0.15s';
         };
-        hideEmptyBtn.textContent = 'Leere ausblenden';
-        hideEmptyBtn.title = 'Hosts und Items ohne Werte verbergen';
+        hideEmptyBtn.textContent = t('table.items.hide_empty');
+        hideEmptyBtn.title = t('table.items.hide_empty_tip');
         _setHideEmptyStyle();
         hideEmptyBtn.addEventListener('click', function() {
             _itemsHideEmpty = !_itemsHideEmpty;
@@ -1175,7 +1158,7 @@ export function renderTable(wrap, nodes, edges) {
                 + 'letter-spacing:0.02em;transition:all 0.15s';
         };
         heatmapBtn.textContent = 'Heatmap';
-        heatmapBtn.title = 'Zellen-Hintergrund nach relativer Position in der Spalte einfaerben';
+        heatmapBtn.title = t('table.items.heatmap_tip');
         _setHeatmapStyle();
         heatmapBtn.addEventListener('click', function() {
             _itemsHeatmap = !_itemsHeatmap;
@@ -1192,7 +1175,7 @@ export function renderTable(wrap, nodes, edges) {
         csvBtn.type = 'button';
         csvBtn.id = 'nt-items-csv';
         csvBtn.textContent = '⬇ CSV';
-        csvBtn.title = 'Aktuelle Pivot-Sicht als CSV downloaden';
+        csvBtn.title = t('table.items.csv_tip');
         csvBtn.style.cssText = 'padding:5px 10px;border:1px solid ' + theme.border
             + ';border-radius:6px;background:' + theme.surface + ';color:' + theme.sub
             + ';font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;'
@@ -1234,7 +1217,7 @@ export function renderTable(wrap, nodes, edges) {
         async function loadAndRenderItems() {
             pivotArea.innerHTML = '<div style="text-align:center;padding:30px;color:' + theme.subSoft + '">'
                 + '<span style="display:inline-block;animation:nt-spin 1.2s linear infinite">\u23F3</span> '
-                + 'Lade Items...</div>';
+                + esc(t('table.items.loading')) + '</div>';
             const seq = ++_itemsFetchSeq;
             const data = await fetchItemsPivot(_itemsPattern);
             if (seq !== _itemsFetchSeq) return;   // neuere Anfrage in flight
@@ -1290,8 +1273,8 @@ export function renderTable(wrap, nodes, edges) {
             const total = allIds.length;
             const visible = visibleIds.length;
             counter.textContent = visible === total
-                ? total + ' Hosts \u00D7 ' + (_itemsData.columns || []).length + ' Items'
-                : visible + ' / ' + total + ' Hosts \u00D7 ' + (_itemsData.columns || []).length + ' Items';
+                ? t('table.items.count.all', { hosts: total, items: (_itemsData.columns || []).length })
+                : t('table.items.count.filtered', { shown: visible, total: total, items: (_itemsData.columns || []).length });
 
             area.querySelectorAll('th[data-sort]').forEach(function(th) {
                 th.style.cursor = 'pointer';

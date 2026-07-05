@@ -80,9 +80,10 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     // Hide Labels
     const bLbl = document.getElementById('nt-btn-labels');
     if (bLbl) bLbl.onclick = function() {
-        const hide = this.textContent.indexOf('Hide') >= 0;
+        const hide = this.dataset.hidden !== '1';
         cy.nodes('[!isGroup]').style('label', hide ? '' : 'data(label)');
-        this.textContent = hide ? 'Show Labels' : 'Hide Labels';
+        this.dataset.hidden = hide ? '1' : '0';
+        this.textContent = hide ? t('toolbar.labels.show') : t('toolbar.labels.hide');
     };
 
     // Fullscreen
@@ -91,10 +92,10 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         const root = document.getElementById('nt-root');
         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
             (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
-            bFs.textContent = 'Exit Fullscreen';
+            bFs.textContent = t('toolbar.fullscreen.exit');
         } else {
             (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-            bFs.textContent = 'Fullscreen';
+            bFs.textContent = t('toolbar.fullscreen');
         }
     });
     // Fullscreen-Toggle aendert die Canvas-Groesse, aber Cytoscape bekommt
@@ -116,7 +117,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             // Button rauswechselt — sonst behaelt der Button "Exit Fullscreen").
             if (bFs) {
                 const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
-                bFs.textContent = inFs ? 'Exit Fullscreen' : 'Fullscreen';
+                bFs.textContent = inFs ? t('toolbar.fullscreen.exit') : t('toolbar.fullscreen');
             }
         };
         document.addEventListener('fullscreenchange', _onFsChange);
@@ -124,7 +125,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     }
 
     // Fit
-    const bReset = mkbtn('nt-btn-reset', 'Fit', null);
+    const bReset = mkbtn('nt-btn-reset', t('toolbar.fit'), null);
     bReset.addEventListener('click', function() {
         cy.fit(cy.nodes(), 40);
         // Positions sicherheitshalber nach kurzer Pause nochmal speichern
@@ -152,7 +153,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         btn.style.margin = '0';
         const _currentLayout = loadLayout();
         const _currentLabel = (LAYOUT_OPTIONS.find(function(o) { return o.id === _currentLayout; }) || LAYOUT_OPTIONS[0]).label;
-        btn.textContent = '\u21BB Layout: ' + _currentLabel;
+        btn.textContent = t('toolbar.layout', { name: _currentLabel });
 
         const menu = document.createElement('div');
         menu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
@@ -221,7 +222,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                     });
                     lo.run();
                 }
-                btn.textContent = '\u21BB Layout: ' + opt.label;
+                btn.textContent = t('toolbar.layout', { name: opt.label });
                 // Aktive Markierung im Menü aktualisieren — nächstes Aufklappen
                 // soll den neuen Stand zeigen.
                 Array.from(menu.children).forEach(function(child, i) {
@@ -263,7 +264,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
             + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:130px;overflow:hidden;margin-top:2px';
         let _tapMs = loadTapholdMs();
-        function tapLabel() { return '\u270B Long-Press: ' + _tapMs + 'ms'; }
+        function tapLabel() { return t('toolbar.taphold', { ms: _tapMs }); }
         tapBtn.textContent = tapLabel();
 
         [300, 500, 800].forEach(function(ms) {
@@ -273,7 +274,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 + 'color:' + (isActive ? '#1d4ed8' : '#334155') + ';'
                 + 'background:' + (isActive ? '#dbeafe' : 'transparent') + ';'
                 + 'font-weight:' + (isActive ? '600' : '400');
-            row.textContent = ms + ' ms' + (ms === 500 ? ' (Standard)' : '');
+            row.textContent = ms + ' ms' + (ms === 500 ? ' ' + t('toolbar.taphold.default') : '');
             row.addEventListener('mouseover', function() {
                 if (ms !== _tapMs) this.style.background = '#f8fafc';
             });
@@ -314,7 +315,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     let _groupViewOn = false;
     try { _groupViewOn = localStorage.getItem(NT_GROUP_VIEW_KEY) === '1'; } catch (e) {}
     const bGroup = mkbtn('nt-btn-groupview',
-        _groupViewOn ? '\u{1F4CB} Aufl\u00F6sen' : '\u{1F5C2} Gruppieren', null);
+        _groupViewOn ? t('toolbar.group.expand') : t('toolbar.group.collapse'), null);
     if (_groupViewOn) {
         bGroup.style.background = '#3b82f6';
         bGroup.style.color = '#fff';
@@ -346,17 +347,17 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             catch (e) { return 'auto'; }
         })();
         const labels = {
-            auto:    '\u{1F5C2} Cluster: Auto',
-            columns: '\u{1F5C2} Cluster: Spalten',
-            rows:    '\u{1F5C2} Cluster: Reihen',
-            off:     '\u{1F5C2} Cluster: Aus',
+            auto:    t('toolbar.cluster.auto'),
+            columns: t('toolbar.cluster.columns'),
+            rows:    t('toolbar.cluster.rows'),
+            off:     t('toolbar.cluster.off'),
         };
 
         const cBtn = document.createElement('button');
         cBtn.className = 'btn-alt btn-small';
         cBtn.id = 'nt-btn-cluster';
         cBtn.textContent = labels[cMode] || labels.auto;
-        cBtn.title = 'Wie sollen mehrere Hostgroups visuell getrennt werden';
+        cBtn.title = t('toolbar.cluster.tip');
         clusterWrap.appendChild(cBtn);
 
         const cMenu = document.createElement('div');
@@ -403,22 +404,23 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     }
 
     // Auto-Refresh-Toggle
-    mkbtn('nt-btn-auto', 'Auto: 30s', function() {
+    mkbtn('nt-btn-auto', t('toolbar.auto.on'), function() {
         window._ntRefreshOn = !window._ntRefreshOn;
-        this.textContent = window._ntRefreshOn ? 'Auto: 30s' : 'Auto: Off';
+        this.textContent = window._ntRefreshOn ? t('toolbar.auto.on') : t('toolbar.auto.off');
         this.style.opacity = window._ntRefreshOn ? '1' : '0.5';
     });
 
     // LLDP-Kanten ein/aus
     let _lldpVisible = localStorage.getItem(NT_LLDP_KEY) !== '0';
-    const bLldp = mkbtn('nt-btn-lldp', _lldpVisible ? ' LLDP: an' : ' LLDP: aus', null);
+    const bLldp = mkbtn('nt-btn-lldp',
+        t('toolbar.lldp', { state: _lldpVisible ? t('toolbar.on') : t('toolbar.off') }), null);
     bLldp.style.opacity = _lldpVisible ? '1' : '0.5';
     if (!_lldpVisible) cy.edges('[?isLLDP]').style('display', 'none');
     bLldp.addEventListener('click', function() {
         _lldpVisible = !_lldpVisible;
         localStorage.setItem(NT_LLDP_KEY, _lldpVisible ? '1' : '0');
         cy.edges('[?isLLDP]').style('display', _lldpVisible ? 'element' : 'none');
-        bLldp.textContent = _lldpVisible ? ' LLDP: an' : ' LLDP: aus';
+        bLldp.textContent = t('toolbar.lldp', { state: _lldpVisible ? t('toolbar.on') : t('toolbar.off') });
         bLldp.style.opacity = _lldpVisible ? '1' : '0.5';
     });
 
@@ -471,15 +473,15 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     setupPresetsUI(bar, isFirstRun, cy);
 
     // Link-Modus (Star-Mode für manuelle Edges)
-    const bLink = mkbtn('nt-btn-link', 'Link', null);
-    bLink.title = 'Stern-Modus: Quelle w\u00E4hlen, dann beliebig viele Ziele klicken. ESC oder Quelle nochmal = fertig.';
+    const bLink = mkbtn('nt-btn-link', t('toolbar.link'), null);
+    bLink.title = t('toolbar.link.tip');
     bLink.onclick = function() {
         if (isLinkModeActive()) { exitLinkMode(); return; }
         resetHighlight(cy);
         enterLinkMode();
         bLink.style.background = '#dbeafe';
         bLink.style.color = '#1d4ed8';
-        bLink.textContent = 'Abbrechen (ESC)';
+        bLink.textContent = t('toolbar.link.cancel');
         document.getElementById('nt-canvas-wrap').style.cursor = 'crosshair';
     };
     // Globaler ESC-Listener — nur einmal pro Page-Load anhaengen, sonst
@@ -499,10 +501,10 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     }
 
     // Alle manuellen Links löschen
-    const bUnlink = mkbtn('nt-btn-unlink', '\u2715 Links', null);
-    bUnlink.title = 'Alle manuellen Links l\u00F6schen';
+    const bUnlink = mkbtn('nt-btn-unlink', t('toolbar.unlink'), null);
+    bUnlink.title = t('toolbar.unlink.tip');
     bUnlink.onclick = function() {
-        if (!confirm('Alle manuellen Verbindungen l\u00F6schen?')) return;
+        if (!confirm(t('toolbar.unlink.confirm'))) return;
         saveLinks([]);
         if (window._ntCy) window._ntCy.edges('[id^="ml_"]').remove();
     };
@@ -518,7 +520,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         const si = document.createElement('input');
         si.id = 'nt-search-input';
         si.type = 'text';
-        si.placeholder = 'Host suchen...';
+        si.placeholder = t('toolbar.search');
         si.style.cssText = 'width:140px;height:26px;font-size:12px;margin-left:8px;padding:0 8px;'
             + 'border:1px solid #e2e8f0;border-radius:4px;outline:none;background:#fff;color:#334155';
         si.addEventListener('input', function() {

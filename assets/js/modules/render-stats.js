@@ -15,9 +15,9 @@ import { esc, mkTabTheme, buildBaseUrl, fmt, linkCapacity } from './utils.js';
 import { t } from './i18n.js';
 
 const RANGES = [
-    { lbl: '7 Tage',  days: 7 },
-    { lbl: '14 Tage', days: 14 },
-    { lbl: '30 Tage', days: 30 },
+    { lbl: t('stats.range_days', { n: 7 }),  days: 7 },
+    { lbl: t('stats.range_days', { n: 14 }), days: 14 },
+    { lbl: t('stats.range_days', { n: 30 }), days: 30 },
 ];
 const DEFAULT_DAYS = 7;
 
@@ -55,7 +55,7 @@ function aggregate(data, hostMeta) {
             if (!perHost[hid]) perHost[hid] = { count: 0, worstSev: 0 };
             perHost[hid].count++;
             perHost[hid].worstSev = Math.max(perHost[hid].worstSev, sev);
-            const tname = e.name || '(unbenannt)';
+            const tname = e.name || t('stats.unnamed');
             if (!perTrigger[tname]) perTrigger[tname] = { count: 0, worstSev: 0, hosts: {} };
             perTrigger[tname].count++;
             perTrigger[tname].worstSev = Math.max(perTrigger[tname].worstSev, sev);
@@ -89,7 +89,7 @@ function aggregate(data, hostMeta) {
 function buildDayChart(agg, theme) {
     if (agg.dayCount === 0 || agg.totalEvents === 0) {
         return '<div style="color:' + theme.subSoft + ';font-style:italic;padding:20px 0">'
-             + 'Keine Events im gewaehlten Zeitraum.</div>';
+             + esc(t('stats.chart.empty')) + '</div>';
     }
     const W = 720, H = 180, padL = 38, padR = 12, padT = 12, padB = 28;
     const innerW = W - padL - padR;
@@ -159,7 +159,7 @@ function buildDayChart(agg, theme) {
 
 function buildTopTable(rows, theme, headers, cellsFn) {
     if (rows.length === 0) {
-        return '<div style="color:' + theme.subSoft + ';font-style:italic">Keine Daten.</div>';
+        return '<div style="color:' + theme.subSoft + ';font-style:italic">' + esc(t('stats.no_data')) + '</div>';
     }
     return '<table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
@@ -201,10 +201,9 @@ export function renderStats(wrap, nodes) {
         + ';height:100%;overflow:auto;font-family:sans-serif';
 
     const head = document.createElement('div');
-    head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">Statistik</h2>'
+    head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">' + esc(t('stats.title')) + '</h2>'
         + '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:14px">'
-        + 'Problem-Events aus dem History-Backend, aggregiert pro Tag. '
-        + 'Recovery-Events und "war schon offen vor Range" werden nicht gezaehlt.'
+        + esc(t('stats.desc'))
         + '</div>';
     root.appendChild(head);
 
@@ -212,7 +211,7 @@ export function renderStats(wrap, nodes) {
     const rangeWrap = document.createElement('div');
     rangeWrap.style.cssText = 'display:flex;gap:6px;margin-bottom:16px;align-items:center';
     const rangeLbl = document.createElement('span');
-    rangeLbl.textContent = 'Zeitraum:';
+    rangeLbl.textContent = t('stats.period');
     rangeLbl.style.cssText = 'font-size:12px;color:' + theme.sub + ';font-weight:600;margin-right:4px';
     rangeWrap.appendChild(rangeLbl);
     let _days = DEFAULT_DAYS;
@@ -245,7 +244,7 @@ export function renderStats(wrap, nodes) {
 
     const aggHead = document.createElement('div');
     aggHead.style.cssText = 'font-size:12px;color:' + theme.sub + ';margin-bottom:10px';
-    aggHead.textContent = 'Laedt...';
+    aggHead.textContent = t('stats.loading');
     root.appendChild(aggHead);
 
     const chartBox = document.createElement('div');
@@ -256,9 +255,9 @@ export function renderStats(wrap, nodes) {
     grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:24px';
     const hostsBox = document.createElement('div');
     const trigBox  = document.createElement('div');
-    hostsBox.innerHTML = '<h3 style="margin:0 0 8px;font-size:13px;color:' + theme.sub + ';text-transform:uppercase;letter-spacing:0.04em">Top 10 Hosts</h3>'
+    hostsBox.innerHTML = '<h3 style="margin:0 0 8px;font-size:13px;color:' + theme.sub + ';text-transform:uppercase;letter-spacing:0.04em">' + esc(t('stats.top_hosts')) + '</h3>'
         + '<div data-slot="hosts" style="color:' + theme.subSoft + '">…</div>';
-    trigBox.innerHTML  = '<h3 style="margin:0 0 8px;font-size:13px;color:' + theme.sub + ';text-transform:uppercase;letter-spacing:0.04em">Top 10 Probleme</h3>'
+    trigBox.innerHTML  = '<h3 style="margin:0 0 8px;font-size:13px;color:' + theme.sub + ';text-transform:uppercase;letter-spacing:0.04em">' + esc(t('stats.top_triggers')) + '</h3>'
         + '<div data-slot="triggers" style="color:' + theme.subSoft + '">…</div>';
     grid.appendChild(hostsBox);
     grid.appendChild(trigBox);
@@ -326,7 +325,7 @@ export function renderStats(wrap, nodes) {
         params.append('to',   String(now));
         groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
         const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
-        aggHead.textContent = 'Lade ' + _days + ' Tage Events...';
+        aggHead.textContent = t('stats.loading_events', { days: _days });
         chartBox.innerHTML = '';
         hostsBox.querySelector('[data-slot="hosts"]').textContent = '…';
         trigBox.querySelector('[data-slot="triggers"]').textContent = '…';
@@ -337,21 +336,26 @@ export function renderStats(wrap, nodes) {
             .then(function(data) {
                 if (seq !== _seq) return;   // outdated response
                 if (data.error) {
-                    aggHead.innerHTML = '<span style="color:#dc2626">Fehler: ' + esc(data.error) + '</span>';
+                    aggHead.innerHTML = '<span style="color:#dc2626">' + esc(t('stats.error', { msg: data.error })) + '</span>';
                     return;
                 }
                 const agg = aggregate(data, hostMeta);
                 const fromStr = new Date(agg.from * 1000).toLocaleDateString('de-DE');
                 const toStr   = new Date(agg.to   * 1000).toLocaleDateString('de-DE');
-                aggHead.innerHTML = '<b>' + agg.totalEvents + '</b> Events &middot; '
-                    + '<b>' + agg.distinctHosts + '</b> Hosts &middot; '
-                    + '<b>' + agg.distinctTriggers + '</b> Trigger &middot; '
-                    + esc(fromStr) + ' – ' + esc(toStr)
-                    + (agg.truncated ? ' &middot; <span style="color:#f59e0b">Achtung: Backend-Limit erreicht</span>' : '');
+                // Platzhalter-Werte duerfen HTML enthalten (<b>-Tags) — nur
+                // eigene Zahlen bzw. via esc() escapte Datums-Strings.
+                aggHead.innerHTML = t('stats.agg_summary', {
+                        events:   '<b>' + agg.totalEvents + '</b>',
+                        hosts:    '<b>' + agg.distinctHosts + '</b>',
+                        triggers: '<b>' + agg.distinctTriggers + '</b>',
+                        from:     esc(fromStr),
+                        to:       esc(toStr),
+                    })
+                    + (agg.truncated ? ' &middot; <span style="color:#f59e0b">' + esc(t('stats.truncated')) + '</span>' : '');
                 chartBox.innerHTML = buildDayChart(agg, theme);
                 hostsBox.querySelector('[data-slot="hosts"]').innerHTML = buildTopTable(
                     agg.topHosts, theme,
-                    ['Host', 'Events', 'Worst'],
+                    [esc(t('stats.col.host')), esc(t('stats.col.events')), esc(t('stats.col.worst'))],
                     function(r) {
                         return [
                             esc(r.label),
@@ -361,7 +365,7 @@ export function renderStats(wrap, nodes) {
                     });
                 trigBox.querySelector('[data-slot="triggers"]').innerHTML = buildTopTable(
                     agg.topTriggers, theme,
-                    ['Trigger', 'Events', 'Hosts', 'Worst'],
+                    [esc(t('stats.col.trigger')), esc(t('stats.col.events')), esc(t('stats.col.hosts')), esc(t('stats.col.worst'))],
                     function(r) {
                         return [
                             esc(r.name),
@@ -373,7 +377,7 @@ export function renderStats(wrap, nodes) {
             })
             .catch(function(e) {
                 if (seq !== _seq) return;
-                aggHead.innerHTML = '<span style="color:#dc2626">Fehler: ' + esc(e.message) + '</span>';
+                aggHead.innerHTML = '<span style="color:#dc2626">' + esc(t('stats.error', { msg: e.message })) + '</span>';
             });
     }
 

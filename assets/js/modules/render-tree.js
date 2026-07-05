@@ -9,6 +9,8 @@
 // der View geladen, vor dem ES-Module).
 
 import { makeNodeImage } from './icons.js';
+import { esc } from './utils.js';
+import { t } from './i18n.js';
 import { showTip, hideTip, moveTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
 
@@ -17,7 +19,7 @@ const SEV_BORDER = ['#cbd5e1', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991
 export function renderTree(wrap, nodes, edges) {
     if (!nodes.length) {
         wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
-                       + 'height:100%;color:#999">No hosts found.</div>';
+                       + 'height:100%;color:#999">' + esc(t('tech.no_hosts')) + '</div>';
         return;
     }
 

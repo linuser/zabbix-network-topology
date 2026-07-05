@@ -9,6 +9,8 @@
 //   _timer — Debounce-Timer für zoom/pan-Updates
 // Beim renderManagement() wird die Minimap versteckt — dafür hideMinimap().
 
+import { t } from './i18n.js';
+
 let _el = null;
 let _timer = null;
 
@@ -33,7 +35,7 @@ export function setupMinimap(cy, wrap) {
             'z-index:40',
             'backdrop-filter:blur(4px)'
         ].join(';');
-        _el.title = 'Minimap \u2014 klicken zum Navigieren';
+        _el.title = t('minimap.tip');
         wrap.appendChild(_el);
     } else if (_el.parentNode !== wrap) {
         // Wrap koennte sich beim Tab-Wechsel geaendert haben \u2014 Element umhaengen

@@ -14,15 +14,16 @@
 //   breadthfirst — Hierarchischer Baum von oben nach unten
 
 import { loadPositions } from './storage.js';
+import { t } from './i18n.js';
 
 // Optionen für das Toolbar-Dropdown. Die Reihenfolge bestimmt die Anzeige.
 export const LAYOUT_OPTIONS = [
-    { id: 'auto',         label: 'Auto'         },
-    { id: 'cose',         label: 'Force'        },
-    { id: 'concentric',   label: 'Konzentrisch' },
-    { id: 'grid',         label: 'Raster'       },
-    { id: 'breadthfirst', label: 'Baum'         },
-    { id: 'hierarchy',    label: 'Hierarchie'   }
+    { id: 'auto',         label: t('layout.auto')       },
+    { id: 'cose',         label: t('layout.force')      },
+    { id: 'concentric',   label: t('layout.concentric') },
+    { id: 'grid',         label: t('layout.grid')       },
+    { id: 'breadthfirst', label: t('layout.tree')       },
+    { id: 'hierarchy',    label: t('layout.hierarchy')  }
 ];
 
 // Tier-Reihenfolge für das Hierarchie-Layout: niedrige Zahl = oben.

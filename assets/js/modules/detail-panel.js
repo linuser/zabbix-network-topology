@@ -7,6 +7,7 @@
 
 import { esc, fmt, fmtItemValue } from './utils.js';
 import { SEV_COL, SEV_LBL } from './severity.js';
+import { t } from './i18n.js';
 
 // Mapping von Backend-Type-String zu deutschem Label + Emoji-Icon.
 // Die Strings hier müssen mit deviceType() in NetworkTopologyData.php
@@ -19,9 +20,9 @@ const TYPE_INFO = {
     server:     { lbl: 'Server',       icon: '\u{1F5A5}',  col: '#475569' },  // 🖥
     storage:    { lbl: 'Storage',      icon: '\u{1F4BE}', col: '#0e7490' },  // 💾
     hypervisor: { lbl: 'Hypervisor',   icon: '\u{1F9F1}', col: '#7c2d12' },  // 🧱
-    camera:     { lbl: 'Kamera',       icon: '\u{1F4F7}', col: '#71717a' },  // 📷
-    printer:    { lbl: 'Drucker',      icon: '\u{1F5A8}',  col: '#52525b' },  // 🖨
-    ups:        { lbl: 'USV',          icon: '\u{1F50B}', col: '#16a34a' },  // 🔋
+    camera:     { lbl: t('detail.type.camera'),  icon: '\u{1F4F7}', col: '#71717a' },  // 📷
+    printer:    { lbl: t('detail.type.printer'), icon: '\u{1F5A8}',  col: '#52525b' },  // 🖨
+    ups:        { lbl: t('detail.type.ups'),     icon: '\u{1F50B}', col: '#16a34a' },  // 🔋
     homeauto:   { lbl: 'Smart Home',   icon: '\u{1F3E0}', col: '#ea580c' },  // 🏠
     mailserver: { lbl: 'Mail-Server',  icon: '\u{2709}\u{FE0F}',  col: '#7c3aed' },  // ✉️
     webserver:  { lbl: 'Web-Server',   icon: '\u{1F310}', col: '#0d9488' },  // 🌐
@@ -34,7 +35,7 @@ const TYPE_INFO = {
 };
 
 function typeInfo(type) {
-    return TYPE_INFO[type] || { lbl: 'Unbekannt', icon: '\u2753', col: '#94a3b8' };  // ❓
+    return TYPE_INFO[type] || { lbl: t('detail.type.unknown'), icon: '\u2753', col: '#94a3b8' };  // ❓
 }
 
 export function showDetail(panel, d, cy) {
@@ -42,7 +43,7 @@ export function showDetail(panel, d, cy) {
 
     const ti = typeInfo(d.type);
     const customMark = d.icon_override
-        ? ' <span title="Custom (von nt:icon Tag)" style="color:#f59e0b;font-weight:700">*</span>'
+        ? ' <span title="' + esc(t('detail.custom_icon_tip')) + '" style="color:#f59e0b;font-weight:700">*</span>'
         : '';
 
     // Interface-Zeile mit Proxy-Info anreichern: nach dem Iftype steht in
@@ -120,10 +121,10 @@ export function showDetail(panel, d, cy) {
 
     // Status-Badges (Pinned, Wartung, Acked, Note) als kleine Chips daneben
     const badges = [];
-    if (d.pinned)        badges.push('<span style="background:rgba(59,130,246,0.13);color:#3b82f6;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">&#128204; Fixiert</span>');
-    if (d.maintenance)   badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u{1F527} Wartung</span>');
+    if (d.pinned)        badges.push('<span style="background:rgba(59,130,246,0.13);color:#3b82f6;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">&#128204; ' + esc(t('detail.badge.pinned')) + '</span>');
+    if (d.maintenance)   badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u{1F527} ' + esc(t('detail.badge.maintenance')) + '</span>');
     if (d.acknowledged)  badges.push('<span style="background:rgba(34,197,94,0.13);color:#16a34a;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u2714 Acked</span>');
-    if (d.note)          badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px" title="' + esc(d.note) + '">&#127991; Notiz</span>');
+    if (d.note)          badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px" title="' + esc(d.note) + '">&#127991; ' + esc(t('detail.badge.note')) + '</span>');
 
     // Identitaets-Section (Host, Type, IP, Interface) \u2014 kompakte Key-Value-Liste
     const idRow = function(k, v) {
@@ -156,10 +157,10 @@ export function showDetail(panel, d, cy) {
     const fmtAgo = function(unixTs) {
         if (!unixTs || unixTs <= 0) return '';
         const sec = Math.max(0, Math.floor(Date.now() / 1000) - unixTs);
-        if (sec < 60)    return 'vor ' + sec + 's';
-        if (sec < 3600)  return 'vor ' + Math.floor(sec / 60) + 'm';
-        if (sec < 86400) return 'vor ' + Math.floor(sec / 3600) + 'h';
-        return 'vor ' + Math.floor(sec / 86400) + 'd';
+        if (sec < 60)    return t('detail.ago', { v: sec + 's' });
+        if (sec < 3600)  return t('detail.ago', { v: Math.floor(sec / 60) + 'm' });
+        if (sec < 86400) return t('detail.ago', { v: Math.floor(sec / 3600) + 'h' });
+        return t('detail.ago', { v: Math.floor(sec / 86400) + 'd' });
     };
     // Stale-Banner: orangener Hinweis wenn Host zwar online aber Items
     // veraltet sind — separate Box, kommt NACH dem Offline-Banner falls beide
@@ -169,10 +170,9 @@ export function showDetail(panel, d, cy) {
         ? '<div style="background:rgba(245,158,11,0.13);border:1px solid #f59e0b;'
             + 'border-left:4px solid #f59e0b;border-radius:2px;padding:6px 10px;'
             + 'margin-bottom:8px;color:#92400e;font-size:12px">'
-            + '<div style="font-weight:700">&#9888; STALE &middot; letzter Wert ' + fmtAgo(d.last_seen) + '</div>'
+            + '<div style="font-weight:700">&#9888; STALE &middot; ' + esc(t('detail.stale.last_value', { ago: fmtAgo(d.last_seen) })) + '</div>'
             + '<div style="font-size:11px;margin-top:2px;font-style:italic">'
-            + 'Host gilt laut Zabbix als verfuegbar, aber es kommen keine '
-            + 'aktuellen Item-Werte mehr an</div>'
+            + esc(t('detail.stale.hint')) + '</div>'
             + '</div>'
         : '';
     const offlineBanner = isOff
@@ -188,7 +188,7 @@ export function showDetail(panel, d, cy) {
                     + 'title="' + esc(d.down_error) + '">' + esc(d.down_error) + '</div>'
                 : '')
             + '<div style="font-size:11px;color:#9c1a25;margin-top:2px;font-style:italic">'
-            + 'Metriken unten sind die letzten Werte vor Disconnect</div>'
+            + esc(t('detail.offline.hint')) + '</div>'
             + '</div>'
         : '';
 
@@ -249,7 +249,7 @@ export function showDetail(panel, d, cy) {
             + (_itemsCollapsible
                 ? '<details><summary style="font-size:11px;color:#0275b8;cursor:pointer;'
                     + 'user-select:none;margin-bottom:4px">'
-                    + _items.length + ' Items anzeigen</summary>'
+                    + esc(t('detail.items.show', { n: _items.length })) + '</summary>'
                     + _itemsHtml
                     + '</details>'
                 : _itemsHtml)
@@ -270,13 +270,13 @@ export function showDetail(panel, d, cy) {
     const actions = [
         { lbl: '\u{1F4CA}', title: 'Latest Data',
           url: zbxOrigin + 'zabbix.php?action=latest.view&filter_set=1&hostids%5B%5D=' + hostId },
-        { lbl: '\u26A0',    title: 'Probleme',
+        { lbl: '\u26A0',    title: t('detail.act.problems'),
           url: zbxOrigin + 'zabbix.php?action=problem.view&filter_set=1&hostids%5B%5D=' + hostId },
         { lbl: '\u{1F4C8}', title: 'Graphs',
           url: zbxOrigin + 'zabbix.php?action=charts.view&filter_set=1&filter_hostids%5B%5D=' + hostId },
     ];
     if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
-        actions.push({ lbl: '\u2699\uFE0F', title: 'Bearbeiten',
+        actions.push({ lbl: '\u2699\uFE0F', title: t('detail.act.edit'),
           url: zbxOrigin + 'zabbix.php?action=popup&popup=host.edit&hostid=' + hostId });
     }
     const actionBar = '<div style="display:flex;gap:4px;margin-bottom:4px">'
@@ -316,11 +316,11 @@ export function showDetail(panel, d, cy) {
         + staleBanner
         + actionBar
         + statusSection
-        + section('Identität') + identityHtml
-        + section('Metriken') + ringHtml + metricsHtml
+        + section(esc(t('detail.sec.identity'))) + identityHtml
+        + section(esc(t('detail.sec.metrics'))) + ringHtml + metricsHtml
         + extraBlock
         + (peers
-            ? section('Verbindungen')
+            ? section(esc(t('detail.sec.connections')))
                 + '<div style="font-size:11px;color:#475569;line-height:1.6">' + peers + '</div>'
             : '');
 

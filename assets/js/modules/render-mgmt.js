@@ -9,6 +9,7 @@ import { showCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
 import { hideMinimap } from './minimap.js';
 import { loadNotes } from './storage.js';
+import { t } from './i18n.js';
 
 // Ebenen-Reihenfolge: niedrige Zahl = oben (Firewall am Perimeter)
 const MGMT_LEVEL = {
@@ -21,13 +22,13 @@ const MGMT_LEVEL = {
 
 const MGMT_LEVEL_NAMES = {
     0: 'Firewall / Gateway', 1: 'Router', 2: 'Switch', 3: 'Wireless',
-    4: 'Server / Virtualisierung', 5: 'Storage / NAS',
-    6: 'Home Automatisierung / Monitoring', 7: 'Geraete'
+    4: t('mgmt.level.server'), 5: 'Storage / NAS',
+    6: t('mgmt.level.homeauto'), 7: t('mgmt.level.devices')
 };
 
 function mgmtSevStyle(sev) {
     const colors = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
-    const labels = ['OK', 'Info', 'Warn', 'Avg', 'High', 'Krit'];
+    const labels = ['OK', 'Info', 'Warn', 'Avg', 'High', t('mgmt.sev.crit')];
     const c = colors[Math.min(sev || 0, colors.length - 1)];
     const l = labels[Math.min(sev || 0, labels.length - 1)];
     return { color: c, label: l };
@@ -123,10 +124,10 @@ export function renderManagement(wrap, nodes, edges) {
     }
 
     addStat('Hosts', totalHosts, text);
-    addStat('Mit Problem', problemHosts, problemHosts > 0 ? '#dc2626' : text);
+    addStat(t('mgmt.stat.problems'), problemHosts, problemHosts > 0 ? '#dc2626' : text);
     if (offCount > 0)   addStat('Offline', offCount, '#e53742');
-    if (maintCount > 0) addStat('Wartung', maintCount, '#92400e');
-    if (ackCount > 0)   addStat('Bestätigt', ackCount, '#16a34a');
+    if (maintCount > 0) addStat(t('mgmt.stat.maintenance'), maintCount, '#92400e');
+    if (ackCount > 0)   addStat(t('mgmt.stat.acked'), ackCount, '#16a34a');
 
     // Letzte Stat-Kachel: Trenn-Border weg
     if (_statBlocks.length > 0) {
@@ -136,7 +137,7 @@ export function renderManagement(wrap, nodes, edges) {
     // Severity-Pillen — nur die mit Treffern anzeigen, kritischste links.
     // Normal (0) blenden wir aus, im "Mit Problem"-Counter ist das Komplement.
     const sevColors = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
-    const sevLabels = ['OK', 'Info', 'Warn', 'Avg', 'High', 'Krit'];
+    const sevLabels = ['OK', 'Info', 'Warn', 'Avg', 'High', t('mgmt.sev.crit')];
     const pills = document.createElement('div');
     pills.style.cssText = 'display:flex;align-items:center;gap:6px;padding:0 8px;'
         + 'margin-left:auto;flex-wrap:wrap';
@@ -167,7 +168,7 @@ export function renderManagement(wrap, nodes, edges) {
             + ';text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;'
             + 'padding-bottom:4px;border-bottom:1px solid ' + bdr
             + ';margin-top:' + (lvl === sortedLevels[0] ? '0' : '24px');
-        header.textContent = MGMT_LEVEL_NAMES[lvl] || ('Ebene ' + lvl);
+        header.textContent = MGMT_LEVEL_NAMES[lvl] || t('mgmt.level.generic', { n: lvl });
         container.appendChild(header);
 
         const row = document.createElement('div');
@@ -221,7 +222,7 @@ export function renderManagement(wrap, nodes, edges) {
             // Status-Badges (Wartung, Acked) rechts neben Severity-Label
             if (n.maintenance) {
                 const mb = document.createElement('span');
-                mb.title = 'In Wartung';
+                mb.title = t('mgmt.tile.maintenance');
                 mb.style.cssText = 'background:#fef3c7;color:#92400e;border-radius:8px;'
                     + 'font-size:9px;font-weight:600;padding:1px 5px';
                 mb.textContent = '\u{1F527}';
@@ -229,7 +230,7 @@ export function renderManagement(wrap, nodes, edges) {
             }
             if (n.acknowledged) {
                 const ab = document.createElement('span');
-                ab.title = 'Probleme best\u00E4tigt';
+                ab.title = t('mgmt.tile.acked');
                 ab.style.cssText = 'background:#dcfce7;color:#166534;border-radius:8px;'
                     + 'font-size:9px;font-weight:600;padding:1px 5px';
                 ab.textContent = '\u2714';

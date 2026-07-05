@@ -17,6 +17,7 @@ import {
     collectCurrentState, loadActivePreset, saveActivePreset
 } from './storage.js';
 import { toast } from './toast.js';
+import { t } from './i18n.js';
 
 // Cross-Module-Glue: render() wird aus dem Hauptmodul injiziert
 let _renderFn = function() {};
@@ -92,7 +93,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
             const txt = document.createElement('span');
             txt.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis';
             txt.textContent = icon + ' ' + p.name;
-            txt.title = p.name + ' (' + (p.scope === 'global' ? 'Global' : 'Diese Auswahl') + ')';
+            txt.title = p.name + ' (' + (p.scope === 'global' ? t('presets.scope.global') : t('presets.scope.this')) + ')';
             row.appendChild(txt);
             row.addEventListener('mouseover', function() {
                 if (!isActive) this.style.background = '#f8fafc';
@@ -128,16 +129,16 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
         if (groupset.length === 0 && global.length === 0) {
             const empty = document.createElement('div');
             empty.style.cssText = 'padding:12px 14px;font-size:12px;color:#94a3b8;font-style:italic';
-            empty.textContent = 'Noch keine Presets gespeichert. Karte einrichten und "Save As..." klicken.';
+            empty.textContent = t('presets.empty');
             ddMenu.appendChild(empty);
             return;
         }
         if (groupset.length > 0) {
-            addHeader('Diese Auswahl');
+            addHeader(t('presets.scope.this'));
             groupset.forEach(addRow);
         }
         if (global.length > 0) {
-            addHeader('Global');
+            addHeader(t('presets.scope.global'));
             global.forEach(addRow);
         }
     }
@@ -162,19 +163,19 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     const saveBtn = document.createElement('button');
     saveBtn.className = 'btn-alt btn-small';
     saveBtn.style.margin = '0';
-    saveBtn.title = 'Aktives Preset mit aktuellem Stand \u00FCberschreiben';
+    saveBtn.title = t('presets.save.tip');
     saveBtn.textContent = '\u{1F4BE}';
 
     const saveAsBtn = document.createElement('button');
     saveAsBtn.className = 'btn-alt btn-small';
     saveAsBtn.style.margin = '0';
-    saveAsBtn.title = 'Als neues Preset speichern';
+    saveAsBtn.title = t('presets.saveas.tip');
     saveAsBtn.textContent = '\u{1F4DD}';
 
     const delBtn = document.createElement('button');
     delBtn.className = 'btn-alt btn-small';
     delBtn.style.margin = '0';
-    delBtn.title = 'Aktives Preset l\u00F6schen';
+    delBtn.title = t('presets.del.tip');
     delBtn.textContent = '\u{1F5D1}';
 
     function updateButtons() {
@@ -194,7 +195,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
             return presetMatches(p, _active);
         });
         if (!existing) {
-            toast('Aktives Preset nicht gefunden — bitte "Save As..." statt "Save".', 'warn');
+            toast(t('presets.notfound'), 'warn');
             _active = null;
             saveActivePreset('', null, null);
             ddBtn.textContent = ddLabel();
@@ -213,23 +214,19 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     });
 
     saveAsBtn.addEventListener('click', function() {
-        const name = prompt('Name f\u00FCr das neue Preset:');
+        const name = prompt(t('presets.name_prompt'));
         if (!name || !name.trim()) return;
         const cleanName = name.trim().substring(0, 40);
 
         // Scope-Auswahl per confirm — einfacher als ein eigenes Modal-Dialog
-        const isGlobal = confirm(
-            'Preset-Scope w\u00E4hlen:\n\n'
-            + 'OK = Global (gilt f\u00FCr alle Hostgroup-Auswahlen)\n'
-            + 'Abbrechen = Diese Auswahl (gilt nur f\u00FCr aktuelle Hostgroups)'
-        );
+        const isGlobal = confirm(t('presets.scope_confirm'));
         const scope = isGlobal ? 'global' : 'groupset';
 
         // Existiert schon? → Confirm zum Überschreiben (gleicher Name + Scope)
         const existing = loadRelevantPresets().find(function(p) {
             return p.name === cleanName && p.scope === scope;
         });
-        if (existing && !confirm('Preset "' + cleanName + '" existiert bereits. \u00DCberschreiben?')) {
+        if (existing && !confirm(t('presets.overwrite_confirm', { name: cleanName }))) {
             return;
         }
 
@@ -245,7 +242,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
 
     delBtn.addEventListener('click', function() {
         if (!_active || !_active.name) return;
-        if (!confirm('Preset "' + _active.name + '" wirklich l\u00F6schen?')) return;
+        if (!confirm(t('presets.delete_confirm', { name: _active.name }))) return;
         const existing = loadRelevantPresets().find(function(p) {
             return presetMatches(p, _active);
         });
