@@ -46,5 +46,4 @@ export function resetHighlight(cy) {
     _activeId = null;
 }
 
-export function isHighlightActive() { return _activeId !== null; }
 export function getActiveHighlightId() { return _activeId; }

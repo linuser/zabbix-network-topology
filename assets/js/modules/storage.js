@@ -117,10 +117,6 @@ export function savePinned(cyInst) {
     cyInst.nodes('[!isGroup]').forEach(function(n) { if (n.locked()) ids.push(n.id()); });
     try { localStorage.setItem(pinnedKey(), JSON.stringify(ids)); } catch (e) {}
 }
-export function clearPinned() {
-    try { localStorage.removeItem(pinnedKey()); } catch (e) {}
-}
-
 // ── Notes helpers ────────────────────────────────────────────────────────────
 export function loadNotes() {
     try { return JSON.parse(localStorage.getItem(notesKey()) || '{}'); }
@@ -280,14 +276,6 @@ export function saveActivePreset(name, scope, scopeKey) {
             localStorage.removeItem(NT_ACTIVE_PRESET_KEY);
         }
     } catch (e) {}
-}
-
-// Findet ein Preset by Name (eindeutig pro User — gleiche Namen mit
-// verschiedenem Scope sind erlaubt, daher braucht man scope+name beide).
-export function findPreset(name, scope, scopeKey) {
-    return loadPresets().find(function(p) {
-        return p.name === name && p.scope === scope && (scope === 'global' || p.scopeKey === scopeKey);
-    }) || null;
 }
 
 // Speichert oder überschreibt ein Preset. data sollte enthalten:

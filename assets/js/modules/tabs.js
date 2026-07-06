@@ -190,9 +190,6 @@ export function ensureBaseToolbar(wrap) {
     regroupToolbar();
 }
 
-// Alter Name behalten — wird noch im Hauptmodul aufgerufen, delegiert
-export function ensureTabs(wrap) { ensureBaseToolbar(wrap); }
-
 // Graph-spezifische Toolbar-Elemente die NUR im Tech-Tab Sinn ergeben.
 // Mgmt/Tabelle/Geo brauchen weder Cytoscape-Zoom noch Layout-Switcher noch
 // Cluster-Toggle, weil sie kein Cytoscape-Canvas haben.

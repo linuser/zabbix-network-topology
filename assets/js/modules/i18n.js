@@ -33,8 +33,6 @@ function detectLang() {
 
 let _lang = detectLang();
 
-export function getLang() { return _lang; }
-
 export function t(key, vars) {
     let s = DICTS[_lang][key];
     if (s === undefined) s = DICTS.en[key];

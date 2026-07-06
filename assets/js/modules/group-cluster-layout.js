@@ -303,8 +303,3 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
         lay.run();
     });
 }
-
-// Public Helper für UI-Code: gibt den effektiven Mode zurück
-export function effectiveClusterMode(mode, numGroups) {
-    return resolveMode(mode || 'auto', numGroups);
-}

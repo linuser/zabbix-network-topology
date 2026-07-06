@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.1 — 2026-07-06
+
+### Removed (Code-Bereinigung — tote/ungenutzte Exporte, Altlasten)
+- **Verwaistes Modul `render-tree.js` gelöscht** (~144 Zeilen): eine nie importierte Alt-Implementierung der Baum-Ansicht; die „Baum"-Layout-Option nutzt Cytoscapes `breadthfirst` in render-tech, nicht dieses Modul.
+- **9 tote Exporte entfernt** (nirgends importiert, nicht intern genutzt): `ensureTabs` (tabs), `isHighlightActive` (highlight), `getHistoryTimestamp` + `deactivateHistoryMode` (history-mode, mit stalen „wird aufgerufen"-Kommentaren), `getLang` (i18n), `clearPinned` + `findPreset` (storage), `isWeathermapMode` (traffic, in v4.26 hinzugefügt aber nie genutzt), `hasSnapshot` (diff-mode), `effectiveClusterMode` (group-cluster-layout).
+- **5 überflüssige `export` entkernt** (nur modul-intern genutzt): `computeSeveritiesAt`, `toggleHistoryMode`, `switchProvider`, `fetchPatternSuggestions` — Funktionen bleiben, nur die öffentliche Sichtbarkeit fällt weg.
+- **4 ungenutzte Imports entfernt**: `fmt` (render-diag), `fmt`/`SEV_COL`/`effectiveClusterMode` (render-tech).
+
+Verifiziert: voller `deno check` über alle Module grün (kein gebrochener Import), Re-Analyse meldet 0 verbleibende tote Exporte/ungenutzte Imports/verwaiste Module. Netto −144 Zeilen, rein nicht-funktional (kein Verhaltensänderung).
+
 ## v4.29.0 — 2026-07-06
 
 ### Added

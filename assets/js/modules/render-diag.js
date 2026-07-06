@@ -7,7 +7,7 @@
 // Nur sichtbar fuer Admins (NT_CONFIG.can_edit). Backend prueft das nochmal,
 // aber wir blenden den Tab im Frontend gleich aus.
 
-import { esc, fmt, mkTabTheme, buildBaseUrl } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
 
 function _bytes(n) {
     if (n < 1024) return n + ' B';

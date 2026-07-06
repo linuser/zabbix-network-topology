@@ -166,7 +166,7 @@ function showToast(message) {
 // Wenn der gewählte Provider eine `warning`-Property hat (z.B. Stamen mit
 // API-Key-Pflicht), zeigen wir einen Toast — sonst sieht der User nur
 // kaputte Tiles ohne Erklärung.
-export function switchProvider(providerId) {
+function switchProvider(providerId) {
     if (!_map) return;
     saveGeoProvider(providerId);
     if (_tileLayer) _map.removeLayer(_tileLayer);

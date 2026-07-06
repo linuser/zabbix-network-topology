@@ -74,7 +74,7 @@ function buildBaseUrl() {
 // dazwischen kam. Höchste Severity aller aktiven Probleme = Host-Severity.
 //
 // Returns: { hostid: severity, ... } — nur Hosts mit aktivem Problem.
-export function computeSeveritiesAt(ts) {
+function computeSeveritiesAt(ts) {
     if (!_eventsCache || !_eventsCache.events) return {};
     const result = {};
     Object.keys(_eventsCache.events).forEach(function(hid) {
@@ -102,7 +102,6 @@ export function computeSeveritiesAt(ts) {
 // Public — wird vom Render-Code aufgerufen (render-tech, render-mgmt etc.)
 // um die History-Severities anzuwenden.
 export function isHistoryActive() { return _active; }
-export function getHistoryTimestamp() { return _currentTs; }
 export function getHistorySeverities() {
     if (!_active) return null;
     return computeSeveritiesAt(_currentTs);
@@ -335,15 +334,9 @@ function deactivate() {
     _renderFn();
 }
 
-export function toggleHistoryMode() {
+function toggleHistoryMode() {
     if (_active) deactivate();
     else activate();
-}
-
-// Wird vom switchTab-Handler aufgerufen wenn der User einen anderen Tab
-// wählt — damit die gelbe History-Bar nicht im DOM hängenbleibt.
-export function deactivateHistoryMode() {
-    if (_active) deactivate();
 }
 
 // Toggle-Button in der Toolbar anlegen — wird vom Toolbar-Setup aufgerufen.

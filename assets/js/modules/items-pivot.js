@@ -265,7 +265,7 @@ const _discoverCache = new Map();
 // Holt die distinct Item-Pattern-Stems der ausgewaehlten Hostgroups vom
 // Backend. Cached pro Group-Auswahl, sodass das Dropdown beim Reopen nicht
 // jedesmal neu fetchen muss. Returns Promise<{patterns: [...]}|{error: ...}>.
-export function fetchPatternSuggestions() {
+function fetchPatternSuggestions() {
     const cfg = window.NT_CONFIG;
     const groupids = (cfg && cfg.selected_groupids) || [];
     if (!groupids.length) return Promise.resolve({ patterns: [] });

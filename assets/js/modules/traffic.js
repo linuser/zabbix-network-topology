@@ -33,7 +33,6 @@ const HEALTH_DROP_THRESHOLD = 5;
 // Kapazitaet kommt als edge.data('capBps') aus min(ifSpeed beider Endpunkte).
 let _weathermap = false;
 export function setWeathermapMode(on) { _weathermap = !!on; }
-export function isWeathermapMode()    { return _weathermap; }
 
 function utilizationTier(pct) {
     if (pct < 1)   return { w: 2,   col: '#94a3b8' };   // idle

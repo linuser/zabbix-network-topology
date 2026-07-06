@@ -14,9 +14,9 @@
 // State (Modul-privat):
 //   _posSaveTimer — debounce-Timer für drag-save
 
-import { esc, fmt } from './utils.js';
+import { esc } from './utils.js';
 import { t } from './i18n.js';
-import { SEV_COL, primaryGroup } from './severity.js';
+import { primaryGroup } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import {
     NT_GROUP_VIEW_KEY, NT_LLDP_KEY,
@@ -45,7 +45,7 @@ import { buildLayoutConfig } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
 import { injectInternetCloud, buildNodeElements, buildEdgeElements } from './build-elements.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
-import { runGroupClusterLayout, effectiveClusterMode } from './group-cluster-layout.js';
+import { runGroupClusterLayout } from './group-cluster-layout.js';
 import { NT_GROUP_CLUSTER_KEY } from './storage.js';
 
 // ── Cross-Module-Glue: setupToolbar lebt im Hauptmodul ─────────────────────
