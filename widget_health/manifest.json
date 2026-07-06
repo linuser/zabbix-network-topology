@@ -2,7 +2,7 @@
     "manifest_version": 2.0,
     "id": "network_topology_v6_health_widget",
     "type": "widget",
-    "name": "NT Health Score Widget",
+    "name": "Network Topology for Zabbix — Health Widget",
     "namespace": "NetworkTopologyV6HealthWidget",
     "version": "1.0.0",
     "author": "PlaNet Fox | Alexander Fox",

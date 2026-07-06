@@ -1,10 +1,25 @@
-# Network Topology v6
+# Network Topology for Zabbix
 
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.29.4-blue)
+![Version](https://img.shields.io/badge/version-4.29.5-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
+
+## Was ist das?
+
+**Network Topology for Zabbix** ist ein Frontend-Modul für Zabbix 7.4, das Hosts,
+Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive
+Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es,
+_wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
+
+Highlights: Live-Graph mit Severity-Ringen · Weathermap (Link-Auslastung) ·
+What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus
+der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/EN.
+
+> Technische Modul-ID: `network_topology_v6` (installiert als Verzeichnis gleichen
+> Namens). Das „v6" ist die interne Modul-Lineage, nicht die Release-Version — die
+> steht im Badge oben und im [CHANGELOG](CHANGELOG.md).
 
 ## Features
 
@@ -71,9 +86,9 @@ sudo chown -R root:root network_topology_v6
 sudo systemctl reload php8.3-fpm
 ```
 
-In Zabbix-UI: Administration → General → Modules → Scan directory → "Network Topology v6" aktivieren.
+In Zabbix-UI: Administration → General → Modules → Scan directory → "Network Topology for Zabbix" aktivieren.
 
-Aufruf via Monitoring → Network Topology v6.
+Aufruf via Monitoring → Network Topology for Zabbix.
 
 ## Dashboard-Widget (optional)
 
@@ -93,13 +108,13 @@ sudo chown -R root:root network_topology_v6_widget
 sudo systemctl reload php8.3-fpm
 ```
 
-Dann Scan directory → "Network Topology v6 Widget" enablen → im Dashboard-Editor verfügbar.
+Dann Scan directory → "Network Topology for Zabbix — Widget" enablen → im Dashboard-Editor verfügbar.
 
 ## Architektur
 
 ```
 network_topology_v6/
-├── manifest.json              Modul-Manifest mit 5 registrierten Actions
+├── manifest.json              Modul-Manifest mit 14 registrierten Actions
 ├── Module.php                 Menü-Eintrag-Registration
 ├── views/
 │   └── network.topology.view.php   HTML-Container + JS-Loader
@@ -113,7 +128,7 @@ network_topology_v6/
     ├── css/network-topology.css
     └── js/
         ├── network-topology.js     Main: switchTab + Init + Refresh-Loop
-        └── modules/                32 ESM-Module (s.u.)
+        └── modules/                44 ESM-Module (Auswahl s.u.)
 ```
 
 ### Frontend-Module
@@ -124,7 +139,7 @@ network_topology_v6/
 | `build-elements.js` | Cytoscape Node/Edge-Builder |
 | `context-menu.js` | Rechtsklick-Menü auf Knoten |
 | `detail-panel.js` | Rechte Seitenleiste mit Host-Details |
-| `export-mail.js` | PNG/PDF/HTML-Export |
+| `export.js` | PNG/PDF/HTML + Audit-Report-Export |
 | `geo-providers.js` | Tile-Server-Definitionen für Leaflet |
 | `group-cluster-layout.js` | Adaptiv: Spalten/Reihen-Layout pro Hostgroup |
 | `group-hulls.js` | Convex-Hull-Lassos um Gruppen |
@@ -153,7 +168,7 @@ network_topology_v6/
 
 ## Sicherheit
 
-- **CSRF**: lese-only Actions deaktivieren CSRF (kein Effekt). Schreibende Actions (Mail wurde entfernt) hatten manuellen CSRF-Check.
+- **CSRF**: Actions setzen `disableCsrfValidation()` (das Frontend hat keinen Zabbix-Form-Token) und prüfen stattdessen `requireAjax()` (Header `X-Requested-With`) als CSRF-Last-Schutz — same-origin-Sessions können den Header setzen, cross-origin nicht (CORS-Preflight). Die einzige schreibende Action (`maintenance`, One-Time-Wartung aus der Karte) ist zusätzlich auf `USER_TYPE_ZABBIX_ADMIN` + Host-Schreibrecht gegated.
 - **Permissions**: alle Actions prüfen `USER_TYPE_ZABBIX_USER`. Permission-Filter auf Hostgroups via `API::HostGroup()->get()` statt Frontend-trust.
 - **XSS**: zentrale `esc()`-Funktion, kein direktes `innerHTML` mit User-Daten.
 - **SQL-Injection**: `(int)`-Cast oder `dbConditionInt()` bei DB-Zugriffen.

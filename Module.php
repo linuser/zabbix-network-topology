@@ -21,7 +21,7 @@ class Module extends CModule {
             ->findOrAdd(_('Monitoring'))
             ->getSubmenu()
             ->add(
-                (new CMenuItem(_('Network Topology v6')))
+                (new CMenuItem(_('Network Topology for Zabbix')))
                     ->setAction('network.topology.v6.view')
             );
     }

@@ -137,7 +137,7 @@ $selected_data = array_map(
                     ->setId('nt-footer')
                     ->addClass('nt-footer')
                     ->addItem(new CSpan(
-                        'Network Topology v6 ' . (static function() {
+                        'Network Topology for Zabbix ' . (static function() {
                             $m = @json_decode((string) @file_get_contents(dirname(__DIR__) . '/manifest.json'), true);
                             return 'v' . (is_array($m) && !empty($m['version']) ? $m['version'] : '?');
                         })() . ' — © Alexander Fox | PlaNet Fox — AGPL-3.0'
@@ -218,7 +218,13 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
         window.NT_CONFIG.selected_groupids = _g;
         window.NT_CONFIG.selected_group_names = [];
         window.NT_CONFIG.data_url = 'zabbix.php?action=network.topology.v6.data';
-        window.NT_CONFIG.can_edit = true;
+        // Fail closed: dieser Fallback greift nur wenn PHP NT_CONFIG NICHT
+        // geliefert hat (also auch die serverseitig ermittelte Admin-Rolle
+        // fehlt). can_edit steuert Admin-only-UI (Bearbeiten-Links, Wartung).
+        // Auf true zu defaulten wuerde einem Nicht-Admin diese Buttons zeigen
+        // (das Backend blockt zwar, aber die UI soll gar nicht "fail open"
+        // sein). Ohne verlaessliche Rolle → keine Edit-UI.
+        window.NT_CONFIG.can_edit = false;
     }
 }
 
@@ -281,7 +287,26 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
         const mainUrl = await loadModule('network-topology.js');
         await import(mainUrl);
     } catch (e) {
+        // Nicht still scheitern (weisser Screen): sichtbare Meldung statt
+        // leerer Seite. Haeufigste Ursache in gehaerteten Umgebungen ist eine
+        // Content-Security-Policy ohne 'blob:' in script-src — dann blockiert
+        // der Browser die Blob-Module. Der Fehlertext nennt genau das.
         console.error('[nt-boot] Module-Loader fehlgeschlagen:', e);
+        var box = document.getElementById('nt-loading')
+               || document.getElementById('nt-canvas-wrap') || document.body;
+        if (box) {
+            var msg = String(e && e.message ? e.message : e).replace(/[<>&]/g, function(c) {
+                return c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&amp;';
+            });
+            box.innerHTML = '<div style="padding:20px 24px;max-width:640px;margin:40px auto;'
+                + 'font-family:sans-serif;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;'
+                + 'border-radius:8px;line-height:1.55">'
+                + '<b>Network Topology konnte nicht geladen werden.</b><br>'
+                + 'Modul-Loader-Fehler: ' + msg + '<br>'
+                + '<span style="color:#7f1d1d;font-size:13px">Falls eine Content-Security-Policy aktiv '
+                + 'ist, muss <code>script-src</code> <code>blob:</code> erlauben. Details in der '
+                + 'Browser-Konsole.</span></div>';
+        }
     }
 })();
 </script>

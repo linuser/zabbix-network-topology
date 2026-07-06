@@ -2,6 +2,20 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.5 — 2026-07-06
+
+### Changed (Pre-Release-Politur — Branding, Sicherheit, Doku)
+- **Produktname vereinheitlicht → „Network Topology for Zabbix"** (Anzeigename im Manifest, Menü-Eintrag, Footer, beide Widgets, README-H1 + Intro). Die technische Modul-ID `network_topology_v6`, der Namespace `NetworkTopologyV6` und die Action-Namen `network.topology.v6.*` bleiben unverändert (Umbenennen würde alle Installs/Actions brechen) — der README erklärt das v6=Lineage-vs-Release-Version-Verhältnis.
+
+### Security
+- **`can_edit`-Fallback fällt jetzt „closed"**: der JS-Fallback in der View (greift nur, wenn PHP `NT_CONFIG` nicht liefert) setzte `can_edit = true` und hätte damit einem Nicht-Admin die Admin-UI (Bearbeiten-Links, **Wartungs-Button**) zeigen können. Jetzt `false` — ohne verlässliche Rolle keine Edit-UI. (Das Backend blockte schon immer; die UI soll aber gar nicht „fail open" sein.)
+
+### Fixed
+- **Modul-Loader scheitert nicht mehr still**: bei einem Ladefehler (häufigste Ursache: Content-Security-Policy ohne `blob:` in `script-src`) zeigt die Seite jetzt eine sichtbare Fehlermeldung mit genau diesem CSP-Hinweis statt eines weißen Screens.
+
+### Docs
+- README: **„Was ist das?"-Intro** für Erstnutzer vorangestellt. Veraltete Angaben korrigiert: 14 (statt 5) Actions, 44 (statt 32) Module, `export.js` (statt nicht mehr existentem `export-mail.js`), aktualisierte CSRF-/Write-Action-Security-Notiz.
+
 ## v4.29.4 — 2026-07-06
 
 ### Added
