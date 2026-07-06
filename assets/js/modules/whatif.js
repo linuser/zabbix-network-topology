@@ -16,10 +16,11 @@
 // ohne LLDP/CDP-Kanten waren nie erreichbar und zaehlen deshalb nicht mit —
 // sonst wuerden sie jedem beliebigen simulierten Host angelastet.
 //
-// Markierung via Cytoscape-Klassen (Underlays) statt Inline-Styles — die
+// Markierung via Cytoscape-Klassen (Overlays) statt Inline-Styles — die
 // Traffic-Heatmap und highlight.js setzen Inline-opacity/line-color, die
-// wuerden Klassen-Styles auf denselben Properties ueberschreiben. Underlay
-// wird nirgends inline gesetzt und ueberlebt beide.
+// wuerden Klassen-Styles auf denselben Properties ueberschreiben. overlay-*
+// setzt niemand inline und rendert oben drauf (cross-browser, auch Firefox,
+// wo underlay hinter dem transparenten Node-Body unsichtbar blieb).
 //
 // Lebenszyklus analog path-highlight: Re-Render/Tab-Wechsel beendet die
 // Simulation (render-tech cleanup), ESC ebenso (toolbar), sonst Banner-Button.

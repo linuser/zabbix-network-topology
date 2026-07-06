@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.2 — 2026-07-06
+
+### Fixed
+- **What-if-/Root-Cause-Markierungen waren in Firefox unsichtbar**: die Nodes haben `background-opacity:0` (transparenter Body, nur SVG-Icon per `background-image`) — Cytoscape rendert `underlay-*` HINTER dem Body, und Firefox überspringt diese Ebene bei transparentem Body (Chrome kompositiert sie). Die roten/grauen Halos der Ausfall-Simulation und der Root-Cause-Ansicht erschienen so nur in Chrome. Fix: die vier Marker (`nt-sim-dead`, `nt-sim-cut`, `nt-rc-cause`, `nt-rc-victim`) nutzen jetzt `overlay-*` (rendert oben drauf, Cytoscapes battle-tested Selektions-Highlight) → cross-browser sichtbar. Die betroffenen Hosts werden jetzt getönt statt umkränzt (semantisch sogar klarer).
+
+### Changed
+- **Management-Tab aufgehübscht**: Karten mit ruhigem neutralem Rahmen + kräftigem linkem Severity-Akzentstreifen (statt lautem Vollrand in der Signalfarbe); Severity als Pill (Punkt + Label, konsistent mit den Header-Pillen); Sektions-Header mit Host-Count-Badge + Worst-Severity-Dot der Ebene; CPU/RAM-Werte farbcodiert (≥90 % rot, ≥75 % amber).
+
 ## v4.29.1 — 2026-07-06
 
 ### Removed (Code-Bereinigung — tote/ungenutzte Exporte, Altlasten)

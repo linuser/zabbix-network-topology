@@ -18,9 +18,10 @@
 // (baseline minus alive) ihren Ursachen zugerechnet — bei redundanten
 // Pfaden mit mehreren toten Frontier-Hosts teilen die sich die Opfer.
 //
-// Markierung via Underlays (nt-rc-cause rot, nt-rc-victim amber) — gleiche
+// Markierung via Overlays (nt-rc-cause rot, nt-rc-victim amber) — gleiche
 // Begruendung wie whatif.js: Heatmap/Highlight setzen Inline-Styles auf
-// opacity/line-color, Underlay-Properties setzt niemand inline.
+// opacity/line-color, overlay-* setzt niemand inline; overlay rendert oben
+// drauf und damit auch in Firefox (underlay blieb dort unsichtbar).
 //
 // Lebenszyklus wie die Simulation: Tools-Menue-Button toggelt, ESC beendet
 // (toolbar), Re-Render raeumt auf (render-tech), Auto-Refresh rechnet eine

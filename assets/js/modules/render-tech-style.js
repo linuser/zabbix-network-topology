@@ -66,27 +66,29 @@ export function buildCytoscapeStyle(dark) {
             'underlay-opacity': 0.45, 'underlay-shape': 'ellipse',
             'opacity': 1, 'z-index': 999,
         }},
-        // What-if-Ausfallsimulation (whatif.js): grauer Halo = simuliert tot,
-        // roter Halo = dadurch vom Uplink abgeschnitten. Bewusst Underlays —
-        // Inline-Styles (Heatmap/Highlight) ueberschreiben opacity/line-color,
-        // Underlay-Properties setzt niemand inline.
+        // What-if-Ausfallsimulation (whatif.js): grau getoent = simuliert tot,
+        // rot getoent = dadurch vom Uplink abgeschnitten.
+        //
+        // OVERLAY statt underlay: die Nodes haben background-opacity:0
+        // (transparenter Body, nur das SVG-Icon per background-image). Ein
+        // underlay wird HINTER dem Body kompositiert — Firefox ueberspringt
+        // die Ebene bei transparentem Body, die Halos blieben dort unsichtbar
+        // (in Chrome gingen sie). overlay-* rendert OBEN drauf (Cytoscapes
+        // battle-tested Selektions-Highlight) und ist cross-browser zuverlaessig.
+        // Niemand setzt overlay-* inline → kein Heatmap-Konflikt.
         { selector: 'node.nt-sim-dead', style: {
-            'underlay-color': '#475569', 'underlay-padding': 10,
-            'underlay-opacity': 0.55, 'underlay-shape': 'ellipse',
+            'overlay-color': '#475569', 'overlay-padding': 9, 'overlay-opacity': 0.45,
         }},
         { selector: 'node.nt-sim-cut', style: {
-            'underlay-color': '#dc2626', 'underlay-padding': 9,
-            'underlay-opacity': 0.4, 'underlay-shape': 'ellipse',
+            'overlay-color': '#dc2626', 'overlay-padding': 9, 'overlay-opacity': 0.4,
         }},
         // Root-Cause-Analyse (root-cause.js): kraeftig rot = Ursache des
-        // Ausfalls, amber = Folge-Ausfall dahinter.
+        // Ausfalls, amber = Folge-Ausfall dahinter. Gleiche Overlay-Begruendung.
         { selector: 'node.nt-rc-cause', style: {
-            'underlay-color': '#b91c1c', 'underlay-padding': 13,
-            'underlay-opacity': 0.5, 'underlay-shape': 'ellipse',
+            'overlay-color': '#b91c1c', 'overlay-padding': 11, 'overlay-opacity': 0.45,
         }},
         { selector: 'node.nt-rc-victim', style: {
-            'underlay-color': '#f59e0b', 'underlay-padding': 8,
-            'underlay-opacity': 0.3, 'underlay-shape': 'ellipse',
+            'overlay-color': '#f59e0b', 'overlay-padding': 7, 'overlay-opacity': 0.35,
         }},
     ];
 }

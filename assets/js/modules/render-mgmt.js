@@ -162,13 +162,29 @@ export function renderManagement(wrap, nodes, edges) {
     sortedLevels.forEach(function(lvl) {
         const lvlNodes = levels[lvl];
 
-        // Ebenen-Header
+        // Ebenen-Header: Label + Count-Badge + Worst-Severity-Dot der Ebene
         const header = document.createElement('div');
-        header.style.cssText = 'font-size:11px;font-weight:700;color:' + sub
-            + ';text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;'
-            + 'padding-bottom:4px;border-bottom:1px solid ' + bdr
+        header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;'
+            + 'padding-bottom:5px;border-bottom:1px solid ' + bdr
             + ';margin-top:' + (lvl === sortedLevels[0] ? '0' : '24px');
-        header.textContent = MGMT_LEVEL_NAMES[lvl] || t('mgmt.level.generic', { n: lvl });
+        const hLbl = document.createElement('span');
+        hLbl.style.cssText = 'font-size:11px;font-weight:700;color:' + sub
+            + ';text-transform:uppercase;letter-spacing:0.08em';
+        hLbl.textContent = MGMT_LEVEL_NAMES[lvl] || t('mgmt.level.generic', { n: lvl });
+        header.appendChild(hLbl);
+        const hCount = document.createElement('span');
+        hCount.style.cssText = 'font-size:10px;font-weight:700;color:' + sub
+            + ';background:' + (dark ? '#21262d' : '#eef2f6') + ';border-radius:9px;padding:1px 8px';
+        hCount.textContent = String(lvlNodes.length);
+        header.appendChild(hCount);
+        const wsev = levelMaxSev[lvl] || 0;
+        if (wsev > 0) {
+            const wdot = document.createElement('span');
+            wdot.style.cssText = 'width:7px;height:7px;border-radius:50%;flex-shrink:0;background:'
+                + sevColors[wsev];
+            wdot.title = mgmtSevStyle(wsev).label;
+            header.appendChild(wdot);
+        }
         container.appendChild(header);
 
         const row = document.createElement('div');
@@ -189,35 +205,40 @@ export function renderManagement(wrap, nodes, edges) {
             // alle Metriken werden grau dargestellt — analog zum Detail-Panel/
             // zur Tabelle.
             const isOff = !!n.unavailable;
-            const tileBorderColor = isOff ? '#9ca3af' : sev.color;
+            // Severity liest sich ueber einen kraeftigen linken Akzentstreifen
+            // (ruhiger als ein Vollrand in der Signalfarbe), der Rest bleibt
+            // neutral. Offline → grauer Streifen.
+            const accentColor = isOff ? '#9ca3af' : sev.color;
             const tile = document.createElement('div');
             // Acked-Hosts bekommen einen zusätzlichen grünen Outline-Ring
             // (box-shadow), Wartungs-Hosts halb-transparent gedimmt.
             const ackShadow = n.acknowledged ? '0 0 0 2px #22c55e, ' : '';
             tile.style.cssText = [
                 'width:190px;min-height:80px;background:' + card,
-                'border:1.5px solid ' + tileBorderColor,
-                'border-radius:10px;padding:12px 14px',
+                'border:1px solid ' + bdr,
+                'border-left:4px solid ' + accentColor,
+                'border-radius:8px;padding:11px 14px',
                 'cursor:pointer;position:relative',
                 'box-shadow:' + ackShadow + '0 1px 4px rgba(0,0,0,0.07)',
                 'transition:box-shadow 0.15s,transform 0.15s',
                 'box-sizing:border-box',
-                isOff           ? 'opacity:0.55' :
+                isOff           ? 'opacity:0.6' :
                 n.maintenance   ? 'opacity:0.75' : ''
             ].filter(Boolean).join(';');
 
             // Severity-Header (oder Offline-Header bei unreachable)
             const topRow = document.createElement('div');
             topRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px';
-            const dot = document.createElement('div');
-            dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:'
-                + (isOff ? '#9ca3af' : sev.color) + ';flex-shrink:0';
-            const sevLbl = document.createElement('span');
-            sevLbl.style.cssText = 'font-size:10px;font-weight:700;color:'
-                + (isOff ? '#e53742' : sev.color);
-            sevLbl.textContent = isOff ? 'OFFLINE' : sev.label;
-            topRow.appendChild(dot);
-            topRow.appendChild(sevLbl);
+            // Severity als Pill (Punkt + Label) — konsistent mit den Header-Pillen.
+            const pillColor = isOff ? '#e53742' : sev.color;
+            const sevPill = document.createElement('span');
+            sevPill.style.cssText = 'display:inline-flex;align-items:center;gap:5px;'
+                + 'padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;'
+                + 'background:' + pillColor + '1a;color:' + pillColor;
+            sevPill.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;'
+                + 'flex-shrink:0;background:' + pillColor + '"></span>'
+                + (isOff ? 'OFFLINE' : sev.label);
+            topRow.appendChild(sevPill);
 
             // Status-Badges (Wartung, Acked) rechts neben Severity-Label
             if (n.maintenance) {
@@ -265,8 +286,15 @@ export function renderManagement(wrap, nodes, edges) {
             if (n.cpu != null || n.memory != null) {
                 const metrics = document.createElement('div');
                 metrics.style.cssText = 'display:flex;gap:8px;margin-top:6px;font-size:10px;color:' + sub;
-                if (n.cpu    != null) metrics.innerHTML += '<span>CPU ' + n.cpu    + '%</span>';
-                if (n.memory != null) metrics.innerHTML += '<span>RAM ' + n.memory + '%</span>';
+                // Auslastung farbcodiert: >=90 rot, >=75 amber, sonst neutral.
+                function metricSpan(lbl, val) {
+                    const v = +val;
+                    const col = v >= 90 ? '#ef4444' : v >= 75 ? '#f59e0b' : sub;
+                    const w = v >= 75 ? ';font-weight:600' : '';
+                    return '<span style="color:' + col + w + '">' + lbl + ' ' + val + '%</span>';
+                }
+                if (n.cpu    != null) metrics.innerHTML += metricSpan('CPU', n.cpu);
+                if (n.memory != null) metrics.innerHTML += metricSpan('RAM', n.memory);
                 tile.appendChild(metrics);
             }
 
