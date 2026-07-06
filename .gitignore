@@ -6,6 +6,5 @@ Thumbs.db
 *.swo
 *~
 *.zip
-dist/
 nt_smtp_password
 node_modules/
