@@ -118,12 +118,21 @@ network_topology_v6/
 ├── Module.php                 Menü-Eintrag-Registration
 ├── views/
 │   └── network.topology.view.php   HTML-Container + JS-Loader
-├── actions/
-│   ├── NetworkTopologyView.php     Haupt-Action, rendert die Seite
-│   ├── NetworkTopologyData.php     JSON: nodes + edges + traffic + LLDP
-│   ├── NetworkTopologyHistory.php  JSON: Trigger-Events für ein Zeitfenster
-│   ├── NetworkTopologyItems.php    JSON: Items-Pivot (Wildcard-Pattern)
-│   └── NetworkTopologySpark.php    JSON: CPU/Ping-History für Tooltip
+├── actions/                        14 Actions (Daten als JSON via layout.json)
+│   ├── NetworkTopologyView.php               rendert die Seite (layout.htmlpage)
+│   ├── NetworkTopologyData.php               nodes + edges + traffic + LLDP/CDP + Health + topo_changes
+│   ├── NetworkTopologyHistory.php            Trigger-Events für ein Zeitfenster (Stats-Tab)
+│   ├── NetworkTopologyItems.php              Items-Pivot (Wildcard-Pattern)
+│   ├── NetworkTopologyItemHistory.php        Batch-Sparklines für den Pivot
+│   ├── NetworkTopologyItemCount.php          Live-Autocomplete-Count fürs Pattern
+│   ├── NetworkTopologySpark.php              CPU/Ping-History für Tooltip
+│   ├── NetworkTopologyDiscoverPatterns.php   Preset-Pattern-Vorschläge
+│   ├── NetworkTopologyCompliance.php         Compliance-Checks pro Host (Admin)
+│   ├── NetworkTopologyDiag.php               Backend-Telemetrie (Super-Admin)
+│   ├── NetworkTopologyCapacityForecast.php   Link-Kapazitäts-Forecast (Zabbix-Trends)
+│   ├── NetworkTopologyResourceForecast.php   CPU-/Memory-Forecast (Zabbix-Trends)
+│   ├── NetworkTopologyHealthHistory.php      Health-Score-Verlauf (Trapper-Items)
+│   └── NetworkTopologyMaintenance.php        One-Time-Wartung aus der Karte (WRITE, Admin)
 └── assets/
     ├── css/network-topology.css
     └── js/
@@ -164,7 +173,14 @@ network_topology_v6/
 | `toolbar.js` | Top-Toolbar mit allen Buttons |
 | `tooltip.js` | Hover-Tooltip auf Knoten |
 | `traffic.js` | Edge-Animation + Traffic-Heatmap |
-| `utils.js` | esc(), fmt() Helpers |
+| `utils.js` | esc(), fmt(), linkCapacity(), Aggregat-Helpers |
+
+Weitere Feature-Module (Auswahl): `whatif.js` (What-if-Ausfallsimulation),
+`root-cause.js` (Ursache vs. Folge), `render-stats.js` (Stats + Kapazitäts-/Ressourcen-Forecast),
+`render-health.js` (Health-Score + Verlauf), `render-compliance.js`, `render-lldp-quality.js`
+(LLDP-Match-Qualität), `render-diag.js` (Admin-Telemetrie), `path-highlight.js` (BFS-Pfad),
+`diff-mode.js` (Snapshot-Diff), `query.js` (Tabellen-Query-Sprache), `port-labels.js`,
+`topo-notify.js` (Topologie-Änderungs-Toasts), `i18n.js` + `i18n/{de,en}.js` (DE/EN).
 
 ## Sicherheit
 
