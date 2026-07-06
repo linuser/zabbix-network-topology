@@ -2,7 +2,7 @@
     "manifest_version": 2.0,
     "id": "network_topology_v6",
     "name": "Network Topology v6 (Cytoscape)",
-    "version": "4.28.1",
+    "version": "4.29.0",
     "author": "PlaNet Fox | Alexander Fox",
     "description": "Interactive network topology map with Cytoscape.js, clustering and severity filter",
     "namespace": "NetworkTopologyV6",
@@ -54,6 +54,14 @@
         },
         "network.topology.v6.health_history": {
             "class": "NetworkTopologyHealthHistory",
+            "layout": "layout.json"
+        },
+        "network.topology.v6.resource_forecast": {
+            "class": "NetworkTopologyResourceForecast",
+            "layout": "layout.json"
+        },
+        "network.topology.v6.maintenance": {
+            "class": "NetworkTopologyMaintenance",
             "layout": "layout.json"
         }
     }

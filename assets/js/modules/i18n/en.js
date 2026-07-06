@@ -322,4 +322,25 @@ export default {
     'app.error': 'Error: {msg}',
     'agg.no_group': '— No group —',
     'minimap.tip': 'Minimap — click to navigate',
+
+    // Maintenance from the map (context-menu.js)
+    'maint.row':     '🔧 Maintenance {dur}',
+    'maint.confirm': 'Put {host} into maintenance for {dur}? Alerts will be suppressed.',
+    'maint.ok':      'Maintenance created for {host} ({dur}) — active in ~1 min.',
+    'maint.fail':    'Maintenance failed: {msg}',
+
+    // Host resource forecast (render-stats.js)
+    'rf.title':       'Host resource forecast',
+    'rf.caveat':      'Linear projection of CPU%/memory% trends (Zabbix trends, same period as above). Only hosts with % items (system.cpu.util, vm.memory…pused). CPU trends are volatile — memory trends catch leaks/growth more reliably. Thresholds: memory 90%, CPU 85%.',
+    'rf.nogroups':    'No host groups selected.',
+    'rf.nodata':      'No CPU/memory % trends found (trends enabled? % items present?).',
+    'rf.summary':     '{hosts} hosts with resource trends · based on {days} days · thresholds: mem 90%, CPU 85%',
+    'rf.col.host':    'Host',
+    'rf.col.mem':     'Memory',
+    'rf.col.mem_week':'Mem trend/week',
+    'rf.col.mem_eta': 'Mem → 90%',
+    'rf.col.cpu':     'CPU',
+    'rf.col.cpu_eta': 'CPU → 85%',
+    'rf.more':        '+{n} more hosts (due later or stable)',
+    'rf.eta.now':     'threshold reached',
 };

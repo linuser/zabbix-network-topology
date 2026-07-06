@@ -2,6 +2,18 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.0 — 2026-07-06
+
+### Added
+- **Wartung direkt aus der Map** (Rechtsklick auf Host → „🔧 Wartung 1h/4h/8h/24h"): legt über die neue Action `maintenance` eine One-Time-Wartung an (`API::Maintenance.create`, `maintenance_type=0` — Metriken laufen weiter, nur Alarme werden unterdrückt). Die Map wird handlungsfähig statt nur beobachtend („darf ich rebooten?" → Wartung an). Nur für Admins sichtbar (`can_edit` = ≥ ZABBIX_ADMIN); die Action prüft `USER_TYPE_ZABBIX_ADMIN` + Host-Schreibrecht (`editable=true`) serverseitig nochmal. Bestätigungsdialog + Toast; Aktivierung durch Zabbix' Timer in ~1 min.
+- **Host-Ressourcen-Forecast** (Stats-Tab, unter dem Link-Forecast): neue Action `resource_forecast` regressiert die CPU-%/Memory-%-Trends und rechnet die ETA bis zur Sättigung — „Host X erreicht 90 % Memory in ~N Tagen". Tabelle sortiert nach frühester Sättigung (Mem→90 %, CPU→85 %), teilt den Zeitraum-Selektor mit dem Link-Forecast. Nur echte %-Items (`system.cpu.util`, `hrProcessorLoad`, `vm.memory…pused`/`utilization`) — absolute Byte-Items fallen bewusst raus. Cache-Key `uid+groups+days` (bounded, Hosts serverseitig aus den Gruppen abgeleitet).
+
+### Changed
+- Manifest: neue Actions `resource_forecast` + `maintenance` → **„Scan directory" nach dem Update nötig**.
+
+### Notes
+- CPU-Trends sind naturgemäß volatil; der Memory-Trend fängt Leaks/Wachstum zuverlässiger — im UI als Caveat vermerkt.
+
 ## v4.28.1 — 2026-07-05
 
 ### Security

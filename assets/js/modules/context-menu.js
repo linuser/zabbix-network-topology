@@ -53,6 +53,35 @@ export function hideCtx() {
     _ctx.style.display = 'none';
 }
 
+// POST an die Maintenance-Action (WRITE). Same-origin + X-Requested-With
+// als CSRF-Last-Schutz wie im Rest des Moduls; die Action prueft
+// USER_TYPE_ZABBIX_ADMIN + Host-Schreibrecht.
+function _createMaintenance(hostId, durationSec, durLabel, hostLabel) {
+    const base = window.location.pathname.replace('zabbix.php', '');
+    const params = new URLSearchParams();
+    params.append('action', 'network.topology.v6.maintenance');
+    params.append('hostids[]', hostId);
+    params.append('duration', String(durationSec));
+    fetch(base + 'zabbix.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params.toString()
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res && res.ok) {
+                toast(t('maint.ok', { host: hostLabel, dur: durLabel }), 'info');
+            } else {
+                toast(t('maint.fail', { msg: (res && res.error) || '?' }), 'warn');
+            }
+        })
+        .catch(function(e) { toast(t('maint.fail', { msg: e.message }), 'warn'); });
+}
+
 export function showCtx(cx, cy2, d) {
     while (_ctx.firstChild) _ctx.removeChild(_ctx.firstChild);
 
@@ -283,6 +312,21 @@ export function showCtx(cx, cy2, d) {
         _ctx.appendChild(_ctxRow(t('whatif.end_all', { n: simulatedCount() }), '#64748b', function() {
             clearSimulation(window._ntCy);
         }));
+    }
+
+    // Wartung direkt aus der Map (nur Admins — can_edit = >= ZABBIX_ADMIN;
+    // die Action prueft die Rechte serverseitig nochmal). One-Time-Wartung
+    // fuer den Host, Alarme werden unterdrueckt. "darf ich rebooten?" → an.
+    if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
+        const maintSep = document.createElement('div');
+        maintSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+        _ctx.appendChild(maintSep);
+        [[3600, '1h'], [14400, '4h'], [28800, '8h'], [86400, '24h']].forEach(function(dur) {
+            _ctx.appendChild(_ctxRow(t('maint.row', { dur: dur[1] }), '#0d9488', function() {
+                if (!confirm(t('maint.confirm', { host: d.label, dur: dur[1] }))) return;
+                _createMaintenance(hostId, dur[0], dur[1], d.label);
+            }));
+        });
     }
 
     _ctx.style.left = cx + 'px';

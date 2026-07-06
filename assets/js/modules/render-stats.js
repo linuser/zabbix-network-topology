@@ -299,6 +299,7 @@ export function renderStats(wrap, nodes) {
                 fb.style.borderColor = on ? theme.accent : theme.border;
             });
             loadForecast();
+            loadResourceForecast();
         });
         fcBtns.push(b);
         fcCtl.appendChild(b);
@@ -310,6 +311,21 @@ export function renderStats(wrap, nodes) {
     fcRoot.appendChild(fcStatus);
     fcRoot.appendChild(fcSlot);
     root.appendChild(fcRoot);
+
+    // ── Host-Ressourcen-Forecast (CPU-%/Memory-%) — teilt den Zeitraum-
+    // Selektor oben mit dem Link-Forecast (_fcDays).
+    const rfRoot = document.createElement('div');
+    rfRoot.style.cssText = 'margin-top:24px;padding-top:16px;border-top:1px solid ' + theme.border;
+    rfRoot.innerHTML = '<h3 style="margin:0 0 4px;font-size:13px;color:' + theme.sub
+        + ';text-transform:uppercase;letter-spacing:0.04em">' + esc(t('rf.title')) + '</h3>'
+        + '<div style="font-size:11px;color:' + theme.subSoft + ';margin-bottom:10px;max-width:760px">'
+        + esc(t('rf.caveat')) + '</div>';
+    const rfStatus = document.createElement('div');
+    rfStatus.style.cssText = 'font-size:12px;color:' + theme.sub + ';margin-bottom:8px';
+    const rfSlot = document.createElement('div');
+    rfRoot.appendChild(rfStatus);
+    rfRoot.appendChild(rfSlot);
+    root.appendChild(rfRoot);
 
     wrap.appendChild(root);
 
@@ -534,5 +550,135 @@ export function renderStats(wrap, nodes) {
         return { text: '<b style="color:' + col + '">' + esc(t('fc.eta.days', { d: days })) + '</b>' };
     }
 
+    // ETA-Zelle fuer Ressourcen (Schwelle im now-Text generisch statt "80 %").
+    function _rfEtaCell(eta) {
+        if (eta === null) {
+            return { text: '<span style="color:' + theme.subSoft + '">' + esc(t('fc.eta.stable')) + '</span>' };
+        }
+        if (eta <= 0.5) {
+            return { text: '<b style="color:#dc2626">' + esc(t('rf.eta.now')) + '</b>' };
+        }
+        const days = Math.round(eta);
+        if (days > 365) {
+            return { text: '<span style="color:' + theme.subSoft + '">' + esc(t('fc.eta.gt1y')) + '</span>' };
+        }
+        const col = days <= 30 ? '#dc2626' : (days <= 90 ? '#f97316' : '#ca8a04');
+        return { text: '<b style="color:' + col + '">' + esc(t('fc.eta.days', { d: days })) + '</b>' };
+    }
+
+    // ── Host-Ressourcen-Forecast: CPU-%/Memory-% Trends → ETA bis Saettigung.
+    // Schwellen: Memory 90 %, CPU 85 %. Hosts serverseitig aus den Gruppen
+    // abgeleitet (kein Client-hostids → bounded Cache).
+    const RF_MEM_TH = 90, RF_CPU_TH = 85;
+    let _rfSeq = 0;
+    function loadResourceForecast() {
+        const cfg = window.NT_CONFIG || {};
+        const groupids = (cfg && cfg.selected_groupids) || [];
+        if (groupids.length === 0) {
+            rfStatus.textContent = '';
+            rfSlot.innerHTML = '<div style="color:' + theme.subSoft + ';font-style:italic;font-size:12px">'
+                + esc(t('rf.nogroups')) + '</div>';
+            return;
+        }
+        const params = new URLSearchParams();
+        params.append('action', 'network.topology.v6.resource_forecast');
+        params.append('days', String(_fcDays));
+        groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
+
+        rfStatus.textContent = t('fc.loading', { days: _fcDays });
+        rfSlot.innerHTML = '';
+        const seq = ++_rfSeq;
+        fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(),
+              { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (seq !== _rfSeq || !rfSlot.isConnected) return;
+                if (data.error) {
+                    rfStatus.innerHTML = '<span style="color:#dc2626">' + esc(data.error) + '</span>';
+                    return;
+                }
+                renderResourceForecast(data.hosts || {});
+            })
+            .catch(function(e) {
+                if (seq !== _rfSeq) return;
+                rfStatus.innerHTML = '<span style="color:#dc2626">' + esc(e.message) + '</span>';
+            });
+    }
+
+    function _etaTo(metric, threshold) {
+        if (!metric) return null;
+        if (metric.now >= threshold) return 0;
+        if (metric.slope > 0) return (threshold - metric.now) / metric.slope / 86400;
+        return null;
+    }
+
+    function renderResourceForecast(rfHosts) {
+        const rows = [];
+        Object.keys(rfHosts).forEach(function(hid) {
+            const h = rfHosts[hid];
+            if (!h || (!h.cpu && !h.mem)) return;
+            const memEta = _etaTo(h.mem, RF_MEM_TH);
+            const cpuEta = _etaTo(h.cpu, RF_CPU_TH);
+            let soon = null;
+            [memEta, cpuEta].forEach(function(e) {
+                if (e !== null && (soon === null || e < soon)) soon = e;
+            });
+            rows.push({
+                label:   h.label || hid,
+                mem:     h.mem || null,
+                cpu:     h.cpu || null,
+                // slope ist %/s → *604800 = Prozentpunkte/Woche
+                memWeek: h.mem ? h.mem.slope * 604800 : null,
+                memEta:  memEta,
+                cpuEta:  cpuEta,
+                soon:    soon,
+            });
+        });
+        if (rows.length === 0) {
+            rfStatus.textContent = '';
+            rfSlot.innerHTML = '<div style="color:' + theme.subSoft + ';font-style:italic;font-size:12px">'
+                + esc(t('rf.nodata')) + '</div>';
+            return;
+        }
+        // Kritischste zuerst: frueheste Saettigung, dann hoechster Ist-Wert.
+        rows.sort(function(a, b) {
+            if ((a.soon === null) !== (b.soon === null)) return a.soon === null ? 1 : -1;
+            if (a.soon !== null && b.soon !== null && a.soon !== b.soon) return a.soon - b.soon;
+            const am = Math.max(a.mem ? a.mem.now : 0, a.cpu ? a.cpu.now : 0);
+            const bm = Math.max(b.mem ? b.mem.now : 0, b.cpu ? b.cpu.now : 0);
+            return bm - am;
+        });
+        rfStatus.textContent = t('rf.summary', { hosts: rows.length, days: _fcDays });
+        const dash = '<span style="color:' + theme.subSoft + '">—</span>';
+        function pct(m) {
+            if (!m) return { text: dash, style: 'text-align:right' };
+            return { text: '<b style="color:' + _utilColor(m.now) + '">' + m.now.toFixed(0) + '%</b>',
+                     style: 'text-align:right;font-family:monospace' };
+        }
+        const shown = rows.slice(0, 20);
+        rfSlot.innerHTML = buildTopTable(shown, theme,
+            [esc(t('rf.col.host')), esc(t('rf.col.mem')), esc(t('rf.col.mem_week')),
+             esc(t('rf.col.mem_eta')), esc(t('rf.col.cpu')), esc(t('rf.col.cpu_eta'))],
+            function(r) {
+                return [
+                    esc(r.label),
+                    pct(r.mem),
+                    (r.memWeek === null
+                        ? { text: dash, style: 'text-align:right' }
+                        : { text: (r.memWeek >= 0 ? '+' : '') + r.memWeek.toFixed(2) + ' pp',
+                            style: 'text-align:right;font-family:monospace;color:'
+                                + (r.memWeek > 0.3 ? '#f97316' : theme.sub) }),
+                    _rfEtaCell(r.memEta),
+                    pct(r.cpu),
+                    _rfEtaCell(r.cpuEta),
+                ];
+            })
+            + (rows.length > shown.length
+                ? '<div style="font-size:11px;color:' + theme.subSoft + ';margin-top:6px">'
+                    + esc(t('rf.more', { n: rows.length - shown.length })) + '</div>'
+                : '');
+    }
+
     loadForecast();
+    loadResourceForecast();
 }

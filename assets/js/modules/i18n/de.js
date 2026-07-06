@@ -327,4 +327,25 @@ export default {
     'app.error': 'Error: {msg}',
     'agg.no_group': '— Ohne Gruppe —',
     'minimap.tip': 'Minimap — klicken zum Navigieren',
+
+    // Wartung aus der Map (context-menu.js)
+    'maint.row':     '🔧 Wartung {dur}',
+    'maint.confirm': '{host} für {dur} in Wartung setzen? Alarme werden unterdrückt.',
+    'maint.ok':      'Wartung für {host} angelegt ({dur}) — aktiv in ~1 min.',
+    'maint.fail':    'Wartung fehlgeschlagen: {msg}',
+
+    // Host-Ressourcen-Forecast (render-stats.js)
+    'rf.title':       'Host-Ressourcen-Forecast',
+    'rf.caveat':      'Lineare Prognose der CPU-%/Memory-%-Trends (Zabbix-Trends, gleicher Zeitraum wie oben). Nur Hosts mit %-Items (system.cpu.util, vm.memory…pused). CPU-Trends sind volatil — Memory-Trends fangen Leaks/Wachstum zuverlässiger. Schwellen: Memory 90 %, CPU 85 %.',
+    'rf.nogroups':    'Keine Hostgruppen ausgewählt.',
+    'rf.nodata':      'Keine CPU-/Memory-%-Trends gefunden (Trends aktiviert? %-Items vorhanden?).',
+    'rf.summary':     '{hosts} Hosts mit Ressourcen-Trends · Basis: {days} Tage · Schwellen: Mem 90 %, CPU 85 %',
+    'rf.col.host':    'Host',
+    'rf.col.mem':     'Memory',
+    'rf.col.mem_week':'Mem Trend/Woche',
+    'rf.col.mem_eta': 'Mem → 90 %',
+    'rf.col.cpu':     'CPU',
+    'rf.col.cpu_eta': 'CPU → 85 %',
+    'rf.more':        '+{n} weitere Hosts (später fällig oder stabil)',
+    'rf.eta.now':     'Schwelle erreicht',
 };
