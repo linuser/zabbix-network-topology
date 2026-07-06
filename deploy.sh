@@ -62,16 +62,31 @@ case "$MODE" in
     *) echo "❌ Ungueltiger Modus: $MODE (main|widgets|all)" >&2; exit 1 ;;
 esac
 
-# ── SSH-Reachability testen ────────────────────────────────────────────────
+# ── SSH-Connection-Multiplexing ────────────────────────────────────────────
+# Alle ssh/scp-Aufrufe teilen sich EINE Verbindung (ControlMaster). Auf
+# flakigen Links (Paketverlust, kurze stabile Fenster) ueberlebt so der
+# ganze Deploy ueber eine schon offene Verbindung, statt bei jedem der ~10
+# Round-Trips (Reachability, Autodetect, 1-3x scp, Install, Reload) neu zu
+# verbinden — wo jeder einzelne Verbindungsaufbau mittendrin scheitern kann.
+# ServerAlive haelt die Verbindung wach und erkennt echte Abbrueche schnell.
+# ControlMaster degradiert sauber: faellt der Master aus, verbindet ssh
+# normal. Socket-Name aus dem (bereits validierten) Servernamen abgeleitet.
+readonly SSH_CTL="/tmp/nt-ssh-$(printf '%s' "$SERVER" | tr -c 'A-Za-z0-9' '_').ctl"
+readonly SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=$SSH_CTL"
+                   -o ControlPersist=60 -o ServerAliveInterval=5 -o ServerAliveCountMax=3)
+cleanup_ssh() { ssh "${SSH_OPTS[@]}" -O exit -- "$SERVER" 2>/dev/null || true; }
+trap cleanup_ssh EXIT
+
+# ── SSH-Reachability testen (etabliert zugleich die Master-Verbindung) ──────
 echo "→ Test SSH-Zugang: $SERVER"
-if ! ssh -o ConnectTimeout=5 -o BatchMode=yes -- "$SERVER" "true" 2>/dev/null; then
+if ! ssh "${SSH_OPTS[@]}" -o ConnectTimeout=8 -o BatchMode=yes -- "$SERVER" "true" 2>/dev/null; then
     echo "❌ SSH zu $SERVER fehlgeschlagen. Public-Key im ~/.ssh/authorized_keys?" >&2
     exit 1
 fi
 
 # ── Remote-Umgebung autodetecten ───────────────────────────────────────────
 echo "→ Autodetect PHP-FPM-Service + Zabbix-UI-Pfad auf $SERVER"
-REMOTE_ENV=$(ssh -- "$SERVER" bash <<'REMOTE_EOF'
+REMOTE_ENV=$(ssh "${SSH_OPTS[@]}" -- "$SERVER" bash <<'REMOTE_EOF'
 set -e
 # PHP-FPM-Service: die genaue Version finden (php8.2-fpm, php8.3-fpm, ...)
 fpm=$(systemctl list-units --type=service --all 2>/dev/null \
@@ -144,15 +159,15 @@ fi
 
 # ── SCP zum Server ─────────────────────────────────────────────────────────
 echo "→ SCP zum Server"
-if [[ "$MODE" == "main"    || "$MODE" == "all" ]]; then scp -q -- "$TMP_MAIN"   "$SERVER:$REMOTE_MAIN"; fi
+if [[ "$MODE" == "main"    || "$MODE" == "all" ]]; then scp -q "${SSH_OPTS[@]}" -- "$TMP_MAIN"   "$SERVER:$REMOTE_MAIN"; fi
 if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
-    scp -q -- "$TMP_WIDGET" "$SERVER:$REMOTE_WIDGET"
-    scp -q -- "$TMP_HEALTH" "$SERVER:$REMOTE_HEALTH"
+    scp -q "${SSH_OPTS[@]}" -- "$TMP_WIDGET" "$SERVER:$REMOTE_WIDGET"
+    scp -q "${SSH_OPTS[@]}" -- "$TMP_HEALTH" "$SERVER:$REMOTE_HEALTH"
 fi
 
 # ── Installieren auf dem Server ────────────────────────────────────────────
 echo "→ Installiere auf $SERVER"
-ssh -- "$SERVER" bash -s <<REMOTE_INSTALL
+ssh "${SSH_OPTS[@]}" -- "$SERVER" bash -s <<REMOTE_INSTALL
 set -e
 # Variablen hier lokal expandiert (unquoted Heredoc) — die inneren Bloecke
 # nutzen sie remote als Shell-Variablen. Vorher waren die inneren Heredocs

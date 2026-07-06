@@ -8,6 +8,7 @@
 import { esc } from './utils.js';
 import { t } from './i18n.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
+import { NT_LEGEND_COLLAPSED_KEY } from './storage.js';
 
 export function setupLegend(groupNames, nodes) {
     const leg = document.getElementById('nt-legend');
@@ -48,4 +49,96 @@ export function setupLegend(groupNames, nodes) {
     });
 
     leg.innerHTML = html;
+}
+
+// setupBottomLegend — einklappbare Farbcode-Leiste unten im Technical-Canvas.
+// Erklaert, was die Farben bedeuten (Node-Severity mit "Optimal" markiert,
+// Offline/Wartung, Edge-Typen inkl. Weathermap-Skala, Metrik-Ringe). Anders
+// als die Seiten-Legende ist das eine statische Erklaerung ohne Counts.
+// Zustand (ein/ausgeklappt) in localStorage; im Wallboard ausgeblendet.
+export function setupBottomLegend(wrap, dark) {
+    if (!wrap) return;
+    const old = document.getElementById('nt-bottom-legend');
+    if (old) old.remove();
+    if (document.body.classList.contains('nt-wallboard')) return;
+
+    let collapsed = false;
+    try { collapsed = localStorage.getItem(NT_LEGEND_COLLAPSED_KEY) === '1'; } catch (e) {}
+
+    const bg  = dark ? 'rgba(22,27,34,0.92)'  : 'rgba(255,255,255,0.92)';
+    const bdr = dark ? '#30363d' : '#dfe4e7';
+    const txt = dark ? '#c9d1d9' : '#475569';
+
+    const bar = document.createElement('div');
+    bar.id = 'nt-bottom-legend';
+    bar.style.cssText = 'position:absolute;left:10px;bottom:8px;z-index:8;'
+        + 'max-width:calc(100% - 190px);background:' + bg + ';border:1px solid ' + bdr
+        + ';border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12);'
+        + 'font-family:sans-serif;font-size:10.5px;color:' + txt + ';overflow:hidden';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;'
+        + 'user-select:none;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:9.5px';
+    head.innerHTML = '<span style="opacity:0.7">' + esc(t('legend.guide.title')) + '</span>'
+        + '<span id="nt-bl-caret" style="opacity:0.55">' + (collapsed ? '▴' : '▾') + '</span>';
+    bar.appendChild(head);
+
+    function dot(c) {
+        return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'
+            + c + ';vertical-align:middle;margin-right:4px"></span>';
+    }
+    function line(c, dashed) {
+        return '<span style="display:inline-block;width:16px;height:0;border-top:3px '
+            + (dashed ? 'dashed' : 'solid') + ' ' + c + ';vertical-align:middle;margin-right:5px"></span>';
+    }
+    function chip(inner) {
+        return '<span style="display:inline-flex;align-items:center;white-space:nowrap;margin-right:12px">'
+            + inner + '</span>';
+    }
+    function grpTitle(label) {
+        return '<span style="font-weight:700;opacity:0.6;margin-right:8px">' + esc(label) + '</span>';
+    }
+    function rowDiv(inner) {
+        return '<div style="display:flex;flex-wrap:wrap;align-items:center;margin-bottom:3px">' + inner + '</div>';
+    }
+
+    // Knoten (Severity-Ring) — Optimal hervorgehoben, dann Info..Disaster,
+    // Offline (grauer Ring + X) und Wartung/veraltet (gedimmt).
+    let r1 = grpTitle(t('legend.guide.nodes'));
+    r1 += chip(dot(SEV_COL[0]) + '<b>' + esc(t('legend.guide.optimal')) + '</b>');
+    for (let i = 1; i <= 5; i++) r1 += chip(dot(SEV_COL[i]) + esc(SEV_LBL[i]));
+    r1 += chip('<span style="color:#dc2626;font-weight:800;margin-right:4px">✕</span>' + esc(t('legend.guide.offline')));
+    r1 += chip('<span style="opacity:0.4;margin-right:4px">◐</span>' + esc(t('legend.guide.maint')));
+
+    // Verbindungen — LLDP/CDP (gruen gestrichelt), Internet (blau), Down
+    // (rot gestrichelt), plus Weathermap-Auslastungsskala als Verlauf.
+    let r2 = grpTitle(t('legend.guide.edges'));
+    r2 += chip(line('#22c55e', true)  + esc(t('legend.guide.link_lldp')));
+    r2 += chip(line('#3b82f6', false) + esc(t('legend.guide.link_inet')));
+    r2 += chip(line('#dc2626', true)  + esc(t('legend.guide.iface_down')));
+    r2 += chip('<span style="display:inline-block;width:74px;height:7px;border-radius:3px;'
+        + 'margin-right:5px;vertical-align:middle;background:linear-gradient(90deg,'
+        + '#3b82f6,#22c55e,#eab308,#f59e0b,#ef4444,#a21caf)"></span>' + esc(t('legend.guide.weathermap')));
+
+    // Metrik-Ringe (die farbigen Segmente im Node-Icon)
+    let r3 = grpTitle(t('legend.guide.rings'));
+    r3 += chip(dot('#3b82f6') + esc(t('legend.ring.cpu')));
+    r3 += chip(dot('#8b5cf6') + esc(t('legend.ring.memory')));
+    r3 += chip(dot('#22c55e') + esc(t('legend.ring.traffic')));
+    r3 += chip(dot('#f59e0b') + esc(t('legend.ring.ping')));
+
+    const body = document.createElement('div');
+    body.style.cssText = 'padding:2px 10px 8px;max-width:840px;display:' + (collapsed ? 'none' : 'block');
+    body.innerHTML = rowDiv(r1) + rowDiv(r2) + rowDiv(r3);
+    bar.appendChild(body);
+
+    head.addEventListener('click', function() {
+        collapsed = !collapsed;
+        body.style.display = collapsed ? 'none' : 'block';
+        const caret = document.getElementById('nt-bl-caret');
+        if (caret) caret.textContent = collapsed ? '▴' : '▾';
+        try { localStorage.setItem(NT_LEGEND_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) {}
+    });
+
+    wrap.appendChild(bar);
 }

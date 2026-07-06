@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.4 — 2026-07-06
+
+### Added
+- **Farbcode-Leiste unten im Technical-Tab**: einklappbare Legende, die erklärt, was die Farben bedeuten — Knoten-Severity (mit **Optimal** grün hervorgehoben, dann Info/Warning/Average/High/Disaster), Zustände (✕ Offline, gedimmt = Wartung/veraltet), **Verbindungen** (LLDP/CDP grün gestrichelt, Internet-Uplink blau, Interface-down rot gestrichelt, Weathermap-Auslastungsskala als Verlauf) und die Metrik-Ringe (CPU/RAM/Traffic/Ping). Zustand in localStorage, im Wallboard ausgeblendet. Ergänzt die bestehende Seiten-Legende (die nur Counts, aber keine Edge-/Zustands-Bedeutung zeigte).
+
+### Tooling
+- **deploy.sh: SSH-Connection-Multiplexing (ControlMaster)** — alle ssh/scp-Schritte eines Deploys teilen sich jetzt EINE Verbindung statt bei jedem der ~10 Round-Trips neu zu verbinden. Auf flakigen Links (wie zuletzt beim Zielserver) überlebt der ganze Deploy ein einzelnes stabiles Fenster; ServerAlive erkennt echte Abbrüche schnell, ControlMaster degradiert sauber auf normale Verbindungen.
+
 ## v4.29.3 — 2026-07-06
 
 ### Changed (Lizenzwechsel MIT → AGPL-3.0)

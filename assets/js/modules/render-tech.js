@@ -33,7 +33,7 @@ import { notifyTopoChanges } from './topo-notify.js';
 import { showTip, hideTip, moveTip, showEdgeTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
-import { setupLegend } from './legend.js';
+import { setupLegend, setupBottomLegend } from './legend.js';
 import { setupMinimap, showMinimap } from './minimap.js';
 import {
     applyManualLinks, edgeLabel,
@@ -337,6 +337,8 @@ export function render(wrap, nodes, edges, dataUrl) {
     _setupToolbar(cy, wrap, nodes, groupNames, dark, useLayout);
     ensureBaseToolbar(wrap);
     setupLegend(groupNames, nodes);
+    // Farbcode-Erklaerung unten im Canvas (einklappbar, was bedeuten die Farben)
+    setupBottomLegend(wrap, dark);
     updateBadge(nodes);
 
     // Group-Hulls: nur wenn Cluster-Layout aktiv ist (sonst überlappen sich

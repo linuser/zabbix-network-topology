@@ -348,4 +348,17 @@ export default {
     'rf.col.cpu_eta': 'CPU → 85 %',
     'rf.more':        '+{n} weitere Hosts (später fällig oder stabil)',
     'rf.eta.now':     'Schwelle erreicht',
+
+    // Farbcode-Leiste unten im Technical-Tab (legend.js)
+    'legend.guide.title':     'Farbcode',
+    'legend.guide.nodes':     'Knoten',
+    'legend.guide.optimal':   'Optimal',
+    'legend.guide.offline':   'Offline',
+    'legend.guide.maint':     'Wartung / veraltet',
+    'legend.guide.edges':     'Verbindungen',
+    'legend.guide.link_lldp': 'LLDP/CDP-Link',
+    'legend.guide.link_inet': 'Internet-Uplink',
+    'legend.guide.iface_down':'Interface down',
+    'legend.guide.weathermap':'Weathermap: Auslastung niedrig → hoch',
+    'legend.guide.rings':     'Metrik-Ringe',
 };

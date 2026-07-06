@@ -343,4 +343,17 @@ export default {
     'rf.col.cpu_eta': 'CPU → 85%',
     'rf.more':        '+{n} more hosts (due later or stable)',
     'rf.eta.now':     'threshold reached',
+
+    // Bottom color-guide bar in the Technical tab (legend.js)
+    'legend.guide.title':     'Color guide',
+    'legend.guide.nodes':     'Nodes',
+    'legend.guide.optimal':   'Optimal',
+    'legend.guide.offline':   'Offline',
+    'legend.guide.maint':     'Maintenance / stale',
+    'legend.guide.edges':     'Links',
+    'legend.guide.link_lldp': 'LLDP/CDP link',
+    'legend.guide.link_inet': 'Internet uplink',
+    'legend.guide.iface_down':'Interface down',
+    'legend.guide.weathermap':'Weathermap: utilization low → high',
+    'legend.guide.rings':     'Metric rings',
 };
