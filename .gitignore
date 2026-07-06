@@ -8,3 +8,4 @@ Thumbs.db
 *.zip
 dist/
 nt_smtp_password
+node_modules/

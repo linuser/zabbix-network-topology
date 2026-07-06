@@ -133,6 +133,21 @@ echo "  php-fpm:    $FPM_SERVICE"
 echo "  UI-Pfad:    $UI_PATH"
 echo "  Modules:    $REMOTE_MODULES"
 
+# ── JS-Bundle bauen (esbuild) ──────────────────────────────────────────────
+# Das Frontend laedt EIN gebundeltes assets/js/dist/nt-bundle.js (kein Blob-
+# Loader mehr). Vor dem Packen frisch aus den Quellmodulen bauen, damit das
+# deployte Bundle garantiert dem Source entspricht. Braucht node + esbuild
+# (npm install). Fehlt die Toolchain, brechen wir mit klarer Meldung ab —
+# ein veraltetes/fehlendes Bundle wuerde sonst still ausgeliefert.
+if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
+    echo "→ Baue JS-Bundle (esbuild)"
+    if [[ ! -x "$SCRIPT_DIR/node_modules/.bin/esbuild" ]]; then
+        echo "❌ esbuild fehlt — einmalig 'npm install' im Projekt ausführen." >&2
+        exit 1
+    fi
+    ( cd "$SCRIPT_DIR" && npm run build ) || { echo "❌ Bundle-Build fehlgeschlagen." >&2; exit 1; }
+fi
+
 # ── Zips lokal bauen ───────────────────────────────────────────────────────
 echo "→ Baue Zips lokal"
 if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
@@ -141,7 +156,8 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
         --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
         --exclude 'widget' --exclude 'widget_health' --exclude 'dashboards' \
         --exclude 'tools' --exclude 'templates' \
-        --exclude '.DS_Store' --exclude '*.zip' --exclude 'dist' \
+        --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
+        --exclude '.DS_Store' --exclude '*.zip' \
         --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' \
         "$SCRIPT_DIR/" "$STAGE/network_topology_v6/"
     rm -f "$TMP_MAIN"

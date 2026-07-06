@@ -148,15 +148,13 @@ $selected_data = array_map(
 ?>
 
 <?php
-// Cache-Buster gegen klebrigen Browser-Cache (besonders ES-Module in Safari).
-// mtime der Haupt-JS-Datei + manifest.json kombiniert ergibt einen Token,
-// der sich bei jedem Deploy aendert. ES-Module-Sub-Imports bekommen das ?v=
-// nicht automatisch, fallen aber auf ETag/Last-Modified-Validierung zurueck —
-// wenn beim Deploy das ganze Modul-Verzeichnis ersetzt wird (was praktisch
-// immer der Fall ist), werden die mtimes aller Sub-Module mit-aktualisiert
-// und der bedingte GET liefert frischen Code statt Cache.
+// Cache-Buster gegen klebrigen Browser-Cache: mtime des gebundelten
+// nt-bundle.js + CSS + manifest.json ergibt einen ?v=-Token, der sich bei
+// jedem Deploy (Rebuild) aendert. Da nur EINE gebundelte Datei geladen wird,
+// reicht deren mtime — kein Sub-Modul-Cache-Problem mehr wie beim alten
+// Blob-Loader.
 $_nt_module_root = dirname(__DIR__);
-$_nt_main_js  = $_nt_module_root . '/assets/js/network-topology.js';
+$_nt_main_js  = $_nt_module_root . '/assets/js/dist/nt-bundle.js';
 $_nt_main_css = $_nt_module_root . '/assets/css/network-topology.css';
 $_nt_manifest = $_nt_module_root . '/manifest.json';
 $_nt_v = (string) max(
@@ -227,88 +225,11 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
 }
 
 </script>
-<script type="module">
-// ES-Module-Cache-Buster fuer Safari & Co.: statische ES-Imports
-// (import ... from './foo.js') ignorieren den ?v=<mtime>-Buster am Haupt-JS,
-// d.h. nach einem Deploy laedt der Browser zwar das neue network-topology.js
-// aber die importierten Sub-Module aus seinem Cache → ReferenceErrors.
-//
-// Loesung: alle Module per fetch holen, jeden 'from'-Pfad in absolute URLs
-// mit ?v= umschreiben, dann als Blob-URL importieren. Browser sieht eine
-// Kette frischer Blob-URLs, kein Cache-Hit moeglich. ?v=<mtime> aenders
-// sich bei jedem Deploy → frischer Code, ohne Cache-Clear.
-(async function ntBoot() {
-    const V    = "<?= $_nt_v ?>";
-    const BASE = "modules/network_topology_v6/assets/js/";
-    const blobUrls = new Map();   // module-path → Blob-URL
-
-    async function loadModule(path) {
-        if (blobUrls.has(path)) return blobUrls.get(path);
-        // Placeholder gegen zirkulaere Lade-Ketten — wird gleich ueberschrieben
-        blobUrls.set(path, null);
-
-        const r = await fetch(BASE + path + '?v=' + V);
-        if (!r.ok) throw new Error('fetch failed: ' + path + ' (' + r.status + ')');
-        let src = await r.text();
-
-        // Alle 'from "./..."' und 'from "../..."' raussuchen + Sub-Module laden
-        const importRe = /(from\s+['"])(\.\.?\/[\w./-]+\.js)(['"])/g;
-        const subs = {};
-        const matches = [];
-        let m;
-        while ((m = importRe.exec(src)) !== null) matches.push(m[2]);
-        // Pro Sub-Import: relativen Pfad resolven und rekursiv laden (seriell —
-        // die Parallel-Variante aus v4.29.7 wurde revertiert, siehe CHANGELOG).
-        const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '';
-        for (const rel of matches) {
-            // Pfad-Normalisierung: ./foo.js, ../foo.js, ./modules/bar.js
-            let parts = (dir + rel).split('/');
-            const out = [];
-            for (const p of parts) {
-                if (p === '..') out.pop();
-                else if (p && p !== '.') out.push(p);
-            }
-            const resolved = out.join('/');
-            subs[rel] = await loadModule(resolved);
-        }
-        // Imports im Source umschreiben auf Blob-URLs
-        src = src.replace(importRe, function(_m, a, p, c) {
-            return a + (subs[p] || p) + c;
-        });
-
-        const blob = new Blob([src], { type: 'application/javascript' });
-        const url  = URL.createObjectURL(blob);
-        blobUrls.set(path, url);
-        return url;
-    }
-
-    try {
-        const mainUrl = await loadModule('network-topology.js');
-        await import(mainUrl);
-    } catch (e) {
-        // Nicht still scheitern (weisser Screen): sichtbare Meldung statt
-        // leerer Seite. Haeufigste Ursache in gehaerteten Umgebungen ist eine
-        // Content-Security-Policy ohne 'blob:' in script-src — dann blockiert
-        // der Browser die Blob-Module. Der Fehlertext nennt genau das.
-        console.error('[nt-boot] Module-Loader fehlgeschlagen:', e);
-        var box = document.getElementById('nt-loading')
-               || document.getElementById('nt-canvas-wrap') || document.body;
-        if (box) {
-            var msg = String(e && e.message ? e.message : e).replace(/[<>&]/g, function(c) {
-                return c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&amp;';
-            });
-            box.innerHTML = '<div style="padding:20px 24px;max-width:640px;margin:40px auto;'
-                + 'font-family:sans-serif;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;'
-                + 'border-radius:8px;line-height:1.55">'
-                + '<b>Network Topology konnte nicht geladen werden.</b><br>'
-                + 'Modul-Loader-Fehler: ' + msg + '<br>'
-                + '<span style="color:#7f1d1d;font-size:13px">Falls eine Content-Security-Policy aktiv '
-                + 'ist, muss <code>script-src</code> <code>blob:</code> erlauben. Details in der '
-                + 'Browser-Konsole.</span></div>';
-        }
-    }
-})();
-</script>
+<?php // Blob-Loader ersetzt durch ein esbuild-Bundle (IIFE): EINE Datei,
+      // echte Stacktraces, kein Import-Rewriting-Regex. defer = Modul-
+      // defer-Semantik (DOM fertig, cytoscape davor geladen). Nach
+      // JS-Aenderungen `npm run build` (deploy.sh baut ausserdem selbst). ?>
+<script defer src="modules/network_topology_v6/assets/js/dist/nt-bundle.js?v=<?= $_nt_v ?>"></script>
 <script>window.addEventListener("load", function(){
     // Wallboard-Mode: Body-Klasse setzen damit CSS Header/Filter ausblendet,
     // und Auto-Tab-Switch starten (Tech ↔ Geo alle 30s).
