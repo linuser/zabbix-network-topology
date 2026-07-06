@@ -226,6 +226,31 @@ export function cleanupGeo() {
     _tileLayer   = null;
 }
 
+// Leaflet lazy laden: ~144 KB (JS+CSS) werden nur geholt, wenn der Geo-Tab
+// wirklich geoeffnet wird — nicht mehr auf jeder Seite via Script-Tag.
+// Idempotent + memoized; bei Fehler wird der Cache zurueckgesetzt (Retry).
+let _leafletPromise = null;
+function ensureLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (_leafletPromise) return _leafletPromise;
+    const BASE = 'modules/network_topology_v6/assets/js/leaflet/';
+    _leafletPromise = new Promise(function(resolve, reject) {
+        if (!document.getElementById('nt-leaflet-css')) {
+            const link = document.createElement('link');
+            link.id = 'nt-leaflet-css';
+            link.rel = 'stylesheet';
+            link.href = BASE + 'leaflet.css';
+            document.head.appendChild(link);
+        }
+        const s = document.createElement('script');
+        s.src = BASE + 'leaflet.js';
+        s.onload = function() { resolve(); };
+        s.onerror = function() { _leafletPromise = null; reject(new Error('leaflet.js konnte nicht geladen werden')); };
+        document.head.appendChild(s);
+    });
+    return _leafletPromise;
+}
+
 export function renderGeo(wrap, nodes, edges, dataUrl) {
     // Aufräumen vorheriger Tab-State (inklusive eigene Karte falls vorhanden)
     if (window._ntCy)         { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
@@ -309,6 +334,10 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
     mapDiv.style.cssText = 'width:100%;height:100%';
     container.appendChild(mapDiv);
 
+    // Leaflet lazy laden, dann die Karte bauen. Der gesamte L-abhaengige
+    // Block bis zum Funktionsende laeuft deferred im .then().
+    ensureLeaflet().then(function() {
+    if (!mapDiv.isConnected) return;   // Tab inzwischen gewechselt
     // Leaflet-Map initialisieren
     _map = L.map(mapDiv, { zoomControl: true, attributionControl: true });
 
@@ -364,4 +393,9 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
                 .catch(function() { /* Network-Hiccup ignorieren */ });
         }, 30000);
     }
+    }).catch(function(err) {
+        // Leaflet-Load fehlgeschlagen — sichtbare Meldung statt leerer Karte.
+        if (mapDiv) mapDiv.textContent = 'Leaflet konnte nicht geladen werden: '
+            + String((err && err.message) || err);
+    });
 }

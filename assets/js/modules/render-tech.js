@@ -140,9 +140,6 @@ export function render(wrap, nodes, edges, dataUrl) {
     wrap.style.position = 'relative';
     wrap.appendChild(cyDiv);
 
-    if (typeof cytoscapeCola !== 'undefined') {
-        try { cytoscape.use(cytoscapeCola); } catch (e) {}
-    }
     const useLayout = 'cose';
     const dark = !!(document.getElementById('nt-root')
                  && document.getElementById('nt-root').classList.contains('nt-dark'));

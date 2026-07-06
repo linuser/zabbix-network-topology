@@ -3,7 +3,7 @@
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.29.6-blue)
+![Version](https://img.shields.io/badge/version-4.29.7-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 ## Was ist das?
@@ -170,7 +170,7 @@ network_topology_v6/
 
 - **CSRF**: Actions setzen `disableCsrfValidation()` (das Frontend hat keinen Zabbix-Form-Token) und prüfen stattdessen `requireAjax()` (Header `X-Requested-With`) als CSRF-Last-Schutz — same-origin-Sessions können den Header setzen, cross-origin nicht (CORS-Preflight). Die einzige schreibende Action (`maintenance`, One-Time-Wartung aus der Karte) ist zusätzlich auf `USER_TYPE_ZABBIX_ADMIN` + Host-Schreibrecht gegated.
 - **Permissions**: alle Actions prüfen `USER_TYPE_ZABBIX_USER`. Permission-Filter auf Hostgroups via `API::HostGroup()->get()` statt Frontend-trust.
-- **XSS**: zentrale `esc()`-Funktion, kein direktes `innerHTML` mit User-Daten.
+- **XSS / Escaping-Konvention** (verbindlich): Jeder Wert aus Zabbix oder dem Netz — Host-/Gruppen-/Proxy-/Trigger-/Item-Name, Item-**Werte** (String-Items!), Notizen, IP und v. a. **LLDP/CDP-Nachbarnamen** (kommen per SNMP von _entfernten_ Geräten, ein Rogue-Device kann `<script>` announcen) — muss vor dem Einfügen in HTML durch `esc()` (`utils.js`, escapet `& < > " '`) laufen **oder** über `el.textContent` gesetzt werden. Fallstricke: `t()` (i18n) escaped **nicht** (roher Platzhalter-Ersatz) → Werte an `t()` müssen selbst escaped/numerisch sein oder das Ergebnis in `textContent`/`esc()` landen; `toast()` nutzt `textContent` (sicher); Cytoscape-Node-Labels sind Canvas-Text (kein HTML). Der gesamte `innerHTML`-Bestand ist auditiert (0 Lücken). Tripwire fürs Review/CI: [`tools/check-xss.sh`](tools/check-xss.sh) (mit `--strict` Exit 1 bei Verdacht).
 - **SQL-Injection**: `(int)`-Cast oder `dbConditionInt()` bei DB-Zugriffen.
 - **Item-Pattern**: Min 3 Non-Wildcard-Zeichen, max 5000 matching Items.
 - **History**: max 50000 Events, max 7 Tage Range.

@@ -168,12 +168,10 @@ if ($_nt_v === '0' || $_nt_v === '') $_nt_v = (string) time();
 ?>
 <link rel="stylesheet" type="text/css"
       href="modules/network_topology_v6/assets/css/network-topology.css?v=<?= $_nt_v ?>">
-<link rel="stylesheet" type="text/css"
-      href="modules/network_topology_v6/assets/js/leaflet/leaflet.css">
 <script src="modules/network_topology_v6/assets/js/cytoscape.min.js"></script>
-<script src="modules/network_topology_v6/assets/js/cola.min.js"></script>
-<script src="modules/network_topology_v6/assets/js/cytoscape-cola.min.js"></script>
-<script src="modules/network_topology_v6/assets/js/leaflet/leaflet.js"></script>
+<?php // Leaflet (CSS+JS, ~144 KB) wird NICHT upfront geladen — nur im Geo-Tab
+      // gebraucht; render-geo.js injiziert es per ensureLeaflet() lazy.
+      // cola-Layout wurde entfernt (kein LAYOUT_OPTIONS-Eintrag nutzte es). ?>
 
 
 <?php
@@ -244,43 +242,49 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
     const BASE = "modules/network_topology_v6/assets/js/";
     const blobUrls = new Map();   // module-path → Blob-URL
 
-    async function loadModule(path) {
+    // Memoize die in-flight PROMISE pro Modulpfad (statt eines null-Platzhalters):
+    // gleichzeitige Anforderungen desselben Moduls (shared deps) teilen sich EINE
+    // Fetch/Blob-Erzeugung, und Geschwister-Imports laden PARALLEL (Promise.all)
+    // statt seriell — das verkuerzt den First-/Post-Deploy-Load der ~44 Module
+    // deutlich (Fetch-Wasserfall -> Fetch pro Ebene). Zyklen sind by-design
+    // ausgeschlossen (Leaf-Module fuer geteilte Helfer), daher kein Deadlock.
+    function loadModule(path) {
         if (blobUrls.has(path)) return blobUrls.get(path);
-        // Placeholder gegen zirkulaere Lade-Ketten — wird gleich ueberschrieben
-        blobUrls.set(path, null);
+        const promise = (async function() {
+            const r = await fetch(BASE + path + '?v=' + V);
+            if (!r.ok) throw new Error('fetch failed: ' + path + ' (' + r.status + ')');
+            let src = await r.text();
 
-        const r = await fetch(BASE + path + '?v=' + V);
-        if (!r.ok) throw new Error('fetch failed: ' + path + ' (' + r.status + ')');
-        let src = await r.text();
+            // Alle 'from "./..."' / 'from "../..."' raussuchen
+            const importRe = /(from\s+['"])(\.\.?\/[\w./-]+\.js)(['"])/g;
+            const matches = [];
+            let m;
+            while ((m = importRe.exec(src)) !== null) matches.push(m[2]);
 
-        // Alle 'from "./..."' und 'from "../..."' raussuchen + Sub-Module laden
-        const importRe = /(from\s+['"])(\.\.?\/[\w./-]+\.js)(['"])/g;
-        const subs = {};
-        const matches = [];
-        let m;
-        while ((m = importRe.exec(src)) !== null) matches.push(m[2]);
-        // Pro Sub-Import: relativen Pfad resolven und rekursiv laden
-        const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '';
-        for (const rel of matches) {
-            // Pfad-Normalisierung: ./foo.js, ../foo.js, ./modules/bar.js
-            let parts = (dir + rel).split('/');
-            const out = [];
-            for (const p of parts) {
-                if (p === '..') out.pop();
-                else if (p && p !== '.') out.push(p);
-            }
-            const resolved = out.join('/');
-            subs[rel] = await loadModule(resolved);
-        }
-        // Imports im Source umschreiben auf Blob-URLs
-        src = src.replace(importRe, function(_m, a, p, c) {
-            return a + (subs[p] || p) + c;
-        });
+            const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '';
+            // Sub-Imports PARALLEL resolven + laden
+            const entries = await Promise.all(matches.map(async function(rel) {
+                // Pfad-Normalisierung: ./foo.js, ../foo.js, ./modules/bar.js
+                const parts = (dir + rel).split('/');
+                const out = [];
+                for (const p of parts) {
+                    if (p === '..') out.pop();
+                    else if (p && p !== '.') out.push(p);
+                }
+                return [rel, await loadModule(out.join('/'))];
+            }));
+            const subs = {};
+            for (const e of entries) subs[e[0]] = e[1];
 
-        const blob = new Blob([src], { type: 'application/javascript' });
-        const url  = URL.createObjectURL(blob);
-        blobUrls.set(path, url);
-        return url;
+            // Imports im Source auf Blob-URLs umschreiben
+            src = src.replace(importRe, function(_m, a, p, c) {
+                return a + (subs[p] || p) + c;
+            });
+            const blob = new Blob([src], { type: 'application/javascript' });
+            return URL.createObjectURL(blob);
+        })();
+        blobUrls.set(path, promise);
+        return promise;
     }
 
     try {

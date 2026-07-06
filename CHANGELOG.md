@@ -2,6 +2,19 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.7 — 2026-07-06
+
+### Performance
+- **Leaflet lazy geladen** (~144 KB JS + CSS): wurde bisher per Script-Tag auf **jeder** Seite geladen, gebraucht wird es aber nur im Geo-Tab. `render-geo.js` injiziert Leaflet jetzt per `ensureLeaflet()` erst beim Öffnen des Geo-Tabs (memoized, mit Fehlermeldung bei Load-Fehler). Wer nie auf Geo klickt, spart den kompletten Download.
+- **cola-Layout entfernt** (~82 KB: `cola.min.js` 78 KB + `cytoscape-cola.min.js`): war upfront geladen, aber **kein** `LAYOUT_OPTIONS`-Eintrag nutzte es — reiner toter Ballast. Script-Tags + `cytoscape.use()`-Registrierung entfernt, Dateien gelöscht.
+- **Modul-Loader parallelisiert**: der Blob-Loader holte die ~44 ESM-Module **seriell** (Fetch-Wasserfall, hinter dem die App wartet). Jetzt lädt er Geschwister-Imports **parallel** (`Promise.all`) und memoized die in-flight Promise pro Modul (statt `null`-Platzhalter) → deutlich schnellerer First-/Post-Deploy-Load. Zyklen bleiben by-design ausgeschlossen.
+
+Summe: **~226 KB weniger JS** beim Initial-Load der Nicht-Geo-Tabs, plus parallele statt serielle Modul-Fetches.
+
+### Security / Maintainability
+- **Escaping-Konvention dokumentiert** (README, Abschnitt Sicherheit): untrusted Zabbix-/Netz-Daten (inkl. LLDP/CDP-Nachbarnamen von entfernten Geräten) müssen vor HTML durch `esc()` oder `textContent`; `t()` escaped nicht; `toast()` nutzt `textContent`.
+- **XSS-Tripwire `tools/check-xss.sh`** (neu): heuristischer Grep-Guard, der neue innerHTML-Stellen mit unescapten untrusted Werten flaggt (`--strict` → Exit 1 für CI). Auf dem aktuellen Code 0 Treffer. Repo-only (nicht im Modul-Zip).
+
 ## v4.29.6 — 2026-07-06
 
 ### Changed
