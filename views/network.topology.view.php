@@ -1,4 +1,6 @@
 <?php
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 PlaNet Fox / Alexander Fox
 /**
  * Network Topology View — Zabbix 7.4
  */
@@ -138,7 +140,7 @@ $selected_data = array_map(
                         'Network Topology v6 ' . (static function() {
                             $m = @json_decode((string) @file_get_contents(dirname(__DIR__) . '/manifest.json'), true);
                             return 'v' . (is_array($m) && !empty($m['version']) ? $m['version'] : '?');
-                        })() . ' — © Alexander Fox | PlaNet Fox — MIT License'
+                        })() . ' — © Alexander Fox | PlaNet Fox — AGPL-3.0'
                     ))
             )
     )

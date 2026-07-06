@@ -1,4 +1,6 @@
 <?php
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 PlaNet Fox / Alexander Fox
 /**
  * Network Topology — View Action (Zabbix 7.4)
  * Fixes: BUG-7 (imports), BUG-8 (fatal response), BUG-9 (API import)

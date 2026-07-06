@@ -1,4 +1,7 @@
-<?php declare(strict_types = 0);
+<?php
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 PlaNet Fox / Alexander Fox
+declare(strict_types = 0);
 
 /**
  * NT Health Score Widget - View

@@ -1,4 +1,6 @@
 <?php
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;

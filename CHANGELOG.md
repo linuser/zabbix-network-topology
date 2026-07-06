@@ -2,6 +2,12 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.3 — 2026-07-06
+
+### Changed (Lizenzwechsel MIT → AGPL-3.0)
+- **Lizenz auf AGPL-3.0-or-later umgestellt** (wie Zabbix 7). Begründung: Das Modul ist ein abgeleitetes Werk des Zabbix-Frontends — es leitet von Zabbix-Klassen (`CController` u. a.) ab und läuft im selben Prozess; Zabbix 7 steht unter AGPL-3.0, damit unterliegt das kombinierte Werk faktisch der AGPL. MIT auf einem AGPL-Derivat versprach Freiheiten, die fürs Gesamtwerk gar nicht gewährt werden können. AGPL-3.0 ist das ehrliche, eindeutige Label.
+- `LICENSE` → offizieller AGPL-3.0-Volltext (verbatim von gnu.org). Footer, README-Badge + Lizenz-Sektion, `SPDX-License-Identifier: AGPL-3.0-or-later`-Header in allen 23 PHP-Dateien + JS-Entry. Copyright bleibt bei PlaNet Fox / Alexander Fox.
+
 ## v4.29.2 — 2026-07-06
 
 ### Fixed

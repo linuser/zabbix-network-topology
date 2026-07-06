@@ -3,8 +3,8 @@
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.20.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-4.29.3-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 ## Features
 
@@ -182,7 +182,14 @@ network_topology_v6/
 
 ## Lizenz
 
-MIT
+**AGPL-3.0-or-later** — © 2026 PlaNet Fox / Alexander Fox. Volltext: [LICENSE](LICENSE).
+
+Dieses Modul ist ein abgeleitetes Werk des Zabbix-Frontends — es leitet von
+Zabbix-Klassen (`CController` u. a.) ab und läuft im selben Prozess. Zabbix 7
+steht unter der AGPL-3.0; das kombinierte Werk unterliegt daher ebenfalls der
+AGPL-3.0. Kurz: nutzen, weitergeben und ändern erlaubt — wer es (auch als
+Netzwerk-Dienst) bereitstellt, muss den Quellcode inkl. eigener Änderungen unter
+AGPL-3.0 verfügbar machen.
 
 ## Autor
 
