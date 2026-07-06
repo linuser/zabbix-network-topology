@@ -242,49 +242,44 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
     const BASE = "modules/network_topology_v6/assets/js/";
     const blobUrls = new Map();   // module-path → Blob-URL
 
-    // Memoize die in-flight PROMISE pro Modulpfad (statt eines null-Platzhalters):
-    // gleichzeitige Anforderungen desselben Moduls (shared deps) teilen sich EINE
-    // Fetch/Blob-Erzeugung, und Geschwister-Imports laden PARALLEL (Promise.all)
-    // statt seriell — das verkuerzt den First-/Post-Deploy-Load der ~44 Module
-    // deutlich (Fetch-Wasserfall -> Fetch pro Ebene). Zyklen sind by-design
-    // ausgeschlossen (Leaf-Module fuer geteilte Helfer), daher kein Deadlock.
-    function loadModule(path) {
+    async function loadModule(path) {
         if (blobUrls.has(path)) return blobUrls.get(path);
-        const promise = (async function() {
-            const r = await fetch(BASE + path + '?v=' + V);
-            if (!r.ok) throw new Error('fetch failed: ' + path + ' (' + r.status + ')');
-            let src = await r.text();
+        // Placeholder gegen zirkulaere Lade-Ketten — wird gleich ueberschrieben
+        blobUrls.set(path, null);
 
-            // Alle 'from "./..."' / 'from "../..."' raussuchen
-            const importRe = /(from\s+['"])(\.\.?\/[\w./-]+\.js)(['"])/g;
-            const matches = [];
-            let m;
-            while ((m = importRe.exec(src)) !== null) matches.push(m[2]);
+        const r = await fetch(BASE + path + '?v=' + V);
+        if (!r.ok) throw new Error('fetch failed: ' + path + ' (' + r.status + ')');
+        let src = await r.text();
 
-            const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '';
-            // Sub-Imports PARALLEL resolven + laden
-            const entries = await Promise.all(matches.map(async function(rel) {
-                // Pfad-Normalisierung: ./foo.js, ../foo.js, ./modules/bar.js
-                const parts = (dir + rel).split('/');
-                const out = [];
-                for (const p of parts) {
-                    if (p === '..') out.pop();
-                    else if (p && p !== '.') out.push(p);
-                }
-                return [rel, await loadModule(out.join('/'))];
-            }));
-            const subs = {};
-            for (const e of entries) subs[e[0]] = e[1];
+        // Alle 'from "./..."' und 'from "../..."' raussuchen + Sub-Module laden
+        const importRe = /(from\s+['"])(\.\.?\/[\w./-]+\.js)(['"])/g;
+        const subs = {};
+        const matches = [];
+        let m;
+        while ((m = importRe.exec(src)) !== null) matches.push(m[2]);
+        // Pro Sub-Import: relativen Pfad resolven und rekursiv laden (seriell —
+        // die Parallel-Variante aus v4.29.7 wurde revertiert, siehe CHANGELOG).
+        const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '';
+        for (const rel of matches) {
+            // Pfad-Normalisierung: ./foo.js, ../foo.js, ./modules/bar.js
+            let parts = (dir + rel).split('/');
+            const out = [];
+            for (const p of parts) {
+                if (p === '..') out.pop();
+                else if (p && p !== '.') out.push(p);
+            }
+            const resolved = out.join('/');
+            subs[rel] = await loadModule(resolved);
+        }
+        // Imports im Source umschreiben auf Blob-URLs
+        src = src.replace(importRe, function(_m, a, p, c) {
+            return a + (subs[p] || p) + c;
+        });
 
-            // Imports im Source auf Blob-URLs umschreiben
-            src = src.replace(importRe, function(_m, a, p, c) {
-                return a + (subs[p] || p) + c;
-            });
-            const blob = new Blob([src], { type: 'application/javascript' });
-            return URL.createObjectURL(blob);
-        })();
-        blobUrls.set(path, promise);
-        return promise;
+        const blob = new Blob([src], { type: 'application/javascript' });
+        const url  = URL.createObjectURL(blob);
+        blobUrls.set(path, url);
+        return url;
     }
 
     try {

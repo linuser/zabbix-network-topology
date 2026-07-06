@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.8 — 2026-07-06
+
+### Fixed (Hotfix — v4.29.7 lud nicht mehr)
+- **Modul blieb bei „Loading topology…" hängen** (weißer Canvas, Tabs/Menüs fehlten). Ursache: der in v4.29.7 parallelisierte Blob-Loader deadlockte. Der Import-Regex des Loaders matcht `from '…'` **auch in Kommentaren** — und `i18n.js` hatte einen Verwendungs-Kommentar `import { t } from './i18n.js';`, also eine **Selbst-Referenz**. Der alte serielle Loader verkraftete das (Selbst-Import blieb harmlos im Kommentar); der parallele wartete via `Promise.all` auf die **eigene** noch offene Promise → Deadlock, kein Fehler, nur endloses Laden.
+- **Fix:** Loader zurück auf die serielle Variante (wie ≤ v4.29.6, bewährt). Zusätzlich den `i18n.js`-Kommentar entschärft, damit der Regex ihn nicht mehr als Import matcht.
+- Die übrigen v4.29.7-Optimierungen bleiben: **Leaflet lazy** (−144 KB) und **cola entfernt** (−82 KB) sind unabhängig vom Loader und funktionieren.
+
+### Notes
+- Ein erneuter Anlauf zur Loader-Parallelisierung müsste vor dem Import-Matching **Kommentare strippen** oder **Selbst-Imports überspringen** (`resolved === path`). Bis dahin bleibt der serielle Loader.
+
 ## v4.29.7 — 2026-07-06
 
 ### Performance

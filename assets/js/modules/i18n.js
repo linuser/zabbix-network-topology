@@ -5,8 +5,10 @@
 // Englisch. Fallback-Kette pro Key: aktive Sprache → Englisch → Key selbst
 // (so faellt ein vergessener Eintrag im UI sofort auf, statt leer zu sein).
 //
-// Verwendung:
-//   import { t } from './i18n.js';
+// Verwendung (Import ohne Quotes geschrieben, damit der Blob-Loader-Regex
+// den from-'...'-Ausdruck NICHT als echten Sub-Import matcht — das ergab eine
+// Selbst-Referenz und liess den parallelen Loader deadlocken):
+//   import { t } from  ./i18n.js
 //   t('health.title')                          → "Topology Health"
 //   t('health.summary', { groups: 8, avg: 72 }) → Platzhalter {groups} etc.
 //
