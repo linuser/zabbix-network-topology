@@ -74,6 +74,37 @@ function updateBadge(nodes) {
         + '<span style="color:#ef4444"><b>' + down + '</b> ' + esc(t('tech.badge.down')) + '</span>';
 }
 
+// ── Auto-Refresh-Fehler dezent sichtbar machen ─────────────────────────────
+// Der 30s-Refresh zeigte Fehler bisher gar nicht (kein .catch, data.error
+// ignoriert) → bei anhaltendem Backend-/Netz-Problem sah man still veraltete
+// Daten. Nach >=2 Fehlversuchen in Folge ein kleines amber Badge oben rechts;
+// verschwindet beim naechsten erfolgreichen Refresh. Ein einzelner Hiccup
+// meldet noch nichts (Rausch-Vermeidung).
+let _refreshFails = 0;
+function _clearRefreshWarn() {
+    _refreshFails = 0;
+    const b = document.getElementById('nt-refresh-warn');
+    if (b) b.remove();
+}
+function _markRefresh(ok) {
+    if (ok) { _clearRefreshWarn(); return; }
+    _refreshFails++;
+    if (_refreshFails < 2) return;
+    const wrap = document.getElementById('nt-canvas-wrap');
+    if (!wrap) return;
+    let b = document.getElementById('nt-refresh-warn');
+    if (!b) {
+        b = document.createElement('div');
+        b.id = 'nt-refresh-warn';
+        b.style.cssText = 'position:absolute;top:10px;right:12px;z-index:9;'
+            + 'background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:6px;'
+            + 'padding:4px 10px;font:600 11px sans-serif;box-shadow:0 2px 6px rgba(0,0,0,0.12)';
+        wrap.appendChild(b);
+    }
+    b.textContent = t('tech.refresh_stale');
+    b.title = t('tech.refresh_stale.tip', { n: _refreshFails });
+}
+
 // ── ntShowExportOverlay: wird vom Export-Menü in setupToolbar aufgerufen ──
 // (im Hauptmodul). Daher nicht hier — bleibt im Hauptmodul.
 
@@ -181,6 +212,12 @@ export function render(wrap, nodes, edges, dataUrl) {
         layout: _initialLayout,
         userZoomingEnabled: true, userPanningEnabled: true, boxSelectionEnabled: false,
         minZoom: 0.1, maxZoom: 4,
+        // Performance bei grossen Graphen (~150-200+ Hosts): Kanten waehrend
+        // Pan/Zoom ausblenden und den Viewport als Textur cachen -> deutlich
+        // fluessigeres Pannen/Zoomen. motionBlur aus (Default) gegen Ghosting.
+        hideEdgesOnViewport: true,
+        textureOnViewport: true,
+        motionBlur: false,
         // Mobile: Long-Press auf einen Knoten öffnet das Kontextmenü.
         // Default 1000ms ist zu langsam, User-konfigurierbar 300/500/800ms.
         tapholdDuration: loadTapholdMs(),
@@ -414,6 +451,7 @@ export function render(wrap, nodes, edges, dataUrl) {
 
     // ── Auto-Refresh (alle 30s) ────────────────────────────────────────────
     if (window._ntRefreshTimer) clearInterval(window._ntRefreshTimer);
+    _clearRefreshWarn();   // frischer Render → Refresh-Fehler-Status zuruecksetzen
     window._ntRefreshTimer = setInterval(function() {
         if (window._ntRefreshOn === false || !window._ntCy) return;
         // Pause waehrend Drag — sonst zerlegt der Refresh den User-Workflow
@@ -425,13 +463,15 @@ export function render(wrap, nodes, edges, dataUrl) {
         })
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                if (data && data.nodes) {
-                    window._ntLastData = window._ntLastData || {};
-                    window._ntLastData.nodes = data.nodes;
-                    window._ntLastData.edges = data.edges || [];
-                    window._ntLastData.lldp_quality = data.lldp_quality || [];
-                    notifyTopoChanges(data.topo_changes);
-                }
+                // Backend-Fehler (data.error) oder leere Antwort → Badge zeigen,
+                // letzten guten Stand behalten statt still zu ueberschreiben.
+                if (!data || !data.nodes) { _markRefresh(false); return; }
+                _markRefresh(true);
+                window._ntLastData = window._ntLastData || {};
+                window._ntLastData.nodes = data.nodes;
+                window._ntLastData.edges = data.edges || [];
+                window._ntLastData.lldp_quality = data.lldp_quality || [];
+                notifyTopoChanges(data.topo_changes);
                 // In Group-View komplett re-rendern (Aggregate können sich
                 // strukturell ändern, In-Place-Update wäre fragil)
                 let inGroupView = false;
@@ -477,6 +517,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                 // Aktive Root-Cause-Analyse mit frischen Offline-Flags neu
                 // rechnen (nicht-verbose: keine Toast-Flut alle 30s).
                 if (isRootCauseActive()) runRootCause(window._ntCy, false);
-            });
+            })
+            .catch(function() { _markRefresh(false); });   // Netz-/Parse-Fehler → Badge
     }, 30000);
 }

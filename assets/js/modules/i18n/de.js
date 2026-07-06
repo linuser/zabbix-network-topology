@@ -361,4 +361,8 @@ export default {
     'legend.guide.iface_down':'Interface down',
     'legend.guide.weathermap':'Weathermap: Auslastung niedrig → hoch',
     'legend.guide.rings':     'Metrik-Ringe',
+
+    // Auto-Refresh-Fehler-Badge (render-tech.js)
+    'tech.refresh_stale':     '⚠ Daten veraltet — Refresh-Fehler',
+    'tech.refresh_stale.tip': '{n} fehlgeschlagene Aktualisierungen in Folge. Angezeigt wird der letzte erfolgreiche Stand.',
 };

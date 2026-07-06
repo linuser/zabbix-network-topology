@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.9 — 2026-07-06
+
+### Performance
+- **Cytoscape-Render-Flags für große Graphen**: `hideEdgesOnViewport` + `textureOnViewport` (Kanten während Pan/Zoom ausblenden, Viewport als Textur cachen) + `motionBlur:false` → spürbar flüssigeres Pannen/Zoomen ab ~150–200 Hosts. Config-only, keine Verhaltensänderung an Daten/Interaktion.
+
+### Fixed / Robustness
+- **Auto-Refresh-Fehler werden jetzt sichtbar**: der 30s-Refresh hatte **kein `.catch`** (Netz-/Parse-Fehler = stille unhandled rejection) und ignorierte `data.error`/leere Antworten → man sah still veraltete Daten. Jetzt: nach **≥ 2 fehlgeschlagenen Aktualisierungen in Folge** ein dezentes amber Badge oben rechts („⚠ Daten veraltet — Refresh-Fehler", Tooltip mit Fehlerzahl); verschwindet beim nächsten erfolgreichen Refresh. Ein einzelner Hiccup meldet noch nichts (Rausch-Vermeidung). Bei Fehler bleibt der letzte gute Stand stehen statt überschrieben zu werden.
+
 ## v4.29.8 — 2026-07-06
 
 ### Fixed (Hotfix — v4.29.7 lud nicht mehr)

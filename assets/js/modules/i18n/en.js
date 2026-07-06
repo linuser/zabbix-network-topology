@@ -356,4 +356,8 @@ export default {
     'legend.guide.iface_down':'Interface down',
     'legend.guide.weathermap':'Weathermap: utilization low → high',
     'legend.guide.rings':     'Metric rings',
+
+    // Auto-refresh failure badge (render-tech.js)
+    'tech.refresh_stale':     '⚠ Data stale — refresh failed',
+    'tech.refresh_stale.tip': '{n} consecutive failed refreshes. Showing the last successful state.',
 };
