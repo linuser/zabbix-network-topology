@@ -2,6 +2,12 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.30.0 — 2026-07-06
+
+### Changed (Build-Step — Blob-Loader ersetzt)
+- **Frontend-JS wird jetzt per esbuild gebündelt** (`assets/js/dist/nt-bundle.js`, IIFE) und per **einzelnem `<script defer>`** geladen — statt des bisherigen Blob-Modul-Loaders, der Imports zur Laufzeit per Regex umschrieb. Vorteile: esbuild löst Imports zur **Build-Zeit über den echten AST** auf (die Kommentar-Regex-Deadlock-Klasse aus v4.29.7 ist damit strukturell unmöglich), echte Stacktraces, CSP-freundlich (kein `blob:` mehr nötig), ein Request statt ~44.
+- Toolchain: `package.json` + `npm run build`; `deploy.sh` baut das Bundle vor dem Packen frisch aus dem Source (bricht ab, wenn esbuild fehlt). Das gebaute Bundle liegt auch im Repo (Download→unzip→läuft ohne npm). Cache-Buster auf Bundle-mtime. `cytoscape`/Leaflet bleiben externe Globals (Leaflet weiter lazy).
+
 ## v4.29.9 — 2026-07-06
 
 ### Performance
