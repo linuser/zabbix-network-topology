@@ -83,13 +83,21 @@ class NetworkTopologyCapacityForecast extends CController {
 
         // APCu-Cache: user-scoped (Permissions!). Trends aendern sich nur
         // stuendlich — der Cache nimmt Tab-Wechseln/Reloads den DB-Druck.
+        //
+        // Cache-Key bewusst NUR aus uid+groups+days — NICHT aus der konkreten
+        // hostids-Liste. Die kommt vom Client (bis MAX_HOSTS) und haette als
+        // Key-Bestandteil 2^n Teilmengen-Kombinationen erzeugt, also praktisch
+        // unbegrenzt viele APCu-Eintraege pro User (Speicherdruck-DoS). Mit
+        // groups+days ist der Key-Raum bounded wie bei der Topo-Baseline in
+        // Data.php. Tradeoff: schickt derselbe User im 30-min-Fenster eine
+        // andere hostids-Auswahl (z.B. neue Edge aufgetaucht), sieht er bis
+        // zum TTL-Ablauf das gecachte Ergebnis der ersten Auswahl. Fuer einen
+        // stuendlich rollenden Forecast akzeptabel; der Cache ist user-scoped,
+        // ein manipulierter Subset trifft nur den eigenen View.
         $uid = (int) (\CWebUser::$data['userid'] ?? 0);
         $gk = array_map('strval', $groupids);
         sort($gk);
-        $hk = array_map('strval', $hostids);
-        sort($hk);
-        $cache_key = 'nt_fc_' . $uid . '_'
-            . md5($days . '|' . implode(',', $gk) . '|' . implode(',', $hk));
+        $cache_key = 'nt_fc_' . $uid . '_' . md5($days . '|' . implode(',', $gk));
         if ($uid > 0 && function_exists('apcu_fetch')) {
             $ok = false;
             $cached = apcu_fetch($cache_key, $ok);

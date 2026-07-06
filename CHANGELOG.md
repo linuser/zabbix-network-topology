@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.28.1 — 2026-07-05
+
+### Security
+- **Kapazitäts-Forecast APCu-Cache-Key gehärtet**: Der Cache-Key enthielt die vom Client gelieferte `hostids`-Liste (bis 200 Einträge) → ein authentifizierter User hätte durch Variieren der Teilmengen praktisch unbegrenzt viele APCu-Einträge (je 30 min TTL) erzeugen können (Speicherdruck-DoS; kein Datenleck, da user-scoped und permission-gefiltert). Key nutzt jetzt nur noch `uid+groups+days` — bounded wie die Topo-Baseline in Data.php. (Bug-/Security-Audit über den Code seit v4.26.0.)
+
+### Audit-Ergebnis
+- Zwei parallele Audits (Korrektheit/Performance + Security) über Weathermap, Topo-Alerting, What-if, Kapazitäts-Forecast, Health-History, Root-Cause, Port-Labels und die i18n-Migration. Verifiziert sauber: AuthZ beider neuer Actions (`capacity_forecast`, `health_history`) konsistent mit dem etablierten Muster, keine Permission-Bypässe beim Trend-/History-Lesen (alles über permission-gefilterte API-Calls), keine XSS-Sinks (host-/user-stammende Strings escaped, Port-Labels als Cytoscape-Canvas-Text statt innerHTML), keine Command-Injection im Sender-Skript (sauberes Quoting, `\n`-Stripping), Health-Score-Formel Backend↔Frontend deckungsgleich, keine Division-durch-null in Forecast/Weathermap/Health-Chart.
+
 ## v4.28.0 — 2026-07-05
 
 ### Added
