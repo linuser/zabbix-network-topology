@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.29.6 — 2026-07-06
+
+### Changed
+- **Farbcode-Leiste (Technical-Tab) dezenter**: standardmäßig eingeklappt (nur ein kleines „Color guide"-Chip unten links statt des präsenten weißen Kastens) — die Wahl wird gemerkt. Ausgeklappt jetzt leichter: transparenter (leichter Blur), weicherer Schatten, gedämpfter Header; volle Deckkraft bei Hover.
+
 ## v4.29.5 — 2026-07-06
 
 ### Changed (Pre-Release-Politur — Branding, Sicherheit, Doku)

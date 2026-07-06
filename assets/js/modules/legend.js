@@ -62,25 +62,28 @@ export function setupBottomLegend(wrap, dark) {
     if (old) old.remove();
     if (document.body.classList.contains('nt-wallboard')) return;
 
-    let collapsed = false;
-    try { collapsed = localStorage.getItem(NT_LEGEND_COLLAPSED_KEY) === '1'; } catch (e) {}
+    // Standardmaessig eingeklappt (dezent): nur ein kleines "Color guide"-
+    // Chip in der Ecke. Ausgeklappt bleibt es nur, wenn der User es explizit
+    // aufgeklappt hat ('0' im Storage) — die Wahl wird gemerkt.
+    let collapsed = true;
+    try { collapsed = localStorage.getItem(NT_LEGEND_COLLAPSED_KEY) !== '0'; } catch (e) {}
 
-    const bg  = dark ? 'rgba(22,27,34,0.92)'  : 'rgba(255,255,255,0.92)';
-    const bdr = dark ? '#30363d' : '#dfe4e7';
+    const bg  = dark ? 'rgba(22,27,34,0.80)'  : 'rgba(255,255,255,0.82)';
+    const bdr = dark ? '#2a2f36' : '#e5e9ee';
     const txt = dark ? '#c9d1d9' : '#475569';
 
     const bar = document.createElement('div');
     bar.id = 'nt-bottom-legend';
     bar.style.cssText = 'position:absolute;left:10px;bottom:8px;z-index:8;'
         + 'max-width:calc(100% - 190px);background:' + bg + ';border:1px solid ' + bdr
-        + ';border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.12);'
-        + 'font-family:sans-serif;font-size:10.5px;color:' + txt + ';overflow:hidden';
+        + ';border-radius:7px;box-shadow:0 1px 3px rgba(0,0,0,0.05);backdrop-filter:blur(2px);'
+        + 'font-family:sans-serif;font-size:10.5px;color:' + txt + ';overflow:hidden;opacity:0.9';
 
     const head = document.createElement('div');
-    head.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;'
-        + 'user-select:none;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:9.5px';
-    head.innerHTML = '<span style="opacity:0.7">' + esc(t('legend.guide.title')) + '</span>'
-        + '<span id="nt-bl-caret" style="opacity:0.55">' + (collapsed ? '▴' : '▾') + '</span>';
+    head.style.cssText = 'display:flex;align-items:center;gap:7px;padding:4px 9px;cursor:pointer;'
+        + 'user-select:none;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;font-size:9px;opacity:0.6';
+    head.innerHTML = '<span>' + esc(t('legend.guide.title')) + '</span>'
+        + '<span id="nt-bl-caret" style="opacity:0.7">' + (collapsed ? '▴' : '▾') + '</span>';
     bar.appendChild(head);
 
     function dot(c) {
@@ -139,6 +142,10 @@ export function setupBottomLegend(wrap, dark) {
         if (caret) caret.textContent = collapsed ? '▴' : '▾';
         try { localStorage.setItem(NT_LEGEND_COLLAPSED_KEY, collapsed ? '1' : '0'); } catch (e) {}
     });
+
+    // Dezent im Ruhezustand, bei Interaktion volle Deckkraft (gut lesbar).
+    bar.addEventListener('mouseenter', function() { bar.style.opacity = '1'; });
+    bar.addEventListener('mouseleave', function() { bar.style.opacity = '0.9'; });
 
     wrap.appendChild(bar);
 }
