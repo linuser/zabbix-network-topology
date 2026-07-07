@@ -132,6 +132,33 @@ export function recomputeSimulation(cy) {
         if (baseline[id] && !visited[id]) { n.addClass('nt-sim-cut'); cutCount++; }
     });
 
+    // Hosting-Containment (nt:parent → hosts-Kante): ein toter oder
+    // abgeschnittener Traeger reisst seine gehosteten Children mit — eine VM
+    // ohne ihren Hypervisor ist weg, auch wenn ihr eigenes Interface noch einen
+    // Netzpfad haette. Gerichtete Propagation entlang der hosts-Kanten
+    // (source=Parent → target=Child), transitiv (Chassis→Node→VM). Ohne
+    // hosts-Kanten kostet der Block nichts.
+    const hostsChildren = {};
+    cy.edges('[kind = "hosts"]').forEach(function(e) {
+        const p = e.source().id();
+        (hostsChildren[p] = hostsChildren[p] || []).push(e.target().id());
+    });
+    if (Object.keys(hostsChildren).length) {
+        const work = [];
+        cy.nodes('.nt-sim-dead, .nt-sim-cut').forEach(function(n) { work.push(n.id()); });
+        while (work.length) {
+            const kids = hostsChildren[work.shift()];
+            if (!kids) continue;
+            kids.forEach(function(childId) {
+                if (_simulated.has(childId)) return;            // bleibt 'dead'
+                const c = cy.getElementById(childId);
+                if (c.hasClass('nt-sim-cut')) return;           // schon markiert
+                c.addClass('nt-sim-cut'); cutCount++;
+                work.push(childId);
+            });
+        }
+    }
+
     _showBanner(cy, cutCount);
 }
 

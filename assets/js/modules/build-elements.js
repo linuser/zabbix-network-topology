@@ -138,9 +138,26 @@ export function buildEdgeElements(edges, nodes) {
         const src = String(e.source || e.from || '');
         const tgt = String(e.target || e.to || '');
         if (!nodeIds[src] || !nodeIds[tgt] || src === tgt) return;
-        const k = [src, tgt].sort().join('_');
+        const isHosts = (e._type === 'hosts' || e.kind === 'hosts');
+        // hosts-Kanten mit eigenem Key-Prefix dedupen, damit sie NICHT mit
+        // einer physischen LLDP-Kante zwischen denselben zwei Hosts kollidieren
+        // (Hypervisor↔VM koennte theoretisch beides haben — die gerichtete
+        // hosts-Kante soll dann ueberleben).
+        const k = (isHosts ? 'h_' : '') + [src, tgt].sort().join('_');
         if (edgeSeen[k]) return;
         edgeSeen[k] = true;
+
+        // Hosting/Containment-Kante (nt:parent): GERICHTET Parent→Child, kein
+        // Traffic, kein LLDP-Flag (der LLDP-Toggle soll sie nicht verstecken).
+        // Style-Engine rendert edge[kind="hosts"] gestrichelt mit Pfeil aufs Child.
+        if (isHosts) {
+            elements.push({
+                data: { id: e.id || ('hosts_' + i), source: src, target: tgt,
+                        kind: 'hosts', isLLDP: false,
+                        trafficIn: 0, trafficOut: 0, tLabel: '' }
+            });
+            return;
+        }
 
         // Synthetische Internet-Edges: ohne Traffic-Berechnung, ohne LLDP-Flag
         if (e._isInternetEdge) {

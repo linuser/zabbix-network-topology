@@ -3,7 +3,7 @@
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.30.1-blue)
+![Version](https://img.shields.io/badge/version-4.32.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 ## Was ist das?
@@ -56,6 +56,7 @@ der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/E
 - `nt:note=<text>` — Notiz-Sticker am Knoten
 - `nt:link=<label>|<url>` — Custom-Link im Kontextmenü (mehrfach möglich)
 - `nt:show=<key>` — zusätzlicher Item-Wert im Tooltip
+- `nt:parent=<hostname>` — Träger-Host deklarieren (VM→Hypervisor, Container→Node, Blade→Chassis). Zeichnet eine gerichtete **hosts**-Kante Parent→Child (violett, Pfeil auf den gehosteten Host). Die What-if-Simulation behandelt sie als **harte Abhängigkeit**: fällt der Parent aus, fällt der Child — unabhängig vom Netzpfad. Wert = technischer oder Anzeige-Name des Parent-Hosts.
 
 ### Detail-Panel
 
