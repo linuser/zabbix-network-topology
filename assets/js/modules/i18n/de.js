@@ -366,4 +366,8 @@ export default {
     // Auto-Refresh-Fehler-Badge (render-tech.js)
     'tech.refresh_stale':     '⚠ Daten veraltet — Refresh-Fehler',
     'tech.refresh_stale.tip': '{n} fehlgeschlagene Aktualisierungen in Folge. Angezeigt wird der letzte erfolgreiche Stand.',
+
+    // Performance-Modus (toolbar.js / render-tech.js)
+    'toolbar.perf':     '⚡ Performance: {state}',
+    'toolbar.perf.tip': 'Vereinfachte Knoten (Severity-Punkte statt SVG-Icons) für flüssiges Rendern bei vielen Hosts — automatisch ab ~400 Hosts.',
 };

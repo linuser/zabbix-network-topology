@@ -212,6 +212,7 @@ const _GRAPH_ONLY_SELECTORS = [
     '#nt-cluster-wrap',   // Cluster-Mode-Toggle
     '#nt-btn-lldp',       // LLDP an/aus
     '#nt-btn-weathermap', // Weathermap-Modus (Auslastungs-%)
+    '#nt-btn-perf',       // Performance-Modus (vereinfachte Knoten)
     '#nt-btn-portlabels', // Port-Labels an Edge-Enden
     '#nt-btn-rootcause',  // Root-Cause-Analyse
     '#nt-btn-link',       // Link-Mode
@@ -424,6 +425,7 @@ function regroupToolbar() {
     _moveIntoMenu('nt-btn-labels',     'nt-menu-view');   // Tech-only, im Mgmt/Tabelle leer
     _moveIntoMenu('nt-btn-reset',      'nt-menu-view');
     _moveIntoMenu('nt-btn-weathermap', 'nt-menu-view');
+    _moveIntoMenu('nt-btn-perf',       'nt-menu-view');
     _moveIntoMenu('nt-btn-portlabels', 'nt-menu-view');
 
     _moveIntoMenu('nt-layout-wrap',    'nt-menu-layout');

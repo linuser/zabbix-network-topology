@@ -16,10 +16,10 @@
 
 import { esc } from './utils.js';
 import { t } from './i18n.js';
-import { primaryGroup } from './severity.js';
+import { primaryGroup, SEV_COL } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import {
-    NT_GROUP_VIEW_KEY, NT_LLDP_KEY,
+    NT_GROUP_VIEW_KEY, NT_LLDP_KEY, NT_PERF_KEY,
     loadPositions, savePositions, loadPinned, loadNotes, loadLinks, saveLinks,
     loadLayout, loadTapholdMs
 } from './storage.js';
@@ -151,7 +151,19 @@ export function render(wrap, nodes, edges, dataUrl) {
     edges = withInet.edges;
 
     // Cytoscape-Elements (Nodes + Edges) bauen
-    const elements = buildNodeElements(nodes).concat(buildEdgeElements(edges, nodes));
+    // ── Performance-Modus: vereinfachte Knoten (Severity-Punkt statt SVG-Pie)
+    // + kein Layout-Animate. Manuell per Toggle (localStorage), sonst
+    // automatisch ab PERF_THRESHOLD Knoten. Kleine Graphen bleiben 1:1.
+    const PERF_THRESHOLD = 400;
+    let _perfPref = null;
+    try {
+        const _pv = localStorage.getItem(NT_PERF_KEY);
+        if (_pv === '1') _perfPref = true; else if (_pv === '0') _perfPref = false;
+    } catch (e) {}
+    const perfMode = _perfPref !== null ? _perfPref : (nodes.length >= PERF_THRESHOLD);
+    window._ntPerfMode = perfMode;
+
+    const elements = buildNodeElements(nodes, perfMode).concat(buildEdgeElements(edges, nodes));
 
     // ── Cleanup vorheriger Tab-State ───────────────────────────────────────
     if (window._ntEdgeAnim)     { clearInterval(window._ntEdgeAnim);     window._ntEdgeAnim     = null; }
@@ -204,6 +216,8 @@ export function render(wrap, nodes, edges, dataUrl) {
     const _initialLayout = _useCluster
         ? { name: 'preset', positions: function() { return undefined; }, fit: false }
         : buildLayoutConfig(loadLayout(), nodes, edges, false);
+    // Im Performance-Modus kein Layout-Animate (bei 1000+ Knoten = Freeze).
+    if (perfMode && _initialLayout) _initialLayout.animate = false;
 
     const cy = cytoscape({
         container: cyDiv,
@@ -222,6 +236,9 @@ export function render(wrap, nodes, edges, dataUrl) {
         // Default 1000ms ist zu langsam, User-konfigurierbar 300/500/800ms.
         tapholdDuration: loadTapholdMs(),
     });
+
+    // Performance-Modus: einfache Severity-Punkte statt SVG-Pie-Knoten.
+    if (perfMode) cy.nodes('[!isGroup]').addClass('nt-perf');
 
     // Bei Cluster nach dem Cytoscape-Init das eigentliche Layout fahren.
     // setTimeout damit das Canvas seine Größe bekommt.
@@ -405,13 +422,13 @@ export function render(wrap, nodes, edges, dataUrl) {
     (function() {
         const pinned = loadPinned();
         const notes  = loadNotes();
-        clearImgCache();
+        if (!perfMode) clearImgCache();
         cy.nodes('[!isGroup]').forEach(function(n) {
             const isPinned = pinned.indexOf(n.id()) >= 0;
             const note     = notes[n.id()] || '';
             n.data('pinned', isPinned);
             n.data('note',   note);
-            n.data('bgImage', makeNodeImage(n.data()));
+            if (!perfMode) n.data('bgImage', makeNodeImage(n.data()));
             if (isPinned) n.lock();
         });
     })();
@@ -482,7 +499,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                 }
                 const map = {};
                 (data.nodes || []).forEach(function(n) { map[String(n.id)] = n; });
-                clearImgCache();
+                if (!perfMode) clearImgCache();
                 cy.nodes('[!isGroup]').forEach(function(node) {
                     const u = map[node.id()]; if (!u) return;
                     node.data('severity', u.severity || 0);
@@ -503,7 +520,14 @@ export function render(wrap, nodes, edges, dataUrl) {
                     if ('unavailable'  in u) node.data('unavailable',  !!u.unavailable);
                     if ('down_since'   in u) node.data('down_since',   u.down_since || 0);
                     if ('last_seen'    in u) node.data('last_seen',    u.last_seen  || 0);
-                    node.data('bgImage', makeNodeImage(node.data()));
+                    // Perf-Modus: nur die Severity-Farbe aktualisieren (kein SVG
+                    // neu bauen); sonst das volle Node-Image.
+                    if (perfMode) {
+                        node.data('sevColor', node.data('unavailable') ? '#9ca3af'
+                            : SEV_COL[Math.min(node.data('severity') || 0, SEV_COL.length - 1)]);
+                    } else {
+                        node.data('bgImage', makeNodeImage(node.data()));
+                    }
                 });
                 updateBadge(data.nodes || []);
                 window._ntCy && window._ntCy.edges('[id^="ml_"]').forEach(function(e) {

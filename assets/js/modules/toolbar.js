@@ -14,7 +14,7 @@
 //     Zirkulardependenz (render-tech.js → toolbar.js → render-tech.js).
 //     Lösung: setRenderCallback() injiziert die render-Funktion vom Hauptmodul.
 
-import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY,
+import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
          clearPositions, savePositions, savePinned, loadLinks, saveLinks,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
@@ -442,6 +442,21 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         setWeathermapMode(_wmOn);
         _setWmLabel();
         applyTrafficHeatmap(window._ntCy);
+    });
+
+    // Performance-Modus: einfache Severity-Punkte statt SVG-Pie-Knoten →
+    // fluessiges Rendern bei vielen Hosts. Auto ab ~400 Knoten (render-tech);
+    // hier manuell erzwingbar (auch zum Testen mit wenigen Hosts). Der Toggle
+    // erfordert einen Re-Render, weil sich die Knoten-Darstellung aendert.
+    const bPerf = mkbtn('nt-btn-perf', '', null);
+    bPerf.textContent = t('toolbar.perf', { state: window._ntPerfMode ? t('toolbar.on') : t('toolbar.off') });
+    bPerf.style.opacity = window._ntPerfMode ? '1' : '0.5';
+    bPerf.title = t('toolbar.perf.tip');
+    bPerf.addEventListener('click', function() {
+        const nowOn = !window._ntPerfMode;
+        try { localStorage.setItem(NT_PERF_KEY, nowOn ? '1' : '0'); } catch (e) {}
+        const d = window._ntLastData || {};
+        if (d.nodes && d.nodes.length) _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');
     });
 
     // Port-Labels: LLDP-Port des Reporters an den Edge-Enden (Best-Effort)

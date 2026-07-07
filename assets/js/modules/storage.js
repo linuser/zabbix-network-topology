@@ -30,6 +30,7 @@ export const NT_LLDP_KEY       = 'nt_' + PFX + 'lldp_visible';
 export const NT_WEATHERMAP_KEY = 'nt_' + PFX + 'weathermap';
 export const NT_PORTLABELS_KEY = 'nt_' + PFX + 'portlabels';
 export const NT_LEGEND_COLLAPSED_KEY = 'nt_' + PFX + 'legend_collapsed';
+export const NT_PERF_KEY = 'nt_' + PFX + 'perf';
 export const NT_TAB_KEY        = 'nt_' + PFX + 'active_tab';
 export const NT_GROUP_VIEW_KEY = 'nt_' + PFX + 'group_view';
 export const NT_SEV_FILTER_KEY = 'nt_' + PFX + 'sev_filter';

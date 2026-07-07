@@ -25,6 +25,19 @@ export function buildCytoscapeStyle(dark) {
             'text-background-padding': '2px', 'text-background-shape': 'roundrectangle',
             'min-zoomed-font-size': 8,
         }},
+        // Performance-Modus (render-tech: perfMode): einfacher Severity-Punkt
+        // via background-color statt SVG-Pie-Image — spart die makeNodeImage-
+        // Erzeugung und rendert 1000+ Knoten fluessig. Klasse ueberschreibt den
+        // Basis-Node-Style (Klassen-Selektor > Typ-Selektor).
+        { selector: 'node.nt-perf', style: {
+            'background-opacity': 1,
+            'background-color': 'data(sevColor)',
+            'background-image': 'none',
+            'width': 38, 'height': 38,
+            'border-width': 2,
+            'border-color': dark ? '#0d1117' : '#ffffff',
+            'min-zoomed-font-size': 13,   // Labels erst bei staerkerem Zoom
+        }},
         { selector: 'edge', style: {
             'width': 2.5, 'line-color': '#22c55e', 'line-style': 'dashed',
             'line-dash-pattern': [6, 5], 'line-dash-offset': 0,

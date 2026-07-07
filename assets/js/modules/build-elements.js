@@ -22,6 +22,7 @@
 
 import { fmt, linkCapacity } from './utils.js';
 import { makeNodeImage } from './icons.js';
+import { SEV_COL } from './severity.js';
 
 // Synthetische Internet-Wolke + Edges injizieren, falls nötig.
 // Mutiert NICHT die Eingabe-Arrays — gibt neue Arrays zurück.
@@ -67,7 +68,9 @@ export function injectInternetCloud(nodes, edges, layoutId) {
 //   - data.bgImage: SVG-data:URL aus makeNodeImage (Severity-Ring + Icons)
 //   - alle Felder die Tooltip / Detail-Panel / Kontextmenü brauchen
 //   - Aggregat-Marker werden durchgereicht (für Group-View)
-export function buildNodeElements(nodes) {
+// perfMode=true: vereinfachte Knoten (Severity-Punkt via sevColor statt SVG-
+// Pie) — spart die makeNodeImage-SVG-Erzeugung, entscheidend bei 1000+ Hosts.
+export function buildNodeElements(nodes, perfMode) {
     const elements = [];
     nodes.forEach(function(n) {
         const nodeData = {
@@ -80,6 +83,10 @@ export function buildNodeElements(nodes) {
             })(),
             isGroup: false,
             severity: n.severity || 0,
+            // Severity-Farbe fuer den Performance-Modus (background-color statt
+            // SVG-Image). Offline (unavailable) sticht als grau heraus.
+            sevColor: n.unavailable ? '#9ca3af'
+                : SEV_COL[Math.min(n.severity || 0, SEV_COL.length - 1)],
             cpu: n.cpu, memory: n.memory, ping: n.ping, traffic: n.traffic,
             iface_health: n.iface_health || null,
             link_speed: n.link_speed || 0,
@@ -112,7 +119,8 @@ export function buildNodeElements(nodes) {
             nodeData._childCount  = n._childCount;
             nodeData._topProblems = n._topProblems;
         }
-        nodeData.bgImage = makeNodeImage(nodeData);
+        // Im Performance-Modus kein SVG bauen — der nt-perf-Style nutzt sevColor.
+        nodeData.bgImage = perfMode ? '' : makeNodeImage(nodeData);
         elements.push({ data: nodeData });
     });
     return elements;

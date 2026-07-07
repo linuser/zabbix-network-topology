@@ -361,4 +361,8 @@ export default {
     // Auto-refresh failure badge (render-tech.js)
     'tech.refresh_stale':     '⚠ Data stale — refresh failed',
     'tech.refresh_stale.tip': '{n} consecutive failed refreshes. Showing the last successful state.',
+
+    // Performance mode (toolbar.js / render-tech.js)
+    'toolbar.perf':     '⚡ Performance: {state}',
+    'toolbar.perf.tip': 'Simplified nodes (severity dots instead of SVG icons) for smooth rendering with many hosts — automatic above ~400 hosts.',
 };
