@@ -79,9 +79,13 @@ Klick auf Knoten/Zeile → rechte Seitenleiste mit:
 
 ## Installation
 
+📦 **Ausführliche, zweisprachige Anleitung: [INSTALL.md](INSTALL.md) (DE/EN)** — Voraussetzungen, Widgets, Integration, Aus-Source-Bauen, Troubleshooting.
+
+Kurzfassung (das Verzeichnis **muss** `network_topology_v6` heißen):
+
 ```bash
 cd /usr/share/zabbix/ui/modules
-sudo unzip ~/Downloads/network_topology_v6_v4_X_Y.zip
+sudo unzip ~/Downloads/network_topology_v6.zip
 sudo chown -R root:root network_topology_v6
 sudo systemctl reload php8.3-fpm
 ```
