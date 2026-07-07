@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.30.1 — 2026-07-07
+
+### Performance
+- **Produktions-Bundle minifiziert + externe Sourcemap**: `assets/js/dist/nt-bundle.js` ist jetzt minifiziert (456 → 283 KB, gzip **103 → 79 KB**). Eine externe Sourcemap (`nt-bundle.js.map`, self-contained) wird vom Browser **nur bei geöffneten DevTools** geladen → echte Stacktraces (Datei + Zeile) bleiben erhalten, kein Laufzeit-Overhead für normale Nutzer. `npm run build` = minify+sourcemap, `npm run build:dev` = unminified. Die Map ist gitignored (940-KB-Artefakt); `deploy.sh` baut sie beim Deploy frisch mit.
+
 ## v4.30.0 — 2026-07-06
 
 ### Changed (Build-Step — Blob-Loader ersetzt)

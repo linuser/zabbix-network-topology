@@ -8,3 +8,4 @@ Thumbs.db
 *.zip
 nt_smtp_password
 node_modules/
+assets/js/dist/*.map
