@@ -94,6 +94,10 @@ In Zabbix-UI: Administration → General → Modules → Scan directory → "Net
 
 Aufruf via Monitoring → Network Topology for Zabbix.
 
+## Kanten / Topologie (LLDP)
+
+Die **Verbindungen (Kanten)** entstehen aus den LLDP/CDP-Nachbar-Tabellen der Geräte, die per SNMP an Zabbix geliefert werden. **Siehst du Knoten aber keine Kanten?** → 📡 **[LLDP-SETUP.md](LLDP-SETUP.md)**: was auf Switches/Clients/Zabbix zu tun ist, eine **Vendor-Matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / MikroTik — was liefert Kanten, was braucht API/Handarbeit) und ein Test-Kommando zum Gegenchecken.
+
 ## Dashboard-Widget (optional)
 
 Im Verzeichnis [`widget/`](widget/) liegt ein **separates Zabbix-Modul** vom Typ `widget` das die Daten dieses Hauptmoduls in einer Dashboard-Kachel rendert. Reduzierte Sicht (Tech + Mgmt), gleiche Offline/Stale-Detection, konfigurierbar pro Widget-Instanz (Hostgroups, Default-View, LLDP, Hide-Offline).
