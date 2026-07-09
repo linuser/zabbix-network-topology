@@ -158,7 +158,7 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
         --exclude 'tools' --exclude 'templates' \
         --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
         --exclude '.DS_Store' --exclude '*.zip' \
-        --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' \
+        --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-install.sh' \
         "$SCRIPT_DIR/" "$STAGE/network_topology_v6/"
     rm -f "$TMP_MAIN"
     (cd "$STAGE" && zip -rq "$TMP_MAIN" network_topology_v6)

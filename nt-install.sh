@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+#
+# nt-install.sh — Install / update / check the "Network Topology for Zabbix"
+# frontend module. Run this ON the Zabbix (frontend) host.
+#
+# Usage:
+#   ./nt-install.sh check                 Verify environment + an existing install
+#   ./nt-install.sh install [<zip>]       Fresh install from a release ZIP
+#   ./nt-install.sh update  [<zip>]       Update in place (backs up first)
+#   ./nt-install.sh update  --rollback    Restore the pre-update backup
+#
+# If <zip> is omitted it looks for  ./network_topology_v6.zip  then ~/network_topology_v6.zip
+# The module is ALWAYS installed as  <ui>/modules/network_topology_v6  (the name is mandatory).
+#
+# Requirements: bash, unzip, sudo (or run as root), a Zabbix 7.4+ frontend.
+# Autodetect override:  ZBX_UI_PATH=/path/to/zabbix/ui  ./nt-install.sh ...
+
+set -uo pipefail   # NICHT -e: check() erwartet fehlschlagende Tests; kritische
+                   # Schritte in install/update sind einzeln mit || die abgesichert.
+
+readonly MODULE="network_topology_v6"
+readonly MIN_MAJOR=7 MIN_MINOR=4
+readonly REQUIRED_FILES=(
+    "manifest.json"
+    "assets/js/dist/nt-bundle.js"
+    "assets/js/cytoscape.min.js"
+    "assets/js/leaflet/leaflet.js"
+)
+
+# ── Ausgabe ──────────────────────────────────────────────────────────────
+if [[ -t 1 ]]; then C_OK=$'\e[32m'; C_ERR=$'\e[31m'; C_WARN=$'\e[33m'; C_DIM=$'\e[2m'; C_RST=$'\e[0m'
+else C_OK=""; C_ERR=""; C_WARN=""; C_DIM=""; C_RST=""; fi
+ok()   { echo "  ${C_OK}✓${C_RST} $*"; }
+bad()  { echo "  ${C_ERR}✗${C_RST} $*"; }
+warn() { echo "  ${C_WARN}!${C_RST} $*"; }
+die()  { echo "${C_ERR}❌ $*${C_RST}" >&2; exit 1; }
+
+# Privileg-Eskalation: NT_SUDO override (z.B. "doas", oder "" zum Testen),
+# sonst automatisch: als root nichts, sonst sudo.
+if [[ -n "${NT_SUDO+x}" ]]; then SUDO="$NT_SUDO"; else SUDO=""; [[ "$(id -u)" -eq 0 ]] || SUDO="sudo"; fi
+
+# Aufräumen des Stage-Verzeichnisses, auch bei die/Abbruch.
+_CLEAN=""
+trap '[[ -n "$_CLEAN" ]] && rm -rf "$_CLEAN" 2>/dev/null || true' EXIT
+
+# ── Autodetect (setzen Globals; die() wirkt hier, weil KEINE Subshell) ────
+UI="" FPM=""
+detect_ui() {
+    if [[ -n "${ZBX_UI_PATH:-}" ]]; then
+        [[ -d "$ZBX_UI_PATH/modules" ]] || die "ZBX_UI_PATH=$ZBX_UI_PATH hat kein modules/-Verzeichnis."
+        UI="$ZBX_UI_PATH"; return
+    fi
+    local c
+    for c in /usr/share/zabbix/ui /var/www/html/zabbix/ui /var/www/zabbix/ui /usr/share/zabbix; do
+        [[ -d "$c/modules" ]] && { UI="$c"; return; }
+    done
+    die "Zabbix-UI-Pfad nicht gefunden. Setze ZBX_UI_PATH=/pfad/zu/zabbix/ui."
+}
+detect_fpm() {   # FPM leer, wenn kein Service gefunden — Aufrufer prüft.
+    FPM=$(systemctl list-units --type=service --all 2>/dev/null \
+          | awk '/php[0-9.]+-fpm\.service/ {print $1; exit}' | sed 's/\.service$//') || true
+    if [[ -z "$FPM" ]] && systemctl list-units --type=service --all 2>/dev/null | grep -q 'php-fpm\.service'; then
+        FPM="php-fpm"
+    fi
+}
+
+zbx_version() {   # liest ZABBIX_VERSION aus den Frontend-Files ($1 = UI-Pfad)
+    local f="$1/include/defines.inc.php"
+    [[ -r "$f" ]] || return 0
+    grep -oE "ZABBIX_VERSION'[^0-9]*[0-9]+\.[0-9]+\.[0-9]+" "$f" 2>/dev/null \
+        | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true
+}
+manifest_version() {
+    grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$1" 2>/dev/null \
+        | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true
+}
+
+find_zip() {   # echot Pfad; die() hier ok, weil Aufrufer mit  || exit 1  abfängt
+    local z="${1:-}"
+    if [[ -n "$z" ]]; then [[ -f "$z" ]] || die "ZIP nicht gefunden: $z"; echo "$z"; return; fi
+    for z in "./$MODULE.zip" "$HOME/$MODULE.zip"; do
+        [[ -f "$z" ]] && { echo "$z"; return; }
+    done
+    die "Kein ZIP angegeben und $MODULE.zip nicht in . oder ~ gefunden."
+}
+
+# ── check ────────────────────────────────────────────────────────────────
+cmd_check() {
+    local ver rc=0
+    echo "${C_DIM}Prüfe Umgebung + Installation…${C_RST}"
+    detect_ui; ok "Zabbix-UI: $UI"
+    local mod="$UI/modules/$MODULE"
+
+    if [[ -d "$mod" ]]; then
+        ok "Modulverzeichnis: $mod (Name korrekt)"
+        local rf
+        for rf in "${REQUIRED_FILES[@]}"; do
+            [[ -r "$mod/$rf" ]] && ok "Datei: $rf" || { bad "fehlt/nicht lesbar: $rf"; rc=1; }
+        done
+    else
+        bad "Modulverzeichnis fehlt: $mod"; rc=1
+        local wrong
+        wrong=$(find "$UI/modules" -maxdepth 1 -type d -iname '*network*topolog*' 2>/dev/null \
+                | grep -v "/$MODULE$" | head -1) || true
+        [[ -n "$wrong" ]] && warn "unter falschem Namen gefunden: $wrong  → mv nach $MODULE"
+    fi
+
+    if command -v php >/dev/null 2>&1; then
+        local pv; pv=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null) || true
+        [[ "${pv%%.*}" == "8" ]] && ok "PHP: $pv" || warn "PHP ${pv:-?} — empfohlen 8.x"
+    else warn "php-CLI nicht gefunden (php-fpm kann trotzdem laufen)"; fi
+
+    detect_fpm
+    if [[ -n "$FPM" ]]; then
+        systemctl is-active --quiet "$FPM" 2>/dev/null && ok "php-fpm: $FPM (aktiv)" || warn "php-fpm: $FPM (nicht aktiv?)"
+    else bad "kein php-fpm-Service gefunden"; rc=1; fi
+
+    ver=$(zbx_version "$UI")
+    if [[ -n "$ver" ]]; then
+        local maj min; maj=${ver%%.*}; min=$(echo "$ver" | cut -d. -f2)
+        if (( maj > MIN_MAJOR || (maj == MIN_MAJOR && min >= MIN_MINOR) )); then ok "Zabbix: $ver"
+        else warn "Zabbix $ver — Modul braucht ${MIN_MAJOR}.${MIN_MINOR}+"; fi
+    else warn "Zabbix-Version nicht lesbar (defines.inc.php)"; fi
+
+    echo
+    [[ $rc -eq 0 ]] && echo "${C_OK}✓ Check bestanden.${C_RST}" || echo "${C_ERR}✗ Check: Probleme gefunden (siehe oben).${C_RST}"
+    return $rc
+}
+
+# ── install / update ─────────────────────────────────────────────────────
+do_deploy() {
+    local mode="$1" zip="$2" mod src stage prev=""
+    detect_ui; detect_fpm
+    [[ -n "$FPM" ]] || die "kein php-fpm-Service gefunden."
+    command -v unzip >/dev/null 2>&1 || die "unzip fehlt — bitte installieren."
+    mod="$UI/modules/$MODULE"
+
+    stage=$(mktemp -d); _CLEAN="$stage"
+    unzip -q "$zip" -d "$stage" || die "unzip fehlgeschlagen: $zip"
+    if   [[ -f "$stage/$MODULE/manifest.json" ]]; then src="$stage/$MODULE"
+    elif [[ -f "$stage/manifest.json" ]];         then src="$stage"
+    else die "ZIP enthält weder $MODULE/manifest.json noch manifest.json — falsches Archiv?"; fi
+
+    echo "→ Ziel: $mod  (v$(manifest_version "$src/manifest.json" || echo '?'))"
+
+    # Sicherer Swap: alte Version beiseite, neue rein, bei Fehler zurück.
+    if [[ -d "$mod" ]]; then prev="$mod.prev.$$"; $SUDO mv "$mod" "$prev" || die "konnte alte Version nicht sichern."; fi
+    if $SUDO cp -a "$src" "$mod"; then
+        $SUDO chown -R root:root "$mod" 2>/dev/null \
+            || warn "chown root:root fehlgeschlagen — als root/sudo laufen oder Dateirechte für den Webserver prüfen."
+    else
+        $SUDO rm -rf "$mod"
+        [[ -n "$prev" ]] && $SUDO mv "$prev" "$mod"
+        die "Kopieren fehlgeschlagen — vorherige Version wiederhergestellt."
+    fi
+    # Erfolg: alte Version → .bak (update, für Rollback) oder weg (install).
+    if [[ -n "$prev" ]]; then
+        if [[ "$mode" == "update" ]]; then $SUDO rm -rf "$mod.bak"; $SUDO mv "$prev" "$mod.bak"; echo "→ Backup: $mod.bak"
+        else $SUDO rm -rf "$prev"; fi
+    fi
+
+    echo "→ Reload $FPM"
+    $SUDO systemctl reload "$FPM" || die "php-fpm reload fehlgeschlagen ($FPM) — Modul liegt, aber Opcache evtl. alt."
+
+    echo
+    echo "${C_OK}✓ $mode fertig${C_RST} — $mod (v$(manifest_version "$mod/manifest.json" || echo '?'))"
+    if [[ "$mode" == "install" ]]; then
+        echo "  Nächster Schritt in der UI: Administration → General → Modules → Scan directory → aktivieren."
+    else
+        echo "  Browser: Strg+F5.  Rollback bei Problemen:  $0 update --rollback"
+    fi
+}
+
+cmd_rollback() {
+    local mod tmp
+    detect_ui; detect_fpm
+    mod="$UI/modules/$MODULE"
+    [[ -d "$mod.bak" ]] || die "Kein Backup ($mod.bak) — nichts zum Zurückrollen."
+    echo "→ Rollback: $mod.bak → $mod"
+    tmp="$mod.rollback.$$"
+    [[ -d "$mod" ]] && { $SUDO mv "$mod" "$tmp" || die "Rollback: Swap fehlgeschlagen."; }
+    if $SUDO mv "$mod.bak" "$mod"; then $SUDO rm -rf "$tmp"
+    else [[ -d "$tmp" ]] && $SUDO mv "$tmp" "$mod"; die "Rollback fehlgeschlagen."; fi
+    [[ -n "$FPM" ]] && $SUDO systemctl reload "$FPM"
+    echo "${C_OK}✓ Rollback fertig${C_RST} — Strg+F5 im Browser."
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────
+case "${1:-}" in
+    check)   cmd_check ;;
+    install) zip=$(find_zip "${2:-}") || exit 1; do_deploy install "$zip" ;;
+    update)
+        if [[ "${2:-}" == "--rollback" ]]; then cmd_rollback
+        else zip=$(find_zip "${2:-}") || exit 1; do_deploy update "$zip"; fi ;;
+    ""|-h|--help|help) sed -n '3,22p' "$0" | sed 's/^#\s\?//' ;;
+    *) die "Unbekanntes Kommando: ${1:-} (install | update | check)";;
+esac

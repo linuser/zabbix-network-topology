@@ -217,7 +217,7 @@ Weitere Feature-Module (Auswahl): `whatif.js` (What-if-Ausfallsimulation),
 - Items-Pivot zeigt nur numerische Items (FLOAT/UINT64)
 - Max 7 Tage History-Range
 - Geo-Tab braucht Hosts mit `inventory.location_lat` + `location_lon`
-- LLDP-Edges nur wenn Items mit `lldp.rem.sysname[*]` existieren
+- LLDP-Edges brauchen Nachbar-Items per SNMP (`lldpRemSysName` / `cdpCacheDeviceId` / `neighbor.sysName` / …) — Setup + Vendor-Matrix: [LLDP-SETUP.md](LLDP-SETUP.md)
 - Zabbix 7.0+ für Proxy-Group-Info (in 6.x leer)
 
 ## Lizenz
@@ -230,6 +230,8 @@ steht unter der AGPL-3.0; das kombinierte Werk unterliegt daher ebenfalls der
 AGPL-3.0. Kurz: nutzen, weitergeben und ändern erlaubt — wer es (auch als
 Netzwerk-Dienst) bereitstellt, muss den Quellcode inkl. eigener Änderungen unter
 AGPL-3.0 verfügbar machen.
+
+Mitgelieferte Fremdkomponenten (Cytoscape.js — MIT, Leaflet 1.9.4 — BSD-2-Clause) stehen unter ihren eigenen, permissiven Lizenzen: [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
 ## Autor
 
