@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.32.0 — 2026-07-07
+
+### Added
+- **Hosting-/Containment-Beziehungen (`nt:parent`-Tag)**: Ein Host deklariert via Tag `nt:parent=<Hostname>` seinen Träger (VM→Hypervisor, Container→Node, Blade→Chassis …). Das Backend zeichnet daraus eine **gerichtete `hosts`-Kante** Parent→Child (violett, fein gestrichelt, Pfeil auf den gehosteten Host), klar abgesetzt von grünem LLDP/CDP und blauem Uplink. Namensauflösung nach technischem Namen ODER Anzeigenamen (case-insensitiv, technischer Name gewinnt); Referenzen auf nicht sichtbare Hosts werden still verworfen.
+- **What-if versteht Containment**: Anders als eine LLDP-Verbindung ist `hosts` eine **harte Abhängigkeit** — fällt der Träger aus (simuliert oder abgeschnitten), reißt er alle gehosteten Children mit, transitiv (Chassis→Node→VM), **unabhängig davon, ob das Child noch einen eigenen Netzpfad hätte**. Eine VM ohne ihren Hypervisor ist weg. Root-Cause profitiert automatisch: ein toter Hypervisor wird zur Frontier-Ursache, seine VMs zu Folge-Ausfällen in derselben Dead-Zone-Komponente — ohne Extra-Logik.
+- Erster Konsument der generischen gerichteten Dependency-Kante; ein späterer `routes`-Typ (Server→Firewall/Gateway, L3-Transit) kann dieselbe Mechanik + BFS-Regel wiederverwenden.
+
+> Hinweis: v4.31.0 (Performance-Modus) entstand parallel auf einem eigenen Branch — je nach Merge-Reihenfolge kann die Versionsfolge auf `main` abweichen.
+
 ## v4.30.1 — 2026-07-07
 
 ### Performance

@@ -197,6 +197,7 @@ class NetworkTopologyData extends CController {
         $host_icon_override = [];   // hid => 'router'|'firewall'|...
         $host_show_keys     = [];   // hid => ['system.cpu.util', 'vfs.fs.size[/,pused]', ...]
         $host_links         = [];   // hid => [{label, url}, ...]
+        $host_parent        = [];   // hid => 'ParentHostname' (nt:parent-Tag → hosts-Kante)
         // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
         $allowed_icons = ['firewall', 'router', 'switch', 'wireless',
                           'server', 'storage', 'camera', 'printer',
@@ -266,6 +267,15 @@ class NetworkTopologyData extends CController {
                     if (preg_match('/[\x00-\x1F\x7F]/', $label)) continue;
 
                     $host_links[$hid][] = ['label' => $label, 'url' => $url];
+                } elseif ($name === 'nt:parent' && $value !== '') {
+                    // Containment/Hosting: dieser Host laeuft auf $value
+                    // (Traeger-Host, z.B. Hypervisor). Erste Angabe gewinnt —
+                    // ein Host hat genau einen Traeger. Namensaufloesung unten,
+                    // sobald alle sichtbaren Hosts bekannt sind.
+                    if (!isset($host_parent[$hid])) {
+                        $pv = trim($value);
+                        if ($pv !== '' && strlen($pv) <= 128) $host_parent[$hid] = $pv;
+                    }
                 }
             }
         }
@@ -903,6 +913,34 @@ class NetworkTopologyData extends CController {
             }
         }
         unset($_e);
+
+        // ── 5a. HOSTING/CONTAINMENT-KANTEN (nt:parent-Tag) ────────────────
+        // Ein Host deklariert via Tag  nt:parent = <Hostname>  seinen Traeger
+        // (VM → Hypervisor, Container → Node, ...). Ergibt eine GERICHTETE
+        // hosts-Kante Parent→Child. Anders als LLDP ist das eine harte
+        // Abhaengigkeit: faellt der Parent, ist der Child weg — What-if/
+        // Root-Cause werten _type=hosts entsprechend aus. Aufloesung nach
+        // technischem Namen (host) ODER Anzeigename (name), case-insensitiv;
+        // technischer Name gewinnt. Referenzen auf nicht sichtbare/unbekannte
+        // Hosts werden still verworfen (Kante zu Nicht-Knoten faellt eh weg).
+        if ($host_parent) {
+            $name_to_id = [];
+            foreach ($hosts as $h2id => $h2) {
+                $vis = strtolower(trim((string) ($h2['name'] ?? '')));
+                if ($vis !== '' && !isset($name_to_id[$vis])) $name_to_id[$vis] = $h2id;
+            }
+            foreach ($hosts as $h2id => $h2) {
+                $tech = strtolower(trim((string) ($h2['host'] ?? '')));
+                if ($tech !== '') $name_to_id[$tech] = $h2id;   // technischer Name gewinnt
+            }
+            $hn = 0;
+            foreach ($host_parent as $child_id => $ref) {
+                $pid = $name_to_id[strtolower($ref)] ?? null;
+                if ($pid === null || (string) $pid === (string) $child_id) continue;
+                $edges[] = ['id' => 'h' . $hn++, 'from' => $pid, 'to' => $child_id,
+                            '_type' => 'hosts'];
+            }
+        }
 
         // ── 5b. PROXY + PROXY-GROUP LOOKUP ────────────────────────────────
         // Hosts können via Proxy oder Proxy-Group (Zabbix 7+) monitored werden.

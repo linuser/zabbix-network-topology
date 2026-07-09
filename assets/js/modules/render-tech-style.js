@@ -41,6 +41,18 @@ export function buildCytoscapeStyle(dark) {
             // target-label inline; hier nur die Offsets weg vom Node)
             'source-text-offset': 26, 'target-text-offset': 26,
         }},
+        // Hosting/Containment-Kante (nt:parent → build-elements kind=hosts):
+        // gerichtet Parent→Child (Pfeil zeigt auf den gehosteten Host), violett
+        // + fein gestrichelt, klar abgesetzt von gruenem LLDP und blauem Uplink.
+        // Semantik: harte Abhaengigkeit — What-if/Root-Cause behandeln das als
+        // "Parent tot → Child tot".
+        { selector: 'edge[kind = "hosts"]', style: {
+            'width': 2, 'line-color': '#a78bfa', 'line-style': 'dashed',
+            'line-dash-pattern': [2, 4], 'opacity': 0.8,
+            'target-arrow-shape': 'triangle', 'target-arrow-color': '#a78bfa',
+            'target-arrow-fill': 'filled', 'arrow-scale': 0.9,
+            'label': '', 'source-text-offset': 0, 'target-text-offset': 0,
+        }},
         { selector: 'edge.dead-edge', style: {
             'width': 1.5, 'line-color': '#94a3b8', 'line-style': 'dashed',
             'line-dash-pattern': [4, 8], 'opacity': 0.55, 'color': '#ef4444', 'font-weight': '600',
