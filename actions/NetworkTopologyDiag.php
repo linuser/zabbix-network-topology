@@ -18,7 +18,7 @@ use CControllerResponseData;
  * Request: GET (kein Body).
  * Response: { entries: [...], apcu: true|false, uid: <int> }
  *
- * Zugriff: nur Admin (USER_TYPE_ZABBIX_ADMIN+). Kein Daten-Leak: jeder
+ * Zugriff: nur Super-Admin (USER_TYPE_SUPER_ADMIN). Kein Daten-Leak: jeder
  * User sieht nur seine eigenen Aufrufe (Bucket per User-ID).
  */
 class NetworkTopologyDiag extends CController {

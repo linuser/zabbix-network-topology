@@ -18,6 +18,10 @@
 set -uo pipefail   # NICHT -e: check() erwartet fehlschlagende Tests; kritische
                    # Schritte in install/update sind einzeln mit || die abgesichert.
 
+# PATH haerten: System-Verzeichnisse zuerst, damit ein manipuliertes PATH
+# (z.B. sudo -E / root-cron) keine Trojaner-Binary vor systemctl/unzip/awk schiebt.
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
+
 readonly MODULE="network_topology_v6"
 readonly MIN_MAJOR=7 MIN_MINOR=4
 readonly REQUIRED_FILES=(
@@ -37,7 +41,13 @@ die()  { echo "${C_ERR}❌ $*${C_RST}" >&2; exit 1; }
 
 # Privileg-Eskalation: NT_SUDO override (z.B. "doas", oder "" zum Testen),
 # sonst automatisch: als root nichts, sonst sudo.
-if [[ -n "${NT_SUDO+x}" ]]; then SUDO="$NT_SUDO"; else SUDO=""; [[ "$(id -u)" -eq 0 ]] || SUDO="sudo"; fi
+if [[ -n "${NT_SUDO+x}" ]]; then
+    # Allow-list statt beliebiger Kommandostring — $SUDO laeuft mit Root-Rechten.
+    case "$NT_SUDO" in
+        ""|sudo|doas) SUDO="$NT_SUDO" ;;
+        *) echo "❌ NT_SUDO nur '', 'sudo' oder 'doas' erlaubt (nicht: $NT_SUDO)." >&2; exit 1 ;;
+    esac
+else SUDO=""; [[ "$(id -u)" -eq 0 ]] || SUDO="sudo"; fi
 
 # Aufräumen des Stage-Verzeichnisses, auch bei die/Abbruch.
 _CLEAN=""
@@ -78,7 +88,7 @@ manifest_version() {
 find_zip() {   # echot Pfad; die() hier ok, weil Aufrufer mit  || exit 1  abfängt
     local z="${1:-}"
     if [[ -n "$z" ]]; then [[ -f "$z" ]] || die "ZIP nicht gefunden: $z"; echo "$z"; return; fi
-    for z in "./$MODULE.zip" "$HOME/$MODULE.zip"; do
+    for z in "./$MODULE.zip" "${HOME:-}/$MODULE.zip"; do
         [[ -f "$z" ]] && { echo "$z"; return; }
     done
     die "Kein ZIP angegeben und $MODULE.zip nicht in . oder ~ gefunden."
@@ -135,8 +145,19 @@ do_deploy() {
     command -v unzip >/dev/null 2>&1 || die "unzip fehlt — bitte installieren."
     mod="$UI/modules/$MODULE"
 
-    stage=$(mktemp -d); _CLEAN="$stage"
+    stage=$(mktemp -d) || die "mktemp fehlgeschlagen — kein beschreibbares TMP?"
+    _CLEAN="$stage"
+    # Zip-Slip-Schutz: keine absoluten (/…) oder ../-Pfade im Archiv — unabhaengig
+    # von der unzip-Implementierung geprueft (busybox-unzip filtert nicht immer).
+    if unzip -Z1 "$zip" 2>/dev/null | grep -qE '^/|(^|/)\.\.(/|$)'; then
+        die "ZIP enthaelt unsichere Pfade (absolut oder ../) — abgebrochen."
+    fi
     unzip -q "$zip" -d "$stage" || die "unzip fehlgeschlagen: $zip"
+    # Keine Symlinks im Modul (ein legitimes Modul hat keine) — verhindert, dass
+    # cp -a einen aus dem Archiv stammenden Symlink ins Modulverzeichnis kopiert.
+    if [[ -n "$(find "$stage" -type l -print -quit 2>/dev/null)" ]]; then
+        die "ZIP enthaelt Symlinks — abgebrochen (Sicherheit)."
+    fi
     if   [[ -f "$stage/$MODULE/manifest.json" ]]; then src="$stage/$MODULE"
     elif [[ -f "$stage/manifest.json" ]];         then src="$stage"
     else die "ZIP enthält weder $MODULE/manifest.json noch manifest.json — falsches Archiv?"; fi
@@ -150,12 +171,17 @@ do_deploy() {
             || warn "chown root:root fehlgeschlagen — als root/sudo laufen oder Dateirechte für den Webserver prüfen."
     else
         $SUDO rm -rf "$mod"
-        [[ -n "$prev" ]] && $SUDO mv "$prev" "$mod"
+        if [[ -n "$prev" ]]; then
+            $SUDO mv "$prev" "$mod" || die "Kopieren UND Restore fehlgeschlagen — alte Version liegt unter: $prev"
+        fi
         die "Kopieren fehlgeschlagen — vorherige Version wiederhergestellt."
     fi
     # Erfolg: alte Version → .bak (update, für Rollback) oder weg (install).
     if [[ -n "$prev" ]]; then
-        if [[ "$mode" == "update" ]]; then $SUDO rm -rf "$mod.bak"; $SUDO mv "$prev" "$mod.bak"; echo "→ Backup: $mod.bak"
+        if [[ "$mode" == "update" ]]; then
+            $SUDO rm -rf "$mod.bak"
+            $SUDO mv "$prev" "$mod.bak" && echo "→ Backup: $mod.bak" \
+                || warn "Backup-Umbenennung fehlgeschlagen — alte Version liegt unter: $prev"
         else $SUDO rm -rf "$prev"; fi
     fi
 

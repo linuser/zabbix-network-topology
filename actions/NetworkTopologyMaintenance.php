@@ -137,8 +137,12 @@ class NetworkTopologyMaintenance extends CController {
                 ]],
             ]);
         } catch (\Throwable $e) {
-            // API-Fehlermeldung durchreichen (enthaelt keine internen Pfade).
-            $this->fail($e->getMessage());
+            // Nur saubere Zabbix-API-Meldungen durchreichen; andere Throwables
+            // (DB/Schema/…) koennten interne Details enthalten. Empfaenger ist
+            // zwar Admin, die Meldung soll aber trotzdem sauber bleiben.
+            $this->fail($e instanceof \APIException
+                ? $e->getMessage()
+                : 'Wartung konnte nicht angelegt werden (interner Fehler).');
             return;
         }
 
