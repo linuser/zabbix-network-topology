@@ -18,11 +18,12 @@ export default {
     'toolbar.menu.view':     'View',
     'toolbar.menu.layout':   'Layout',
     'toolbar.menu.tools':    'Tools',
-    'toolbar.snapshot':      'Snapshot',
-    'toolbar.snapshot.diff': 'Diff since {age}',
+    'toolbar.snapshot':      '📸 Snapshot',
+    'toolbar.snapshot.diff': '📸 Diff since {age}',
     'toolbar.snapshot.set':  'Remember the current state — afterwards you can see what changed',
     'toolbar.snapshot.new':  'Take a new snapshot (replaces the old one)',
     'toolbar.snapshot.del':  'Delete snapshot',
+    'toolbar.snapshot.clear': '✕ Snapshot',
 
     // Health tab
     'health.title':      'Topology Health',
@@ -166,7 +167,7 @@ export default {
     'toolbar.auto.on': 'Auto: 30s',
     'toolbar.auto.off': 'Auto: Off',
     'toolbar.lldp': 'LLDP: {state}',
-    'toolbar.link': 'Link',
+    'toolbar.link': '🔗 Draw link',
     'toolbar.link.tip': 'Star mode: pick a source, then click any number of targets. ESC or the source again = done.',
     'toolbar.link.cancel': 'Cancel (ESC)',
     'toolbar.unlink': '✕ Links',

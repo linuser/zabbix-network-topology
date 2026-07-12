@@ -164,7 +164,7 @@ export function ensureBaseToolbar(wrap) {
         bClear.id = 'nt-btn-snap-clear';
         bClear.className = 'btn-alt btn-small';
         bClear.style.marginLeft = '2px';
-        bClear.textContent = '✕';
+        bClear.textContent = t('toolbar.snapshot.clear');
         bClear.title = t('toolbar.snapshot.del');
         bClear.addEventListener('click', function() {
             clearSnapshot();

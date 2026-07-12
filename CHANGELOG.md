@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.32.1 — 2026-07-12
+
+### Changed
+- **Tools-Menü aufgeräumt**: einheitliche Icon+Nomen-Labels statt gemischt Wort/nacktes ✕ — **📸 Snapshot / ✕ Snapshot**, **🔗 Verbindung ziehen / ✕ Verbindungen** (vorher „Snapshot" / nacktes „✕" / „Link" / „✕ Links"). Der Snapshot-Löschen-Button nutzt jetzt einen echten i18n-Key statt hartcodiertem `✕`. de/en deckungsgleich, rein kosmetisch.
+
 ## v4.32.0 — 2026-07-07
 
 ### Added
