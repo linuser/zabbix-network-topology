@@ -1,0 +1,77 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - name: Templates/Network devices
+  templates:
+    - uuid: 38caefc2777a4ea5a8e2f9a2060c0660
+      template: 'NT LLDP Neighbors by SNMP'
+      name: 'NT LLDP Neighbors by SNMP'
+      description: |
+        Entdeckt LLDP- (und optional Cisco-CDP-) Nachbarn per SNMP fuer das
+        "Network Topology for Zabbix"-Frontend-Modul. Das Modul zeichnet aus den
+        Nachbar-System-Namen die Verbindungen (Kanten) — Details in LLDP-SETUP.md.
+
+        Verwendung:
+          - an SNMP-faehige Switches/Router/Firewalls linken
+          - auf dem Geraet LLDP aktivieren (Cisco: CDP ist meist default an)
+          - Naming beachten: der annoncierte SysName muss auf einen ueberwachten
+            Zabbix-Host aufloesen, sonst entsteht keine Kante (siehe LLDP-Q-Tab).
+
+        Standards-basiert (IEEE 802.1AB LLDP-MIB); kein externer Collector noetig.
+      groups:
+        - name: Templates/Network devices
+      macros:
+        - macro: '{$NT.LLDP.INTERVAL}'
+          value: 1h
+          description: 'Polling-Intervall der LLDP/CDP-Nachbar-Items.'
+        - macro: '{$NT.LLDP.DISCOVERY.INTERVAL}'
+          value: 3h
+          description: 'Discovery-Intervall der Nachbar-Tabellen (aendert sich selten).'
+      discovery_rules:
+        - uuid: f388b88ad77144c7b94dfd9c1913713a
+          name: 'LLDP neighbor discovery'
+          type: SNMP_AGENT
+          key: nt.lldp.rem.discovery
+          snmp_oid: 'discovery[{#NT_SYSNAME},1.0.8802.1.1.2.1.4.1.1.9]'
+          delay: '{$NT.LLDP.DISCOVERY.INTERVAL}'
+          description: |
+            LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). Der {#SNMPINDEX}
+            traegt TimeMark.LocalPort.RemIndex — das Modul liest daraus den lokalen
+            Port fuer die Port-Labels.
+          item_prototypes:
+            - uuid: 71e0268303f9471796f291808b05293b
+              name: 'LLDP neighbor [{#SNMPINDEX}]: {#NT_SYSNAME}'
+              type: SNMP_AGENT
+              key: 'lldpRemSysName[{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.9.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                SysName des am lokalen Port gesehenen LLDP-Nachbarn. Wird vom
+                Network-Topology-Modul als Kante gezeichnet, wenn der Name auf einen
+                ueberwachten Zabbix-Host aufloest.
+        - uuid: 8e6fb294701f48d3a41dd38e59d1fbf0
+          name: 'CDP neighbor discovery (Cisco)'
+          type: SNMP_AGENT
+          key: nt.cdp.cache.discovery
+          snmp_oid: 'discovery[{#NT_DEVICEID},1.3.6.1.4.1.9.9.23.1.2.1.1.6]'
+          delay: '{$NT.LLDP.DISCOVERY.INTERVAL}'
+          description: |
+            CISCO-CDP-MIB cdpCacheDeviceId (1.3.6.1.4.1.9.9.23.1.2.1.1.6). Fuer
+            Cisco-Geraete, die CDP statt/zusaetzlich zu LLDP sprechen. Auf
+            Nicht-Cisco-Geraeten bleibt die Discovery einfach leer (kein Fehler).
+          item_prototypes:
+            - uuid: 7f0e08dfeb4e41a1b9286aa4f26a9e49
+              name: 'CDP neighbor [{#SNMPINDEX}]: {#NT_DEVICEID}'
+              type: SNMP_AGENT
+              key: 'cdpCacheDeviceId[{#SNMPINDEX}]'
+              snmp_oid: '1.3.6.1.4.1.9.9.23.1.2.1.1.6.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                Device-ID des CDP-Nachbarn (Cisco). Vom Modul wie ein LLDP-Nachbar
+                behandelt (Key enthaelt cdpCacheDeviceId).

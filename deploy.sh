@@ -234,6 +234,6 @@ Naechste Schritte in der Zabbix-UI:
 
 Optional: Integration-Links via Global-Macros
   Administration → General → Macros
-    {\$NT_INT_NETBOX_LABEL} = NetBox
-    {\$NT_INT_NETBOX_URL}   = https://netbox.example.com/dcim/devices/?q={host}
+    {\$NT.INT.NETBOX.LABEL} = NetBox
+    {\$NT.INT.NETBOX.URL}   = https://netbox.example.com/dcim/devices/?q={host}
 EOF

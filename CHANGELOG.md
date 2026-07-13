@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.32.1 — 2026-07-13
+
+### Changed
+- **Macro-Naming auf Zabbix-Dot-Notation** (Guideline-Alignment): Integration-Link-Macros heißen kanonisch `{$NT.INT.<NAME>.LABEL}` / `{$NT.INT.<NAME>.URL}` (statt `{$NT_INT_..._..}`). **Rückwärtskompatibel** — die alte Underscore-Form wird weiter akzeptiert (Regex nimmt `.` und `_`); Docs/Beispiele zeigen die Dot-Form. Folgt der Zabbix-Template-Guideline.
+
+### Added
+- **LLDP-SNMP-Template** ([`templates/nt_lldp_snmp_template.yaml`](templates/nt_lldp_snmp_template.yaml)): guideline-konformes Template mit SNMP-LLD für LLDP- (`lldpRemSysName`) **und** Cisco-CDP- (`cdpCacheDeviceId`) Nachbarn → turnkey Topologie-Kanten. An SNMP-Switches linken, fertig. Macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`. **Entwurf** — vor Release einmal auf echter Zabbix-7.4 test-importieren.
+
 ## v4.32.0 — 2026-07-07
 
 ### Added

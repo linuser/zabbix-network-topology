@@ -62,6 +62,9 @@ Liste aller Nachbarn enthalten.
 - **SNMP-LLD** auf dem Switch: die `lldpRemSysName`-Tabelle discovern → Item-Prototyp
   `lldpRemSysName[{#SNMPINDEX}]` (ein Item pro Nachbar). Viele **Vendor-Templates bringen das
   schon mit** — vorher unter *Latest Data* nach `lldpRemSysName`-Items schauen.
+- **Turnkey:** das mitgelieferte Template [`templates/nt_lldp_snmp_template.yaml`](templates/nt_lldp_snmp_template.yaml)
+  importieren und an SNMP-Switches linken — bringt LLDP- **und** Cisco-CDP-Discovery fertig mit
+  (Macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`).
 - **Namens-Matching ist der Dreh- und Angelpunkt.** Das Modul löst den Nachbar-Namen in dieser
   Reihenfolge auf:
   1. exakter **Host-/Anzeigename** (case-insensitiv)

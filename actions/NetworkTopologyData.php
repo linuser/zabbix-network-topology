@@ -281,7 +281,7 @@ class NetworkTopologyData extends CController {
         }
 
         // ── 2c. Integration-Links aus Zabbix Global-Macros ────────────────
-        // Pattern: {$NT_INT_<NAME>_LABEL} / {$NT_INT_<NAME>_URL}. Beide
+        // Pattern: {$NT.INT.<NAME>.LABEL} / {$NT.INT.<NAME>.URL}. Beide
         // muessen gesetzt sein. URL-Templates duerfen Tokens enthalten:
         //   {host}, {label}, {ip}, {location}
         // Pro Host wird der Template-String mit URL-encoded Werten gefuellt
@@ -1232,13 +1232,14 @@ class NetworkTopologyData extends CController {
 
     /**
      * Laedt Integration-Templates aus Zabbix Global-Macros.
-     * Erwartet Paare: {$NT_INT_<NAME>_LABEL} + {$NT_INT_<NAME>_URL}.
+     * Erwartet Paare: {$NT.INT.<NAME>.LABEL} + {$NT.INT.<NAME>.URL}
+     * (Dot-Notation = Zabbix-Konvention; Underscore-Form weiter akzeptiert).
      * Liefert ein Array [{name, label, url}, ...] mit dem URL-Template
      * (Tokens noch nicht expandiert).
      *
      * Beispiel-Macros:
-     *   {$NT_INT_NETBOX_LABEL} = NetBox
-     *   {$NT_INT_NETBOX_URL}   = https://netbox.fox1.de/dcim/devices/?q={host}
+     *   {$NT.INT.NETBOX.LABEL} = NetBox
+     *   {$NT.INT.NETBOX.URL}   = https://netbox.fox1.de/dcim/devices/?q={host}
      */
     private function loadIntegrationTemplates(): array {
         try {
@@ -1252,7 +1253,9 @@ class NetworkTopologyData extends CController {
         $by_name = [];   // name → ['label' => ?, 'url' => ?]
         foreach ($macros as $m) {
             $macro = $m['macro'] ?? '';
-            if (!preg_match('/^\{\$NT_INT_([A-Z0-9_]+)_(LABEL|URL)\}$/', $macro, $mm)) continue;
+            // Kanonisch Dot-Notation ({$NT.INT.<NAME>.URL}) = Zabbix-Konvention;
+            // die alte Underscore-Form ({$NT_INT_..._URL}) wird aus Kompat weiter akzeptiert.
+            if (!preg_match('/^\{\$NT[._]INT[._]([A-Z0-9_]+)[._](LABEL|URL)\}$/', $macro, $mm)) continue;
             $name = $mm[1];
             $part = strtolower($mm[2]);
             $by_name[$name][$part] = (string) ($m['value'] ?? '');
