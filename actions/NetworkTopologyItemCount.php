@@ -75,6 +75,16 @@ class NetworkTopologyItemCount extends CController {
             return;
         }
 
+        // Zabbix 7.4: vfs.fs.size[...] -> vfs.fs.dependent.size[...] (Dependent-
+        // Item-Modell). "vfs.fs." -> "vfs.fs*" macht die Disk-Presets auf 6.x UND
+        // 7.4 matchbar. Identisch zu NetworkTopologyItems, sonst weicht der
+        // "N Items matchen"-Hint von der tatsaechlichen Pivot-Tabelle ab.
+        $search_pattern = $pattern;
+        if (strncmp($search_pattern, 'vfs.fs.', 7) === 0
+                && strncmp($search_pattern, 'vfs.fs.dependent.', 17) !== 0) {
+            $search_pattern = 'vfs.fs*' . substr($search_pattern, 7);
+        }
+
         // Permission-Filter analog NetworkTopologyItems
         $allowed = API::HostGroup()->get([
             'output'       => ['groupid'],
@@ -91,7 +101,7 @@ class NetworkTopologyItemCount extends CController {
         $count = (int) API::Item()->get([
             'countOutput' => true,
             'groupids'    => $allowed_ids,
-            'search'      => ['key_' => $pattern],
+            'search'      => ['key_' => $search_pattern],
             'searchWildcardsEnabled' => true,
             'monitored'   => true,
         ]);
@@ -102,7 +112,7 @@ class NetworkTopologyItemCount extends CController {
             $probe = API::Item()->get([
                 'output'      => ['itemid', 'key_'],
                 'groupids'    => $allowed_ids,
-                'search'      => ['key_' => $pattern],
+                'search'      => ['key_' => $search_pattern],
                 'searchWildcardsEnabled' => true,
                 'monitored'   => true,
                 'limit'       => self::SAMPLE_SIZE * 4,
