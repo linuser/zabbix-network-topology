@@ -213,7 +213,7 @@ export function showCtx(cx, cy2, d) {
     items.forEach(function(item) {
         const url = item[1];
         _ctx.appendChild(_ctxRow(item[0], '#334155', function() {
-            window.open(url, '_blank');
+            window.open(url, '_blank', 'noopener,noreferrer');
         }));
     });
 

@@ -69,6 +69,13 @@ class NetworkTopologyMaintenance extends CController {
     }
 
     protected function checkInput(): bool {
+        // Schreibende Action nur per POST (GET/HEAD/… abweisen).
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->setResponse(new CControllerResponseData([
+                'main_block' => json_encode(['error' => 'Method not allowed'])
+            ]));
+            return false;
+        }
         if (!$this->requireAjax()) return false;
         $ret = $this->validateInput([
             'hostids'  => 'required|array_id',
@@ -102,23 +109,37 @@ class NetworkTopologyMaintenance extends CController {
     }
 
     protected function doAction(): void {
-        $hostids  = array_slice($this->getInput('hostids', []), 0, self::MAX_HOSTS);
+        // Eindeutige, normalisierte Host-ID-Liste (validateInput hat bereits
+        // auf array_id geprueft).
+        $hostids  = array_values(array_unique(array_map('strval',
+            (array) $this->getInput('hostids', []))));
         $duration = (int) $this->getInput('duration', 3600);
         if (!$hostids || !isset(self::DURATIONS[$duration])) {
             $this->fail('Invalid input');
             return;
         }
+        // Kein stilles Abschneiden: zu viele Hosts -> ablehnen, statt nur die
+        // ersten MAX_HOSTS in Wartung zu nehmen (der Aufrufer soll es merken).
+        if (count($hostids) > self::MAX_HOSTS) {
+            $this->fail(sprintf('Zu viele Hosts (max. %d).', self::MAX_HOSTS));
+            return;
+        }
 
         // Permission-Check + Namen holen (Host.get ehrt die User-Rechte;
-        // leeres Ergebnis → keine Sicht/kein Recht auf den Host).
+        // editable => nur Hosts mit Schreibrecht).
         $hosts = API::Host()->get([
             'output'       => ['hostid', 'host', 'name'],
             'hostids'      => $hostids,
-            'editable'     => true,   // nur Hosts mit Schreibrecht → Wartung erlaubt
+            'editable'     => true,
             'preservekeys' => true,
         ]);
-        if (!$hosts) {
-            $this->fail('Keine Schreibberechtigung fuer den/die Host(s).');
+        // Kein stilles Teil-Ergebnis: jeder angeforderte Host muss vorhanden
+        // UND editierbar sein — sonst abbrechen, sonst legte die Aktion
+        // ueberraschend Wartung nur fuer die erlaubte Teilmenge an.
+        if (count($hosts) !== count($hostids)) {
+            $this->fail($hosts
+                ? 'Mindestens ein Host wurde nicht gefunden oder darf nicht bearbeitet werden.'
+                : 'Keine Schreibberechtigung fuer den/die Host(s).');
             return;
         }
 
