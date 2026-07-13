@@ -205,6 +205,19 @@ function _buildSparklineSvg(values, theme) {
 // buildBaseUrl kommt aus utils.js (war hier als leicht abweichende
 // indexOf-Variante dupliziert — gleiche Semantik).
 
+// Sekunden -> kompakte Dauer: "45s", "12m 30s", "5h 20m", "3d 4h".
+function fmtDuration(sec) {
+    sec = Math.round(sec);
+    if (!isFinite(sec) || sec < 0) return String(sec);
+    if (sec < 60) return sec + 's';
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm ' + (sec % 60) + 's';
+}
+
 // Wert formatieren je nach Unit. Nichts Schlaues — units sind in Zabbix
 // frei wählbar, wir machen nur die häufigsten Fälle.
 function fmtVal(v, unit) {
@@ -224,6 +237,10 @@ function fmtVal(v, unit) {
         return (v / 1e9).toFixed(2) + ' Gbps';
     }
     if (unit === 'ms') return v.toFixed(2) + ' ms';
+    // uptime / s: Sekunden -> lesbare Dauer. Gilt bewusst auch fuer die Aggregat-
+    // Zeilen (Avg/P50/Max einer Uptime als "5h 20m" ist lesbarer als 19206).
+    if (unit === 'uptime') return fmtDuration(v);
+    if (unit === 's') return v >= 60 ? fmtDuration(v) : (v === Math.floor(v) ? v + ' s' : v.toFixed(2) + ' s');
     // Default: Zahl mit max 2 Decimals
     if (v === Math.floor(v)) return String(v);
     return v.toFixed(2);
@@ -999,6 +1016,8 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             const ttParts = [];
             if (im && im.name) ttParts.push(im.name);
             if (im && im.desc) ttParts.push('— ' + im.desc);
+            // Bei Dauer-Units den Rohwert (Sekunden) im Tooltip mitgeben.
+            if ((c.unit === 'uptime' || c.unit === 's') && v != null) ttParts.push(Math.round(v) + ' s');
             if (anomalous && _anomalyStats[c.key]) {
                 ttParts.push('◆ Anomalie: Spalten-Median ' + fmtVal(_anomalyStats[c.key].median, c.unit));
             }
