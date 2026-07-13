@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use API;
 
 /**
@@ -48,23 +46,12 @@ use API;
  *     (z.B. "/var" aus "vfs.fs.size[/var,pused]") als Spalten-Label.
  *   - Wenn Pattern keinen [...]-Teil hat, nehmen wir den Item-Namen.
  */
-class NetworkTopologyItems extends CController {
+class NetworkTopologyItems extends NetworkTopologyController {
 
     private const MAX_ITEMS = 5000;     // Schutz gegen riesige Pattern-Matches
 
     protected function init(): void {
         $this->disableCsrfValidation();
-    }
-
-    // Read-only Endpunkt — nur XHR-Aufrufe akzeptieren (CSRF-Last-Schutz).
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
     }
 
     protected function checkInput(): bool {
@@ -74,9 +61,7 @@ class NetworkTopologyItems extends CController {
             'pattern'  => 'string|not_empty',
         ]);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
         }
         return $ret;
     }
@@ -288,8 +273,6 @@ class NetworkTopologyItems extends CController {
     }
 
     private function respond(array $data): void {
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode($data, JSON_UNESCAPED_SLASHES)
-        ]));
+        $this->jsonResponse($data);
     }
 }

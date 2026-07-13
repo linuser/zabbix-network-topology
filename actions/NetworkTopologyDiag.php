@@ -5,9 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
-
 /**
  * NetworkTopologyDiag
  *
@@ -21,7 +18,7 @@ use CControllerResponseData;
  * Zugriff: nur Super-Admin (USER_TYPE_SUPER_ADMIN). Kein Daten-Leak: jeder
  * User sieht nur seine eigenen Aufrufe (Bucket per User-ID).
  */
-class NetworkTopologyDiag extends CController {
+class NetworkTopologyDiag extends NetworkTopologyController {
 
     private const MAX_ENTRIES = 50;
     private const KEY_PREFIX  = 'nt_diag_';
@@ -29,16 +26,6 @@ class NetworkTopologyDiag extends CController {
 
     protected function init(): void {
         $this->disableCsrfValidation();
-    }
-
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
     }
 
     protected function checkInput(): bool {
@@ -64,13 +51,11 @@ class NetworkTopologyDiag extends CController {
                 $entries = $arr;
             }
         }
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode([
-                'entries' => array_values(array_slice($entries, -self::MAX_ENTRIES)),
-                'apcu'    => $apcu,
-                'uid'     => $uid,
-            ], JSON_UNESCAPED_UNICODE)
-        ]));
+        $this->jsonResponse([
+            'entries' => array_values(array_slice($entries, -self::MAX_ENTRIES)),
+            'apcu'    => $apcu,
+            'uid'     => $uid,
+        ]);
     }
 
     /**

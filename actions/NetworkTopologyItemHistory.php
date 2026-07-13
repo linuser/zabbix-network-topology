@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use API;
 
 /**
@@ -19,7 +17,7 @@ use API;
  * Request: itemids[] (Pflicht, max 500)
  * Response: { itemid: [v0, v1, ..., vN], ... }  (leere Arrays wenn kein History)
  */
-class NetworkTopologyItemHistory extends CController {
+class NetworkTopologyItemHistory extends NetworkTopologyController {
 
     private const MAX_ITEMS   = 500;   // Cap gegen missbrauchen
     private const SAMPLE_N    = 20;    // Sparkline-Aufloesung
@@ -29,23 +27,11 @@ class NetworkTopologyItemHistory extends CController {
         $this->disableCsrfValidation();
     }
 
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
-    }
-
     protected function checkInput(): bool {
         if (!$this->requireAjax()) return false;
         $ret = $this->validateInput(['itemids' => 'array_id']);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
         }
         return $ret;
     }
@@ -58,9 +44,7 @@ class NetworkTopologyItemHistory extends CController {
         $_t0 = microtime(true);
         $itemids = $this->getInput('itemids', []);
         if (!$itemids) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode((object) [])
-            ]));
+            $this->jsonResponse((object) []);
             return;
         }
         if (count($itemids) > self::MAX_ITEMS) {
@@ -75,9 +59,7 @@ class NetworkTopologyItemHistory extends CController {
             'preservekeys' => true,
         ]);
         if (!$items) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode((object) [])
-            ]));
+            $this->jsonResponse((object) []);
             return;
         }
 
@@ -134,9 +116,7 @@ class NetworkTopologyItemHistory extends CController {
             'cache_hit'  => false,
             'counts'     => ['items' => count($out)],
         ]);
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode($out, JSON_UNESCAPED_UNICODE)
-        ]));
+        $this->jsonResponse($out);
     }
 
     /**

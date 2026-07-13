@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.4 — 2026-07-14
+
+### Fixed
+- **JSON-Encoding robust gegen ungültiges UTF-8** (Review #6/#8): alle Modul-Antworten laufen jetzt über ein zentrales `encodeJson()` mit `JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES`. Geräte-/Interface-Namen und SNMP-/LLDP-Werte mit kaputten Bytefolgen ließen `json_encode` vorher `false` zurückgeben → leere/abgebrochene Antwort; jetzt wird das Fehlerbyte ersetzt statt die ganze Antwort zu verwerfen.
+
+### Changed
+- **Gemeinsame Controller-Basisklasse** `NetworkTopologyController` (Review #7): die 13 JSON-Actions erben `requireAjax()` und die zentralen `jsonResponse()`/`jsonResponseRaw()`/`encodeJson()`-Helfer, statt jeweils eigener (leicht divergierender) Kopien. ~200 Zeilen Boilerplate entfernt; einheitliche Fehlermeldungen und JSON-Flags. Rein interner Umbau — Response-Semantik unverändert (außer der UTF-8-Robustheit oben). Verhaltensgleich per `php -l` + Demo-Test verifiziert.
+
 ## v4.34.3 — 2026-07-13
 
 ### Security

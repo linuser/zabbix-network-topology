@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use API;
 
 /**
@@ -28,7 +26,7 @@ use API;
  *           Serien sind auf max ~240 Buckets (Mittelwert) verdichtet —
  *           ein 2min-Sender x 90d waeren sonst 65k Punkte.
  */
-class NetworkTopologyHealthHistory extends CController {
+class NetworkTopologyHealthHistory extends NetworkTopologyController {
 
     private const KEY_AVG   = 'nt.health.score';
     private const KEY_MIN   = 'nt.health.score.min';
@@ -40,25 +38,13 @@ class NetworkTopologyHealthHistory extends CController {
         $this->disableCsrfValidation();
     }
 
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
-    }
-
     protected function checkInput(): bool {
         if (!$this->requireAjax()) return false;
         $ret = $this->validateInput([
             'days' => 'in 7,14,30,90',
         ]);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
         }
         return $ret;
     }
@@ -147,7 +133,7 @@ class NetworkTopologyHealthHistory extends CController {
     }
 
     private function out(array $payload, float $t0, bool $cache_hit): void {
-        $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $json = $this->encodeJson($payload);
         NetworkTopologyDiag::record([
             'action'     => 'health_history',
             'elapsed_ms' => round((microtime(true) - $t0) * 1000, 1),
@@ -155,6 +141,6 @@ class NetworkTopologyHealthHistory extends CController {
             'cache_hit'  => $cache_hit,
             'counts'     => ['points' => count($payload['avg'] ?? [])],
         ]);
-        $this->setResponse(new CControllerResponseData(['main_block' => $json]));
+        $this->jsonResponseRaw($json);
     }
 }

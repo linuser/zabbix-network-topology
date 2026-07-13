@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use CCsrfTokenHelper;
 use API;
 
@@ -40,7 +38,7 @@ use API;
  * Aktivierung: Zabbix' Timer-Prozess zieht die Wartung erst beim naechsten
  * Lauf (bis ~1 min) — das Frontend weist im Toast darauf hin.
  */
-class NetworkTopologyMaintenance extends CController {
+class NetworkTopologyMaintenance extends NetworkTopologyController {
 
     // Whitelist der erlaubten Dauern (Sekunden) → Label fuer den Namen.
     private const DURATIONS = [
@@ -58,22 +56,10 @@ class NetworkTopologyMaintenance extends CController {
         $this->disableCsrfValidation();
     }
 
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
-    }
-
     protected function checkInput(): bool {
         // Schreibende Action nur per POST (GET/HEAD/… abweisen).
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Method not allowed'])
-            ]));
+            $this->jsonResponse(['error' => 'Method not allowed']);
             return false;
         }
         if (!$this->requireAjax()) return false;
@@ -83,9 +69,7 @@ class NetworkTopologyMaintenance extends CController {
             'nt_csrf'  => 'string',
         ]);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
             return false;
         }
         // Echter CSRF-Schutz: der action- + session-gebundene Token (im View
@@ -94,9 +78,7 @@ class NetworkTopologyMaintenance extends CController {
         // Action kein ausreichender Schutz.
         if (!CCsrfTokenHelper::check((string) $this->getInput('nt_csrf', ''),
                 'network.topology.v6.maintenance')) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'CSRF token invalid'])
-            ]));
+            $this->jsonResponse(['error' => 'CSRF token invalid']);
             return false;
         }
         return true;
@@ -190,20 +172,16 @@ class NetworkTopologyMaintenance extends CController {
         }
 
         $maintenanceid = $res['maintenanceids'][0] ?? null;
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode([
-                'ok'            => true,
-                'maintenanceid' => $maintenanceid,
-                'name'          => $name,
-                'hosts'         => count($hosts),
-                'label'         => $label,
-            ], JSON_UNESCAPED_UNICODE)
-        ]));
+        $this->jsonResponse([
+            'ok'            => true,
+            'maintenanceid' => $maintenanceid,
+            'name'          => $name,
+            'hosts'         => count($hosts),
+            'label'         => $label,
+        ]);
     }
 
     private function fail(string $msg): void {
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE)
-        ]));
+        $this->jsonResponse(['error' => $msg]);
     }
 }

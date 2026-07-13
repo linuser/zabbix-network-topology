@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use API;
 
 /**
@@ -33,30 +31,17 @@ use API;
  *     ...
  *   }
  */
-class NetworkTopologySpark extends CController {
+class NetworkTopologySpark extends NetworkTopologyController {
 
     protected function init(): void {
         $this->disableCsrfValidation();
-    }
-
-    // Read-only Endpunkt — nur XHR-Aufrufe akzeptieren (CSRF-Last-Schutz).
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
     }
 
     protected function checkInput(): bool {
         if (!$this->requireAjax()) return false;
         $ret = $this->validateInput(['hostids' => 'array_id']);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
         }
         return $ret;
     }
@@ -82,9 +67,7 @@ class NetworkTopologySpark extends CController {
         $result   = [];
 
         if (!$hostids) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode((object)[])
-            ]));
+            $this->jsonResponse((object)[]);
             return;
         }
 
@@ -231,7 +214,7 @@ class NetworkTopologySpark extends CController {
             ];
         }
 
-        $_payload = json_encode($result, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $_payload = $this->encodeJson($result);
         NetworkTopologyDiag::record([
             'action'     => 'spark',
             'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
@@ -239,7 +222,7 @@ class NetworkTopologySpark extends CController {
             'cache_hit'  => false,
             'counts'     => ['hosts' => count($hostids)],
         ]);
-        $this->setResponse(new CControllerResponseData(['main_block' => $_payload]));
+        $this->jsonResponseRaw($_payload);
     }
 
     /**
