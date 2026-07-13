@@ -2,6 +2,20 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.3 — 2026-07-13
+
+### Security
+- **Maintenance-Action weiter gehärtet** (Fortsetzung des Review-Batches): nimmt jetzt nur noch `POST` an (GET/HEAD → `Method not allowed`); **lehnt Teil-Berechtigungen ab** — ist nicht *jeder* angeforderte Host vorhanden und editierbar, wird gar keine Wartung angelegt (vorher stilles Teil-Ergebnis nur für die erlaubte Teilmenge); zu viele Hosts (> `MAX_HOSTS`) werden abgelehnt statt still abgeschnitten.
+- **`window.open` im Kontextmenü mit `noopener,noreferrer`** (Host-Links): verhindert `window.opener`-Zugriff der Zielseite auf die Ursprungsseite. Die übrigen `window.open`-Aufrufe im Modul waren bereits abgesichert (Blank-Fenster zum synchronen Reinschreiben — dort ist `noopener` nicht anwendbar).
+
+### Changed
+- **esbuild → 0.28.1** (Dev-Dependency): behebt den `npm audit`-Fund GHSA-67mh-4wv8-2f99 (esbuild-Dev-Server). Bundle neu gebaut, funktional unverändert.
+
+## v4.34.2 — 2026-07-13
+
+### Security
+- **Schreibende Maintenance-Action jetzt mit echtem CSRF-Token** (vorher nur `X-Requested-With`): `NetworkTopologyMaintenance` legt aus der Map heraus Wartungen an — eine Zustandsänderung. Der `X-Requested-With: XMLHttpRequest`-Header lässt sich zwar nicht cross-origin setzen, ist aber kein vollwertiger CSRF-Schutz. Jetzt erzeugt die View einen action- + session-gebundenen Token (`CCsrfTokenHelper::get('network.topology.v6.maintenance')`), reicht ihn über `NT_CONFIG` ans JS (Feld `nt_csrf` im POST); die Action prüft ihn per `CCsrfTokenHelper::check` **vor** dem Permission-Check. Cross-Site-Requests ohne den (nicht cross-origin auslesbaren) Token werden abgewiesen. `X-Requested-With`, same-origin-Cookie, `USER_TYPE_ZABBIX_ADMIN` und Host-Schreibrecht bleiben als Defense-in-Depth. Verifiziert auf der Demo: kein/falscher Token → `CSRF token invalid`, gültiger Token passiert den Gate.
+
 ## v4.34.1 — 2026-07-13
 
 ### Fixed

@@ -190,6 +190,10 @@ window.NT_CONFIG = <?= json_encode([
     'data_url'   => $data_url,
     'can_edit'       => (bool) $data['user']['can_edit'],
     'is_super_admin' => (bool) ($data['user']['is_super_admin'] ?? false),
+    // CSRF-Token fuer die schreibende Maintenance-Action (action- + session-
+    // gebunden). Das JS sendet es mit; NetworkTopologyMaintenance prueft es via
+    // CCsrfTokenHelper::check -> echter CSRF-Schutz statt nur X-Requested-With.
+    'csrf_token' => \CCsrfTokenHelper::get('network.topology.v6.maintenance'),
     // Optionaler Provider-Name für die Internet-Wolke im Hierarchie-Layout.
     // Aus URL-Parameter ?internet=Vodafone gelesen; leer = "Internet" als Default.
     'internet_label' => (string) ($data['internet_label'] ?? ''),

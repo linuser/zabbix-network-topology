@@ -1,6 +1,6 @@
 {
   "name": "network-topology-for-zabbix",
-  "version": "4.34.1",
+  "version": "4.34.3",
   "private": true,
   "description": "Build tooling for the Network Topology for Zabbix frontend module (AGPL-3.0).",
   "license": "AGPL-3.0-or-later",
@@ -9,6 +9,6 @@
     "build:dev": "esbuild assets/js/network-topology.js --bundle --format=iife --target=es2019 --outfile=assets/js/dist/nt-bundle.js"
   },
   "devDependencies": {
-    "esbuild": "^0.24.0"
+    "esbuild": "^0.28.1"
   }
 }
