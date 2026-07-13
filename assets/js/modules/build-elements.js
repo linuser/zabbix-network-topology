@@ -120,7 +120,11 @@ export function buildNodeElements(nodes, perfMode) {
             nodeData._topProblems = n._topProblems;
         }
         // Im Performance-Modus kein SVG bauen — der nt-perf-Style nutzt sevColor.
-        nodeData.bgImage = perfMode ? '' : makeNodeImage(nodeData);
+        // WICHTIG: 'none', NICHT '' — der Basis-Node-Style bildet
+        // background-image: data(bgImage) ab; ein LEERER String crasht Cytoscapes
+        // Style-Parser beim fit()/Layout ("background-image: is invalid" -> null
+        // is not an object). 'none' ist ein gueltiger Wert (= kein Bild).
+        nodeData.bgImage = perfMode ? 'none' : makeNodeImage(nodeData);
         elements.push({ data: nodeData });
     });
     return elements;

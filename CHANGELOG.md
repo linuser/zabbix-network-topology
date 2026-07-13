@@ -5,6 +5,7 @@ Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 ## v4.33.0 — 2026-07-13
 
 ### Added
+- **Performance-Modus für große Topologien (1000+ Hosts)**: vereinfachte Knoten (Severity-Punkte statt SVG-Pie-Icons) + kein Layout-Animate → flüssiges Rendern/Pan/Zoom. Automatisch ab ~400 Knoten, manuell im Anzeige-Menü (`⚡ Performance`). Überspringt den teuren `makeNodeImage`-Pfad; Refresh aktualisiert nur die Severity-Farbe. Kleine Graphen unverändert.
 - **LLDP-SNMP-Template** ([`templates/nt_lldp_snmp_template.yaml`](templates/nt_lldp_snmp_template.yaml)): guideline-konform, SNMP-LLD für LLDP (`lldpRemSysName`) **+** Cisco-CDP (`cdpCacheDeviceId`) → turnkey Topologie-Kanten. Macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`. Entwurf — vor Release test-importieren.
 
 ### Changed
@@ -12,6 +13,7 @@ Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 - **Tools-Menü aufgeräumt**: einheitliche Icon+Nomen-Labels — **📸 Snapshot / ✕ Snapshot**, **🔗 Verbindung ziehen / ✕ Verbindungen** (vorher „Snapshot"/„✕"/„Link"/„✕ Links").
 
 ### Fixed
+- **Performance-Modus rendert wieder** (war Blank-Graph): `bgImage='none'` statt `''` — ein leerer `background-image`-Mapper crashte Cytoscapes Style-Parser beim `fit()` (Konsolen-Fehler war eindeutig). Fix ist die eine Zeile.
 - **Kontextmenü lief unten/rechts aus dem Bild**: langes Menü (Wartung) abgeschnitten → jetzt in den Viewport **geclampt** + `max-height`/Scroll.
 
 ## v4.32.0 — 2026-07-07
