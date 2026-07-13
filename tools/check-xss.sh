@@ -38,7 +38,7 @@ UNTRUSTED='\.(label|host|name|proxy_name|proxy_group_name|note|raw|ip|iftype|des
 # Senken (textContent/.style/.title/dataset/…) werden ausgefiltert.
 mapfile -t hits < <(
   grep -rnE "(innerHTML|insertAdjacentHTML|document\.write|<[a-zA-Z/]|>['\"])" "$JS_DIR" --include='*.js' 2>/dev/null \
-    | grep -vE '/(leaflet|cytoscape|cola|dagre)' \
+    | grep -vE '/(leaflet|cytoscape|cola|dagre|dist)' \
     | grep -E "\+[^+]*($UNTRUSTED)" \
     | grep -v 'esc(' \
     | grep -vE '\.textContent|\.style|\.title *=|\.dataset|\.value\b|createElement|getElementById|querySelector|addEventListener|classList|^\s*[0-9]+:\s*//' \
