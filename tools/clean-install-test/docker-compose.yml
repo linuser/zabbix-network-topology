@@ -1,0 +1,52 @@
+# Clean-Install-Test — Wegwerf-Zabbix 7.4 (PostgreSQL) zum Testen des Moduls
+# auf einer sauberen Instanz. Siehe README.md.
+#
+#   ./build-module.sh          # Modul bauen (= Inhalt des Release-ZIP) -> ./module/
+#   docker compose up -d       # Zabbix hochfahren (erster Start: ~1-2 Min DB-Import)
+#   http://localhost:8080      # Login: Admin / zabbix
+#   docker compose down -v     # aufraeumen (inkl. DB)
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      POSTGRES_DB: zabbix
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  server:
+    image: zabbix/zabbix-server-pgsql:alpine-7.4-latest
+    environment:
+      DB_SERVER_HOST: db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      POSTGRES_DB: zabbix
+    depends_on:
+      - db
+    ports:
+      - "10051:10051"
+
+  web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.4-latest
+    environment:
+      DB_SERVER_HOST: db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      POSTGRES_DB: zabbix
+      ZBX_SERVER_HOST: server
+      PHP_TZ: Europe/Berlin
+    depends_on:
+      - db
+      - server
+    ports:
+      - "8080:8080"
+    volumes:
+      # Das gebaute Modul read-only in den Frontend-Modul-Ordner mounten.
+      # Falls das Image den Frontend-Root anders legt: Pfad anpassen
+      # (im Container:  find / -name manifest.json -path '*modules*' 2>/dev/null).
+      - ./module/network_topology_v6:/usr/share/zabbix/modules/network_topology_v6:ro
+
+volumes:
+  db-data:
