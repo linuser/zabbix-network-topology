@@ -200,13 +200,18 @@ class NetworkTopologyItems extends CController {
             // Spalten-Label aus Key extrahieren
             $col_key = $this->extractColumnKey($key);
 
-            // Spalten-Map updaten (wir nehmen das erste vorkommende Unit)
+            // Spalten-Map updaten. Unit: erste NICHT-leere gewinnt — sonst kann
+            // ein Sub-Item wie net.if.in["eth0",dropped] (units='') die echte
+            // bps-Unit von net.if.in["eth0"] verdraengen (beide -> Spalten-Key "eth0").
             if (!isset($columns_map[$col_key])) {
                 $columns_map[$col_key] = [
                     'key'   => $col_key,
                     'label' => $col_key,
                     'unit'  => $units,
                 ];
+            }
+            elseif ($units !== '' && $columns_map[$col_key]['unit'] === '') {
+                $columns_map[$col_key]['unit'] = $units;
             }
 
             // Wert
