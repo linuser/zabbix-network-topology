@@ -248,3 +248,27 @@ body.nt-wallboard .nt-topbar__actions .btn-small {
     font-size: 13px !important;
     min-height: 32px;
 }
+
+/* ── Dark-Modus fuer die Filterbox ────────────────────────────────────────
+   #nt-filter-form ist ein Sibling von #nt-root (steht davor) — die
+   #nt-root.nt-dark-Regeln greifen also nicht. :has() am body zieht die
+   (Zabbix-gestylte) Filterbox im Modul-Dark-Modus mit. */
+body:has(#nt-root.nt-dark) #nt-filter-form,
+body:has(#nt-root.nt-dark) #nt-filter-form .filter-container {
+    background: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #cbd5e1 !important;
+}
+body:has(#nt-root.nt-dark) #nt-filter-form label {
+    color: #94a3b8 !important;
+}
+body:has(#nt-root.nt-dark) #nt-filter-form .multiselect,
+body:has(#nt-root.nt-dark) #nt-filter-form input {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+body:has(#nt-root.nt-dark) #nt-filter-form .multiselect .selected li {
+    background: #334155 !important;
+    color: #e2e8f0 !important;
+}
