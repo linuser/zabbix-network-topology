@@ -7,6 +7,7 @@ namespace Modules\NetworkTopologyV6\Actions;
 
 use CController;
 use CControllerResponseData;
+use CCsrfTokenHelper;
 use API;
 
 /**
@@ -17,11 +18,16 @@ use API;
  * handlungsfaehig: „darf ich den Host rebooten?" → Wartung an, Alarme
  * werden unterdrueckt.
  *
- * WRITE-Action. Schutz:
+ * WRITE-Action. Schutz (Defense in Depth):
+ *   - Echter CSRF-Token: action- + session-gebunden, im View via
+ *     CCsrfTokenHelper::get('network.topology.v6.maintenance') erzeugt, ueber
+ *     NT_CONFIG ans JS gereicht und hier per CCsrfTokenHelper::check geprueft.
+ *     Ein Cross-Site-Request kann den Token nicht kennen → wird abgelehnt.
+ *     (disableCsrfValidation() schaltet nur Zabbix' automatische Form-Token-
+ *     Pruefung ab; wir pruefen denselben Token stattdessen explizit mit
+ *     eigenem Transport-Feld nt_csrf.)
  *   - checkPermissions() >= USER_TYPE_ZABBIX_ADMIN (Wartung ist Admin-Sache).
- *   - requireAjax() (X-Requested-With) als CSRF-Last-Schutz wie im Rest des
- *     Moduls; zusaetzlich same-origin-Session-Cookie. disableCsrfValidation()
- *     schaltet nur den Zabbix-Form-Token ab (den das Frontend hier nicht hat).
+ *   - requireAjax() (X-Requested-With) + same-origin-Session-Cookie.
  *   - API::Maintenance.create ehrt die User-Permissions: ein Admin kann nur
  *     Wartung fuer Hosts in Gruppen anlegen, auf die er Schreibrecht hat.
  *     Host.get vorab liefert den (permission-gefilterten) Namen und dient
@@ -46,6 +52,9 @@ class NetworkTopologyMaintenance extends CController {
     private const MAX_HOSTS = 50;   // Bulk-Cap; die Map schickt i.d.R. 1
 
     protected function init(): void {
+        // Zabbix' automatische Form-Token-Pruefung aus (das JS-Frontend nutzt
+        // kein Zabbix-Formular); den CSRF-Token pruefen wir stattdessen selbst
+        // in checkInput() via CCsrfTokenHelper::check (Feld nt_csrf).
         $this->disableCsrfValidation();
     }
 
@@ -64,13 +73,26 @@ class NetworkTopologyMaintenance extends CController {
         $ret = $this->validateInput([
             'hostids'  => 'required|array_id',
             'duration' => 'required|in 3600,14400,28800,86400',
+            'nt_csrf'  => 'string',
         ]);
         if (!$ret) {
             $this->setResponse(new CControllerResponseData([
                 'main_block' => json_encode(['error' => 'Invalid input'])
             ]));
+            return false;
         }
-        return $ret;
+        // Echter CSRF-Schutz: der action- + session-gebundene Token (im View
+        // via CCsrfTokenHelper::get erzeugt, ueber NT_CONFIG ans JS gereicht)
+        // muss stimmen. X-Requested-With allein waere fuer eine schreibende
+        // Action kein ausreichender Schutz.
+        if (!CCsrfTokenHelper::check((string) $this->getInput('nt_csrf', ''),
+                'network.topology.v6.maintenance')) {
+            $this->setResponse(new CControllerResponseData([
+                'main_block' => json_encode(['error' => 'CSRF token invalid'])
+            ]));
+            return false;
+        }
+        return true;
     }
 
     protected function checkPermissions(): bool {

@@ -70,15 +70,17 @@ export function hideCtx() {
     _ctx.style.display = 'none';
 }
 
-// POST an die Maintenance-Action (WRITE). Same-origin + X-Requested-With
-// als CSRF-Last-Schutz wie im Rest des Moduls; die Action prueft
-// USER_TYPE_ZABBIX_ADMIN + Host-Schreibrecht.
+// POST an die Maintenance-Action (WRITE). Echter CSRF-Schutz: der action- +
+// session-gebundene Token aus NT_CONFIG wird mitgeschickt und serverseitig via
+// CCsrfTokenHelper::check geprueft. Zusaetzlich same-origin, X-Requested-With,
+// USER_TYPE_ZABBIX_ADMIN + Host-Schreibrecht (Defense in Depth).
 function _createMaintenance(hostId, durationSec, durLabel, hostLabel) {
     const base = window.location.pathname.replace('zabbix.php', '');
     const params = new URLSearchParams();
     params.append('action', 'network.topology.v6.maintenance');
     params.append('hostids[]', hostId);
     params.append('duration', String(durationSec));
+    params.append('nt_csrf', (window.NT_CONFIG && window.NT_CONFIG.csrf_token) || '');
     fetch(base + 'zabbix.php', {
         method: 'POST',
         credentials: 'same-origin',

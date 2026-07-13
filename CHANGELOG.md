@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.2 — 2026-07-13
+
+### Security
+- **Schreibende Maintenance-Action jetzt mit echtem CSRF-Token** (vorher nur `X-Requested-With`): `NetworkTopologyMaintenance` legt aus der Map heraus Wartungen an — eine Zustandsänderung. Der `X-Requested-With: XMLHttpRequest`-Header lässt sich zwar nicht cross-origin setzen, ist aber kein vollwertiger CSRF-Schutz. Jetzt erzeugt die View einen action- + session-gebundenen Token (`CCsrfTokenHelper::get('network.topology.v6.maintenance')`), reicht ihn über `NT_CONFIG` ans JS (Feld `nt_csrf` im POST); die Action prüft ihn per `CCsrfTokenHelper::check` **vor** dem Permission-Check. Cross-Site-Requests ohne den (nicht cross-origin auslesbaren) Token werden abgewiesen. `X-Requested-With`, same-origin-Cookie, `USER_TYPE_ZABBIX_ADMIN` und Host-Schreibrecht bleiben als Defense-in-Depth. Verifiziert auf der Demo: kein/falscher Token → `CSRF token invalid`, gültiger Token passiert den Gate.
+
 ## v4.34.1 — 2026-07-13
 
 ### Fixed
