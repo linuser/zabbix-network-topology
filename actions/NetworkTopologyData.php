@@ -575,7 +575,11 @@ class NetworkTopologyData extends CController {
             }
         }
 
-        foreach ($items_b as $item) {
+        // Metrik-Items (CPU/Memory/Ping/SNMP-Varianten) liegen in $items_a — der
+        // Traffic-Loop oben iteriert es auch. $items_b ist seit dem Fetch-Merge
+        // (siehe Z. ~386) dauerhaft leer; frueher lief die Extraktion darueber.
+        // Ohne diesen Fix wurden CPU/Memory fuer JEDEN Host nie befuellt (-> "—").
+        foreach ($items_a as $item) {
             $hid = $item['hostid'];
             $key = $item['key_'];
             $val = (float) $item['lastvalue'];
