@@ -140,13 +140,25 @@ class NetworkTopologyItems extends CController {
         }
         $hostids = array_keys($hosts);
 
+        // Zabbix 7.4 hat die Filesystem-Items im "Linux by Zabbix agent"-Template
+        // von vfs.fs.size[...] auf vfs.fs.dependent.size[...] umgestellt (Dependent-
+        // Item-Modell, Master = vfs.fs.get). Damit die Disk-Presets auf 6.x UND 7.4
+        // matchen, machen wir das fuehrende "vfs.fs."-Segment per Wildcard tolerant:
+        // "vfs.fs." -> "vfs.fs*" matcht sowohl vfs.fs.size[...] als auch
+        // vfs.fs.dependent.size[...] (searchWildcardsEnabled: * -> beliebige Zeichen).
+        $search_pattern = $pattern;
+        if (strncmp($search_pattern, 'vfs.fs.', 7) === 0
+                && strncmp($search_pattern, 'vfs.fs.dependent.', 17) !== 0) {
+            $search_pattern = 'vfs.fs*' . substr($search_pattern, 7);
+        }
+
         // Pattern → Wildcard-Suche via item.get search.
         // Zabbix unterstützt 'searchWildcardsEnabled' für Wildcard-Match
         // im 'search' Parameter.
         $items = API::Item()->get([
             'output'   => ['itemid', 'hostid', 'key_', 'name', 'description', 'units', 'value_type', 'lastvalue', 'lastclock'],
             'hostids'  => $hostids,
-            'search'   => ['key_' => $pattern],
+            'search'   => ['key_' => $search_pattern],
             'searchWildcardsEnabled' => true,
             'monitored' => true,
             'limit'    => self::MAX_ITEMS,
