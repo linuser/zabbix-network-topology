@@ -187,8 +187,15 @@ export function render(wrap, nodes, edges, dataUrl) {
     const dark = !!(document.getElementById('nt-root')
                  && document.getElementById('nt-root').classList.contains('nt-dark'));
 
-    cyDiv.style.width  = wrap.clientWidth  + 'px';
-    cyDiv.style.height = wrap.clientHeight + 'px';
+    // Nur explizite Pixelmasse setzen, wenn der Flex-Wrapper schon eine Groesse
+    // hat. Sonst friert ein zu frueh gemessenes 0px den Container auf Hoehe 0
+    // ein (Cytoscape rendert ins Nichts) — das cssText-height:100% bleibt dann
+    // aktiv, und der ResizeObserver weiter unten fuehrt nach, sobald Flex die
+    // Hoehe gibt.
+    if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+        cyDiv.style.width  = wrap.clientWidth  + 'px';
+        cyDiv.style.height = wrap.clientHeight + 'px';
+    }
 
     // Group-Cluster-Mode aus Storage: 'auto' | 'columns' | 'rows' | 'off'
     // Default 'auto' = adaptive (2-3 Gruppen Spalten, 4+ Gruppen Reihen).
@@ -265,6 +272,29 @@ export function render(wrap, nodes, edges, dataUrl) {
     // Force resize after DOM settles (Cytoscape misst manchmal zu früh)
     setTimeout(function() { if (cy && !cy.destroyed()) { cy.resize(); cy.fit(cy.nodes(), 40); } }, 200);
     setTimeout(function() { if (cy && !cy.destroyed()) { cy.resize(); cy.fit(cy.nodes(), 40); } }, 600);
+
+    // Boot-Pfad-Absicherung gegen "Container-Hoehe 0": der Flex-Wrapper
+    // #nt-canvas-wrap bekommt seine Hoehe u.U. erst NACH dem Cytoscape-Init
+    // (Layout-Reflow, Sidebar-Toggle, Fullscreen, Direkt-Navigation via URL).
+    // Die setTimeout-resize()-Aufrufe oben helfen nicht, wenn cyDiv da immer
+    // noch 0px hoch ist. Ein ResizeObserver fuehrt cyDiv + Canvas nach und
+    // fittet einmalig, sobald der Wrapper echte Hoehe hat — sonst bleibt der
+    // Graph unsichtbar (Daten vorhanden, aber 0px Rendering).
+    if (window.ResizeObserver) {
+        try { if (window._ntRO) window._ntRO.disconnect(); } catch (e) {}
+        let _fitOnce = false;
+        const _ro = new ResizeObserver(function() {
+            if (!cy || cy.destroyed()) { try { _ro.disconnect(); } catch (e) {} return; }
+            if (wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+                cyDiv.style.width  = wrap.clientWidth  + 'px';
+                cyDiv.style.height = wrap.clientHeight + 'px';
+                cy.resize();
+                if (!_fitOnce) { _fitOnce = true; cy.fit(cy.nodes(), 40); }
+            }
+        });
+        window._ntRO = _ro;
+        _ro.observe(wrap);
+    }
     cy.one('layoutready', function() {
         const usedPreset = (loadPositions && Object.keys(loadPositions()).length > 0);
         if (usedPreset) {
