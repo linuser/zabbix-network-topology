@@ -603,7 +603,7 @@ export function buildPivotToolbar(onApply, theme) {
     wrap.appendChild(patWrap);
 
     const apply = document.createElement('button');
-    apply.textContent = 'Anwenden';
+    apply.textContent = tr('items.apply');
     apply.style.cssText = 'padding:3px 12px;border:1px solid ' + t.accent
         + ';border-radius:2px;background:' + t.accent
         + ';color:#ffffff;cursor:pointer;font-size:12px;font-weight:600;'
@@ -674,13 +674,13 @@ export function buildPivotToolbar(onApply, theme) {
                     if (!d || d.error) { countHint.textContent = ''; return; }
                     if (d.hint) { countHint.textContent = d.hint; return; }
                     if (d.count === 0) {
-                        countHint.textContent = '0 Items matchen — Pattern pruefen';
+                        countHint.textContent = tr('items.count_none');
                         countHint.style.color = '#f59e0b';
                         return;
                     }
                     const sample = (d.sample || []).slice(0, 3).join('  ·  ');
-                    countHint.textContent = d.count + ' Items matchen'
-                        + (sample ? '   z.B. ' + sample : '');
+                    countHint.textContent = tr('items.count_n', { n: d.count })
+                        + (sample ? '   ' + sample : '');
                 })
                 .catch(function() { if (seq === _probeSeq) countHint.textContent = ''; });
         }, 400);
@@ -942,7 +942,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     thead += '<th style="padding:6px 8px;text-align:right;font-size:11px;'
         + 'font-weight:700;color:' + t.sub + ';text-transform:uppercase;'
         + 'letter-spacing:0.04em;font-family:' + monoFam + ';white-space:nowrap;'
-        + 'border-left:2px solid ' + t.border + '" title="Durchschnitt ueber alle Item-Spalten">'
+        + 'border-left:2px solid ' + t.border + '" title="' + esc(tr('items.avg_col_tt')) + '">'
         + 'Avg</th>';
     thead += '</tr></thead>';
     table.innerHTML = thead;
@@ -1120,10 +1120,9 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
     // Truncated-Hinweis
     if (data.truncated) {
         const warn = document.createElement('div');
-        warn.style.cssText = 'padding:10px 14px;background:#fef3c7;color:#92400e;'
-            + 'font-size:12px;border-radius:2px;margin-bottom:8px;font-weight:500';
-        warn.textContent = '\u26A0 Sehr viele Items \u2014 Liste wurde abgeschnitten. '
-            + 'Spezifischeres Pattern verwenden.';
+        warn.style.cssText = 'padding:10px 14px;background:rgba(245,158,11,0.15);color:' + t.text
+            + ';font-size:12px;border-radius:2px;margin-bottom:8px;font-weight:500';
+        warn.textContent = tr('items.truncated_warn');
         container.appendChild(warn);
     }
 
