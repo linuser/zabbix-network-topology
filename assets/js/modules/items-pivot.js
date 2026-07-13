@@ -380,12 +380,18 @@ export function buildPivotToolbar(onApply, theme) {
     // sind aehnlich, koennen aber "system.cpu.util*" sein (trailing wildcard).
     // Wir wandeln das Pattern in eine Regex (alle '*' -> '.*', alles andere
     // escaped) und testen.
+    // Zabbix 7.4: vfs.fs.dependent.size[...] == vfs.fs.size[...] (Dependent-Item-
+    // Modell). Fuer Preset-Matching als aequivalent behandeln, sonst wird das
+    // Disks-Preset auf 7.4-Hosts faelschlich aus dem Dropdown gefiltert.
+    function _normStem(s) {
+        return s.replace('vfs.fs.dependent.', 'vfs.fs.');
+    }
     function patternMatchesAnyStem(pattern, stems) {
         if (!stems || stems.length === 0) return false;
-        const re = new RegExp('^' + pattern.split('*').map(function(p) {
+        const re = new RegExp('^' + _normStem(pattern).split('*').map(function(p) {
             return p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }).join('.*') + '$');
-        return stems.some(function(s) { return re.test(s); });
+        return stems.some(function(s) { return re.test(_normStem(s)); });
     }
 
     function rebuildItemsList() {
