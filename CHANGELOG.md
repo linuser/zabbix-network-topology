@@ -2,6 +2,19 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.0 — 2026-07-13
+
+### Fixed
+- **CPU/Memory wurden für JEDEN Host nicht angezeigt** („—"): der Metrik-Extraktions-Loop iterierte ein seit dem Fetch-Merge dauerhaft leeres `$items_b` statt `$items_a`. Traffic war nicht betroffen (eigener Loop). CPU-/Memory-Ringe + Detail-Panel füllen sich wieder.
+- **Leerer Graph beim Laden** (Cytoscape-Container-Höhe 0): `cyDiv` bekam ein zu früh gemessenes `0px` fest, bevor der Flex-Wrapper `#nt-canvas-wrap` Höhe hatte. Fix: Pixel-Sizing gegen 0 abgesichert + `ResizeObserver`, der `resize()`+`fit()` nachführt (Boot-Race, Sidebar-Toggle, Fullscreen, Direkt-URL).
+- **Zabbix 7.4 Disk-Items** (`vfs.fs.dependent.size[...]`): die „Disks"-Presets matchten 0 Items. Jetzt matcht das Modul 6.x (`vfs.fs.size`) **und** 7.4 — in der Pivot-Query, im „N Items matchen"-Hint und im Preset-Dropdown.
+- **`net.if.in[*]` zeigte den bps-Wert roh** (`2632` statt `2.6 Kbps`): Sub-Items `[...,dropped]`/`[...,errors]` (leere Unit) verdrängten die `bps`-Unit auf demselben Spalten-Key „eth0". Jetzt gewinnt die erste nicht-leere Unit.
+
+### Changed
+- **Items-Pivot: `uptime`/`s` als Dauer** („5h 20m" statt Rohsekunden), Rohwert im Zellen-Tooltip; gilt auch für Aggregat-Zeilen.
+- **Dark-Modus** zieht die (Zabbix-gestylte) Filterbox mit (`:has()`); Truncated-Banner nutzt Theme-Farben statt hardcodiertem Hellgelb.
+- **i18n**: kompletter `items.*`-Namespace (DE/EN, deckungsgleich) + restliche hardcodierte deutsche Strings über `tr()` (Anwenden, Count-Hint, Avg-Tooltip, Truncated-Warnung).
+
 ## v4.33.0 — 2026-07-13
 
 ### Added
