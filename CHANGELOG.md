@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.1 — 2026-07-13
+
+### Fixed
+- **Performance-Toggle (⚡) ließ sich nicht wieder ausschalten** („nur an"): `mkbtn` gibt bestehende Toolbar-Buttons wieder zurück (Reuse per id), der Aufrufer hängte aber bei jedem Toolbar-Neuaufbau einen weiteren Click-Handler an. Da der Perf-Toggle als einziger einen vollen Re-Render auslöst, akkumulierten seine Handler → mehrfaches Feuern, netto blieb er an. Fix: `mkbtn` klont das Element beim Wiederverwenden (`cloneNode` kopiert keine Listener) → genau ein Handler pro Render. Betraf latent alle Toolbar-Toggles (Weathermap/Port-Labels/Root-Cause/LLDP) nach einem Perf-Klick.
+
 ## v4.34.0 — 2026-07-13
 
 ### Fixed

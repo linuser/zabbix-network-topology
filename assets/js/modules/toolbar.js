@@ -48,7 +48,16 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     // tech-spezifische Buttons.
     function mkbtn(id, lbl, fn) {
         const existing = id ? document.getElementById(id) : null;
-        if (existing) return existing;
+        if (existing) {
+            // Wiederverwenden, aber alte Event-Listener abwerfen: cloneNode kopiert
+            // KEINE Handler. Sonst haengt jeder Toolbar-Neuaufbau (der Perf-Toggle
+            // macht einen vollen Re-Render) einen WEITEREN Click-Handler an denselben
+            // Button -> der Toggle feuert mehrfach und bleibt haengen ("nur-an"-Bug).
+            const clone = existing.cloneNode(true);
+            existing.replaceWith(clone);
+            if (fn) clone.addEventListener('click', fn);
+            return clone;
+        }
         const b = document.createElement('button');
         b.className = 'btn-alt btn-small';
         b.style.marginLeft = '4px';
