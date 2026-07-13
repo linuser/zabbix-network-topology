@@ -2,13 +2,17 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
-## v4.32.1 — 2026-07-13
-
-### Changed
-- **Macro-Naming auf Zabbix-Dot-Notation** (Guideline-Alignment): Integration-Link-Macros heißen kanonisch `{$NT.INT.<NAME>.LABEL}` / `{$NT.INT.<NAME>.URL}` (statt `{$NT_INT_..._..}`). **Rückwärtskompatibel** — die alte Underscore-Form wird weiter akzeptiert (Regex nimmt `.` und `_`); Docs/Beispiele zeigen die Dot-Form. Folgt der Zabbix-Template-Guideline.
+## v4.33.0 — 2026-07-13
 
 ### Added
-- **LLDP-SNMP-Template** ([`templates/nt_lldp_snmp_template.yaml`](templates/nt_lldp_snmp_template.yaml)): guideline-konformes Template mit SNMP-LLD für LLDP- (`lldpRemSysName`) **und** Cisco-CDP- (`cdpCacheDeviceId`) Nachbarn → turnkey Topologie-Kanten. An SNMP-Switches linken, fertig. Macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`. **Entwurf** — vor Release einmal auf echter Zabbix-7.4 test-importieren.
+- **LLDP-SNMP-Template** ([`templates/nt_lldp_snmp_template.yaml`](templates/nt_lldp_snmp_template.yaml)): guideline-konform, SNMP-LLD für LLDP (`lldpRemSysName`) **+** Cisco-CDP (`cdpCacheDeviceId`) → turnkey Topologie-Kanten. Macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`. Entwurf — vor Release test-importieren.
+
+### Changed
+- **Macro-Naming auf Zabbix-Dot-Notation** (Guideline): Integration-Macros kanonisch `{$NT.INT.<NAME>.LABEL}` / `{$NT.INT.<NAME>.URL}` statt `{$NT_INT_..._..}`, **rückwärtskompatibel** (Regex nimmt `.` und `_`).
+- **Tools-Menü aufgeräumt**: einheitliche Icon+Nomen-Labels — **📸 Snapshot / ✕ Snapshot**, **🔗 Verbindung ziehen / ✕ Verbindungen** (vorher „Snapshot"/„✕"/„Link"/„✕ Links").
+
+### Fixed
+- **Kontextmenü lief unten/rechts aus dem Bild**: langes Menü (Wartung) abgeschnitten → jetzt in den Viewport **geclampt** + `max-height`/Scroll.
 
 ## v4.32.0 — 2026-07-07
 

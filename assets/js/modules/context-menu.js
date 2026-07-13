@@ -26,6 +26,23 @@ _ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:#fff;b
     + 'border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:190px;font-size:13px;overflow:hidden';
 document.body.appendChild(_ctx);
 
+// Menü an (cx,cy) zeigen und in den Viewport clampen — sonst laeuft ein langes
+// Menue (z.B. mit Maintenance-Eintraegen) unten/rechts aus dem Bild. max-height
+// + Scroll fangen ab, wenn das Menue hoeher als der Screen ist. position:fixed
+// → die Koordinaten sind viewport-relativ, also direkt gegen innerWidth/Height.
+function _showCtxAt(cx, cy) {
+    const m = 8;   // Mindestabstand zum Bildrand
+    _ctx.style.maxHeight = (window.innerHeight - 2 * m) + 'px';
+    _ctx.style.overflowY = 'auto';
+    _ctx.style.left = cx + 'px';
+    _ctx.style.top  = cy + 'px';
+    _ctx.style.display = 'block';
+    // jetzt messbar → bei Ueberlauf nach innen schieben
+    const w = _ctx.offsetWidth, h = _ctx.offsetHeight;
+    if (cx + w > window.innerWidth  - m) _ctx.style.left = Math.max(m, window.innerWidth  - w - m) + 'px';
+    if (cy + h > window.innerHeight - m) _ctx.style.top  = Math.max(m, window.innerHeight - h - m) + 'px';
+}
+
 document.addEventListener('click', function(e) {
     if (!_ctx.contains(e.target)) _ctx.style.display = 'none';
 });
@@ -128,9 +145,7 @@ export function showCtx(cx, cy2, d) {
             if (_onResolveAggregate) _onResolveAggregate();
         }));
 
-        _ctx.style.left = cx + 'px';
-        _ctx.style.top  = cy2 + 'px';
-        _ctx.style.display = 'block';
+        _showCtxAt(cx, cy2);
         return;
     }
 
@@ -329,7 +344,5 @@ export function showCtx(cx, cy2, d) {
         });
     }
 
-    _ctx.style.left = cx + 'px';
-    _ctx.style.top  = cy2 + 'px';
-    _ctx.style.display = 'block';
+    _showCtxAt(cx, cy2);
 }
