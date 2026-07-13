@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.32.2 — 2026-07-13
+
+### Fixed
+- **Kontextmenü lief unten/rechts aus dem Bild**: Rechtsklick auf einen Host im unteren Bildbereich klappte das Menü stur nach unten → lange Menüs (mit Wartungs-Einträgen) waren abgeschnitten/unerreichbar. Jetzt wird das Menü in den Viewport **geclampt** (nach innen geschoben) + `max-height`/Scroll, falls es höher als der Screen ist. Betraf alle Versionen.
+
 ## v4.32.1 — 2026-07-12
 
 ### Changed
