@@ -27,6 +27,15 @@ php-lint:
   script:
     - find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
 
+# Unit-Tests der aus Data.php ausgelagerten, reinen Klassen (Review §6). Sie
+# brauchen weder DB noch Session noch Zabbix — genau deshalb wurden sie
+# ausgelagert. Laeuft im nackten php-cli-Image.
+unit-tests:
+  stage: lint
+  image: php:8.2-cli-alpine
+  script:
+    - php tests/MetricExtractorTest.php
+
 xss-tripwire:
   stage: lint
   image: alpine:3.20

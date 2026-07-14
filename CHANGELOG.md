@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.9 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 2/n** (Review §6): die **Metrik-Klassifikation** (~290 Zeilen, der größte Block im `doAction()`) liegt jetzt in `topology/MetricExtractor.php`. Sie leitet aus rohen Item-Keys CPU, Memory, Traffic, Link-Speed, Interface-Health und Ping ab — quer über Agent-, SNMP-, Proxmox-, Windows- und hrStorage-Varianten. Genau in dieser Heuristik saß schon einmal ein Bug, der CPU/Memory für *jeden* Host leer ließ (v4.34.0).
+  `Data.php`: **1357 → 946 Zeilen** (inkl. Schnitt 1). Reiner Struktur-Umbau: der Code wurde **byte-identisch verschoben**, kein Verhalten geändert. Die Schnittstelle ist bewiesen vollständig — geprüft, dass *jede* in dem Block gesetzte Variable, die danach noch gebraucht wird, auch zurückgegeben wird (die übrigen werden nachher ohnehin neu zugewiesen).
+
+### Added
+- **Der erste Unit-Test des Moduls** (`tests/MetricExtractorTest.php`) — die direkte Antwort auf den Kernvorwurf des Reviews (»erschwert Unit-Tests«). Er läuft **ohne Datenbank, ohne Session, ohne HTTP, ohne Zabbix-Installation** — nur mit PHP, weil die ausgelagerte Klasse rein ist. Deckt Agent- und SNMP-Pfade ab, inklusive der fehleranfälligsten Regel: ein *absichtlich* abgeschalteter Port (`admin-down`) und ein ungenutzter (`notPresent`) dürfen **nicht** als Link-Ausfall zählen. 10/10 grün.
+- CI-Job **`unit-tests`** (siebtes Gate).
+
 ## v4.34.8 — 2026-07-14
 
 ### Added
