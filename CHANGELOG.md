@@ -2,6 +2,17 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.6 — 2026-07-14
+
+### Security
+- **Source-Map wird nicht mehr ausgeliefert** (Review §13): `npm run build` ist jetzt ein Release-Build **ohne** Source-Map. Vorher landete eine ~1 MB große, öffentlich abrufbare `nt-bundle.js.map` auf den Servern (auf **beiden** Prod-Instanzen verifiziert — der Punkt war real, nicht theoretisch). Zum Debuggen gibt es `npm run build:debug` (die `.map` ist gitignored). `deploy.sh` schließt `*.map` zusätzlich vom Zip aus, falls eine Debug-Map liegenbleibt.
+
+### Added
+- **CI-Pipeline** (`.gitlab-ci.yml`, Review §14): fünf Gates — `php-lint` (41 Dateien), `xss-tripwire` (`check-xss.sh --strict`), `shellcheck` (`nt-install.sh`, `deploy.sh`, `tools/*.sh`), `npm-audit` (`--audit-level=moderate`) und vor allem **`bundle-drift`**: baut das Bundle frisch und schlägt fehl, sobald das eingecheckte `nt-bundle.js` nicht mehr zu den Quellmodulen passt. Alle fünf Gates laufen aktuell grün.
+
+### Fixed
+- **`deploy.sh` shellcheck-clean**: zwei `SC2155` (Declare-and-assign maskiert Return-Codes) getrennt; der *bewusst* unquotete Heredoc ist jetzt per `# shellcheck disable=SC2087` samt Begründung dokumentiert — statt das CI-Gate abzuschwächen.
+
 ## v4.34.5 — 2026-07-14
 
 ### Security
