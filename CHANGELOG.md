@@ -10,6 +10,9 @@ Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 ### Changed
 - **Gemeinsame Controller-Basisklasse** `NetworkTopologyController` (Review #7): die 13 JSON-Actions erben `requireAjax()` und die zentralen `jsonResponse()`/`jsonResponseRaw()`/`encodeJson()`-Helfer, statt jeweils eigener (leicht divergierender) Kopien. ~200 Zeilen Boilerplate entfernt; einheitliche Fehlermeldungen und JSON-Flags. Rein interner Umbau — Response-Semantik unverändert (außer der UTF-8-Robustheit oben). Verhaltensgleich per `php -l` + Demo-Test verifiziert.
 
+### Security
+- **`nt-install.sh` gehärtet** (Review-Abschnitt Installationsskripte): entpackte Archivgröße wird vor dem Extrahieren gegen einen 100-MiB-Cap geprüft (Zip-Bomben-Schutz); Geräte-/Pipe-/Socket-Spezialdateien im ZIP werden abgelehnt (analog zum bestehenden Symlink-Schutz); nach dem Kopieren werden die Dateirechte normalisiert (Verzeichnisse `0755`, Dateien `0644`). `bash -n` + `shellcheck` clean.
+
 ## v4.34.3 — 2026-07-13
 
 ### Security
