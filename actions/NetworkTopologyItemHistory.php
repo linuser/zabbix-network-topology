@@ -22,6 +22,7 @@ class NetworkTopologyItemHistory extends NetworkTopologyController {
     private const MAX_ITEMS   = 500;   // Cap gegen missbrauchen
     private const SAMPLE_N    = 20;    // Sparkline-Aufloesung
     private const TIME_WINDOW = 3600;  // 1 Stunde zurueck
+    private const CACHE_TTL   = 45;    // Sparkline-/Tooltip-Daten kurz cachen
 
     protected function init(): void {
         $this->disableCsrfValidation();
@@ -50,6 +51,24 @@ class NetworkTopologyItemHistory extends NetworkTopologyController {
         }
         if (count($itemids) > self::MAX_ITEMS) {
             $itemids = array_slice($itemids, 0, self::MAX_ITEMS);
+        }
+
+        // Kurz-Cache pro (User, Item-Set): dieselben Sparklines werden beim
+        // Panel-/Tab-Wechsel wiederholt fuer dieselben Items geholt — bis zu
+        // 500 Items x 120 History-Werte jedes Mal frisch zu ziehen ist unnoetig
+        // teuer. NtCache hasht den langen itemids-Key intern und sortiert ihn,
+        // sodass dieselbe Item-Menge in anderer Reihenfolge denselben Key trifft.
+        $cached = NtCache::get('item_history', [$itemids]);
+        if ($cached !== null) {
+            NetworkTopologyDiag::record([
+                'action'     => 'item_history',
+                'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+                'bytes'      => strlen($this->encodeJson($cached)),
+                'cache_hit'  => true,
+                'counts'     => ['items' => count((array) $cached)],
+            ]);
+            $this->jsonResponse($cached);
+            return;
         }
 
         // Permission-Filter: nur Items zu denen der User Zugang hat.
@@ -109,6 +128,8 @@ class NetworkTopologyItemHistory extends NetworkTopologyController {
             $key = (string) $iid;
             if (!isset($out[$key])) $out[$key] = [];
         }
+
+        NtCache::set('item_history', [$itemids], $out, self::CACHE_TTL);
 
         NetworkTopologyDiag::record([
             'action'     => 'item_history',

@@ -1,0 +1,91 @@
+{
+  "assets/js/modules/detail-panel.js": {
+    "no-unsanitized/property": {
+      "count": 1
+    }
+  },
+  "assets/js/modules/export.js": {
+    "no-unsanitized/method": {
+      "count": 3
+    },
+    "no-unsanitized/property": {
+      "count": 2
+    }
+  },
+  "assets/js/modules/history-mode.js": {
+    "no-unsanitized/property": {
+      "count": 1
+    }
+  },
+  "assets/js/modules/items-pivot.js": {
+    "no-unsanitized/method": {
+      "count": 3
+    },
+    "no-unsanitized/property": {
+      "count": 6
+    }
+  },
+  "assets/js/modules/legend.js": {
+    "no-unsanitized/property": {
+      "count": 3
+    }
+  },
+  "assets/js/modules/minimap.js": {
+    "no-unsanitized/property": {
+      "count": 1
+    }
+  },
+  "assets/js/modules/render-compliance.js": {
+    "no-unsanitized/property": {
+      "count": 7
+    }
+  },
+  "assets/js/modules/render-diag.js": {
+    "no-unsanitized/property": {
+      "count": 7
+    }
+  },
+  "assets/js/modules/render-health.js": {
+    "no-unsanitized/property": {
+      "count": 6
+    }
+  },
+  "assets/js/modules/render-lldp-quality.js": {
+    "no-unsanitized/property": {
+      "count": 2
+    }
+  },
+  "assets/js/modules/render-mgmt.js": {
+    "no-unsanitized/property": {
+      "count": 4
+    }
+  },
+  "assets/js/modules/render-stats.js": {
+    "no-unsanitized/property": {
+      "count": 15
+    }
+  },
+  "assets/js/modules/render-table.js": {
+    "no-unsanitized/method": {
+      "count": 1
+    },
+    "no-unsanitized/property": {
+      "count": 6
+    }
+  },
+  "assets/js/modules/render-tech.js": {
+    "no-unsanitized/property": {
+      "count": 1
+    }
+  },
+  "assets/js/modules/sev-filter.js": {
+    "no-unsanitized/property": {
+      "count": 1
+    }
+  },
+  "assets/js/modules/tooltip.js": {
+    "no-unsanitized/property": {
+      "count": 6
+    }
+  }
+}

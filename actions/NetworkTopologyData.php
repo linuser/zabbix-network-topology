@@ -5,6 +5,10 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
+use Modules\NetworkTopologyV6\Topology\HostMetadata;
+use Modules\NetworkTopologyV6\Topology\MetricExtractor;
+use Modules\NetworkTopologyV6\Topology\LldpEdgeBuilder;
+use Modules\NetworkTopologyV6\Topology\HostTagParser;
 use CControllerResponseFatal;
 use API;
 
@@ -39,7 +43,11 @@ class NetworkTopologyData extends NetworkTopologyController {
             $this->jsonResponse(['nodes' => [], 'edges' => []]);
             return;
         }
-        if (count($groupids) > self::MAX_GROUPS) {
+        // Nicht still abschneiden: die Zahlen gehen mit in die Antwort, damit das
+        // Frontend warnen kann, statt ein unvollstaendiges Bild als vollstaendig
+        // darzustellen.
+        $requested_groups = count($groupids);
+        if ($requested_groups > self::MAX_GROUPS) {
             $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
         }
 
@@ -169,104 +177,21 @@ class NetworkTopologyData extends NetworkTopologyController {
             unset($list);
         }
 
-        // ── 2b. TAG-SCAN: nt:icon, nt:show ────────────────────────────────
-        // Per Host: 'nt:icon'-Tag (max 1) und 'nt:show'-Tags (n) sammeln.
-        // - nt:icon=router  → überschreibt die Auto-Erkennung in deviceType()
-        // - nt:show=<key>   → das Item wird in den Tooltip aufgenommen
-        // - nt:link=Label|URL  → Custom-Link im Kontextmenü (mehrfach möglich)
-        $host_icon_override = [];   // hid => 'router'|'firewall'|...
-        $host_show_keys     = [];   // hid => ['system.cpu.util', 'vfs.fs.size[/,pused]', ...]
-        $host_links         = [];   // hid => [{label, url}, ...]
-        $host_parent        = [];   // hid => 'ParentHostname' (nt:parent-Tag → hosts-Kante)
-        // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
-        $allowed_icons = ['firewall', 'router', 'switch', 'wireless',
-                          'server', 'storage', 'camera', 'printer',
-                          'hypervisor', 'linux', 'windows', 'macos',
-                          'webserver', 'container', 'mailserver',
-                          'monitoring', 'homeauto', 'ups', 'internet'];
-
-        foreach ($hosts as $hid => $h) {
-            foreach ($h['tags'] ?? [] as $tag) {
-                $name  = $tag['tag']   ?? '';
-                $value = $tag['value'] ?? '';
-                if ($name === 'nt:icon' && $value !== '') {
-                    $value = strtolower(trim($value));
-                    if (in_array($value, $allowed_icons, true)) {
-                        $host_icon_override[$hid] = $value;
-                    }
-                } elseif ($name === 'nt:show' && $value !== '') {
-                    // Item-Key-Cap: realistisch nie >200 Zeichen. Schutz gegen
-                    // teure API-Filter-Listen wenn jemand pathologisch lange
-                    // Tag-Werte setzt (Host-Tag-Edit-Rechte vorausgesetzt).
-                    $v = trim($value);
-                    if (strlen($v) > 200) continue;
-                    if (!isset($host_show_keys[$hid])) $host_show_keys[$hid] = [];
-                    // Begrenzung pro Host: 4 (Tooltip-Platz). Weitere Tags ignorieren.
-                    if (count($host_show_keys[$hid]) < 4) {
-                        $host_show_keys[$hid][] = $v;
-                    }
-                } elseif ($name === 'nt:link' && $value !== '') {
-                    // Format: "Label|URL" — Pipe-getrennt. Wenn kein Pipe vorhanden,
-                    // ist der ganze Wert die URL und das Label wird die Domain.
-                    // Begrenzung pro Host: 6 (sonst wird das Untermenü unhandlich).
-                    if (!isset($host_links[$hid])) $host_links[$hid] = [];
-                    if (count($host_links[$hid]) >= 6) continue;
-
-                    // Hard cap am ganzen Tag-Value: 2500 Zeichen reicht für jede
-                    // realistische URL+Label, schützt aber vor pathologisch großen
-                    // Tags die das JSON-Response aufblähen.
-                    if (strlen($value) > 2500) continue;
-
-                    $pipe_pos = strpos($value, '|');
-                    if ($pipe_pos !== false) {
-                        $label = trim(substr($value, 0, $pipe_pos));
-                        $url   = trim(substr($value, $pipe_pos + 1));
-                    } else {
-                        $url   = trim($value);
-                        // Domain als Label extrahieren ("https://nas.fox1.de:5000" → "nas.fox1.de")
-                        $parsed = parse_url($url);
-                        $label  = $parsed['host'] ?? $url;
-                    }
-
-                    // Sicherheits-Validierung der URL: nur http/https, keine
-                    // javascript:/data:/file: Schemes (würden XSS via Tooltip
-                    // ermöglichen wenn ein User die Tags eines anderen sehen
-                    // kann). Anchor-Tags werden im Frontend zusätzlich escaped.
-                    if ($label === '' || $url === '') continue;
-                    if (!preg_match('#^https?://#i', $url)) continue;
-
-                    // Length-Caps + Control-Char-Filter:
-                    //   - URL > 2048 Zeichen: realistisch nie sinnvoll, bricht
-                    //     den meisten Browsern eh
-                    //   - Label > 200 Zeichen: würde das Kontextmenü zerstören
-                    //   - Control-Chars (CR/LF/Tab/0x00-0x1F) raus damit kein
-                    //     Header-Injection o.ä. möglich ist falls die URL irgendwo
-                    //     unsauber landet (z.B. in Logs, in einer redirect-Kette)
-                    if (strlen($url) > 2048 || strlen($label) > 200) continue;
-                    if (preg_match('/[\x00-\x1F\x7F]/', $url)) continue;
-                    if (preg_match('/[\x00-\x1F\x7F]/', $label)) continue;
-
-                    $host_links[$hid][] = ['label' => $label, 'url' => $url];
-                } elseif ($name === 'nt:parent' && $value !== '') {
-                    // Containment/Hosting: dieser Host laeuft auf $value
-                    // (Traeger-Host, z.B. Hypervisor). Erste Angabe gewinnt —
-                    // ein Host hat genau einen Traeger. Namensaufloesung unten,
-                    // sobald alle sichtbaren Hosts bekannt sind.
-                    if (!isset($host_parent[$hid])) {
-                        $pv = trim($value);
-                        if ($pv !== '' && strlen($pv) <= 128) $host_parent[$hid] = $pv;
-                    }
-                }
-            }
-        }
-
+        // ── 2b. TAG-SCAN: nt:icon, nt:show, nt:link, nt:parent ────────────
+        // Tag-Auswertung ausgelagert nach topology/HostTagParser.php (Review §6).
+        // Hosts rein, vier Maps raus — rein, kein API-Call, einzeln testbar.
+        $tags               = HostTagParser::parse($hosts);
+        $host_icon_override = $tags['icon_override'];
+        $host_show_keys     = $tags['show_keys'];
+        $host_links         = $tags['links'];
+        $host_parent        = $tags['parent'];
         // ── 2c. Integration-Links aus Zabbix Global-Macros ────────────────
         // Pattern: {$NT.INT.<NAME>.LABEL} / {$NT.INT.<NAME>.URL}. Beide
         // muessen gesetzt sein. URL-Templates duerfen Tokens enthalten:
         //   {host}, {label}, {ip}, {location}
         // Pro Host wird der Template-String mit URL-encoded Werten gefuellt
         // und an host_links angehaengt. Cap analog nt:link bei 6 Links/Host.
-        $integration_templates = $this->loadIntegrationTemplates();
+        $integration_templates = HostMetadata::loadIntegrationTemplates();
         // primaryIp() sortiert die interfaces in-place (usort) — beim wiederholten
         // Aufruf pro Template UND spaeter in der Host-Assembly nicht noetig.
         // Einmal pro Host cachen.
@@ -275,7 +200,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             foreach ($hosts as $hid => $h) {
                 if (!isset($host_links[$hid])) $host_links[$hid] = [];
                 if (!isset($primary_ip_cache[$hid])) {
-                    $primary_ip_cache[$hid] = $this->primaryIp($h['interfaces'] ?? []);
+                    $primary_ip_cache[$hid] = HostMetadata::primaryIp($h['interfaces'] ?? []);
                 }
                 foreach ($integration_templates as $tpl) {
                     if (count($host_links[$hid]) >= 6) break;
@@ -436,468 +361,26 @@ class NetworkTopologyData extends NetworkTopologyController {
         unset($item);
 
         // ── 4. PROCESS ITEMS ──────────────────────────────────────────────
-        $host_traffic   = [];
-        // Interface-Health pro Host: aggregiert ueber alle Interfaces.
-        //   down_count    Anzahl Interfaces mit ifOperStatus != 1 (up)
-        //   errors_rate   Summe in+out Errors/sec ueber alle Interfaces
-        //   discards_rate Summe in+out Discards/sec ueber alle Interfaces
-        //   iface_count   Anzahl beobachteter Interfaces (Kontext)
-        $host_iface     = [];   // hid => ['down'=>N, 'errors'=>X, 'discards'=>X, 'count'=>N]
-        $iface_oper     = [];   // hid => [ifaceParam => operStatus]  (Roh-Sammlung)
-        $iface_admin    = [];   // hid => [ifaceParam => adminStatus] (fuer Korrelation)
-        $host_speed     = [];   // hid => max Link-Speed in bps (Weathermap-Kapazitaet)
-        $lldp_raw       = [];
-        $host_cpu       = [];
-        $host_mem_used  = [];   // bytes (used)
-        $host_mem_total = [];   // bytes (total)
-        $host_mem_avail = [];   // bytes (available/free) \u2014 wenn used fehlt
-        $host_mem_pct   = [];   // direkter Prozent-Wert (Top-Prio)
-        $host_ping      = [];
-
-        // SNMP memory helper: hrStorage entries per host
-        // hrStorageType .1.3.6.1.2.1.25.2.1.2 = RAM
-        $hr_used  = [];  // hostid => [index => bytes]
-        $hr_total = [];
-        $hr_type  = [];
-
-        foreach ($items_a as $item) {
-            $hid = $item['hostid'];
-            $key = $item['key_'];
-            $val = $item['lastvalue'];
-
-            // WICHTIG: Health-Branches VOR dem generischen net.if-Traffic-Branch.
-            // Moderne SNMP-Template-Keys wie net.if.status[ifOperStatus.1] und
-            // net.if.in.errors[ifInErrors.1] beginnen mit "net.if" — der
-            // Traffic-Branch wuerde sie sonst schlucken und iface_health bliebe
-            // fuer Standard-Zabbix-7-Templates leer.
-            if (strpos($key, 'ifOperStatus') !== false) {
-                // Oper-Status pro Interface. Bracket-Param als Korrelations-
-                // Key zu ifAdminStatus, damit admin-down (absichtlich
-                // deaktivierte Ports) unten nicht als "Link down" zaehlt.
-                $iface_oper[$hid][$this->ifaceParam($key)] = (int) $val;
-            } elseif (strpos($key, 'ifAdminStatus') !== false) {
-                $iface_admin[$hid][$this->ifaceParam($key)] = (int) $val;
-            } elseif (strpos($key, 'ifInErrors') !== false || strpos($key, 'ifOutErrors') !== false
-                  || preg_match('/net\.if\.(?:in|out)\[[^\]]*,errors\]/', $key)) {
-                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
-                $host_iface[$hid]['errors'] += (float) $val;
-            } elseif (strpos($key, 'ifInDiscards') !== false || strpos($key, 'ifOutDiscards') !== false
-                  || preg_match('/net\.if\.(?:in|out)\[[^\]]*,dropped\]/', $key)) {
-                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
-                $host_iface[$hid]['discards'] += (float) $val;
-            } elseif (strpos($key, 'ifHighSpeed') !== false) {
-                // ifHighSpeed = Mbps. ABER: das Zabbix-Standard-Template
-                // multipliziert per Preprocessing schon auf bps. Heuristik:
-                // Werte < 1e7 sind Mbps (800G-Link = 8e5 Mbps), Werte >= 1e7
-                // sind bereits bps (kleinster realer bps-Wert: 10M = 1e7).
-                $sp = (float) $val;
-                if ($sp > 0) {
-                    if ($sp < 1.0e7) $sp *= 1.0e6;
-                    if (!isset($host_speed[$hid]) || $sp > $host_speed[$hid]) $host_speed[$hid] = $sp;
-                }
-            } elseif (strpos($key, 'ifSpeed') !== false) {
-                // ifSpeed = bps direkt (32bit-Counter, capped bei ~4.3G)
-                $sp = (float) $val;
-                if ($sp > 0 && (!isset($host_speed[$hid]) || $sp > $host_speed[$hid])) {
-                    $host_speed[$hid] = $sp;
-                }
-            } elseif (strpos($key, 'net.if') === 0) {
-                // Zabbix agent traffic (bits/s)
-                $name = strtolower($item['name']);
-                if (!isset($host_traffic[$hid])) {
-                    $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
-                }
-                if (strpos($name, 'received') !== false || strpos($name, 'bits in') !== false) {
-                    $host_traffic[$hid]['in'] += (float) $val;
-                } elseif (strpos($name, 'sent') !== false || strpos($name, 'bits out') !== false) {
-                    $host_traffic[$hid]['out'] += (float) $val;
-                }
-            } elseif (strpos($key, 'ifHCInOctets') !== false || strpos($key, 'ifInOctets') !== false) {
-                // SNMP traffic in — octets/s → bits/s × 8
-                if (!isset($host_traffic[$hid])) {
-                    $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
-                }
-                $host_traffic[$hid]['in'] += (float) $val * 8;
-            } elseif (strpos($key, 'ifHCOutOctets') !== false || strpos($key, 'ifOutOctets') !== false) {
-                // SNMP traffic out
-                if (!isset($host_traffic[$hid])) {
-                    $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
-                }
-                $host_traffic[$hid]['out'] += (float) $val * 8;
-            } elseif (!empty($val) && (
-                    $key === 'lldpRemSysName'
-                 || strpos($key, 'cdpCacheDeviceId')  !== false   // Cisco CDP
-                 || strpos($key, 'neighbor.sysName')  !== false   // generisch / Ubiquiti
-                 || strpos($key, 'discovery.neighbor') !== false  // MikroTik & andere
-                 || preg_match('/(?:^|\.)(lldp.*sysname|cdp.*device)/i', $key)
-                 )) {
-                // Quelle merken (lldp/cdp/other) — Frontend kann das spaeter
-                // anzeigen oder zum Debuggen nutzen. Fuer den Match selber egal.
-                $src = (strpos($key, 'cdp') !== false)
-                    ? 'cdp'
-                    : ((strpos($key, 'lldp') !== false) ? 'lldp' : 'other');
-                $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val, 'src' => $src];
-            }
-        }
-
-        // Oper/Admin-Korrelation → down-Count pro Host. Ein Interface zaehlt
-        // nur als down wenn oper=down(2)/lowerLayerDown(7) UND es nicht
-        // absichtlich deaktiviert ist (admin=down(2)). notPresent(6)/unknown(4)
-        // zaehlen weder als up noch down (typisch: ungenutzte Ports).
-        foreach ($iface_oper as $hid => $params) {
-            if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
-            foreach ($params as $param => $oper) {
-                if ($oper === 4 || $oper === 6) continue;
-                $admin = $iface_admin[$hid][$param] ?? 1;
-                if ($admin === 2) continue;   // admin-down: gewollt, kein Issue
-                $host_iface[$hid]['count']++;
-                if ($oper === 2 || $oper === 7) $host_iface[$hid]['down']++;
-            }
-        }
-
-        // Metrik-Items (CPU/Memory/Ping/SNMP-Varianten) liegen in $items_a — der
-        // Traffic-Loop oben iteriert es auch. $items_b ist seit dem Fetch-Merge
-        // (siehe Z. ~386) dauerhaft leer; frueher lief die Extraktion darueber.
-        // Ohne diesen Fix wurden CPU/Memory fuer JEDEN Host nie befuellt (-> "—").
-        foreach ($items_a as $item) {
-            $hid = $item['hostid'];
-            $key = $item['key_'];
-            $val = (float) $item['lastvalue'];
-
-            // ── CPU ──────────────────────────────────────────────────────
-            // Prio: direkter Prozent-Wert > Aggregate.
-            // Erst gefundener Wert "gewinnt" (Templates können doppelt liefern).
-            if ($key === 'system.cpu.util' || $key === 'system.cpu.utilization') {
-                if (!isset($host_cpu[$hid])) $host_cpu[$hid] = round($val, 1);
-            } elseif (preg_match('/^system\.cpu\.util\[/', $key)) {
-                // system.cpu.util[,user] / system.cpu.util[all,idle] etc.
-                // Bei [*,idle]: 100 - val. Sonst direkter Wert.
-                if (!isset($host_cpu[$hid])) {
-                    $host_cpu[$hid] = (strpos($key, 'idle') !== false)
-                        ? round(max(0.0, 100.0 - $val), 1)
-                        : round($val, 1);
-                }
-            } elseif (preg_match('/proxmox\.[^.]*\.?cpu\.usage/', $key)) {
-                // Proxmox liefert CPU als 0..1 Float (z.B. 0.42 = 42%)
-                if (!isset($host_cpu[$hid])) {
-                    $cpu_pct = $val <= 1.0 ? $val * 100.0 : $val;
-                    $host_cpu[$hid] = round($cpu_pct, 1);
-                }
-            } elseif (strpos($key, 'perf_counter') === 0 && stripos($key, 'Processor') !== false
-                      && stripos($key, 'Processor Time') !== false) {
-                // Windows: perf_counter[\Processor(_Total)\% Processor Time]
-                if (!isset($host_cpu[$hid])) $host_cpu[$hid] = round($val, 1);
-            } elseif (strpos($key, 'hrProcessorLoad') !== false) {
-                // HOST-RESOURCES-MIB: average across CPUs
-                if (!isset($host_cpu[$hid])) {
-                    $host_cpu[$hid] = round($val, 1);
-                } else {
-                    $host_cpu[$hid] = round(($host_cpu[$hid] + $val) / 2, 1);
-                }
-            } elseif ($key === 'ssCpuUser' || $key === 'ssCpuSystem') {
-                if (!isset($host_cpu[$hid])) $host_cpu[$hid] = 0.0;
-                $host_cpu[$hid] = round($host_cpu[$hid] + $val, 1);
-            } elseif ($key === 'synoSystem.ssCpuIdle') {
-                if (!isset($host_cpu[$hid])) {
-                    $host_cpu[$hid] = round(max(0.0, 100.0 - $val * 0.01), 1);
-                }
-
-            // ── Memory Agent (klassisch: used/total getrennt) ─────────────
-            } elseif (strpos($key, 'vm.memory.size[used]') !== false) {
-                $host_mem_used[$hid] = $val;
-            } elseif (strpos($key, 'vm.memory.size[total]') !== false) {
-                $host_mem_total[$hid] = $val;
-
-            // ── Memory: direkter Prozent-Wert (Top-Prio) ──────────────────
-            // vm.memory.size[pused], vm.memory.utilization \u2192 sofort fertig
-            } elseif (strpos($key, 'vm.memory.size[pused]') !== false
-                      || $key === 'vm.memory.utilization') {
-                $host_mem_pct[$hid] = round($val, 1);
-
-            // ── Memory: available/free statt used ─────────────────────────
-            // Wenn nur available + total verf\u00FCgbar sind, rechnen wir den
-            // used-Wert sp\u00E4ter aus (im Resolve-Schritt).
-            } elseif (strpos($key, 'vm.memory.size[available]') !== false
-                      || strpos($key, 'vm.memory.size[free]') !== false) {
-                $host_mem_avail[$hid] = $val;
-
-            // ── Memory: pavailable als direkter Prozent ───────────────────
-            } elseif (strpos($key, 'vm.memory.size[pavailable]') !== false) {
-                if (!isset($host_mem_pct[$hid])) {
-                    $host_mem_pct[$hid] = round(max(0.0, 100.0 - $val), 1);
-                }
-
-            // ── Memory: Proxmox-Template ──────────────────────────────────
-            } elseif (preg_match('/proxmox\.[^.]*\.?memory\.used/', $key)) {
-                $host_mem_used[$hid] = $val;
-            } elseif (preg_match('/proxmox\.[^.]*\.?memory\.total/', $key)) {
-                $host_mem_total[$hid] = $val;
-
-            // ── Memory: Windows perf_counter ──────────────────────────────
-            } elseif (strpos($key, 'perf_counter') === 0
-                      && stripos($key, 'Committed Bytes In Use') !== false) {
-                if (!isset($host_mem_pct[$hid])) $host_mem_pct[$hid] = round($val, 1);
-
-            // ── Memory SNMP (hrStorage) ───────────────────────────────────
-            // Key format: hrStorageUsed[index] / hrStorageSize[index] / hrStorageType[index]
-            } elseif (strpos($key, 'hrStorageType') !== false) {
-                preg_match('/\[([^\]]+)\]/', $key, $m);
-                $idx = $m[1] ?? '0';
-                // hrStorageType kann als Integer (2) oder OID-String kommen:
-                // "2", ".2", "1.3.6.1.2.1.25.2.1.2" -> alle bedeuten RAM
-                $hr_type_raw = trim((string) $val);
-                if (
-                    $hr_type_raw === '2' ||
-                    $hr_type_raw === '.2' ||
-                    substr($hr_type_raw, -2) === '.2' ||
-                    strpos($hr_type_raw, '25.2.1.2') !== false
-                ) {
-                    $hr_type[$hid][$idx] = 2; // RAM
-                } elseif (
-                    $hr_type_raw === '3' ||
-                    substr($hr_type_raw, -2) === '.3' ||
-                    strpos($hr_type_raw, '25.2.1.3') !== false
-                ) {
-                    $hr_type[$hid][$idx] = 3; // Virtual Memory
-                } else {
-                    $hr_type[$hid][$idx] = (int) $hr_type_raw;
-                }
-            } elseif (strpos($key, 'hrStorageUsed') !== false) {
-                preg_match('/\[([^\]]+)\]/', $key, $m);
-                $idx = $m[1] ?? '0';
-                $hr_used[$hid][$idx] = $val;
-            } elseif (strpos($key, 'hrStorageSize') !== false) {
-                preg_match('/\[([^\]]+)\]/', $key, $m);
-                $idx = $m[1] ?? '0';
-                $hr_total[$hid][$idx] = $val;
-
-            // ── Ping ──────────────────────────────────────────────────────
-            } elseif (strpos($key, 'icmppingsec') !== false) {
-                $ms = round($val * 1000, 1);
-                if (!isset($host_ping[$hid]) || $ms < $host_ping[$hid]) {
-                    $host_ping[$hid] = $ms;
-                }
-            }
-        }
-
-        // ── Resolve SNMP hrStorage memory (pick RAM entry, type=2) ───────
-        foreach ($hr_used as $hid => $entries) {
-            if (isset($host_mem_used[$hid])) continue; // Agent already found
-            $total_used  = 0.0;
-            $total_total = 0.0;
-            foreach ($entries as $idx => $used) {
-                $size = $hr_total[$hid][$idx] ?? 0;
-                $type = $hr_type[$hid][$idx] ?? 0;
-                // type 2 = hrStorageRam only; type 0 (unknown) absichtlich ausgeschlossen
-                if ($type === 2 && $size > 0) {
-                    $total_used  += $used;
-                    $total_total += $size;
-                }
-            }
-            if ($total_total > 0) {
-                $host_mem_used[$hid]  = $total_used;
-                $host_mem_total[$hid] = $total_total;
-            }
-        }
-
-        // ── Resolve available/free \u2192 used (wenn used fehlt, total da ist) ──
-        foreach ($host_mem_avail as $hid => $avail) {
-            if (isset($host_mem_used[$hid])) continue;
-            $total = $host_mem_total[$hid] ?? 0.0;
-            if ($total > 0.0 && $avail >= 0.0) {
-                $host_mem_used[$hid] = max(0.0, $total - $avail);
-            }
-        }
-
-        // ── Memory % \u2014 Prio: direkter pct > used/total ────────────────────
-        $host_memory = [];
-        // 1. Direkte Prozent-Werte (vm.memory.utilization, perf_counter, ...)
-        foreach ($host_mem_pct as $hid => $pct) {
-            $host_memory[$hid] = (int) round(max(0.0, min(100.0, $pct)));
-        }
-        // 2. used/total \u2014 nur wenn nicht schon Prozent vorhanden
-        foreach ($host_mem_used as $hid => $used) {
-            if (isset($host_memory[$hid])) continue;
-            $total = $host_mem_total[$hid] ?? 0.0;
-            if ($total > 0.0) {
-                $host_memory[$hid] = (int) round($used / $total * 100);
-            }
-        }
-
+        // Metrik-Klassifikation ausgelagert nach topology/MetricExtractor.php
+        // (Review §6). Items rein, sieben Metrik-Arrays raus — reine
+        // Transformation, kein API-Call, kein Controller-Zustand. Dadurch
+        // erstmals einzeln testbar, statt nur ueber einen kompletten Request.
+        $metrics      = MetricExtractor::extract($items_a);
+        $host_traffic = $metrics['traffic'];
+        $host_iface   = $metrics['iface'];
+        $host_speed   = $metrics['speed'];
+        $host_cpu     = $metrics['cpu'];
+        $host_memory  = $metrics['memory'];
+        $host_ping    = $metrics['ping'];
+        $lldp_raw     = $metrics['lldp_raw'];
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
-        $name_map = [];
-        $ip_map   = [];
-        foreach ($hosts as $hid => $h) {
-            $name_map[strtolower($h['host'])] = $hid;
-            $name_map[strtolower($h['name'])] = $hid;
-            foreach ($h['interfaces'] ?? [] as $iface) {
-                if (!empty($iface['ip'])) {
-                    $ip_map[$iface['ip']] = $hid;
-                }
-            }
-        }
-        // Short-Name-Map einmal vorberechnen statt pro Edge linear durch
-        // alle name_map-Eintraege zu iterieren. Bei 500 Hosts × 500 LLDP-
-        // Neighbors war das vorher 250k Vergleiche.
-        $short_name_map = [];   // short → [hid, ...]
-        foreach ($name_map as $mapped_name => $mapped_hid) {
-            $short = explode('.', $mapped_name)[0];
-            $short_name_map[$short][$mapped_hid] = true;
-        }
-
-        $edges          = [];
-        $seen_edges     = [];
-        $lldp_unmatched = [];
-        // LLDP-Quality-Sammlung: pro Host-Reporter detailliertere Statistik
-        // fuer den Quality-Tab. Vereinheitlicht 4 Kategorien:
-        //   matched / unmatched / ambiguous / self
-        // Strukturierte Liste plus aggregat: { hostid → { matched: N, unmatched: [{raw,src}],
-        //   ambiguous: [{raw,src,candidates:[hid]}], self_loops: N } }
-        $lldp_quality = [];   // hostid → counters + lists
-        $ensureQ = function($hid) use (&$lldp_quality) {
-            if (!isset($lldp_quality[$hid])) {
-                $lldp_quality[$hid] = ['matched' => 0, 'unmatched' => [], 'ambiguous' => [], 'self' => 0];
-            }
-        };
-
-        // Cleanup-Helper fuer Vendor-spezifische Neighbor-Strings:
-        //   Cisco IP-Phones: "SEP00112233AABB" → enthaelt MAC, kein Host-Match
-        //   Cisco APs:       "AP-corp-01.example.com(JAFXXXXXXX)" → Serial in Klammern
-        //   HP/Aruba:        "ProCurve_Switch_2530-24G" → manchmal SysDescr statt SysName
-        //   Ubiquiti:        "UAP-AC-PRO" oder "ubnt-12345"
-        //   reverse-DNS:     "ip-10-0-0-5.eu-central-1.compute.internal"
-        // Wir reduzieren auf den ersten "echten" Token vor Leerzeichen/Klammer.
-        $cleanNeighbor = static function(string $raw): string {
-            $s = trim($raw);
-            // Vor erstem Leerzeichen abschneiden ("hostname Description...")
-            $sp = strpos($s, ' ');  if ($sp !== false) $s = substr($s, 0, $sp);
-            // Vor offener Klammer abschneiden ("hostname(serial)")
-            $br = strpos($s, '(');  if ($br !== false) $s = substr($s, 0, $br);
-            // Trailing-Punkte (FQDN-Wurzel) entfernen
-            $s = rtrim($s, '.');
-            return trim($s);
-        };
-
-        foreach ($lldp_raw as $item) {
-            // Wert kann komma-separierte Liste sein: "pve,HP24GARUBA".
-            // CDP kann auch "\n"-separiert oder mit Pipe kommen.
-            $neighbors = preg_split('/[,\n\r\|]+/', $item['lastvalue']);
-            foreach ($neighbors as $neighbor_full) {
-                // 0. Exact-Match auf den ROHEN Wert zuerst — SysNames/Visible-
-                // Names mit Leerzeichen ("Core Switch 1") matchten bis v4.21.1
-                // exakt; cleanNeighbor() wuerde sie am Leerzeichen zerschneiden
-                // (Regression). Cleanup nur als Fallback fuer Vendor-Suffixe.
-                $neighbor_full = trim((string) $neighbor_full);
-                if ($neighbor_full === '') continue;
-                $rhid = $name_map[strtolower($neighbor_full)] ?? null;
-                if (!$rhid && isset($ip_map[$neighbor_full])) {
-                    $rhid = $ip_map[$neighbor_full];
-                }
-
-                $neighbor_raw = $rhid ? $neighbor_full : $cleanNeighbor($neighbor_full);
-                if ($neighbor_raw === '') continue;
-                $lldp_val = strtolower($neighbor_raw);
-
-                // 1. Exakter Match gegen cleaned host/visiblename/lowercase
-                if (!$rhid) {
-                    $rhid = $name_map[$lldp_val] ?? null;
-                }
-
-                // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
-                if (!$rhid && isset($ip_map[$neighbor_raw])) {
-                    $rhid = $ip_map[$neighbor_raw];
-                }
-
-                // 2b. reverse-DNS-Pattern wie "ip-10-0-0-5" oder "host-10-0-0-5"
-                //     → extrahiere die IP und versuche IP-Match
-                if (!$rhid && preg_match('/(?:^|[-_])(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})/', $lldp_val, $mm)) {
-                    $extracted_ip = str_replace('-', '.', $mm[1]);
-                    if (isset($ip_map[$extracted_ip])) $rhid = $ip_map[$extracted_ip];
-                }
-
-                // 3. Short-Hostname (O(1)-Lookup via Map) — unique vs ambiguous tracken
-                $ambiguous_candidates = null;
-                if (!$rhid) {
-                    $lldp_short = explode('.', $lldp_val)[0];
-                    $candidates = $short_name_map[$lldp_short] ?? [];
-                    if (count($candidates) === 1) {
-                        $rhid = array_key_first($candidates);
-                    } elseif (count($candidates) > 1) {
-                        // Ambiguous: Short-Name matched mehrere Hosts → fuer
-                        // Quality-Tab merken, aber nicht als Edge anlegen
-                        // (sonst zufaellige Zuordnung).
-                        $ambiguous_candidates = array_keys($candidates);
-                    }
-                }
-
-                $rid = $item['hostid'];
-                $src = $item['src'] ?? 'other';
-                $ensureQ($rid);
-                if (!$rhid) {
-                    if ($ambiguous_candidates !== null) {
-                        $lldp_quality[$rid]['ambiguous'][] = [
-                            'raw' => $neighbor_raw, 'src' => $src, 'candidates' => $ambiguous_candidates
-                        ];
-                    } else {
-                        $lldp_quality[$rid]['unmatched'][] = ['raw' => $neighbor_raw, 'src' => $src];
-                        $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $rid . ', src=' . $src . ')';
-                    }
-                    continue;
-                }
-                if ($rhid === $rid) {
-                    // Self-Loop ignorieren (Host meldet sich selbst als Nachbarn)
-                    $lldp_quality[$rid]['self']++;
-                    continue;
-                }
-                $lldp_quality[$rid]['matched']++;
-                // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
-                // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
-                // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
-                // die Mitte ist der lokale Port des Reporters. Keys wie
-                // lldp.rem.sysname[eth0] liefern den Namen direkt. Comma-
-                // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
-                $port = '';
-                if (strpos($item['key_'], '[') !== false) {
-                    $port = $this->ifaceParam($item['key_']);
-                    if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $port, $pm)) {
-                        $port = $pm[2];
-                    }
-                    if (strlen($port) > 24) $port = substr($port, 0, 24);
-                }
-                $pair = [(string) $rid, (string) $rhid];
-                sort($pair);
-                $edge_key = implode('-', $pair);
-                if (!isset($seen_edges[$edge_key])) {
-                    $seen_edges[$edge_key] = count($edges);
-                    $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
-                                'to' => $rhid, 'iface' => $item['key_'],
-                                'src' => [$src => true],
-                                // Reporter-Hostid → lokaler Port. Meldet die
-                                // Gegenseite dieselbe Edge, ergaenzt der
-                                // Merge-Zweig unten ihre Port-Sicht.
-                                'ports' => $port !== '' ? [(string) $rid => $port] : []];
-                } else {
-                    // Edge schon bekannt (z.B. von LLDP) — Source ergaenzen
-                    // wenn jetzt CDP dieselbe Verbindung meldet (merge-Logik).
-                    $eidx = $seen_edges[$edge_key];
-                    if (!isset($edges[$eidx]['src'][$src])) {
-                        $edges[$eidx]['src'][$src] = true;
-                    }
-                    if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
-                        $edges[$eidx]['ports'][(string) $rid] = $port;
-                    }
-                }
-            }
-        }
-        // src-Map zu sortierter Liste konvertieren fuers Frontend ("lldp", "cdp")
-        foreach ($edges as &$_e) {
-            if (isset($_e['src']) && is_array($_e['src'])) {
-                $_e['src'] = array_keys($_e['src']);
-                sort($_e['src']);
-            }
-        }
-        unset($_e);
-
+        // Nachbar-Matching + Kantenbau ausgelagert nach
+        // topology/LldpEdgeBuilder.php (Review §6). Hosts + Roh-Nachbarn rein,
+        // Kanten + Qualitaetsstatistik raus — rein, kein API-Call, testbar.
+        $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw);
+        $edges          = $lldp['edges'];
+        $lldp_quality   = $lldp['quality'];
+        $lldp_unmatched = $lldp['unmatched'];
         // ── 5a. HOSTING/CONTAINMENT-KANTEN (nt:parent-Tag) ────────────────
         // Ein Host deklariert via Tag  nt:parent = <Hostname>  seinen Traeger
         // (VM → Hypervisor, Container → Node, ...). Ergibt eine GERICHTETE
@@ -984,7 +467,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             $all_acked = $total > 0 && $acked === $total;
 
             // Auto-Detection des Device-Type, ggf. überschrieben durch nt:icon-Tag
-            $detected_type = $this->deviceType($h['host'], $tpls);
+            $detected_type = HostMetadata::deviceType($h['host'], $tpls);
             $effective_type = $host_icon_override[$hid] ?? $detected_type;
 
             // Extra-Items für nt:show-Tags zusammenstellen — in der Reihenfolge
@@ -1050,8 +533,8 @@ class NetworkTopologyData extends NetworkTopologyController {
                 'id'          => $hid,
                 'label'       => $h['name'] !== '' ? $h['name'] : $h['host'],
                 'host'        => $h['host'],
-                'ip'          => $primary_ip_cache[$hid] ?? ($primary_ip_cache[$hid] = $this->primaryIp($ifaces)),
-                'iftype'      => $this->ifaceType($ifaces),
+                'ip'          => $primary_ip_cache[$hid] ?? ($primary_ip_cache[$hid] = HostMetadata::primaryIp($ifaces)),
+                'iftype'      => HostMetadata::ifaceType($ifaces),
                 'severity'    => $host_severity[$hid] ?? 0,
                 'problems'    => $host_problems[$hid]  ?? 0,
                 'problem_list' => $host_problem_list[$hid] ?? [],
@@ -1169,39 +652,39 @@ class NetworkTopologyData extends NetworkTopologyController {
             if (!$h) return (string) $hid;
             return ($h['name'] ?? '') !== '' ? $h['name'] : ($h['host'] ?? (string) $hid);
         };
-        if (function_exists('apcu_fetch')) {
-            $uid = (int) (\CWebUser::$data['userid'] ?? 0);
-            $gk  = array_map('strval', $groupids);
-            sort($gk);
-            $topo_key = 'nt_topo_' . $uid . '_' . md5(implode(',', $gk));
-            $current = [];   // "idA|idB" → [labelA, labelB]
-            foreach ($edges as $e) {
-                if (!empty($e['_isInternetEdge'])) continue;
-                $pair = [(string) $e['from'], (string) $e['to']];
-                sort($pair);
-                $current[$pair[0] . '|' . $pair[1]] = [$host_label($pair[0]), $host_label($pair[1])];
+        // Baseline der letzten Abfrage (user- + gruppengebunden, 7 Tage). Das ist
+        // KEIN Response-Cache, sondern ein "letzter Stand"-Speicher: der Diff
+        // dagegen ergibt topo_changes. User-Scoping, Sortierung der groupids und
+        // Schema-Version macht NtCache; ohne APCu ist es ein No-Op und
+        // topo_changes bleibt schlicht leer.
+        $current = [];   // "idA|idB" → [labelA, labelB]
+        foreach ($edges as $e) {
+            if (!empty($e['_isInternetEdge'])) continue;
+            $pair = [(string) $e['from'], (string) $e['to']];
+            sort($pair);
+            $current[$pair[0] . '|' . $pair[1]] = [$host_label($pair[0]), $host_label($pair[1])];
+        }
+        $baseline = NtCache::get('topo_baseline', [$groupids]);
+        if (is_array($baseline)) {
+            foreach ($current as $k => $lbls) {
+                if (!isset($baseline[$k])) $topo_changes['added'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
             }
-            $ok = false;
-            $baseline = ($uid > 0) ? apcu_fetch($topo_key, $ok) : false;
-            if ($ok && is_array($baseline)) {
-                foreach ($current as $k => $lbls) {
-                    if (!isset($baseline[$k])) $topo_changes['added'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
-                }
-                foreach ($baseline as $k => $lbls) {
-                    if (!isset($current[$k])) $topo_changes['removed'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
-                }
-            }
-            if ($uid > 0) {
-                apcu_store($topo_key, $current, 7 * 86400);
+            foreach ($baseline as $k => $lbls) {
+                if (!isset($current[$k])) $topo_changes['removed'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
             }
         }
+        NtCache::set('topo_baseline', [$groupids], $current, 7 * 86400);
 
         $_payload = $this->encodeJson(
             ['nodes' => $nodes, 'edges' => $edges,
              'lldp_unmatched' => $lldp_unmatched,
              'lldp_quality'   => $lldp_quality_out,
              'topo_changes'   => $topo_changes,
-             'health'         => $health]
+             'health'         => $health,
+             // Truncation sichtbar machen (statt still abzuschneiden).
+             'truncated'       => $requested_groups > self::MAX_GROUPS,
+             'requested_count' => $requested_groups,
+             'processed_count' => count($groupids)]
         );
         NetworkTopologyDiag::record([
             'action'     => 'data',
@@ -1213,141 +696,4 @@ class NetworkTopologyData extends NetworkTopologyController {
         $this->jsonResponseRaw($_payload);
     }
 
-    /**
-     * Laedt Integration-Templates aus Zabbix Global-Macros.
-     * Erwartet Paare: {$NT.INT.<NAME>.LABEL} + {$NT.INT.<NAME>.URL}
-     * (Dot-Notation = Zabbix-Konvention; Underscore-Form weiter akzeptiert).
-     * Liefert ein Array [{name, label, url}, ...] mit dem URL-Template
-     * (Tokens noch nicht expandiert).
-     *
-     * Beispiel-Macros:
-     *   {$NT.INT.NETBOX.LABEL} = NetBox
-     *   {$NT.INT.NETBOX.URL}   = https://netbox.fox1.de/dcim/devices/?q={host}
-     */
-    private function loadIntegrationTemplates(): array {
-        try {
-            $macros = API::UserMacro()->get([
-                'output'      => ['macro', 'value'],
-                'globalmacro' => true,
-            ]);
-        } catch (\Throwable $e) {
-            return [];   // API nicht verfuegbar → leise no-op
-        }
-        $by_name = [];   // name → ['label' => ?, 'url' => ?]
-        foreach ($macros as $m) {
-            $macro = $m['macro'] ?? '';
-            // Kanonisch Dot-Notation ({$NT.INT.<NAME>.URL}) = Zabbix-Konvention;
-            // die alte Underscore-Form ({$NT_INT_..._URL}) wird aus Kompat weiter akzeptiert.
-            if (!preg_match('/^\{\$NT[._]INT[._]([A-Z0-9_]+)[._](LABEL|URL)\}$/', $macro, $mm)) continue;
-            $name = $mm[1];
-            $part = strtolower($mm[2]);
-            $by_name[$name][$part] = (string) ($m['value'] ?? '');
-        }
-        $out = [];
-        foreach ($by_name as $name => $parts) {
-            $label = trim($parts['label'] ?? '');
-            $url   = trim($parts['url']   ?? '');
-            if ($label === '' || $url === '') continue;
-            // Schutz-Caps analog nt:link
-            if (strlen($label) > 200 || strlen($url) > 2048) continue;
-            if (!preg_match('#^https?://#i', $url)) continue;
-            if (preg_match('/[\x00-\x1F\x7F]/', $url . $label)) continue;
-            $out[] = ['name' => $name, 'label' => $label, 'url' => $url];
-        }
-        return $out;
-    }
-
-    /**
-     * Extrahiert den Bracket-Parameter eines Item-Keys als Korrelations-Key
-     * fuer Interface-Items ("ifOperStatus[eth0]" → "eth0",
-     * "net.if.status[ifOperStatus.3]" → "ifOperStatus.3" → normalisiert "3").
-     * Ohne Bracket: ganzer Key.
-     */
-    private function ifaceParam(string $key): string {
-        $p = strpos($key, '[');
-        if ($p === false) return $key;
-        $q = strrpos($key, ']');
-        $param = substr($key, $p + 1, ($q !== false ? $q : strlen($key)) - $p - 1);
-        // "ifOperStatus.3" / "ifAdminStatus.3" → "3", damit Oper und Admin
-        // desselben Interfaces trotz MIB-Name-Praefix korrelieren.
-        return preg_replace('/^if(?:Oper|Admin)Status\./', '', $param);
-    }
-
-    // Returns IP from primary interface, prefers Agent but falls back to SNMP/JMX/IPMI
-    private function primaryIp(array $ifaces): string {
-        if (!$ifaces) return '';
-        // Sort: main=1 first, then by type (1=agent, 2=snmp, 3=ipmi, 4=jmx)
-        usort($ifaces, static fn($a, $b) =>
-            $b['main'] !== $a['main']
-                ? (int)$b['main'] - (int)$a['main']
-                : (int)$a['type'] - (int)$b['type']
-        );
-        return $ifaces[0]['ip'] ?? '';
-    }
-
-    // Returns interface type string for JS display
-    private function ifaceType(array $ifaces): string {
-        foreach ($ifaces as $i) {
-            if ((int)$i['main'] === 1) {
-                return match((int)$i['type']) {
-                    1 => 'Agent',
-                    2 => 'SNMP',
-                    3 => 'IPMI',
-                    4 => 'JMX',
-                    default => 'Unknown'
-                };
-            }
-        }
-        return 'Unknown';
-    }
-
-    private function deviceType(string $host, array $tpls): string {
-        $s = strtolower($host.' '.implode(' ', $tpls));
-        $map = [
-            // Network security
-            'firewall'       => ['fw-','firewall','fortigate','pfsense','opnsense','-asa-','srx',
-                                 'opnsense by snmp'],
-            'router'         => ['rtr-','router','-gw-','gateway','mikrotik routeros','vyos'],
-            'switch'         => ['sw-','switch','-core-','-acc-','catalyst','procurve','nexus',
-                                 'hp enterprise switch','tp-link by snmp'],
-            'wireless'       => ['-ap-','wlan','wifi','wireless','unifi','omada'],
-            // Storage & backup
-            'storage'        => ['nas-','synology','qnap','netapp','storage','truenas',
-                                 'truenas core by snmp','synology active backup'],
-            // Virtualization
-            'hypervisor'     => ['esxi','vmware','proxmox','proxmox ve by http',
-                                 'hypervisor','pve'],
-            // Surveillance
-            'camera'         => ['cam-','camera','nvr','dvr','hikvision','dahua','axis'],
-            // Power
-            'ups'            => ['ups-','usv-','usv','ups','apc','eaton','powerware',
-                                 'network ups'],
-            // Home automation
-            'homeauto'       => ['home assistant','homeassistant','home-assistant',
-                                 'zigbee','z-wave','domoticz','openhab'],
-            // Mail
-            'mailserver'     => ['mail','smtp','imap','mailcow','postfix','dovecot',
-                                 'mailcow complete'],
-            // Web & apps
-            'webserver'      => ['nginx by zabbix','apache','web-','www-'],
-            // Containers
-            'container'      => ['docker by zabbix','docker','container','kubernetes'],
-            // Monitoring
-            'monitoring'     => ['tactical rmm','rmm.cloudglue'],
-            // Printer
-            'printer'        => ['prt-','printer','mfp'],
-            // Linux/Windows/macOS generic servers
-            'linux'          => ['linux by zabbix agent','zfs on linux'],
-            'windows'        => ['windows','win-'],
-            'macos'          => ['macos by zabbix agent'],
-            // Generic server fallback
-            'server'         => ['srv-','server'],
-        ];
-        foreach ($map as $type => $kws) {
-            foreach ($kws as $kw) {
-                if (strpos($s, $kw) !== false) return $type;
-            }
-        }
-        return 'server';
-    }
 }

@@ -25,6 +25,22 @@ function _ensureStack() {
     return _stack;
 }
 
+// Backend-Truncation sichtbar machen: mehrere Endpunkte kappen zu lange
+// Eingabelisten (MAX_GROUPS/MAX_HOSTS) und melden das jetzt via
+// truncated/requested_count/processed_count. Ohne Hinweis haelt der User ein
+// unvollstaendiges Ergebnis fuer vollstaendig.
+//
+// Warnt pro Signatur nur EINMAL — der Auto-Refresh (30s) wuerde sonst
+// endlos denselben Toast nachlegen. Die Nachricht kommt fertig uebersetzt
+// rein, weil dieses Modul bewusst kein i18n zieht.
+const _truncSeen = new Set();
+
+export function toastTruncatedOnce(signature, message) {
+    if (_truncSeen.has(signature)) return;
+    _truncSeen.add(signature);
+    toast(message, 'warn', 8000);
+}
+
 export function toast(message, type, durationMs) {
     const t = TOAST_COLORS[type] || TOAST_COLORS.info;
     const ms = (typeof durationMs === 'number') ? durationMs : 3500;

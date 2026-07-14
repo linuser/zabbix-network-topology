@@ -1,0 +1,219 @@
+<?php
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 PlaNet Fox / Alexander Fox
+declare(strict_types = 1);
+
+namespace Modules\NetworkTopologyV6\Topology;
+
+/**
+ * LldpEdgeBuilder
+ *
+ * Dritter Schnitt der Data.php-Aufteilung (Review §6, dort "LldpParser").
+ *
+ * Baut aus den LLDP-/CDP-Nachbarmeldungen der Geraete die Kanten der Topologie.
+ * Das ist die heikelste Zuordnung im ganzen Modul: ein Switch meldet einen
+ * Nachbarn als Namen ("sw-core", "sw-core.fritz.box", "SW-CORE") und wir muessen
+ * raten, WELCHER Zabbix-Host das ist — ueber technischen Namen, Anzeigenamen,
+ * FQDN-Kuerzung und Gross-/Kleinschreibung hinweg. Faellt das Matching still auf
+ * die Nase, fehlen Kanten und niemand merkt es: die Karte sieht nur "leerer" aus.
+ *
+ * Genau deshalb gehoert die Logik hier raus aus dem 1200-Zeilen-doAction() —
+ * jetzt ist sie mit synthetischen Nachbarn testbar (siehe tests/).
+ *
+ * Rein: die Hosts + die rohen Nachbarmeldungen. Raus: Kanten, Qualitaets-
+ * Statistik (was wurde gematcht, was nicht) und die unmatched-Liste fuers
+ * Frontend. Kein API-Call, kein Controller-Zustand.
+ *
+ * Der Code ist unveraendert aus Data.php uebernommen — reiner Struktur-Umbau.
+ */
+final class LldpEdgeBuilder {
+
+    /**
+     * @param array $hosts     hostid => Host-Datensatz (mit 'host', 'name', ...)
+     * @param array $lldp_raw  Roh-Nachbarmeldungen aus dem MetricExtractor
+     *
+     * @return array{edges: array, quality: array, unmatched: array}
+     */
+    public static function build(array $hosts, array $lldp_raw): array {
+        // ── 5. LLDP EDGES ─────────────────────────────────────────────────
+        $name_map = [];
+        $ip_map   = [];
+        foreach ($hosts as $hid => $h) {
+            $name_map[strtolower($h['host'])] = $hid;
+            $name_map[strtolower($h['name'])] = $hid;
+            foreach ($h['interfaces'] ?? [] as $iface) {
+                if (!empty($iface['ip'])) {
+                    $ip_map[$iface['ip']] = $hid;
+                }
+            }
+        }
+        // Short-Name-Map einmal vorberechnen statt pro Edge linear durch
+        // alle name_map-Eintraege zu iterieren. Bei 500 Hosts × 500 LLDP-
+        // Neighbors war das vorher 250k Vergleiche.
+        $short_name_map = [];   // short → [hid, ...]
+        foreach ($name_map as $mapped_name => $mapped_hid) {
+            $short = explode('.', $mapped_name)[0];
+            $short_name_map[$short][$mapped_hid] = true;
+        }
+
+        $edges          = [];
+        $seen_edges     = [];
+        $lldp_unmatched = [];
+        // LLDP-Quality-Sammlung: pro Host-Reporter detailliertere Statistik
+        // fuer den Quality-Tab. Vereinheitlicht 4 Kategorien:
+        //   matched / unmatched / ambiguous / self
+        // Strukturierte Liste plus aggregat: { hostid → { matched: N, unmatched: [{raw,src}],
+        //   ambiguous: [{raw,src,candidates:[hid]}], self_loops: N } }
+        $lldp_quality = [];   // hostid → counters + lists
+        $ensureQ = function($hid) use (&$lldp_quality) {
+            if (!isset($lldp_quality[$hid])) {
+                $lldp_quality[$hid] = ['matched' => 0, 'unmatched' => [], 'ambiguous' => [], 'self' => 0];
+            }
+        };
+
+        // Cleanup-Helper fuer Vendor-spezifische Neighbor-Strings:
+        //   Cisco IP-Phones: "SEP00112233AABB" → enthaelt MAC, kein Host-Match
+        //   Cisco APs:       "AP-corp-01.example.com(JAFXXXXXXX)" → Serial in Klammern
+        //   HP/Aruba:        "ProCurve_Switch_2530-24G" → manchmal SysDescr statt SysName
+        //   Ubiquiti:        "UAP-AC-PRO" oder "ubnt-12345"
+        //   reverse-DNS:     "ip-10-0-0-5.eu-central-1.compute.internal"
+        // Wir reduzieren auf den ersten "echten" Token vor Leerzeichen/Klammer.
+        $cleanNeighbor = static function(string $raw): string {
+            $s = trim($raw);
+            // Vor erstem Leerzeichen abschneiden ("hostname Description...")
+            $sp = strpos($s, ' ');  if ($sp !== false) $s = substr($s, 0, $sp);
+            // Vor offener Klammer abschneiden ("hostname(serial)")
+            $br = strpos($s, '(');  if ($br !== false) $s = substr($s, 0, $br);
+            // Trailing-Punkte (FQDN-Wurzel) entfernen
+            $s = rtrim($s, '.');
+            return trim($s);
+        };
+
+        foreach ($lldp_raw as $item) {
+            // Wert kann komma-separierte Liste sein: "pve,HP24GARUBA".
+            // CDP kann auch "\n"-separiert oder mit Pipe kommen.
+            $neighbors = preg_split('/[,\n\r\|]+/', $item['lastvalue']);
+            foreach ($neighbors as $neighbor_full) {
+                // 0. Exact-Match auf den ROHEN Wert zuerst — SysNames/Visible-
+                // Names mit Leerzeichen ("Core Switch 1") matchten bis v4.21.1
+                // exakt; cleanNeighbor() wuerde sie am Leerzeichen zerschneiden
+                // (Regression). Cleanup nur als Fallback fuer Vendor-Suffixe.
+                $neighbor_full = trim((string) $neighbor_full);
+                if ($neighbor_full === '') continue;
+                $rhid = $name_map[strtolower($neighbor_full)] ?? null;
+                if (!$rhid && isset($ip_map[$neighbor_full])) {
+                    $rhid = $ip_map[$neighbor_full];
+                }
+
+                $neighbor_raw = $rhid ? $neighbor_full : $cleanNeighbor($neighbor_full);
+                if ($neighbor_raw === '') continue;
+                $lldp_val = strtolower($neighbor_raw);
+
+                // 1. Exakter Match gegen cleaned host/visiblename/lowercase
+                if (!$rhid) {
+                    $rhid = $name_map[$lldp_val] ?? null;
+                }
+
+                // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
+                if (!$rhid && isset($ip_map[$neighbor_raw])) {
+                    $rhid = $ip_map[$neighbor_raw];
+                }
+
+                // 2b. reverse-DNS-Pattern wie "ip-10-0-0-5" oder "host-10-0-0-5"
+                //     → extrahiere die IP und versuche IP-Match
+                if (!$rhid && preg_match('/(?:^|[-_])(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})/', $lldp_val, $mm)) {
+                    $extracted_ip = str_replace('-', '.', $mm[1]);
+                    if (isset($ip_map[$extracted_ip])) $rhid = $ip_map[$extracted_ip];
+                }
+
+                // 3. Short-Hostname (O(1)-Lookup via Map) — unique vs ambiguous tracken
+                $ambiguous_candidates = null;
+                if (!$rhid) {
+                    $lldp_short = explode('.', $lldp_val)[0];
+                    $candidates = $short_name_map[$lldp_short] ?? [];
+                    if (count($candidates) === 1) {
+                        $rhid = array_key_first($candidates);
+                    } elseif (count($candidates) > 1) {
+                        // Ambiguous: Short-Name matched mehrere Hosts → fuer
+                        // Quality-Tab merken, aber nicht als Edge anlegen
+                        // (sonst zufaellige Zuordnung).
+                        $ambiguous_candidates = array_keys($candidates);
+                    }
+                }
+
+                $rid = $item['hostid'];
+                $src = $item['src'] ?? 'other';
+                $ensureQ($rid);
+                if (!$rhid) {
+                    if ($ambiguous_candidates !== null) {
+                        $lldp_quality[$rid]['ambiguous'][] = [
+                            'raw' => $neighbor_raw, 'src' => $src, 'candidates' => $ambiguous_candidates
+                        ];
+                    } else {
+                        $lldp_quality[$rid]['unmatched'][] = ['raw' => $neighbor_raw, 'src' => $src];
+                        $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $rid . ', src=' . $src . ')';
+                    }
+                    continue;
+                }
+                if ($rhid === $rid) {
+                    // Self-Loop ignorieren (Host meldet sich selbst als Nachbarn)
+                    $lldp_quality[$rid]['self']++;
+                    continue;
+                }
+                $lldp_quality[$rid]['matched']++;
+                // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
+                // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
+                // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
+                // die Mitte ist der lokale Port des Reporters. Keys wie
+                // lldp.rem.sysname[eth0] liefern den Namen direkt. Comma-
+                // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
+                $port = '';
+                if (strpos($item['key_'], '[') !== false) {
+                    $port = HostMetadata::ifaceParam($item['key_']);
+                    if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $port, $pm)) {
+                        $port = $pm[2];
+                    }
+                    if (strlen($port) > 24) $port = substr($port, 0, 24);
+                }
+                $pair = [(string) $rid, (string) $rhid];
+                sort($pair);
+                $edge_key = implode('-', $pair);
+                if (!isset($seen_edges[$edge_key])) {
+                    $seen_edges[$edge_key] = count($edges);
+                    $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
+                                'to' => $rhid, 'iface' => $item['key_'],
+                                'src' => [$src => true],
+                                // Reporter-Hostid → lokaler Port. Meldet die
+                                // Gegenseite dieselbe Edge, ergaenzt der
+                                // Merge-Zweig unten ihre Port-Sicht.
+                                'ports' => $port !== '' ? [(string) $rid => $port] : []];
+                } else {
+                    // Edge schon bekannt (z.B. von LLDP) — Source ergaenzen
+                    // wenn jetzt CDP dieselbe Verbindung meldet (merge-Logik).
+                    $eidx = $seen_edges[$edge_key];
+                    if (!isset($edges[$eidx]['src'][$src])) {
+                        $edges[$eidx]['src'][$src] = true;
+                    }
+                    if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
+                        $edges[$eidx]['ports'][(string) $rid] = $port;
+                    }
+                }
+            }
+        }
+        // src-Map zu sortierter Liste konvertieren fuers Frontend ("lldp", "cdp")
+        foreach ($edges as &$_e) {
+            if (isset($_e['src']) && is_array($_e['src'])) {
+                $_e['src'] = array_keys($_e['src']);
+                sort($_e['src']);
+            }
+        }
+        unset($_e);
+
+
+        return [
+            'edges'     => $edges,
+            'quality'   => $lldp_quality,
+            'unmatched' => $lldp_unmatched,
+        ];
+    }
+}

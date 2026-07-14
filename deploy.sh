@@ -28,7 +28,8 @@
 set -euo pipefail
 
 # ── Config ─────────────────────────────────────────────────────────────────
-readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+readonly SCRIPT_DIR
 readonly TMP_MAIN="/tmp/network_topology_v6.zip"
 readonly TMP_WIDGET="/tmp/network_topology_v6_widget.zip"
 readonly TMP_HEALTH="/tmp/network_topology_v6_health_widget.zip"
@@ -71,7 +72,8 @@ esac
 # ServerAlive haelt die Verbindung wach und erkennt echte Abbrueche schnell.
 # ControlMaster degradiert sauber: faellt der Master aus, verbindet ssh
 # normal. Socket-Name aus dem (bereits validierten) Servernamen abgeleitet.
-readonly SSH_CTL="/tmp/nt-ssh-$(printf '%s' "$SERVER" | tr -c 'A-Za-z0-9' '_').ctl"
+SSH_CTL="/tmp/nt-ssh-$(printf '%s' "$SERVER" | tr -c 'A-Za-z0-9' '_').ctl"
+readonly SSH_CTL
 readonly SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=$SSH_CTL"
                    -o ControlPersist=60 -o ServerAliveInterval=5 -o ServerAliveCountMax=3)
 cleanup_ssh() { ssh "${SSH_OPTS[@]}" -O exit -- "$SERVER" 2>/dev/null || true; }
@@ -139,6 +141,12 @@ echo "  Modules:    $REMOTE_MODULES"
 # deployte Bundle garantiert dem Source entspricht. Braucht node + esbuild
 # (npm install). Fehlt die Toolchain, brechen wir mit klarer Meldung ab —
 # ein veraltetes/fehlendes Bundle wuerde sonst still ausgeliefert.
+#
+# "npm run build" erzeugt bewusst KEINE Source-Map (Release-Build) — vorher
+# landete eine ~1 MB grosse nt-bundle.js.map oeffentlich abrufbar auf den
+# Servern. Wer sie zum Debuggen braucht: "npm run build:debug" (die .map ist
+# gitignored). Der '*.map'-rsync-Ausschluss unten faengt zusaetzlich eine
+# stehengebliebene Debug-Map ab, damit sie nie ins Zip rutscht.
 if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     echo "→ Baue JS-Bundle (esbuild)"
     if [[ ! -x "$SCRIPT_DIR/node_modules/.bin/esbuild" ]]; then
@@ -157,8 +165,10 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
         --exclude 'widget' --exclude 'widget_health' --exclude 'dashboards' \
         --exclude 'tools' --exclude 'templates' \
         --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
-        --exclude '.DS_Store' --exclude '*.zip' \
+        --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
         --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-install.sh' \
+        --exclude 'tests' --exclude '.gitlab-ci.yml' \
+        --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
         "$SCRIPT_DIR/" "$STAGE/network_topology_v6/"
     rm -f "$TMP_MAIN"
     (cd "$STAGE" && zip -rq "$TMP_MAIN" network_topology_v6)
@@ -183,6 +193,11 @@ fi
 
 # ── Installieren auf dem Server ────────────────────────────────────────────
 echo "→ Installiere auf $SERVER"
+# SC2087 bewusst aus: der Heredoc ist ABSICHTLICH unquoted. Die Variablen unten
+# (REMOTE_MODULES, MODE, FPM_SERVICE, R_*) werden LOKAL expandiert und als
+# Literale zum Server geschickt. Quoten wuerde sie remote undefined lassen —
+# genau das war frueher der Bug (unzip "" statt unzip "$REMOTE_MAIN").
+# shellcheck disable=SC2087
 ssh "${SSH_OPTS[@]}" -- "$SERVER" bash -s <<REMOTE_INSTALL
 set -e
 # Variablen hier lokal expandiert (unquoted Heredoc) — die inneren Bloecke

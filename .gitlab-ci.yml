@@ -1,0 +1,80 @@
+# CI fuer "Network Topology for Zabbix"  (Code-Review §14 + §11-Danach-Liste)
+#
+# Fuenf Gates, die genau die Regressionen abfangen, die uns real passiert sind:
+#
+#   php-lint       — Syntaxfehler in Actions/Views/Widgets/Module.php
+#   xss-tripwire   — tools/check-xss.sh --strict (innerHTML-Sinks ohne esc())
+#   shellcheck     — nt-install.sh, deploy.sh, tools/*.sh
+#   npm-audit      — verwundbare Dev-Dependencies (z.B. der alte esbuild-Fund)
+#   bundle-drift   — DER wichtige: assets/js/dist/nt-bundle.js ist eingecheckt und
+#                    kann von den Quellmodulen abweichen, wenn jemand den Build
+#                    vergisst. Der Job baut frisch und schlaegt fehl, sobald sich
+#                    das Ergebnis vom eingecheckten Bundle unterscheidet.
+#
+# Hinweis: "npm run build" erzeugt bewusst KEINE Source-Map (Release-Build), damit
+# der Drift-Vergleich stabil bleibt und keine ~1 MB .map ausgeliefert wird.
+
+stages:
+  - lint
+  - build
+
+default:
+  interruptible: true
+
+php-lint:
+  stage: lint
+  image: php:8.2-cli-alpine
+  script:
+    - find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+
+# Unit-Tests der aus Data.php ausgelagerten, reinen Klassen (Review §6). Sie
+# brauchen weder DB noch Session noch Zabbix — genau deshalb wurden sie
+# ausgelagert. Laeuft im nackten php-cli-Image.
+unit-tests:
+  stage: lint
+  image: php:8.2-cli-alpine
+  script:
+    - for t in tests/*Test.php; do echo "--- $t"; php "$t" || exit 1; done
+
+xss-tripwire:
+  stage: lint
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache bash grep
+  script:
+    - bash tools/check-xss.sh --strict
+
+# Schaerferer Bruder des Tripwires: no-unsanitized wertet den Ausdruck aus statt
+# zu greppen. Der Bestand (~76 Sinks aus esc()-Buildern) ist in
+# eslint-suppressions.json gebaselined — dieser Job faellt also genau dann, wenn
+# NEUER unsicherer Code dazukommt.
+eslint-dom-sinks:
+  stage: lint
+  image: node:22-alpine
+  script:
+    - npm ci
+    - npm run ci:eslint
+
+shellcheck:
+  stage: lint
+  image: koalaman/shellcheck-alpine:stable
+  script:
+    - shellcheck nt-install.sh deploy.sh tools/*.sh
+
+npm-audit:
+  stage: lint
+  image: node:22-alpine
+  script:
+    - npm ci
+    - npm audit --audit-level=moderate
+
+bundle-drift:
+  stage: build
+  image: node:22-alpine
+  before_script:
+    - apk add --no-cache git
+  script:
+    - npm ci
+    - npm run build
+    # Exit 1, wenn das eingecheckte Bundle nicht zu den Quellmodulen passt.
+    - git diff --exit-code -- assets/js/dist/nt-bundle.js

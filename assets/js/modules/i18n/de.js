@@ -269,6 +269,7 @@ export default {
     'stats.error': 'Fehler: {msg}',
     'stats.agg_summary': '{events} Events &middot; {hosts} Hosts &middot; {triggers} Trigger &middot; {from} – {to}',
     'stats.truncated': 'Achtung: Backend-Limit erreicht',
+    'warn.truncated': '⚠ Nur die ersten {processed} von {requested} Hostgruppen ausgewertet — Auswahl eingrenzen für ein vollständiges Bild.',
     'stats.col.host': 'Host',
     'stats.col.events': 'Events',
     'stats.col.worst': 'Worst',

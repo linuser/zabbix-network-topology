@@ -69,19 +69,13 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
             return;
         }
 
-        // Cache-Key nur uid+groups+days (bounded, user-scoped) — Hosts werden
-        // serverseitig aus den Gruppen abgeleitet, nicht vom Client.
-        $uid = (int) (\CWebUser::$data['userid'] ?? 0);
-        $gk = array_map('strval', $groupids);
-        sort($gk);
-        $cache_key = 'nt_rf_' . $uid . '_' . md5($days . '|' . implode(',', $gk));
-        if ($uid > 0 && function_exists('apcu_fetch')) {
-            $ok = false;
-            $cached = apcu_fetch($cache_key, $ok);
-            if ($ok && is_array($cached)) {
-                $this->out($cached, $_t0, true);
-                return;
-            }
+        // Cache-Key nur groups+days (bounded) — Hosts werden serverseitig aus
+        // den Gruppen abgeleitet, nicht vom Client. User-Scoping, Sortierung
+        // der groupids und Schema-Version macht NtCache.
+        $cached = NtCache::get('resource_forecast', [$groupids, $days]);
+        if ($cached !== null) {
+            $this->out($cached, $_t0, true);
+            return;
         }
 
         $hosts = API::Host()->get([
@@ -168,9 +162,7 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
         }
 
         $payload = ['days' => $days, 'hosts' => $out_hosts ?: (object) []];
-        if ($uid > 0 && function_exists('apcu_store')) {
-            apcu_store($cache_key, $payload, self::CACHE_TTL);
-        }
+        NtCache::set('resource_forecast', [$groupids, $days], $payload, self::CACHE_TTL);
         $this->out($payload, $_t0, false);
     }
 

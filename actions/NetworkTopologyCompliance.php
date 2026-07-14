@@ -32,6 +32,7 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
 
     private const STALE_PROBLEM_DAYS = 7;
     private const MAX_GROUPS = 100;
+    private const CACHE_TTL  = 60;
 
     protected function init(): void {
         $this->disableCsrfValidation();
@@ -62,27 +63,21 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
             $this->respond(['hosts' => [], 'aggregate' => (object)[], 'total' => 0]);
             return;
         }
-        if (count($groupids) > self::MAX_GROUPS) {
+        // Nicht still abschneiden — die Zahlen gehen mit in die Antwort.
+        $requested_groups = count($groupids);
+        if ($requested_groups > self::MAX_GROUPS) {
             $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
         }
 
-        // Kurzer APCu-Cache (60s, user-scoped): 1 Host.get ueber bis zu 100
-        // Gruppen mit selectInterfaces/Inventory/Templates + Problem.get +
-        // Maintenance.get ist teuer genug dass ein authentifizierter User den
-        // Endpoint nicht im Sekundentakt haemmern soll.
-        $cache_ids = array_map('strval', $groupids);
-        sort($cache_ids);
-        $uid = (int) (\CWebUser::$data['userid'] ?? 0);
-        $cache_key = ($uid > 0 && function_exists('apcu_fetch'))
-            ? 'nt_compl_' . $uid . '_' . md5(implode(',', $cache_ids))
-            : '';
-        if ($cache_key !== '') {
-            $ok = false;
-            $cached = apcu_fetch($cache_key, $ok);
-            if ($ok && is_array($cached)) {
-                $this->respond($cached);
-                return;
-            }
+        // Kurzer Cache (60s): 1 Host.get ueber bis zu 100 Gruppen mit
+        // selectInterfaces/Inventory/Templates + Problem.get + Maintenance.get
+        // ist teuer genug, dass wiederholte Aufrufe nicht jedes Mal durchlaufen
+        // sollen. User-Scoping (Permissions!), Sortierung der groupids und
+        // Schema-Version macht NtCache.
+        $cached = NtCache::get('compliance', [$groupids]);
+        if ($cached !== null) {
+            $this->respond($this->withTruncation($cached, $requested_groups, count($groupids)));
+            return;
         }
 
         // Hosts mit allen benoetigten Feldern in einem Call.
@@ -239,9 +234,8 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
             'cutoff_days' => self::STALE_PROBLEM_DAYS,
         ];
 
-        if ($cache_key !== '' && function_exists('apcu_store')) {
-            apcu_store($cache_key, $payload, 60);
-        }
+        // Truncation-Felder bewusst NICHT mitcachen (siehe withTruncation()).
+        NtCache::set('compliance', [$groupids], $payload, self::CACHE_TTL);
 
         NetworkTopologyDiag::record([
             'action'     => 'compliance',
@@ -250,7 +244,7 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
             'cache_hit'  => false,
             'counts'     => ['hosts' => count($out_hosts)],
         ]);
-        $this->respond($payload);
+        $this->respond($this->withTruncation($payload, $requested_groups, count($groupids)));
     }
 
     private function respond(array $data): void {

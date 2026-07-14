@@ -2,7 +2,67 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.11 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 4/n** (Review §6): der **Tag-Scan** (91 Zeilen) liegt jetzt in `topology/HostTagParser.php` — die Auswertung von `nt:icon` / `nt:show` / `nt:link` / `nt:parent`, mit denen ein Admin einzelne Hosts steuert.
+  `Data.php`: **1357 → 699 Zeilen** (−48 %).
+
+### Added
+- **Dritter Unit-Test** (`tests/HostTagParserTest.php`) — und der sicherheitsrelevanteste: `nt:link` verarbeitet eine **frei eingetippte URL**. Der Test belegt, dass `javascript:`-, `data:`- und `ftp://`-URLs verworfen werden (nur `http`/`https` sind erlaubt), dass die Icon-Whitelist greift und dass der 6-Links-Cap hält. Fiele eine dieser Regeln bei einem Umbau still weg, wäre das ein echter Vektor im Kontextmenü — und einem Diff sieht man das nicht an. 10/10 grün.
+
+## v4.34.10 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 3/n** (Review §6): die **LLDP-/CDP-Nachbar-Erkennung** (~174 Zeilen) liegt jetzt in `topology/LldpEdgeBuilder.php`. Das ist die heikelste Zuordnung im Modul — ein Switch meldet einen Nachbarn als *Namen*, und das Modul muss raten, welcher Zabbix-Host gemeint ist (technischer Name, Anzeigename, FQDN-Kürzung, Groß-/Kleinschreibung). Greift das daneben, **fehlen einfach Kanten**: die Karte sieht nur „leerer" aus, niemand bekommt einen Fehler. Genau solche stillen Aussetzer fängt man nur mit Tests.
+  `Data.php`: **1357 → 781 Zeilen** (−42 %). Weiterhin reiner Struktur-Umbau, Code byte-identisch verschoben, Schnittstelle bewiesen vollständig.
+
+### Added
+- **Zweiter Unit-Test** (`tests/LldpEdgeBuilderTest.php`): prüft exaktes Namens-Matching, GROSSSCHREIBUNG + FQDN (`SW-CORE.fritz.box` → Host `sw-core`), und dass ein Zabbix **unbekannter** Nachbar keine Falschkante erzeugt, sondern sauber in `unmatched` landet. 6/6 grün.
+- Der CI-Job `unit-tests` läuft jetzt über **alle** `tests/*Test.php` — neue Tests werden automatisch mitgenommen.
+
+## v4.34.9 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 2/n** (Review §6): die **Metrik-Klassifikation** (~290 Zeilen, der größte Block im `doAction()`) liegt jetzt in `topology/MetricExtractor.php`. Sie leitet aus rohen Item-Keys CPU, Memory, Traffic, Link-Speed, Interface-Health und Ping ab — quer über Agent-, SNMP-, Proxmox-, Windows- und hrStorage-Varianten. Genau in dieser Heuristik saß schon einmal ein Bug, der CPU/Memory für *jeden* Host leer ließ (v4.34.0).
+  `Data.php`: **1357 → 946 Zeilen** (inkl. Schnitt 1). Reiner Struktur-Umbau: der Code wurde **byte-identisch verschoben**, kein Verhalten geändert. Die Schnittstelle ist bewiesen vollständig — geprüft, dass *jede* in dem Block gesetzte Variable, die danach noch gebraucht wird, auch zurückgegeben wird (die übrigen werden nachher ohnehin neu zugewiesen).
+
+### Added
+- **Der erste Unit-Test des Moduls** (`tests/MetricExtractorTest.php`) — die direkte Antwort auf den Kernvorwurf des Reviews (»erschwert Unit-Tests«). Er läuft **ohne Datenbank, ohne Session, ohne HTTP, ohne Zabbix-Installation** — nur mit PHP, weil die ausgelagerte Klasse rein ist. Deckt Agent- und SNMP-Pfade ab, inklusive der fehleranfälligsten Regel: ein *absichtlich* abgeschalteter Port (`admin-down`) und ein ungenutzter (`notPresent`) dürfen **nicht** als Link-Ausfall zählen. 10/10 grün.
+- CI-Job **`unit-tests`** (siebtes Gate).
+
+## v4.34.8 — 2026-07-14
+
+### Added
+- **ESLint-Gate gegen unsichere DOM-Sinks** (Review §12): `eslint-plugin-no-unsanitized` wertet den *Ausdruck* aus, statt zu greppen — `innerHTML = '<b>statisch</b>'` ist erlaubt, `innerHTML = wert` nicht; `esc()` ist ihm als Escaping-Funktion bekannt. Damit fällt die Lücke weg, die das Review beim Grep-Tripwire benennt (er kann Datenflüsse über mehrere Funktionen nicht verfolgen).
+  Der **Bestand (76 Sinks)** — alle aus `esc()`-Buildern, Tripwire läuft sauber durch — ist in `eslint-suppressions.json` **gebaselined, nicht umgeschrieben**: ein Umbau der kompletten Render-Schicht auf DOM-Methoden wäre ein größerer Eingriff als die `Data.php`-Aufteilung und ist bewusst kein Teil dieses Schritts. Der Gate ist dadurch scharf für alles **Neue** — verifiziert: ein frisch eingefügter `el.innerHTML = userVar` macht die CI rot.
+- **`assets/js/modules/dom-safe.js`** — explizite Helfer für neuen Code: `setText()` (untrusted → Text, nie HTML), `setStaticHtml()` (bewusst statisches Literal), `elText()` (`createElement` + `textContent`, der vom Review empfohlene Weg). Ehrlich dazu: `setStaticHtml` ist eine *Konvention*, keine Garantie — sein Wert ist, dass ein falscher Aufruf im Review sofort auffällt. Wird noch nirgends importiert → 0 Bytes im Bundle.
+- CI-Job **`eslint-dom-sinks`** (sechstes Gate).
+
+## v4.34.7 — 2026-07-14
+
+### Added
+- **Zentraler APCu-Cache `NtCache`** (Review §11): die sieben hand-gebauten Caches (je eigenes Key-Schema, eigene Guards, teils eine eigene Mini-Cache-Schicht) laufen jetzt über *eine* Klasse. Der Key enthält **Schema-Version**, Namespace, User-ID und die normalisierten (sortierten) Bestandteile — ein `SCHEMA`-Bump invalidiert schlagartig alles. Genau das fehlte vorher: nach einem Modul-Update konnten strukturell veraltete Einträge bis zum TTL-Ablauf weiterbedient werden. Ohne APCu ist alles ein No-Op (fail-open).
+- **Truncation ist sichtbar** (Review §9): `data`, `compliance` und `capacity_forecast` liefern jetzt `truncated` / `requested_count` / `processed_count`, wenn sie die Eingabe kappen (`MAX_GROUPS`/`MAX_HOSTS`). Das Frontend warnt einmalig per Toast, statt ein unvollständiges Bild als vollständig darzustellen. Die Felder werden bewusst **nicht mitgecacht** — sonst bekäme eine spätere, *nicht* gekappte Anfrage mit gleichem Cache-Key das `truncated`-Flag der früheren.
+- **ItemHistory-Kurzcache** (Review §10): Sparkline-/Tooltip-Daten werden 45 s pro (User, Item-Set) gecacht. Bis zu 500 Items × 120 History-Werte bei jedem Panel-/Tab-Wechsel frisch zu ziehen war unnötig teuer.
+
+### Notes
+- `item_history` und `spark` liefern **bare ID-keyed Maps** (`{itemid: [...]}`) — Top-Level-Meta-Felder würden dort die Response-Form brechen (das Frontend iteriert die Keys als IDs). Ihre Caps (500 Items / 50 Hosts) sind interne Batch-Limits, die das Frontend selbst steuert, kein User-Input. Truncation-Felder daher bewusst nur bei den drei Endpunkten mit Wrapper-Objekt, wo der User wirklich Gruppen/Hosts schickt.
+
+## v4.34.6 — 2026-07-14
+
+### Security
+- **Source-Map wird nicht mehr ausgeliefert** (Review §13): `npm run build` ist jetzt ein Release-Build **ohne** Source-Map. Vorher landete eine ~1 MB große, öffentlich abrufbare `nt-bundle.js.map` auf den Servern (auf **beiden** Prod-Instanzen verifiziert — der Punkt war real, nicht theoretisch). Zum Debuggen gibt es `npm run build:debug` (die `.map` ist gitignored). `deploy.sh` schließt `*.map` zusätzlich vom Zip aus, falls eine Debug-Map liegenbleibt.
+
+### Added
+- **CI-Pipeline** (`.gitlab-ci.yml`, Review §14): fünf Gates — `php-lint` (41 Dateien), `xss-tripwire` (`check-xss.sh --strict`), `shellcheck` (`nt-install.sh`, `deploy.sh`, `tools/*.sh`), `npm-audit` (`--audit-level=moderate`) und vor allem **`bundle-drift`**: baut das Bundle frisch und schlägt fehl, sobald das eingecheckte `nt-bundle.js` nicht mehr zu den Quellmodulen passt. Alle fünf Gates laufen aktuell grün.
+
+### Fixed
+- **`deploy.sh` shellcheck-clean**: zwei `SC2155` (Declare-and-assign maskiert Return-Codes) getrennt; der *bewusst* unquotete Heredoc ist jetzt per `# shellcheck disable=SC2087` samt Begründung dokumentiert — statt das CI-Gate abzuschwächen.
+
 ## v4.34.5 — 2026-07-14
+
+> **Korrektur (nachgetragen):** Die Commit-Message zu diesem Release behauptet, die Produktions-Frontends hätten kein APCu und der Limiter sei dort ein No-Op. Das war eine Fehlmessung (ein fehlerhaftes Prüf-Kommando schlug still fehl). Nachgemessen: **beide Prod-Server haben APCu** (`/etc/php/8.2/fpm/conf.d/20-apcu.ini`). Rate-Limit **und** die Caches aus 4.34.7 sind dort also aktiv, nicht inert.
 
 ### Security
 - **Rate-Limit für teure Read-Actions** (Review #5): APCu-Fixed-Window-Drosselung pro (User, Action) — max. **10 Aufrufe / 5 s** — für `history`, `discover_patterns`, `compliance`, `capacity_forecast`, `resource_forecast`, `item_history`. Schützt vor Hammering (Abuse, Runaway-Script, gekaperter Account); normale UI-Interaktion liegt weit unter dem Limit. Bei Überschreitung: `{"error":"Too many requests"}`. Ohne APCu wird nicht gedrosselt (fail-open, APCu optional). Zentral in der Controller-Basisklasse (`throttle()`/`rateLimitOk()`), atomar via `apcu_add`+`apcu_inc`.

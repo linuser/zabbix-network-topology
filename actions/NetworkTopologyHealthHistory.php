@@ -57,15 +57,10 @@ class NetworkTopologyHealthHistory extends NetworkTopologyController {
         $_t0  = microtime(true);
         $days = (int) $this->getInput('days', 14);
 
-        $uid = (int) (\CWebUser::$data['userid'] ?? 0);
-        $cache_key = 'nt_hh_' . $uid . '_' . $days;
-        if ($uid > 0 && function_exists('apcu_fetch')) {
-            $ok = false;
-            $cached = apcu_fetch($cache_key, $ok);
-            if ($ok && is_array($cached)) {
-                $this->out($cached, $_t0, true);
-                return;
-            }
+        $cached = NtCache::get('health_history', [$days]);
+        if ($cached !== null) {
+            $this->out($cached, $_t0, true);
+            return;
         }
 
         // Items per Key suchen — Item.get ehrt die User-Permissions. Gibt
@@ -92,9 +87,7 @@ class NetworkTopologyHealthHistory extends NetworkTopologyController {
             'min'        => $this->fetchSeries($by_key[self::KEY_MIN] ?? null, $from, $now),
         ];
 
-        if ($uid > 0 && function_exists('apcu_store')) {
-            apcu_store($cache_key, $payload, self::CACHE_TTL);
-        }
+        NtCache::set('health_history', [$days], $payload, self::CACHE_TTL);
         $this->out($payload, $_t0, false);
     }
 

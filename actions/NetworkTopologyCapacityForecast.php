@@ -62,7 +62,10 @@ class NetworkTopologyCapacityForecast extends NetworkTopologyController {
         if (!$this->throttle('capacity_forecast')) return;
         $_t0      = microtime(true);
         $groupids = $this->getInput('groupids', []);
-        $hostids  = array_slice($this->getInput('hostids', []), 0, self::MAX_HOSTS);
+        // Nicht still abschneiden — die Zahlen gehen mit in die Antwort.
+        $req_hostids     = $this->getInput('hostids', []);
+        $requested_hosts = count($req_hostids);
+        $hostids         = array_slice($req_hostids, 0, self::MAX_HOSTS);
         $days     = (int) $this->getInput('days', 30);
 
         if (!$groupids || !$hostids) {
@@ -83,17 +86,12 @@ class NetworkTopologyCapacityForecast extends NetworkTopologyController {
         // zum TTL-Ablauf das gecachte Ergebnis der ersten Auswahl. Fuer einen
         // stuendlich rollenden Forecast akzeptabel; der Cache ist user-scoped,
         // ein manipulierter Subset trifft nur den eigenen View.
-        $uid = (int) (\CWebUser::$data['userid'] ?? 0);
-        $gk = array_map('strval', $groupids);
-        sort($gk);
-        $cache_key = 'nt_fc_' . $uid . '_' . md5($days . '|' . implode(',', $gk));
-        if ($uid > 0 && function_exists('apcu_fetch')) {
-            $ok = false;
-            $cached = apcu_fetch($cache_key, $ok);
-            if ($ok && is_array($cached)) {
-                $this->out($cached, $_t0, true);
-                return;
-            }
+        // User-Scoping (Permissions!), Sortierung der groupids und Schema-Version
+        // macht NtCache — der Key bleibt bewusst groups+days (siehe oben).
+        $cached = NtCache::get('capacity_forecast', [$groupids, $days]);
+        if ($cached !== null) {
+            $this->out($this->withTruncation($cached, $requested_hosts, count($hostids)), $_t0, true);
+            return;
         }
 
         // Permission-Schnitt: nur Hosts die der User in diesen Gruppen sieht.
@@ -173,10 +171,9 @@ class NetworkTopologyCapacityForecast extends NetworkTopologyController {
         }
 
         $payload = ['days' => $days, 'hosts' => $out_hosts ?: (object) []];
-        if ($uid > 0 && function_exists('apcu_store')) {
-            apcu_store($cache_key, $payload, self::CACHE_TTL);
-        }
-        $this->out($payload, $_t0, false);
+        // Truncation-Felder bewusst NICHT mitcachen (siehe withTruncation()).
+        NtCache::set('capacity_forecast', [$groupids, $days], $payload, self::CACHE_TTL);
+        $this->out($this->withTruncation($payload, $requested_hosts, count($hostids)), $_t0, false);
     }
 
     /**
