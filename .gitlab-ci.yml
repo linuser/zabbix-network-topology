@@ -35,6 +35,17 @@ xss-tripwire:
   script:
     - bash tools/check-xss.sh --strict
 
+# Schaerferer Bruder des Tripwires: no-unsanitized wertet den Ausdruck aus statt
+# zu greppen. Der Bestand (~76 Sinks aus esc()-Buildern) ist in
+# eslint-suppressions.json gebaselined — dieser Job faellt also genau dann, wenn
+# NEUER unsicherer Code dazukommt.
+eslint-dom-sinks:
+  stage: lint
+  image: node:22-alpine
+  script:
+    - npm ci
+    - npm run ci:eslint
+
 shellcheck:
   stage: lint
   image: koalaman/shellcheck-alpine:stable

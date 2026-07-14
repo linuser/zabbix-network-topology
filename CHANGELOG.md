@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.8 — 2026-07-14
+
+### Added
+- **ESLint-Gate gegen unsichere DOM-Sinks** (Review §12): `eslint-plugin-no-unsanitized` wertet den *Ausdruck* aus, statt zu greppen — `innerHTML = '<b>statisch</b>'` ist erlaubt, `innerHTML = wert` nicht; `esc()` ist ihm als Escaping-Funktion bekannt. Damit fällt die Lücke weg, die das Review beim Grep-Tripwire benennt (er kann Datenflüsse über mehrere Funktionen nicht verfolgen).
+  Der **Bestand (76 Sinks)** — alle aus `esc()`-Buildern, Tripwire läuft sauber durch — ist in `eslint-suppressions.json` **gebaselined, nicht umgeschrieben**: ein Umbau der kompletten Render-Schicht auf DOM-Methoden wäre ein größerer Eingriff als die `Data.php`-Aufteilung und ist bewusst kein Teil dieses Schritts. Der Gate ist dadurch scharf für alles **Neue** — verifiziert: ein frisch eingefügter `el.innerHTML = userVar` macht die CI rot.
+- **`assets/js/modules/dom-safe.js`** — explizite Helfer für neuen Code: `setText()` (untrusted → Text, nie HTML), `setStaticHtml()` (bewusst statisches Literal), `elText()` (`createElement` + `textContent`, der vom Review empfohlene Weg). Ehrlich dazu: `setStaticHtml` ist eine *Konvention*, keine Garantie — sein Wert ist, dass ein falscher Aufruf im Review sofort auffällt. Wird noch nirgends importiert → 0 Bytes im Bundle.
+- CI-Job **`eslint-dom-sinks`** (sechstes Gate).
+
 ## v4.34.7 — 2026-07-14
 
 ### Added
