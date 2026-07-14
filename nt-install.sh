@@ -24,6 +24,7 @@ export PATH="/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
 
 readonly MODULE="network_topology_v6"
 readonly MIN_MAJOR=7 MIN_MINOR=4
+readonly MAX_UNPACKED=$((100 * 1024 * 1024))   # 100 MiB — Cap gegen Zip-Bomben
 readonly REQUIRED_FILES=(
     "manifest.json"
     "assets/js/dist/nt-bundle.js"
@@ -152,11 +153,28 @@ do_deploy() {
     if unzip -Z1 "$zip" 2>/dev/null | grep -qE '^/|(^|/)\.\.(/|$)'; then
         die "ZIP enthaelt unsichere Pfade (absolut oder ../) — abgebrochen."
     fi
+    # Zip-Bomben-Schutz: entpackte Gesamtgroesse VOR dem Extrahieren pruefen
+    # (unzip -l liest die deklarierten Groessen aus dem Central Directory). Ist
+    # sie nicht bestimmbar (z.B. busybox-unzip mit anderem Format), nur warnen
+    # statt eine legitime Installation zu blockieren.
+    local unpacked
+    unpacked=$(unzip -l "$zip" 2>/dev/null | awk 'END {print $1}')
+    if [[ "$unpacked" =~ ^[0-9]+$ ]]; then
+        (( unpacked <= MAX_UNPACKED )) \
+            || die "Archiv entpackt zu gross (${unpacked} > ${MAX_UNPACKED} Bytes) — abgebrochen."
+    else
+        warn "Archivgroesse nicht bestimmbar (unzip -l) — Zip-Bomben-Cap uebersprungen."
+    fi
     unzip -q "$zip" -d "$stage" || die "unzip fehlgeschlagen: $zip"
     # Keine Symlinks im Modul (ein legitimes Modul hat keine) — verhindert, dass
     # cp -a einen aus dem Archiv stammenden Symlink ins Modulverzeichnis kopiert.
     if [[ -n "$(find "$stage" -type l -print -quit 2>/dev/null)" ]]; then
         die "ZIP enthaelt Symlinks — abgebrochen (Sicherheit)."
+    fi
+    # Keine Spezialdateien (Block-/Char-Devices, Named Pipes, Sockets) — ein
+    # legitimes Frontend-Modul besteht nur aus regulaeren Dateien + Verzeichnissen.
+    if [[ -n "$(find "$stage" \( -type b -o -type c -o -type p -o -type s \) -print -quit 2>/dev/null)" ]]; then
+        die "ZIP enthaelt Geraete-/Pipe-/Socket-Dateien — abgebrochen (Sicherheit)."
     fi
     if   [[ -f "$stage/$MODULE/manifest.json" ]]; then src="$stage/$MODULE"
     elif [[ -f "$stage/manifest.json" ]];         then src="$stage"
@@ -169,6 +187,10 @@ do_deploy() {
     if $SUDO cp -a "$src" "$mod"; then
         $SUDO chown -R root:root "$mod" 2>/dev/null \
             || warn "chown root:root fehlgeschlagen — als root/sudo laufen oder Dateirechte für den Webserver prüfen."
+        # Dateirechte normalisieren: entfernt ungewoehnliche Schreib-/Exec-Bits
+        # aus dem Archiv. Verzeichnisse 0755, Dateien 0644 (Webserver liest nur).
+        $SUDO find "$mod" -type d -exec chmod 0755 {} + 2>/dev/null || true
+        $SUDO find "$mod" -type f -exec chmod 0644 {} + 2>/dev/null || true
     else
         $SUDO rm -rf "$mod"
         if [[ -n "$prev" ]]; then
