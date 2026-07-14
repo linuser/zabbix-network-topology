@@ -1,6 +1,6 @@
 {
   "name": "network-topology-for-zabbix",
-  "version": "4.34.13",
+  "version": "4.34.14",
   "private": true,
   "description": "Build tooling for the Network Topology for Zabbix frontend module (AGPL-3.0).",
   "license": "AGPL-3.0-or-later",

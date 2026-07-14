@@ -28,6 +28,16 @@ namespace Modules\NetworkTopologyV6\Actions;
  * Ohne APCu (oder ohne eingeloggten User) ist alles ein No-Op: get() liefert
  * null, set() verwirft. Die Actions rechnen dann jedes Mal frisch und
  * funktionieren normal weiter (fail-open).
+ *
+ * Permissions-Hinweis (ehrlich): ein gecachter Wert wurde mit den Rechten von
+ * damals berechnet und liegt user-gebunden. VERLIERT ein User Rechte, sieht er
+ * sein EIGENES Ergebnis noch bis zum TTL-Ablauf — die TTLs sind deshalb kurz
+ * (Sekunden bis Minuten); einzige Ausnahme ist die topo_baseline in
+ * NetworkTopologyData (7 Tage, siehe dort). Cross-User kann nichts lecken, weil
+ * die uid Teil des Keys ist. Ein AKTIVES Invalidieren bei Rechteaenderungen
+ * gibt es bewusst nicht: Zabbix reicht Modulen keinen solchen Hook, ein
+ * entsprechendes deleteByUser() waere nie aufgerufen worden (toter Code) und
+ * haette einen Schutz nur vorgetaeuscht.
  */
 final class NtCache {
 
@@ -91,18 +101,5 @@ final class NtCache {
             return;
         }
         apcu_store(self::key($namespace, $uid, $parts), $value, $ttl);
-    }
-
-    /**
-     * Alle Eintraege eines Users verwerfen (z.B. nach einer Rechteaenderung,
-     * damit kein Ergebnis aus der Zeit mit mehr Rechten weiterlebt).
-     */
-    public static function deleteByUser(int $userid): void {
-        if (!function_exists('apcu_delete') || !class_exists('\APCUIterator')) {
-            return;
-        }
-        $pattern = '/^' . preg_quote('nt:' . self::SCHEMA . ':', '/')
-            . '[^:]+' . preg_quote(':' . $userid . ':', '/') . '/';
-        apcu_delete(new \APCUIterator($pattern));
     }
 }

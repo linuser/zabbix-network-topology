@@ -2,6 +2,18 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.14 — 2026-07-14
+
+### Removed
+- **Code-Leichen nach der `Data.php`-Aufteilung entfernt**: sechs `$host_*`-Variablen, die beim Auslagern entstanden (die Ausgabe von `MetricExtractor`/`HostTagParser` wurde erst in Einzelvariablen entpackt, dann aber gebündelt an `NodeBuilder` gereicht — die Einzelvariablen las niemand mehr). Dazu `$items_b` endgültig raus: seit dem CPU/Memory-Fix (4.34.0) dauerhaft `[]`, ging nur als No-op in ein `+`-Merge und eine leere `foreach`-Schleife. `Data.php`: 518 → **507 Zeilen**.
+- **`NtCache::deleteByUser()` entfernt** — toter Code (0 Aufrufer), gefunden im Security-Review (siehe unten).
+
+### Security
+- **Security-Review des in §6/§9–§14 neu hinzugekommenen Codes** (den das ursprüngliche externe Review nicht sah): eigener Scan + adversarialer Zweit-Durchlauf. Kein Roh-SQL/`eval`/Shell in `topology/` oder `NtCache`; `NtCache`-Keys enthalten **immer** die User-ID und cachen bei `uid<=0` gar nicht (keine Cross-User-Treffer); alle `namespace`- und `throttle`-Bucket-Argumente sind String-Literale; Key-`$parts` stammen aus `validateInput` und werden gehasht. Die Write-Action (Maintenance) ist mit echtem CSRF-Token + POST-only + Admin-Check + All-or-Nothing sauber; `nt:link`-/Integration-URLs sind doppelt validiert (Backend `^https?://` + Control-Char-Filter, Frontend nochmal + `textContent`/`window.open(noopener)`). Secret-Scan über den Verlauf ohne echten Treffer (`ZBX_PASS` = Default `changeme` aus der Env).
+- **Ein Fund, behoben (Low):** `NtCache::deleteByUser()` war toter Code — und der Klassenkommentar verkaufte es als Sicherheitskontrolle („nach Rechteänderung verwerfen"). Diese Kontrolle existierte real nie: Zabbix reicht Modulen keinen Hook auf Rechteänderungen, die Methode hätte also nie aufgerufen werden können. Entfernt; der Kommentar sagt jetzt ehrlich, dass ein gecachter Wert nur durch **TTL-Ablauf** verfällt (Sekunden bis Minuten; Ausnahme `topo_baseline` 7 Tage). Restrisiko: verliert ein User Rechte, sieht er sein *eigenes* Ergebnis bis zum TTL weiter — same-user, **kein** Cross-User-Leak.
+- **Rate-Limit jetzt auch auf `network.topology.v6.data`** (der teuerste Endpoint: Host + Trigger + Problem + Item + gebatchte Lastvalues): großzügige 30 Aufrufe / 10 s pro User. Der Auto-Refresh (~1 Call/30 s) und normales Gruppen-Umschalten liegen weit darunter; ein Runaway-Skript oder sehr viele Tabs werden gekappt. War bewusst zunächst ausgelassen — Beobachtung aus dem Security-Review nachgezogen.
+- **Zwei `innerHTML`-Sinks lokal abgesichert**: `render-table.js` (Preset-Dropdown) nutzt jetzt `textContent` statt `innerHTML` — der Helfer ist damit selbst sicher, statt sich auf `esc()` an jeder Aufrufstelle zu verlassen (die redundanten `esc()` dort entfernt). `export.js` (Export-Menü) escapt das Label defensiv; der Icon bleibt als bewusste statische Emoji-Entity. Beides waren keine echten Vektoren (statische/i18n bzw. bereits ge-`esc()`te Werte), aber lokal-sicher ist wartbarer. ESLint-Baseline entsprechend geprunt (ein Sink weniger).
+
 ## v4.34.13 — 2026-07-14
 
 ### Changed

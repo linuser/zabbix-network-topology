@@ -38,6 +38,11 @@ class NetworkTopologyData extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        // Grosszuegiges Rate-Limit: data ist der teuerste Endpoint (Host + Trigger
+        // + Problem + Item + gebatchte Lastvalues). Der Auto-Refresh macht ~1
+        // Call/30s, manuelles Gruppen-Umschalten ein paar mehr — 30/10s trifft
+        // legitime Nutzung nie, kappt aber ein Runaway-Skript / viele Tabs.
+        if (!$this->throttle('data', 30, 10)) return;
         $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
 
@@ -215,14 +220,13 @@ class NetworkTopologyData extends NetworkTopologyController {
             'monitored'    => true,
             'preservekeys' => true
         ]);
-        $items_b = [];   // Kompatibilitaet mit der nachgelagerten Merge-Logik
 
         // ── 3b. LASTVALUE via batched UNION-ALL Queries (Chunk=20 Items/Query)
         // Statt N separaten DB-Roundtrips machen wir eine Query pro 20 Items
         // mit UNION ALL von Subqueries. Jedes Subquery nutzt den Index (itemid, clock)
         // über ORDER BY clock DESC LIMIT 1 effizient.
         // Für 482 Items reduziert das 482 Queries auf ~25.
-        $all_items = $items_a + $items_b + $items_show;
+        $all_items = $items_a + $items_show;
         $last_values = [];
         $last_clocks = [];   // itemid => max(clock) — fuer Stale-Detection
         $CHUNK = 20;
@@ -278,10 +282,6 @@ class NetworkTopologyData extends NetworkTopologyController {
             $item['lastvalue'] = $last_values[$iid] ?? null;
         }
         unset($item);
-        foreach ($items_b as $iid => &$item) {
-            $item['lastvalue'] = $last_values[$iid] ?? null;
-        }
-        unset($item);
         foreach ($items_show as $iid => &$item) {
             $item['lastvalue'] = $last_values[$iid] ?? null;
         }
@@ -293,12 +293,6 @@ class NetworkTopologyData extends NetworkTopologyController {
         // Transformation, kein API-Call, kein Controller-Zustand. Dadurch
         // erstmals einzeln testbar, statt nur ueber einen kompletten Request.
         $metrics      = MetricExtractor::extract($items_a);
-        $host_traffic = $metrics['traffic'];
-        $host_iface   = $metrics['iface'];
-        $host_speed   = $metrics['speed'];
-        $host_cpu     = $metrics['cpu'];
-        $host_memory  = $metrics['memory'];
-        $host_ping    = $metrics['ping'];
         $lldp_raw     = $metrics['lldp_raw'];
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         // Nachbar-Matching + Kantenbau ausgelagert nach

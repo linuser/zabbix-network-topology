@@ -117,7 +117,9 @@ function _rebuildPresetPop(pop, theme) {
         const r = document.createElement('div');
         r.style.cssText = 'padding:5px 10px;cursor:pointer;font-size:12px;color:'
             + (color || theme.text) + ';border-radius:3px;display:flex;align-items:center;gap:8px';
-        r.innerHTML = label;
+        // textContent statt innerHTML: der Helfer ist damit selbst sicher, egal
+        // was Aufrufer uebergeben — kein esc() an jeder Aufrufstelle noetig.
+        r.textContent = label;
         r.addEventListener('mouseenter', function() { r.style.background = theme.head; });
         r.addEventListener('mouseleave', function() { r.style.background = ''; });
         r.addEventListener('click', function(e) { e.stopPropagation(); pop.style.display = 'none'; onClick(); });
@@ -132,7 +134,7 @@ function _rebuildPresetPop(pop, theme) {
     }
     pop.appendChild(header(t('table.preset.builtin')));
     BUILTIN_FILTER_PRESETS.forEach(function(p) {
-        pop.appendChild(row(esc(p.name), theme.text, function() { _applyFilterPreset(p); }));
+        pop.appendChild(row(p.name, theme.text, function() { _applyFilterPreset(p); }));
     });
     const user = loadFilterPresets();
     if (user.length > 0) {
@@ -164,7 +166,7 @@ function _rebuildPresetPop(pop, theme) {
     const sep = document.createElement('div');
     sep.style.cssText = 'height:1px;background:' + theme.borderSoft + ';margin:4px 0';
     pop.appendChild(sep);
-    pop.appendChild(row(esc(t('table.preset.save_current')), theme.accent, function() {
+    pop.appendChild(row(t('table.preset.save_current'), theme.accent, function() {
         const name = prompt(t('table.preset.name_prompt'));
         if (!name || !name.trim()) return;
         const arr = loadFilterPresets().filter(function(x) { return x.name !== name.trim(); });
