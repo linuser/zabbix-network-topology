@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.11 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 4/n** (Review §6): der **Tag-Scan** (91 Zeilen) liegt jetzt in `topology/HostTagParser.php` — die Auswertung von `nt:icon` / `nt:show` / `nt:link` / `nt:parent`, mit denen ein Admin einzelne Hosts steuert.
+  `Data.php`: **1357 → 699 Zeilen** (−48 %).
+
+### Added
+- **Dritter Unit-Test** (`tests/HostTagParserTest.php`) — und der sicherheitsrelevanteste: `nt:link` verarbeitet eine **frei eingetippte URL**. Der Test belegt, dass `javascript:`-, `data:`- und `ftp://`-URLs verworfen werden (nur `http`/`https` sind erlaubt), dass die Icon-Whitelist greift und dass der 6-Links-Cap hält. Fiele eine dieser Regeln bei einem Umbau still weg, wäre das ein echter Vektor im Kontextmenü — und einem Diff sieht man das nicht an. 10/10 grün.
+
 ## v4.34.10 — 2026-07-14
 
 ### Changed
