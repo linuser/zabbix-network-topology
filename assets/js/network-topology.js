@@ -14,6 +14,7 @@
 
 import { esc } from './modules/utils.js';
 import { t } from './modules/i18n.js';
+import { toastTruncatedOnce } from './modules/toast.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
@@ -225,6 +226,16 @@ function init() {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             spin.style.display = 'none';
+            // Das Backend hat die Gruppenauswahl gekappt (MAX_GROUPS). Sichtbar
+            // machen, statt ein unvollstaendiges Bild als vollstaendig zu zeigen
+            // — warnt pro Zahlenpaar nur einmal, sonst nervt der 30s-Refresh.
+            if (data.truncated) {
+                toastTruncatedOnce('data:' + data.requested_count + '/' + data.processed_count,
+                    t('warn.truncated', {
+                        requested: data.requested_count,
+                        processed: data.processed_count
+                    }));
+            }
             // lldp_quality mit durchreichen — der LLDP-Q-Tab liest es aus
             // _ntLastData (ohne dieses Feld waere der Tab immer leer).
             window._ntLastData = { nodes: data.nodes || [], edges: data.edges || [],

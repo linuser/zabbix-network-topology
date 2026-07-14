@@ -93,14 +93,12 @@ class NetworkTopologyDiscoverPatterns extends NetworkTopologyController {
         }
 
         // Cache-Lookup: Item-Scan ueber 20k Items kostet 1-2s, aber Pattern-
-        // Stems aendern sich selten — TTL=300s ist ein guter Kompromiss.
-        // Cache-Key isoliert nach (user_id, sorted permitted-groupids) damit
-        // Permission-Filter beim Cache-Hit gewahrt bleiben (User A sieht
-        // andere Gruppen als User B → andere Stems).
-        $cache_ids = $allowed_ids;
-        sort($cache_ids);
-        $cache_key = $this->cacheKey($cache_ids);
-        $cached = $this->cacheGet($cache_key);
+        // Stems aendern sich selten. Gecacht wird ueber die ERLAUBTEN groupids
+        // (nicht die angefragten), damit der Permission-Filter beim Cache-Hit
+        // gewahrt bleibt (User A sieht andere Gruppen als User B → andere
+        // Stems). User-ID + Schema-Version haengt NtCache selbst an den Key,
+        // Sortierung der IDs ebenfalls.
+        $cached = NtCache::get('discover_patterns', [$allowed_ids]);
         if ($cached !== null) {
             $cached['cached'] = true;
             NetworkTopologyDiag::record([
@@ -187,7 +185,7 @@ class NetworkTopologyDiscoverPatterns extends NetworkTopologyController {
         ];
         // Cache-Write fuer naechste Aufrufe innerhalb der TTL — wir cachen
         // nur das Roh-Payload, das 'cached'-Flag wird beim Hit injiziert.
-        $this->cacheSet($cache_key, $payload);
+        NtCache::set('discover_patterns', [$allowed_ids], $payload, self::CACHE_TTL);
         $payload['cached'] = false;
         NetworkTopologyDiag::record([
             'action'     => 'discover',
@@ -197,40 +195,6 @@ class NetworkTopologyDiscoverPatterns extends NetworkTopologyController {
             'counts'     => ['patterns' => count($patterns)],
         ]);
         $this->respond($payload);
-    }
-
-    /**
-     * Cache-Key: namespaced mit user_id + groupids-Hash.
-     * user_id stellt sicher dass User mit unterschiedlichen Permissions
-     * keinen geteilten Cache-Eintrag treffen (privacy + correctness).
-     * Bei userid == 0 (Session-Loss, anonymer Request) wird '' zurueckgegeben
-     * — die Cache-Layer muss das als "no-cache" interpretieren, damit
-     * solche Edge-Cases keinen geteilten Bucket bilden.
-     */
-    private function cacheKey(array $sortedGroupIds): string {
-        $uid = (int) (\CWebUser::$data['userid'] ?? 0);
-        if ($uid === 0) return '';
-        return 'nt_dp_' . $uid . '_' . md5(implode(',', $sortedGroupIds));
-    }
-
-    /**
-     * Cache-Get: APCu wenn verfuegbar (in-memory, schnell, shared zwischen
-     * PHP-FPM-Workern), sonst null = no-cache. APCu ist in den meisten
-     * modernen PHP-Setups (>=8.0) verfuegbar; Zabbix selber nutzt es auch.
-     * Bei deaktiviertem APCu degradiert das Modul auf "kein Cache" — die
-     * Action laeuft dann jedes Mal voll durch (1-2s), aber funktional OK.
-     */
-    private function cacheGet(string $key): ?array {
-        if ($key === '' || !function_exists('apcu_fetch')) return null;
-        $ok  = false;
-        $val = apcu_fetch($key, $ok);
-        if (!$ok || !is_array($val)) return null;
-        return $val;
-    }
-
-    private function cacheSet(string $key, array $value): void {
-        if ($key === '' || !function_exists('apcu_store')) return;
-        apcu_store($key, $value, self::CACHE_TTL);
     }
 
     /**

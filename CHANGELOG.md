@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.7 — 2026-07-14
+
+### Added
+- **Zentraler APCu-Cache `NtCache`** (Review §11): die sieben hand-gebauten Caches (je eigenes Key-Schema, eigene Guards, teils eine eigene Mini-Cache-Schicht) laufen jetzt über *eine* Klasse. Der Key enthält **Schema-Version**, Namespace, User-ID und die normalisierten (sortierten) Bestandteile — ein `SCHEMA`-Bump invalidiert schlagartig alles. Genau das fehlte vorher: nach einem Modul-Update konnten strukturell veraltete Einträge bis zum TTL-Ablauf weiterbedient werden. Ohne APCu ist alles ein No-Op (fail-open).
+- **Truncation ist sichtbar** (Review §9): `data`, `compliance` und `capacity_forecast` liefern jetzt `truncated` / `requested_count` / `processed_count`, wenn sie die Eingabe kappen (`MAX_GROUPS`/`MAX_HOSTS`). Das Frontend warnt einmalig per Toast, statt ein unvollständiges Bild als vollständig darzustellen. Die Felder werden bewusst **nicht mitgecacht** — sonst bekäme eine spätere, *nicht* gekappte Anfrage mit gleichem Cache-Key das `truncated`-Flag der früheren.
+- **ItemHistory-Kurzcache** (Review §10): Sparkline-/Tooltip-Daten werden 45 s pro (User, Item-Set) gecacht. Bis zu 500 Items × 120 History-Werte bei jedem Panel-/Tab-Wechsel frisch zu ziehen war unnötig teuer.
+
+### Notes
+- `item_history` und `spark` liefern **bare ID-keyed Maps** (`{itemid: [...]}`) — Top-Level-Meta-Felder würden dort die Response-Form brechen (das Frontend iteriert die Keys als IDs). Ihre Caps (500 Items / 50 Hosts) sind interne Batch-Limits, die das Frontend selbst steuert, kein User-Input. Truncation-Felder daher bewusst nur bei den drei Endpunkten mit Wrapper-Objekt, wo der User wirklich Gruppen/Hosts schickt.
+
 ## v4.34.6 — 2026-07-14
 
 ### Security

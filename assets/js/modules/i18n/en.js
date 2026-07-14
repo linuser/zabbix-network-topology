@@ -264,6 +264,7 @@ export default {
     'stats.error': 'Error: {msg}',
     'stats.agg_summary': '{events} events &middot; {hosts} hosts &middot; {triggers} triggers &middot; {from} – {to}',
     'stats.truncated': 'Note: backend limit reached',
+    'warn.truncated': '⚠ Only the first {processed} of {requested} host groups were evaluated — narrow the selection for a complete picture.',
     'stats.col.host': 'Host',
     'stats.col.events': 'Events',
     'stats.col.worst': 'Worst',

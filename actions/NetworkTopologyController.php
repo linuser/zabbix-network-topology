@@ -75,6 +75,25 @@ abstract class NetworkTopologyController extends CController {
     }
 
     /**
+     * Haengt die Truncation-Felder an ein Payload (Review §9). Mehrere Endpunkte
+     * kappen zu lange Eingabelisten (MAX_GROUPS/MAX_HOSTS/MAX_ITEMS) — bisher
+     * still, sodass der Aufrufer ein unvollstaendiges Ergebnis fuer vollstaendig
+     * halten musste. Jetzt sieht er es.
+     *
+     * BEWUSST nicht mitgecacht: die Felder werden erst NACH dem Cache-Read/Write
+     * angehaengt. Sonst bekaeme eine spaetere, nicht gekappte Anfrage mit
+     * gleichem Cache-Key (der Key entsteht aus der bereits gekappten Liste!) das
+     * truncated-Flag der frueheren Anfrage.
+     */
+    protected function withTruncation(array $payload, int $requested, int $processed): array {
+        $payload['truncated']       = $requested > $processed;
+        $payload['requested_count'] = $requested;
+        $payload['processed_count'] = $processed;
+
+        return $payload;
+    }
+
+    /**
      * Fixed-Window-Rate-Limit pro (User, Bucket) via APCu. Schuetzt die teuren
      * Read-Actions vor Hammering (Abuse / Runaway-Script / gekaperter Account);
      * normale UI-Interaktion liegt weit unter dem Limit. Ohne APCu wird nicht

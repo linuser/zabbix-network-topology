@@ -39,7 +39,11 @@ class NetworkTopologyData extends NetworkTopologyController {
             $this->jsonResponse(['nodes' => [], 'edges' => []]);
             return;
         }
-        if (count($groupids) > self::MAX_GROUPS) {
+        // Nicht still abschneiden: die Zahlen gehen mit in die Antwort, damit das
+        // Frontend warnen kann, statt ein unvollstaendiges Bild als vollstaendig
+        // darzustellen.
+        $requested_groups = count($groupids);
+        if ($requested_groups > self::MAX_GROUPS) {
             $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
         }
 
@@ -1169,39 +1173,39 @@ class NetworkTopologyData extends NetworkTopologyController {
             if (!$h) return (string) $hid;
             return ($h['name'] ?? '') !== '' ? $h['name'] : ($h['host'] ?? (string) $hid);
         };
-        if (function_exists('apcu_fetch')) {
-            $uid = (int) (\CWebUser::$data['userid'] ?? 0);
-            $gk  = array_map('strval', $groupids);
-            sort($gk);
-            $topo_key = 'nt_topo_' . $uid . '_' . md5(implode(',', $gk));
-            $current = [];   // "idA|idB" → [labelA, labelB]
-            foreach ($edges as $e) {
-                if (!empty($e['_isInternetEdge'])) continue;
-                $pair = [(string) $e['from'], (string) $e['to']];
-                sort($pair);
-                $current[$pair[0] . '|' . $pair[1]] = [$host_label($pair[0]), $host_label($pair[1])];
+        // Baseline der letzten Abfrage (user- + gruppengebunden, 7 Tage). Das ist
+        // KEIN Response-Cache, sondern ein "letzter Stand"-Speicher: der Diff
+        // dagegen ergibt topo_changes. User-Scoping, Sortierung der groupids und
+        // Schema-Version macht NtCache; ohne APCu ist es ein No-Op und
+        // topo_changes bleibt schlicht leer.
+        $current = [];   // "idA|idB" → [labelA, labelB]
+        foreach ($edges as $e) {
+            if (!empty($e['_isInternetEdge'])) continue;
+            $pair = [(string) $e['from'], (string) $e['to']];
+            sort($pair);
+            $current[$pair[0] . '|' . $pair[1]] = [$host_label($pair[0]), $host_label($pair[1])];
+        }
+        $baseline = NtCache::get('topo_baseline', [$groupids]);
+        if (is_array($baseline)) {
+            foreach ($current as $k => $lbls) {
+                if (!isset($baseline[$k])) $topo_changes['added'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
             }
-            $ok = false;
-            $baseline = ($uid > 0) ? apcu_fetch($topo_key, $ok) : false;
-            if ($ok && is_array($baseline)) {
-                foreach ($current as $k => $lbls) {
-                    if (!isset($baseline[$k])) $topo_changes['added'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
-                }
-                foreach ($baseline as $k => $lbls) {
-                    if (!isset($current[$k])) $topo_changes['removed'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
-                }
-            }
-            if ($uid > 0) {
-                apcu_store($topo_key, $current, 7 * 86400);
+            foreach ($baseline as $k => $lbls) {
+                if (!isset($current[$k])) $topo_changes['removed'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
             }
         }
+        NtCache::set('topo_baseline', [$groupids], $current, 7 * 86400);
 
         $_payload = $this->encodeJson(
             ['nodes' => $nodes, 'edges' => $edges,
              'lldp_unmatched' => $lldp_unmatched,
              'lldp_quality'   => $lldp_quality_out,
              'topo_changes'   => $topo_changes,
-             'health'         => $health]
+             'health'         => $health,
+             // Truncation sichtbar machen (statt still abzuschneiden).
+             'truncated'       => $requested_groups > self::MAX_GROUPS,
+             'requested_count' => $requested_groups,
+             'processed_count' => count($groupids)]
         );
         NetworkTopologyDiag::record([
             'action'     => 'data',
