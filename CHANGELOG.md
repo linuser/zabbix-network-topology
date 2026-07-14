@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.15 — 2026-07-15
+
+### Added
+- **Versionierter API-Contract** (Feature-Vorschlag §12): die `data`-Response trägt jetzt additiv `api_version` (1), `generated_at` und ein `capabilities`-Objekt (`lldp`, `history`, `maintenance`, `health`, `forecast`, `compliance`, `port_metrics`). Externe Integrationen/Widgets können daran Kompatibilität und verfügbare Features festmachen. `API_VERSION` + `capabilities()` liegen zentral in der Controller-Basisklasse. Rein additiv — bestehende Top-Level-Felder unverändert. `port_metrics` ist bewusst `false` (Port-zu-Port ist noch nicht umgesetzt).
+
 ## v4.34.14 — 2026-07-14
 
 ### Removed

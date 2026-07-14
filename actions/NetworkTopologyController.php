@@ -34,6 +34,31 @@ use CControllerResponseData;
 abstract class NetworkTopologyController extends CController {
 
     /**
+     * Version des JSON-Antwort-Contracts (Review §12). Bumpen, wenn sich die
+     * Response-Struktur breaking aendert — externe Integrationen/Widgets koennen
+     * daran ihre Kompatibilitaet festmachen. Additive Felder erhoehen sie NICHT.
+     */
+    public const API_VERSION = 1;
+
+    /**
+     * Welche Modul-Features dieser Server unterstuetzt (Review §12). Server-Ebene,
+     * NICHT per-User-Permission — ob der aktuelle User z.B. Wartung anlegen darf,
+     * steht in NT_CONFIG.can_edit. port_metrics ist bewusst false: die Port-zu-
+     * Port-Zuordnung (Review-„fehlende Funktionen" §3) ist noch nicht umgesetzt.
+     */
+    protected function capabilities(): array {
+        return [
+            'lldp'         => true,
+            'history'      => true,
+            'maintenance'  => true,
+            'health'       => true,
+            'forecast'     => true,
+            'compliance'   => true,
+            'port_metrics' => false,
+        ];
+    }
+
+    /**
      * Einheitliches JSON-Encoding fuer alle Modul-Antworten.
      */
     protected function encodeJson($data): string {
