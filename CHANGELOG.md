@@ -33,6 +33,8 @@ Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
 ## v4.34.5 — 2026-07-14
 
+> **Korrektur (nachgetragen):** Die Commit-Message zu diesem Release behauptet, die Produktions-Frontends hätten kein APCu und der Limiter sei dort ein No-Op. Das war eine Fehlmessung (ein fehlerhaftes Prüf-Kommando schlug still fehl). Nachgemessen: **beide Prod-Server haben APCu** (`/etc/php/8.2/fpm/conf.d/20-apcu.ini`). Rate-Limit **und** die Caches aus 4.34.7 sind dort also aktiv, nicht inert.
+
 ### Security
 - **Rate-Limit für teure Read-Actions** (Review #5): APCu-Fixed-Window-Drosselung pro (User, Action) — max. **10 Aufrufe / 5 s** — für `history`, `discover_patterns`, `compliance`, `capacity_forecast`, `resource_forecast`, `item_history`. Schützt vor Hammering (Abuse, Runaway-Script, gekaperter Account); normale UI-Interaktion liegt weit unter dem Limit. Bei Überschreitung: `{"error":"Too many requests"}`. Ohne APCu wird nicht gedrosselt (fail-open, APCu optional). Zentral in der Controller-Basisklasse (`throttle()`/`rateLimitOk()`), atomar via `apcu_add`+`apcu_inc`.
 
