@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use API;
 
 /**
@@ -32,7 +30,7 @@ use API;
  * Agent-Items werden ueber den Item-NAMEN (received/sent) gerichtet,
  * SNMP-Octets werden x8 auf bps gerechnet.
  */
-class NetworkTopologyCapacityForecast extends CController {
+class NetworkTopologyCapacityForecast extends NetworkTopologyController {
 
     private const MAX_HOSTS  = 200;
     private const CACHE_TTL  = 1800;   // Trends rollen stuendlich — 30min reicht
@@ -43,16 +41,6 @@ class NetworkTopologyCapacityForecast extends CController {
         $this->disableCsrfValidation();
     }
 
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
-    }
-
     protected function checkInput(): bool {
         if (!$this->requireAjax()) return false;
         $ret = $this->validateInput([
@@ -61,9 +49,7 @@ class NetworkTopologyCapacityForecast extends CController {
             'days'     => 'in 7,14,30,60,90',
         ]);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
         }
         return $ret;
     }
@@ -258,7 +244,7 @@ class NetworkTopologyCapacityForecast extends CController {
     }
 
     private function out(array $payload, float $t0, bool $cache_hit): void {
-        $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $json = $this->encodeJson($payload);
         NetworkTopologyDiag::record([
             'action'     => 'capacity_forecast',
             'elapsed_ms' => round((microtime(true) - $t0) * 1000, 1),
@@ -266,6 +252,6 @@ class NetworkTopologyCapacityForecast extends CController {
             'cache_hit'  => $cache_hit,
             'counts'     => ['hosts' => is_array($payload['hosts'] ?? null) ? count($payload['hosts']) : 0],
         ]);
-        $this->setResponse(new CControllerResponseData(['main_block' => $json]));
+        $this->jsonResponseRaw($json);
     }
 }

@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use API;
 
 /**
@@ -44,7 +42,7 @@ use API;
  * Events liefern. Wir limitieren auf max 50000 Events; falls truncated,
  * gibt das Backend ein "truncated":true Flag zurück.
  */
-class NetworkTopologyHistory extends CController {
+class NetworkTopologyHistory extends NetworkTopologyController {
 
     private const MAX_EVENTS = 50000;
     private const MAX_RANGE_SECONDS = 31 * 86400 + 3600;   // 31 Tage + 1h Toleranz
@@ -52,17 +50,6 @@ class NetworkTopologyHistory extends CController {
 
     protected function init(): void {
         $this->disableCsrfValidation();
-    }
-
-    // Read-only Endpunkt — nur XHR-Aufrufe akzeptieren (CSRF-Last-Schutz).
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
     }
 
     protected function checkInput(): bool {
@@ -73,9 +60,7 @@ class NetworkTopologyHistory extends CController {
             'to'       => 'int32',
         ]);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
         }
         return $ret;
     }
@@ -92,15 +77,15 @@ class NetworkTopologyHistory extends CController {
 
         // Range-Validierung
         if ($from <= 0 || $to <= 0 || $to <= $from) {
-            $this->respond(['error' => 'Invalid time range']);
+            $this->jsonResponse(['error' => 'Invalid time range']);
             return;
         }
         if (($to - $from) > self::MAX_RANGE_SECONDS) {
-            $this->respond(['error' => 'Time range exceeds max (' . (int)(self::MAX_RANGE_SECONDS / 86400) . ' days)']);
+            $this->jsonResponse(['error' => 'Time range exceeds max (' . (int)(self::MAX_RANGE_SECONDS / 86400) . ' days)']);
             return;
         }
         if (empty($groupids)) {
-            $this->respond(['error' => 'No groupids']);
+            $this->jsonResponse(['error' => 'No groupids']);
             return;
         }
 
@@ -112,7 +97,7 @@ class NetworkTopologyHistory extends CController {
         ]);
         $allowed_ids = array_keys($allowed_groups);
         if (empty($allowed_ids)) {
-            $this->respond(['error' => 'No accessible hostgroups']);
+            $this->jsonResponse(['error' => 'No accessible hostgroups']);
             return;
         }
 
@@ -124,7 +109,7 @@ class NetworkTopologyHistory extends CController {
         ]);
         $hostids = array_keys($hosts);
         if (empty($hostids)) {
-            $this->respond([
+            $this->jsonResponse([
                 'from' => $from, 'to' => $to, 'events' => new \stdClass()
             ]);
             return;
@@ -222,16 +207,10 @@ class NetworkTopologyHistory extends CController {
         NetworkTopologyDiag::record([
             'action'     => 'history',
             'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
-            'bytes'      => strlen(json_encode($_payload)),
+            'bytes'      => strlen($this->encodeJson($_payload)),
             'cache_hit'  => false,
             'counts'     => ['hosts' => is_array($by_host) ? count($by_host) : 0, 'truncated' => $truncated],
         ]);
-        $this->respond($_payload);
-    }
-
-    private function respond(array $data): void {
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode($data, JSON_UNESCAPED_SLASHES)
-        ]));
+        $this->jsonResponse($_payload);
     }
 }

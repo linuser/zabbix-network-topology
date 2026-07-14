@@ -5,12 +5,10 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use CControllerResponseFatal;
 use API;
 
-class NetworkTopologyData extends CController {
+class NetworkTopologyData extends NetworkTopologyController {
 
     // Schutz vor CSRF-Last-Abuse (Lese-Endpoint, kein CSRF-Token):
     // Cap auf max 100 Gruppen pro Request. Realistisch hat ein User
@@ -20,20 +18,6 @@ class NetworkTopologyData extends CController {
 
     protected function init(): void {
         $this->disableCsrfValidation();
-    }
-
-    // Read-only Endpunkt — nur XHR-Aufrufe akzeptieren. Cross-Origin-Browser
-    // koennen X-Requested-With nicht ohne CORS-Preflight setzen, also
-    // schuetzt das gegen CSRF-Last (Daten kann der Angreifer wegen Same-
-    // Origin sowieso nicht lesen, aber er koennte teure Queries triggern).
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
     }
 
     protected function checkInput(): bool {
@@ -52,9 +36,7 @@ class NetworkTopologyData extends CController {
         $groupids = $this->getInput('groupids', []);
 
         if (!$groupids) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['nodes' => [], 'edges' => []])
-            ]));
+            $this->jsonResponse(['nodes' => [], 'edges' => []]);
             return;
         }
         if (count($groupids) > self::MAX_GROUPS) {
@@ -89,9 +71,7 @@ class NetworkTopologyData extends CController {
         ]);
 
         if (!$hosts) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['nodes' => [], 'edges' => []])
-            ]));
+            $this->jsonResponse(['nodes' => [], 'edges' => []]);
             return;
         }
         $hostids = array_keys($hosts);
@@ -1216,13 +1196,12 @@ class NetworkTopologyData extends CController {
             }
         }
 
-        $_payload = json_encode(
+        $_payload = $this->encodeJson(
             ['nodes' => $nodes, 'edges' => $edges,
              'lldp_unmatched' => $lldp_unmatched,
              'lldp_quality'   => $lldp_quality_out,
              'topo_changes'   => $topo_changes,
-             'health'         => $health],
-            JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+             'health'         => $health]
         );
         NetworkTopologyDiag::record([
             'action'     => 'data',
@@ -1231,7 +1210,7 @@ class NetworkTopologyData extends CController {
             'cache_hit'  => false,
             'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],
         ]);
-        $this->setResponse(new CControllerResponseData(['main_block' => $_payload]));
+        $this->jsonResponseRaw($_payload);
     }
 
     /**

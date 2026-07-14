@@ -5,8 +5,6 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
-use CController;
-use CControllerResponseData;
 use API;
 
 /**
@@ -30,7 +28,7 @@ use API;
  * Request: groupids[] (Pflicht).
  * Response: { hosts: [...], aggregate: { check: count, ... }, total: N }
  */
-class NetworkTopologyCompliance extends CController {
+class NetworkTopologyCompliance extends NetworkTopologyController {
 
     private const STALE_PROBLEM_DAYS = 7;
     private const MAX_GROUPS = 100;
@@ -39,23 +37,11 @@ class NetworkTopologyCompliance extends CController {
         $this->disableCsrfValidation();
     }
 
-    private function requireAjax(): bool {
-        if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'AJAX only'])
-            ]));
-            return false;
-        }
-        return true;
-    }
-
     protected function checkInput(): bool {
         if (!$this->requireAjax()) return false;
         $ret = $this->validateInput(['groupids' => 'array_id']);
         if (!$ret) {
-            $this->setResponse(new CControllerResponseData([
-                'main_block' => json_encode(['error' => 'Invalid input'])
-            ]));
+            $this->jsonResponse(['error' => 'Invalid input']);
         }
         return $ret;
     }
@@ -267,8 +253,6 @@ class NetworkTopologyCompliance extends CController {
     }
 
     private function respond(array $data): void {
-        $this->setResponse(new CControllerResponseData([
-            'main_block' => json_encode($data, JSON_UNESCAPED_UNICODE)
-        ]));
+        $this->jsonResponse($data);
     }
 }
