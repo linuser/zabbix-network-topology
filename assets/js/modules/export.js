@@ -436,7 +436,10 @@ export function setupExportMenu(bar, isFirstRun) {
         const row = document.createElement('div');
         row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:#334155;'
             + 'white-space:nowrap;display:flex;align-items:center;gap:8px';
-        row.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>';
+        // icon ist bewusst eine statische HTML-Entity (&#128444; usw.) und bleibt.
+        // label defensiv escapen — aktuell immer statisch/i18n, aber so ist der
+        // Helfer auch gegen ein kuenftiges dynamisches Label sicher.
+        row.innerHTML = '<span>' + icon + '</span><span>' + esc(label) + '</span>';
         row.addEventListener('mouseover', function() { this.style.background = '#f8fafc'; });
         row.addEventListener('mouseout',  function() { this.style.background = ''; });
         row.addEventListener('click', function() { expMenu.style.display = 'none'; fn(); });

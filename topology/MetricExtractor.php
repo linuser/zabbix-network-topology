@@ -164,10 +164,11 @@ final class MetricExtractor {
             }
         }
 
-        // Metrik-Items (CPU/Memory/Ping/SNMP-Varianten) liegen in $items_a — der
-        // Traffic-Loop oben iteriert es auch. $items_b ist seit dem Fetch-Merge
-        // (siehe Z. ~386) dauerhaft leer; frueher lief die Extraktion darueber.
-        // Ohne diesen Fix wurden CPU/Memory fuer JEDEN Host nie befuellt (-> "—").
+        // Zweiter Durchlauf ueber dieselben Items: Metrik-Klassifikation
+        // (CPU/Memory/Ping/SNMP-Varianten). Frueher lief das ueber ein separates
+        // $items_b, das seit einem Fetch-Merge dauerhaft leer war — dadurch
+        // blieben CPU/Memory fuer JEDEN Host "—" (Fix in 4.34.0). Beide
+        // Durchlaeufe iterieren jetzt eindeutig $items_a.
         foreach ($items_a as $item) {
             $hid = $item['hostid'];
             $key = $item['key_'];
