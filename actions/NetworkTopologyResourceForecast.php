@@ -59,6 +59,7 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        if (!$this->throttle('resource_forecast')) return;
         $_t0      = microtime(true);
         $groupids = $this->getInput('groupids', []);
         $days     = (int) $this->getInput('days', 30);

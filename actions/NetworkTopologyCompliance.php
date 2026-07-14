@@ -55,6 +55,7 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        if (!$this->throttle('compliance')) return;
         $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
         if (!$groupids) {

@@ -59,6 +59,7 @@ class NetworkTopologyCapacityForecast extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        if (!$this->throttle('capacity_forecast')) return;
         $_t0      = microtime(true);
         $groupids = $this->getInput('groupids', []);
         $hostids  = array_slice($this->getInput('hostids', []), 0, self::MAX_HOSTS);

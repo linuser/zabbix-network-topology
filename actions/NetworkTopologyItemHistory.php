@@ -41,6 +41,7 @@ class NetworkTopologyItemHistory extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        if (!$this->throttle('item_history')) return;
         $_t0 = microtime(true);
         $itemids = $this->getInput('itemids', []);
         if (!$itemids) {

@@ -70,6 +70,7 @@ class NetworkTopologyHistory extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        if (!$this->throttle('history')) return;
         $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
         $from     = (int) $this->getInput('from', 0);
