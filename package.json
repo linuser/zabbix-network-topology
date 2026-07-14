@@ -1,6 +1,6 @@
 {
   "name": "network-topology-for-zabbix",
-  "version": "4.34.9",
+  "version": "4.34.10",
   "private": true,
   "description": "Build tooling for the Network Topology for Zabbix frontend module (AGPL-3.0).",
   "license": "AGPL-3.0-or-later",
@@ -10,7 +10,7 @@
     "build:dev": "esbuild assets/js/network-topology.js --bundle --format=iife --target=es2019 --outfile=assets/js/dist/nt-bundle.js",
     "ci:lint-php": "find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l",
     "ci:xss": "bash tools/check-xss.sh --strict",
-    "ci:test": "php tests/MetricExtractorTest.php",
+    "ci:test": "for t in tests/*Test.php; do php \"$t\" || exit 1; done",
     "ci:eslint": "eslint assets/js",
     "ci:shellcheck": "shellcheck nt-install.sh deploy.sh tools/*.sh",
     "ci:bundle-drift": "npm run build && git diff --exit-code -- assets/js/dist/nt-bundle.js"

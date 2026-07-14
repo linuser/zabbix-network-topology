@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.10 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 3/n** (Review §6): die **LLDP-/CDP-Nachbar-Erkennung** (~174 Zeilen) liegt jetzt in `topology/LldpEdgeBuilder.php`. Das ist die heikelste Zuordnung im Modul — ein Switch meldet einen Nachbarn als *Namen*, und das Modul muss raten, welcher Zabbix-Host gemeint ist (technischer Name, Anzeigename, FQDN-Kürzung, Groß-/Kleinschreibung). Greift das daneben, **fehlen einfach Kanten**: die Karte sieht nur „leerer" aus, niemand bekommt einen Fehler. Genau solche stillen Aussetzer fängt man nur mit Tests.
+  `Data.php`: **1357 → 781 Zeilen** (−42 %). Weiterhin reiner Struktur-Umbau, Code byte-identisch verschoben, Schnittstelle bewiesen vollständig.
+
+### Added
+- **Zweiter Unit-Test** (`tests/LldpEdgeBuilderTest.php`): prüft exaktes Namens-Matching, GROSSSCHREIBUNG + FQDN (`SW-CORE.fritz.box` → Host `sw-core`), und dass ein Zabbix **unbekannter** Nachbar keine Falschkante erzeugt, sondern sauber in `unmatched` landet. 6/6 grün.
+- Der CI-Job `unit-tests` läuft jetzt über **alle** `tests/*Test.php` — neue Tests werden automatisch mitgenommen.
+
 ## v4.34.9 — 2026-07-14
 
 ### Changed
