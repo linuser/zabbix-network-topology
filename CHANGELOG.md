@@ -2,6 +2,32 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.13 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 6/n** (Review §6, dort „ProblemLoader"): Trigger- und Problem-Verarbeitung liegt jetzt in `topology/ProblemLoader.php`.
+  `Data.php`: **1357 → 518 Zeilen** (−62 %), `doAction()` **477 Zeilen**.
+
+  *Zweite Korrektur einer eigenen Fehleinschätzung:* Ich hatte behauptet, hier sei nichts zu holen, weil „alles nur API-Aufrufe" seien. Falsch — von 87 Zeilen lagen **50 hinter dem letzten API-Call**: worst-case-Severity, Ack-Zähler, gekappte und sortierte Problemliste. Der API-Kontakt ist jetzt **eine** dünne Methode (`load()`), die Logik liegt in zwei **reinen** (`aggregateTriggers()`, `aggregateProblems()`) — und damit ist sie testbar, ohne die Zabbix-API zu mocken.
+
+- `HostLoader` habe ich **bewusst nicht** gebaut: das ist genau *ein* API-Call, und der Früh-Ausstieg (`keine Hosts → leere Antwort`) muss ohnehin im Controller bleiben, weil er eine Response sendet. Übrig bliebe ein Wrapper um einen Aufruf.
+
+### Added
+- **Fünfter Unit-Test** (`tests/ProblemLoaderTest.php`, 14 Assertions) — prüft die Regeln, die man leicht übersieht: ein Trigger kann auf **mehrere Hosts** zeigen (und zählt bei jedem), Severity ist der **worst case** und nicht der zuletzt gesehene, `acknowledged` kommt je nach Zabbix-Version als String `'1'` **oder** als int `1`, und die Problemliste wird bei 20 **gekappt** — die Zähler laufen aber über **alle** Probleme weiter.
+  Gesamt: **5 Test-Dateien, 54 Assertions**.
+
+## v4.34.12 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 5/n** (Review §6, dort „TopologyBuilder"): der **Knoten-Zusammenbau** (136 Zeilen) liegt jetzt in `topology/NodeBuilder.php`.
+  `Data.php`: **1357 → 592 Zeilen** (−56 %), `doAction()` **552 Zeilen**.
+
+  *Korrektur einer eigenen Fehleinschätzung:* Ich hatte diesen Schnitt zuvor abgelehnt — der Block liest 23 Variablen, und eine „23-Parameter-Signatur" schien mir keine Verbesserung. Das war ein Denkfehler. Die 23 sind fünf **Gruppen**, und zwei davon (`$metrics`, `$tags`) liefern `MetricExtractor` und `HostTagParser` bereits fertig gebündelt — sie wurden in `doAction()` nur wieder auseinandergepflückt. Reicht man die Bündel durch, bleiben **fünf Parameter**: genau die Form, die das Review selbst skizziert (`build($hosts, $metrics, $links)`).
+
+### Added
+- **Vierter Unit-Test** (`tests/NodeBuilderTest.php`, 14 Assertions): prüft vor allem die **Präzedenz** — ein `nt:icon`-Tag muss die automatische Gerätetyp-Erkennung überstimmen (Host `sw-core` + Tag `firewall` → `firewall`, nicht `switch`), und ohne Tag muss die Heuristik greifen (`nas-01` → `storage`). Dreht sich das um, bekäme jeder Admin, der bewusst ein Icon gesetzt hat, wieder das geratene zu sehen — ohne dass irgendetwas fehlschlägt.
+  Gesamt: **4 Test-Dateien, 40 Assertions**.
+
 ## v4.34.11 — 2026-07-14
 
 ### Changed
