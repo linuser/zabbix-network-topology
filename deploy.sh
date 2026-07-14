@@ -167,6 +167,8 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
         --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
         --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
         --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-install.sh' \
+        --exclude 'tests' --exclude '.gitlab-ci.yml' \
+        --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
         "$SCRIPT_DIR/" "$STAGE/network_topology_v6/"
     rm -f "$TMP_MAIN"
     (cd "$STAGE" && zip -rq "$TMP_MAIN" network_topology_v6)
