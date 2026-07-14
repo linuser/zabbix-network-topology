@@ -5,6 +5,7 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopologyV6\Actions;
 
+use Modules\NetworkTopologyV6\Topology\HostMetadata;
 use CControllerResponseFatal;
 use API;
 
@@ -270,7 +271,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         //   {host}, {label}, {ip}, {location}
         // Pro Host wird der Template-String mit URL-encoded Werten gefuellt
         // und an host_links angehaengt. Cap analog nt:link bei 6 Links/Host.
-        $integration_templates = $this->loadIntegrationTemplates();
+        $integration_templates = HostMetadata::loadIntegrationTemplates();
         // primaryIp() sortiert die interfaces in-place (usort) — beim wiederholten
         // Aufruf pro Template UND spaeter in der Host-Assembly nicht noetig.
         // Einmal pro Host cachen.
@@ -279,7 +280,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             foreach ($hosts as $hid => $h) {
                 if (!isset($host_links[$hid])) $host_links[$hid] = [];
                 if (!isset($primary_ip_cache[$hid])) {
-                    $primary_ip_cache[$hid] = $this->primaryIp($h['interfaces'] ?? []);
+                    $primary_ip_cache[$hid] = HostMetadata::primaryIp($h['interfaces'] ?? []);
                 }
                 foreach ($integration_templates as $tpl) {
                     if (count($host_links[$hid]) >= 6) break;
@@ -478,9 +479,9 @@ class NetworkTopologyData extends NetworkTopologyController {
                 // Oper-Status pro Interface. Bracket-Param als Korrelations-
                 // Key zu ifAdminStatus, damit admin-down (absichtlich
                 // deaktivierte Ports) unten nicht als "Link down" zaehlt.
-                $iface_oper[$hid][$this->ifaceParam($key)] = (int) $val;
+                $iface_oper[$hid][HostMetadata::ifaceParam($key)] = (int) $val;
             } elseif (strpos($key, 'ifAdminStatus') !== false) {
-                $iface_admin[$hid][$this->ifaceParam($key)] = (int) $val;
+                $iface_admin[$hid][HostMetadata::ifaceParam($key)] = (int) $val;
             } elseif (strpos($key, 'ifInErrors') !== false || strpos($key, 'ifOutErrors') !== false
                   || preg_match('/net\.if\.(?:in|out)\[[^\]]*,errors\]/', $key)) {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
@@ -862,7 +863,7 @@ class NetworkTopologyData extends NetworkTopologyController {
                 // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
                 $port = '';
                 if (strpos($item['key_'], '[') !== false) {
-                    $port = $this->ifaceParam($item['key_']);
+                    $port = HostMetadata::ifaceParam($item['key_']);
                     if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $port, $pm)) {
                         $port = $pm[2];
                     }
@@ -988,7 +989,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             $all_acked = $total > 0 && $acked === $total;
 
             // Auto-Detection des Device-Type, ggf. überschrieben durch nt:icon-Tag
-            $detected_type = $this->deviceType($h['host'], $tpls);
+            $detected_type = HostMetadata::deviceType($h['host'], $tpls);
             $effective_type = $host_icon_override[$hid] ?? $detected_type;
 
             // Extra-Items für nt:show-Tags zusammenstellen — in der Reihenfolge
@@ -1054,8 +1055,8 @@ class NetworkTopologyData extends NetworkTopologyController {
                 'id'          => $hid,
                 'label'       => $h['name'] !== '' ? $h['name'] : $h['host'],
                 'host'        => $h['host'],
-                'ip'          => $primary_ip_cache[$hid] ?? ($primary_ip_cache[$hid] = $this->primaryIp($ifaces)),
-                'iftype'      => $this->ifaceType($ifaces),
+                'ip'          => $primary_ip_cache[$hid] ?? ($primary_ip_cache[$hid] = HostMetadata::primaryIp($ifaces)),
+                'iftype'      => HostMetadata::ifaceType($ifaces),
                 'severity'    => $host_severity[$hid] ?? 0,
                 'problems'    => $host_problems[$hid]  ?? 0,
                 'problem_list' => $host_problem_list[$hid] ?? [],
@@ -1217,141 +1218,4 @@ class NetworkTopologyData extends NetworkTopologyController {
         $this->jsonResponseRaw($_payload);
     }
 
-    /**
-     * Laedt Integration-Templates aus Zabbix Global-Macros.
-     * Erwartet Paare: {$NT.INT.<NAME>.LABEL} + {$NT.INT.<NAME>.URL}
-     * (Dot-Notation = Zabbix-Konvention; Underscore-Form weiter akzeptiert).
-     * Liefert ein Array [{name, label, url}, ...] mit dem URL-Template
-     * (Tokens noch nicht expandiert).
-     *
-     * Beispiel-Macros:
-     *   {$NT.INT.NETBOX.LABEL} = NetBox
-     *   {$NT.INT.NETBOX.URL}   = https://netbox.fox1.de/dcim/devices/?q={host}
-     */
-    private function loadIntegrationTemplates(): array {
-        try {
-            $macros = API::UserMacro()->get([
-                'output'      => ['macro', 'value'],
-                'globalmacro' => true,
-            ]);
-        } catch (\Throwable $e) {
-            return [];   // API nicht verfuegbar → leise no-op
-        }
-        $by_name = [];   // name → ['label' => ?, 'url' => ?]
-        foreach ($macros as $m) {
-            $macro = $m['macro'] ?? '';
-            // Kanonisch Dot-Notation ({$NT.INT.<NAME>.URL}) = Zabbix-Konvention;
-            // die alte Underscore-Form ({$NT_INT_..._URL}) wird aus Kompat weiter akzeptiert.
-            if (!preg_match('/^\{\$NT[._]INT[._]([A-Z0-9_]+)[._](LABEL|URL)\}$/', $macro, $mm)) continue;
-            $name = $mm[1];
-            $part = strtolower($mm[2]);
-            $by_name[$name][$part] = (string) ($m['value'] ?? '');
-        }
-        $out = [];
-        foreach ($by_name as $name => $parts) {
-            $label = trim($parts['label'] ?? '');
-            $url   = trim($parts['url']   ?? '');
-            if ($label === '' || $url === '') continue;
-            // Schutz-Caps analog nt:link
-            if (strlen($label) > 200 || strlen($url) > 2048) continue;
-            if (!preg_match('#^https?://#i', $url)) continue;
-            if (preg_match('/[\x00-\x1F\x7F]/', $url . $label)) continue;
-            $out[] = ['name' => $name, 'label' => $label, 'url' => $url];
-        }
-        return $out;
-    }
-
-    /**
-     * Extrahiert den Bracket-Parameter eines Item-Keys als Korrelations-Key
-     * fuer Interface-Items ("ifOperStatus[eth0]" → "eth0",
-     * "net.if.status[ifOperStatus.3]" → "ifOperStatus.3" → normalisiert "3").
-     * Ohne Bracket: ganzer Key.
-     */
-    private function ifaceParam(string $key): string {
-        $p = strpos($key, '[');
-        if ($p === false) return $key;
-        $q = strrpos($key, ']');
-        $param = substr($key, $p + 1, ($q !== false ? $q : strlen($key)) - $p - 1);
-        // "ifOperStatus.3" / "ifAdminStatus.3" → "3", damit Oper und Admin
-        // desselben Interfaces trotz MIB-Name-Praefix korrelieren.
-        return preg_replace('/^if(?:Oper|Admin)Status\./', '', $param);
-    }
-
-    // Returns IP from primary interface, prefers Agent but falls back to SNMP/JMX/IPMI
-    private function primaryIp(array $ifaces): string {
-        if (!$ifaces) return '';
-        // Sort: main=1 first, then by type (1=agent, 2=snmp, 3=ipmi, 4=jmx)
-        usort($ifaces, static fn($a, $b) =>
-            $b['main'] !== $a['main']
-                ? (int)$b['main'] - (int)$a['main']
-                : (int)$a['type'] - (int)$b['type']
-        );
-        return $ifaces[0]['ip'] ?? '';
-    }
-
-    // Returns interface type string for JS display
-    private function ifaceType(array $ifaces): string {
-        foreach ($ifaces as $i) {
-            if ((int)$i['main'] === 1) {
-                return match((int)$i['type']) {
-                    1 => 'Agent',
-                    2 => 'SNMP',
-                    3 => 'IPMI',
-                    4 => 'JMX',
-                    default => 'Unknown'
-                };
-            }
-        }
-        return 'Unknown';
-    }
-
-    private function deviceType(string $host, array $tpls): string {
-        $s = strtolower($host.' '.implode(' ', $tpls));
-        $map = [
-            // Network security
-            'firewall'       => ['fw-','firewall','fortigate','pfsense','opnsense','-asa-','srx',
-                                 'opnsense by snmp'],
-            'router'         => ['rtr-','router','-gw-','gateway','mikrotik routeros','vyos'],
-            'switch'         => ['sw-','switch','-core-','-acc-','catalyst','procurve','nexus',
-                                 'hp enterprise switch','tp-link by snmp'],
-            'wireless'       => ['-ap-','wlan','wifi','wireless','unifi','omada'],
-            // Storage & backup
-            'storage'        => ['nas-','synology','qnap','netapp','storage','truenas',
-                                 'truenas core by snmp','synology active backup'],
-            // Virtualization
-            'hypervisor'     => ['esxi','vmware','proxmox','proxmox ve by http',
-                                 'hypervisor','pve'],
-            // Surveillance
-            'camera'         => ['cam-','camera','nvr','dvr','hikvision','dahua','axis'],
-            // Power
-            'ups'            => ['ups-','usv-','usv','ups','apc','eaton','powerware',
-                                 'network ups'],
-            // Home automation
-            'homeauto'       => ['home assistant','homeassistant','home-assistant',
-                                 'zigbee','z-wave','domoticz','openhab'],
-            // Mail
-            'mailserver'     => ['mail','smtp','imap','mailcow','postfix','dovecot',
-                                 'mailcow complete'],
-            // Web & apps
-            'webserver'      => ['nginx by zabbix','apache','web-','www-'],
-            // Containers
-            'container'      => ['docker by zabbix','docker','container','kubernetes'],
-            // Monitoring
-            'monitoring'     => ['tactical rmm','rmm.cloudglue'],
-            // Printer
-            'printer'        => ['prt-','printer','mfp'],
-            // Linux/Windows/macOS generic servers
-            'linux'          => ['linux by zabbix agent','zfs on linux'],
-            'windows'        => ['windows','win-'],
-            'macos'          => ['macos by zabbix agent'],
-            // Generic server fallback
-            'server'         => ['srv-','server'],
-        ];
-        foreach ($map as $type => $kws) {
-            foreach ($kws as $kw) {
-                if (strpos($s, $kw) !== false) return $type;
-            }
-        }
-        return 'server';
-    }
 }
