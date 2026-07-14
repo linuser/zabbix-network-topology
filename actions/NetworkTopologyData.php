@@ -497,7 +497,12 @@ class NetworkTopologyData extends NetworkTopologyController {
              // Truncation sichtbar machen (statt still abzuschneiden).
              'truncated'       => $requested_groups > self::MAX_GROUPS,
              'requested_count' => $requested_groups,
-             'processed_count' => count($groupids)]
+             'processed_count' => count($groupids),
+             // Review §12: versionierter, dokumentierter API-Contract. Additiv,
+             // bestehende Top-Level-Felder bleiben unveraendert.
+             'api_version'     => self::API_VERSION,
+             'generated_at'    => time(),
+             'capabilities'    => $this->capabilities()]
         );
         NetworkTopologyDiag::record([
             'action'     => 'data',
