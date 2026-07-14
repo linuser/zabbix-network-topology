@@ -4,7 +4,7 @@
     "type": "widget",
     "name": "Network Topology for Zabbix — Health Widget",
     "namespace": "NetworkTopologyV6HealthWidget",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "author": "PlaNet Fox | Alexander Fox",
     "description": "Dashboard-Widget: Topology Health Score pro Hostgroup. Setzt das Hauptmodul (network_topology_v6) voraus.",
     "actions": {

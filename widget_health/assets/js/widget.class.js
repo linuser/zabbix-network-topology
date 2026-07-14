@@ -42,15 +42,31 @@ class WidgetNetworkTopologyHealth extends CWidget {
             } catch (e) {
                 this._groupids = [];
             }
+        } else {
+            // Fallback wie im Topology-Widget: bei onStart ist die View-DOM in
+            // Zabbix 7 haeufig noch nicht gesetzt -> die Config direkt aus
+            // this._fields lesen statt aus data-* am (noch fehlenden) Canvas.
+            // Ohne das blieb this._groupids leer, das Widget fetchte NIE und
+            // haengte auf "Loading...".
+            this._worstFirst = this._fields.worst_first !== false && this._fields.worst_first !== 0;
+            this._maxGroups  = parseInt(this._fields.max_groups || 0, 10) || 0;
+            this._showLegend = this._fields.show_legend !== false && this._fields.show_legend !== 0;
+            this._groupids   = this._fields.groupids || [];
         }
+    }
+
+    onActivate() {
+        // Laden + Rendern gehoert in onActivate (Widget aktiv, DOM bereit) —
+        // NICHT in onStart. Genau das war der zweite Teil des Bugs: onStart lief
+        // zu frueh, der Canvas war noch nicht da. Spiegelt das Topology-Widget.
         this._loadAndRender();
         if (this._timer) clearInterval(this._timer);
-        // Refresh-Cycle: 60s — Health-Aenderungen entwickeln sich langsam
+        // Refresh-Cycle: 60s — Health-Aenderungen entwickeln sich langsam.
         var self = this;
         this._timer = setInterval(function() { self._loadAndRender(); }, 60000);
     }
 
-    onDestroy() {
+    onDeactivate() {
         if (this._timer) { clearInterval(this._timer); this._timer = null; }
     }
 
