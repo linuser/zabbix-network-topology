@@ -72,6 +72,7 @@ class NetworkTopologyDiscoverPatterns extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        if (!$this->throttle('discover_patterns')) return;
         $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
         if (empty($groupids)) {
