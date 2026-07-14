@@ -10,6 +10,7 @@ use Modules\NetworkTopologyV6\Topology\MetricExtractor;
 use Modules\NetworkTopologyV6\Topology\LldpEdgeBuilder;
 use Modules\NetworkTopologyV6\Topology\HostTagParser;
 use Modules\NetworkTopologyV6\Topology\NodeBuilder;
+use Modules\NetworkTopologyV6\Topology\ProblemLoader;
 use CControllerResponseFatal;
 use API;
 
@@ -92,91 +93,16 @@ class NetworkTopologyData extends NetworkTopologyController {
         }
 
         // ── 2. SEVERITY + ACKNOWLEDGED ────────────────────────────────────
-        // Trigger-API liefert die Severity (= worst-case pro Host).
-        $triggers = API::Trigger()->get([
-            'output'       => ['triggerid', 'priority'],
-            'hostids'      => $hostids,
-            'monitored'    => true,
-            'only_true'    => true,
-            'filter'       => ['value' => TRIGGER_VALUE_TRUE],
-            'selectHosts'  => ['hostid'],
-            'preservekeys' => false
-        ]);
-
-        $host_severity = [];
-        $host_problems = [];   // Anzahl aktiver Trigger pro Host
-        foreach ($triggers as $t) {
-            $sev = (int) $t['priority'];
-            foreach ($t['hosts'] as $th) {
-                $hid = $th['hostid'];
-                if (!isset($host_severity[$hid]) || $sev > $host_severity[$hid]) {
-                    $host_severity[$hid] = $sev;
-                }
-                $host_problems[$hid] = ($host_problems[$hid] ?? 0) + 1;
-            }
-        }
-
-        // Acknowledged-Status pro Host: ein Host gilt als "acked", wenn er
-        // mindestens ein Problem hat UND alle Probleme acknowledged sind.
-        // Problem-API liefert acknowledge-Flag direkt (anders als Trigger-API).
-        $host_ack_total  = [];   // hid => Anzahl Probleme
-        $host_ack_acked  = [];   // hid => Anzahl davon acknowledged
-        $host_problem_list = []; // hid => [{name, severity, clock, acknowledged}, ...] (max 20/Host)
-        if ($host_problems) {
-            // recent=true: nur aktuell offene Probleme (oder kürzlich geschlossene).
-            // Frueher 'false', was historische Problems zurueckgeliefert hat — bei
-            // vielen Hosts tausende Events von denen wir nur 20/Host nutzen.
-            // sortfield+limit als zweite Sicherung gegen runaway-Listen.
-            $problems = API::Problem()->get([
-                'output'       => ['eventid', 'objectid', 'name', 'severity', 'clock', 'acknowledged'],
-                'hostids'      => array_keys($host_problems),
-                'recent'       => true,
-                'sortfield'    => ['eventid'],
-                'sortorder'    => 'DESC',
-                'limit'        => max(500, count($host_problems) * 25),
-                'preservekeys' => false
-            ]);
-            // Probleme haben keinen direkten hostid — der Weg geht über
-            // event.get oder über die schon geholten Trigger. Wir mappen
-            // triggerid → hosts aus dem Trigger-Result.
-            $trigger_hosts = [];
-            foreach ($triggers as $t) {
-                $trigger_hosts[$t['triggerid'] ?? ''] = array_column($t['hosts'], 'hostid');
-            }
-            foreach ($problems as $p) {
-                $tid = $p['objectid'] ?? '';
-                $hids = $trigger_hosts[$tid] ?? [];
-                // Type-loose-Vergleich: Zabbix-API liefert acknowledged je
-                // nach Version mal als String '1', mal als Integer 1.
-                $is_acked = (int) ($p['acknowledged'] ?? 0) === 1;
-                $entry = [
-                    'name'         => (string) ($p['name'] ?? ''),
-                    'severity'     => (int)    ($p['severity'] ?? 0),
-                    'clock'        => (int)    ($p['clock'] ?? 0),
-                    'acknowledged' => $is_acked,
-                ];
-                foreach ($hids as $hid) {
-                    $host_ack_total[$hid] = ($host_ack_total[$hid] ?? 0) + 1;
-                    if ($is_acked) {
-                        $host_ack_acked[$hid] = ($host_ack_acked[$hid] ?? 0) + 1;
-                    }
-                    // Cap pro Host: 20 Probleme reichen für die UI; mehr würden
-                    // den Accordion unbrauchbar machen und den Payload aufblähen.
-                    if (!isset($host_problem_list[$hid])) $host_problem_list[$hid] = [];
-                    if (count($host_problem_list[$hid]) < 20) {
-                        $host_problem_list[$hid][] = $entry;
-                    }
-                }
-            }
-            // Pro Host: nach Severity desc, dann nach Clock desc (neueste oben).
-            foreach ($host_problem_list as $hid => &$list) {
-                usort($list, function($a, $b) {
-                    if ($a['severity'] !== $b['severity']) return $b['severity'] - $a['severity'];
-                    return $b['clock'] - $a['clock'];
-                });
-            }
-            unset($list);
-        }
+        // Trigger + Probleme holen und verdichten — ausgelagert nach
+        // topology/ProblemLoader.php (§6). Der API-Kontakt steckt dort in EINER
+        // duennen Methode, die eigentliche Aggregation (worst-case-Severity,
+        // Ack-Zaehler, gekappte Problemliste) in zwei REINEN, getesteten.
+        $prob              = ProblemLoader::load($hostids);
+        $host_severity     = $prob['severity'];
+        $host_problems     = $prob['problems'];
+        $host_ack_total    = $prob['ack_total'];
+        $host_ack_acked    = $prob['ack_acked'];
+        $host_problem_list = $prob['problem_list'];
 
         // ── 2b. TAG-SCAN: nt:icon, nt:show, nt:link, nt:parent ────────────
         // Tag-Auswertung ausgelagert nach topology/HostTagParser.php (Review §6).

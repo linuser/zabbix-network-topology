@@ -2,6 +2,20 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.34.13 — 2026-07-14
+
+### Changed
+- **`Data.php` aufteilen — Schnitt 6/n** (Review §6, dort „ProblemLoader"): Trigger- und Problem-Verarbeitung liegt jetzt in `topology/ProblemLoader.php`.
+  `Data.php`: **1357 → 518 Zeilen** (−62 %), `doAction()` **477 Zeilen**.
+
+  *Zweite Korrektur einer eigenen Fehleinschätzung:* Ich hatte behauptet, hier sei nichts zu holen, weil „alles nur API-Aufrufe" seien. Falsch — von 87 Zeilen lagen **50 hinter dem letzten API-Call**: worst-case-Severity, Ack-Zähler, gekappte und sortierte Problemliste. Der API-Kontakt ist jetzt **eine** dünne Methode (`load()`), die Logik liegt in zwei **reinen** (`aggregateTriggers()`, `aggregateProblems()`) — und damit ist sie testbar, ohne die Zabbix-API zu mocken.
+
+- `HostLoader` habe ich **bewusst nicht** gebaut: das ist genau *ein* API-Call, und der Früh-Ausstieg (`keine Hosts → leere Antwort`) muss ohnehin im Controller bleiben, weil er eine Response sendet. Übrig bliebe ein Wrapper um einen Aufruf.
+
+### Added
+- **Fünfter Unit-Test** (`tests/ProblemLoaderTest.php`, 14 Assertions) — prüft die Regeln, die man leicht übersieht: ein Trigger kann auf **mehrere Hosts** zeigen (und zählt bei jedem), Severity ist der **worst case** und nicht der zuletzt gesehene, `acknowledged` kommt je nach Zabbix-Version als String `'1'` **oder** als int `1`, und die Problemliste wird bei 20 **gekappt** — die Zähler laufen aber über **alle** Probleme weiter.
+  Gesamt: **5 Test-Dateien, 54 Assertions**.
+
 ## v4.34.12 — 2026-07-14
 
 ### Changed
