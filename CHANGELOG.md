@@ -2,6 +2,20 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.35.1 — 2026-07-15
+
+### Fixed
+- **CDP-Per-Link-Traffic** (§3-Polish): der CDP-`{#SNMPINDEX}` ist zweiteilig (`cdpCacheIfIndex.devIndex`); das Modul liest den lokalen Port jetzt aus dem *ersten* Teil (= ifIndex) statt ihn zu verfehlen. CDP-Links bekommen damit — wie LLDP — die gemessene Per-Link-Weathermap und ein korrektes lokales Port-Label (statt `"7.4"`).
+- **Remote-Port-Fallback**: `trim()` läuft jetzt VOR dem Leer-Test → ein leerer oder whitespace-only `lldpRemPortDesc` fällt sauber auf die `lldpRemPortId` zurück, statt ein leeres Label zu erzeugen.
+- **Traffic-Richtung**: die ↓/↑-Pfeile einer Per-Link-Kante werden konsistent aus Sicht des SRC-Knotens ausgerichtet — vorher kippten sie, je nachdem welches Ende zuerst LLDP meldete.
+- **Hängender Tooltip beim Tab-Wechsel** (vorbestehend, unabhängig von §3): ein offener Host-/Edge-Tooltip blieb über dem neuen Tab (z.B. Health) stehen, weil `switchTab()` ihn nicht wegräumte — Cytoscapes `mouseout` feuert nicht beim Direkt-Klick auf einen Tab-Button. `hideTip()` jetzt am Anfang von `switchTab()`.
+
+### Changed
+- **Edge-Tooltip**: die 1h-Sparkline einer Per-Link-Kante ist jetzt als „Host gesamt (beide Enden)" ausgewiesen — die Live-Zeile darüber ist per-Link, die Sparkline host-basiert (der Spark-Endpoint liefert nur Host-History); kein scheinbarer Widerspruch mehr.
+- **Interne Cleanups**: `highSpeedBps()`- und `capLabel()`-Helfer (Duplikate entfernt), billiger `strpos`-Vorfilter vor den Per-Interface-Regexes im Hot-Loop.
+- **Doku** (LLDP-SETUP): CDP-Einschränkung entfernt (jetzt gelöst) + Hinweis „Default- vs. %-Weathermap" als Vergleichssicht.
+- Abgesichert durch 5 neue Unit-Assertions (CDP-Index-Extraktion, leerer/whitespace-PortDesc-Fallback, kein-ifIndex-Match → Kante mit Label aber ohne Metrik, Merge-Zweig → beidseitig gemeldete Kante bekommt beide Metriken).
+
 ## v4.35.0 — 2026-07-15
 
 ### Added
