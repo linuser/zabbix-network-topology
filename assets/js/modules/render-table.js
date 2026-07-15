@@ -78,6 +78,9 @@ const BUILTIN_FILTER_PRESETS = [
 // triggern kann (Filter-Bar wird neu gebaut). Werden bei jedem renderTable
 // gesetzt.
 let _renderWrap = null;
+// Ein einziger Document-Close-Handler fuers Preset-Popup; vor Neu-Anlegen
+// entfernt (buildFilterBar laeuft bei jedem renderTable) — sonst Listener-Leak.
+let _tblDocClose = null;
 let _renderNodes = null;
 let _renderEdges = null;
 
@@ -494,8 +497,8 @@ function compare(a, b) {
         case 'type':     av = (a.type  || '').toLowerCase(); bv = (b.type  || '').toLowerCase(); break;
         case 'group':    av = (a._primaryGroup || '').toLowerCase(); bv = (b._primaryGroup || '').toLowerCase(); break;
         case 'ip':       av = a.ip || ''; bv = b.ip || ''; break;
-        case 'cpu':      av = a.cpu || -1; bv = b.cpu || -1; break;
-        case 'memory':   av = a.memory || -1; bv = b.memory || -1; break;
+        case 'cpu':      av = (a.cpu == null ? -1 : a.cpu); bv = (b.cpu == null ? -1 : b.cpu); break;
+        case 'memory':   av = (a.memory == null ? -1 : a.memory); bv = (b.memory == null ? -1 : b.memory); break;
         case 'ping':     av = (a.ping == null ? 1e9 : a.ping); bv = (b.ping == null ? 1e9 : b.ping); break;
         // Traffic-Sortierung: Summe in+out (gibt einen sinnvollen "Lasttreiber"-Sort)
         case 'traffic':  av = ((a.traffic && a.traffic.in)  || 0) + ((a.traffic && a.traffic.out)  || 0);
@@ -672,9 +675,11 @@ function buildFilterBar(nodes, groupNames, theme) {
         presetPop.style.display = open ? 'none' : 'block';
         if (!open) _rebuildPresetPop(presetPop, theme);
     });
-    document.addEventListener('click', function(e) {
+    if (_tblDocClose) document.removeEventListener('click', _tblDocClose);
+    _tblDocClose = function(e) {
         if (!presetWrap.contains(e.target)) presetPop.style.display = 'none';
-    });
+    };
+    document.addEventListener('click', _tblDocClose);
 
     // Suche — flach, kein Lupen-Glyph (Zabbix nutzt das nicht), schmaler Focus.
     const search = document.createElement('input');

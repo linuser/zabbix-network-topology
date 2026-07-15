@@ -240,7 +240,7 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
         NetworkTopologyDiag::record([
             'action'     => 'compliance',
             'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
-            'bytes'      => strlen(json_encode($payload)),
+            'bytes'      => strlen($this->encodeJson($payload)),
             'cache_hit'  => false,
             'counts'     => ['hosts' => count($out_hosts)],
         ]);

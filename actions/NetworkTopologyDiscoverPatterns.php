@@ -104,7 +104,7 @@ class NetworkTopologyDiscoverPatterns extends NetworkTopologyController {
             NetworkTopologyDiag::record([
                 'action'     => 'discover',
                 'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
-                'bytes'      => strlen(json_encode($cached)),
+                'bytes'      => strlen($this->encodeJson($cached)),
                 'cache_hit'  => true,
                 'counts'     => ['patterns' => count($cached['patterns'] ?? [])],
             ]);
@@ -190,7 +190,7 @@ class NetworkTopologyDiscoverPatterns extends NetworkTopologyController {
         NetworkTopologyDiag::record([
             'action'     => 'discover',
             'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
-            'bytes'      => strlen(json_encode($payload)),
+            'bytes'      => strlen($this->encodeJson($payload)),
             'cache_hit'  => false,
             'counts'     => ['patterns' => count($patterns)],
         ]);

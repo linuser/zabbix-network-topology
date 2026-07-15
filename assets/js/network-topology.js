@@ -16,6 +16,7 @@ import { esc } from './modules/utils.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
+import { destroyGroupHulls } from './modules/group-hulls.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
@@ -124,6 +125,11 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     if (_activeTab === 'tree' && tab !== 'tree') {
         cleanupTable();
     }
+    // Beim Verlassen des Technical-Tabs die Group-Hull-SVG + deren ResizeObserver
+    // abbauen — sonst feuert der Observer weiter gegen ein zerstoertes cy.
+    if (_activeTab === 'tech' && tab !== 'tech') {
+        destroyGroupHulls();
+    }
     _activeTab = tab;
     try { localStorage.setItem(NT_TAB_KEY, tab); } catch (e) {}
     // History-Severities anwenden falls History-Mode aktiv
@@ -203,12 +209,18 @@ function init() {
         // Wenn vorhanden: URL ergänzen und reload, damit das PHP-Backend die
         // Hostgroups validiert und das Multiselect korrekt vorbefüllt.
         const lastGroups = loadLastGroups();
-        if (lastGroups && lastGroups.length) {
+        // Marker _ntr: verhindert eine Reload-Schleife. Hat der User zu einer
+        // gespeicherten Gruppe die Permission verloren, strippt das Backend sie
+        // wieder → selected_groupids leer → ohne Marker wieder Auto-Restore →
+        // reload → endlos. Wir versuchen den Restore genau EINMAL pro Kette.
+        const _restoreTried = new URL(window.location.href).searchParams.has('_ntr');
+        if (lastGroups && lastGroups.length && !_restoreTried) {
             const u = new URL(window.location.href);
             // Bestehende groupids[]-Params (gibt's hier definitionsgemäß nicht,
             // aber sicher ist sicher) und ggf. action ungetastet lassen
             u.searchParams.delete('groupids[]');
             lastGroups.forEach(function(id) { u.searchParams.append('groupids[]', id); });
+            u.searchParams.set('_ntr', '1');
             window.location.replace(u.toString());
             return;
         }

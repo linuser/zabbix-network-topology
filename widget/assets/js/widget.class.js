@@ -73,26 +73,38 @@ class WidgetNetworkTopology extends CWidget {
     }
 
     onActivate() {
+        this._active = true;
+        if (this._timer) { clearInterval(this._timer); this._timer = null; }
         this._setupButtons();
         var self = this;
         this._loadLibs(function () {
+            // _loadLibs ist async — wurde das Widget waehrenddessen deaktiviert,
+            // keinen Timer/Load mehr starten (sonst laeuft ein Refresh-Loop auf
+            // einem deaktivierten Widget und wird nie gecleart).
+            if (!self._active) return;
             self._loadData();
             self._timer = setInterval(function () { self._loadData(); }, 30000);
         });
     }
 
     onDeactivate() {
+        this._active = false;
         if (this._timer) { clearInterval(this._timer); this._timer = null; }
         this._destroyCy();
     }
 
     _setupButtons() {
         var self = this;
+        // Per-Element-Flag: die Buttons ueberleben Deaktivieren/Aktivieren im DOM,
+        // ohne Guard wuerde jedes onActivate einen weiteren Click-Handler anhaengen.
         this._target.querySelectorAll('.nt-tab-btn').forEach(function (btn) {
+            if (btn.dataset.ntWired) return;
+            btn.dataset.ntWired = '1';
             btn.addEventListener('click', function () { self._setTab(btn.dataset.tab); });
         });
         var fitBtn = this._target.querySelector('.nt-fit-btn');
-        if (fitBtn) {
+        if (fitBtn && !fitBtn.dataset.ntWired) {
+            fitBtn.dataset.ntWired = '1';
             fitBtn.addEventListener('click', function () {
                 if (self._cy) { self._cy.fit(self._cy.nodes(), 16); }
             });

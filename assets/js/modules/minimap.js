@@ -43,7 +43,11 @@ export function setupMinimap(cy, wrap) {
     }
 
     function drawMinimap() {
-        if (!window._ntCy || !_el) return;
+        // window._ntCy on-demand lesen (nicht die Closure-cy): nach einem
+        // Re-Render zeigt der Closure-Parameter auf die zerstoerte alte Instanz,
+        // ein noch offener Timer wuerde sonst darauf derefen.
+        const cy = window._ntCy;
+        if (!cy || !_el) return;
 
         // Sichtbare Nodes sammeln. Knoten ohne valide Position überspringen
         // — kommt vor wenn das Layout noch nicht fertig ist und ein
@@ -140,7 +144,8 @@ export function setupMinimap(cy, wrap) {
         _timer = setTimeout(drawMinimap, 80);
     });
 
-    setTimeout(drawMinimap, 1000);
+    if (window._ntMinimapBoot) clearTimeout(window._ntMinimapBoot);
+    window._ntMinimapBoot = setTimeout(drawMinimap, 1000);
 
     // Hintergrund-Refresh — Reference auf window damit Tab-Wechsel sie clearen kann
     if (window._ntMinimapTimer) clearInterval(window._ntMinimapTimer);

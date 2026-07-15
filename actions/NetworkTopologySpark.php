@@ -52,6 +52,7 @@ class NetworkTopologySpark extends NetworkTopologyController {
 
     protected function doAction(): void {
         $_t0 = microtime(true);
+        if (!$this->throttle('spark', 60, 10)) return;
         $hostids  = $this->getInput('hostids', []);
 
         // Defensive: Spark wird vom Tooltip einzeln pro Host getriggert,

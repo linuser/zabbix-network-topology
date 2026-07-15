@@ -44,6 +44,7 @@ class NetworkTopologyItemCount extends NetworkTopologyController {
 
     protected function doAction(): void {
         $_t0 = microtime(true);
+        if (!$this->throttle('itemcount', 20, 10)) return;
         $groupids = $this->getInput('groupids', []);
         $pattern  = trim($this->getInput('pattern', ''));
 

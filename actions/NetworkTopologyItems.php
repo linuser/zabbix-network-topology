@@ -72,6 +72,7 @@ class NetworkTopologyItems extends NetworkTopologyController {
 
     protected function doAction(): void {
         $_t0 = microtime(true);
+        if (!$this->throttle('items', 20, 10)) return;
         $groupids = $this->getInput('groupids', []);
         $pattern  = trim($this->getInput('pattern', ''));
 
@@ -202,9 +203,12 @@ class NetworkTopologyItems extends NetworkTopologyController {
             // Wert
             $val = $it['lastvalue'] ?? null;
             if ($val !== null && $val !== '') {
+                // (int) wuerde UINT64-Counter > PHP_INT_MAX (z.B. ifHCInOctets auf
+                // Langlaeufern) auf PHP_INT_MAX kappen → solche Werte als
+                // numerischen String behalten, sonst normaler int-Cast.
                 $val = ($vtype === ITEM_VALUE_TYPE_FLOAT)
                     ? (float) $val
-                    : (int) $val;
+                    : (is_numeric($val) && (float) $val > PHP_INT_MAX ? $val : (int) $val);
                 if (!isset($rows[$hid])) $rows[$hid] = [];
                 // Falls Host mehrere Items mit gleichem col_key hat (z.B. doppelte
                 // Discoverys), nehmen wir den höheren Wert (worst-case).
@@ -243,7 +247,7 @@ class NetworkTopologyItems extends NetworkTopologyController {
         NetworkTopologyDiag::record([
             'action'     => 'items',
             'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
-            'bytes'      => strlen(json_encode($_payload)),
+            'bytes'      => strlen($this->encodeJson($_payload)),
             'cache_hit'  => false,
             'counts'     => ['items' => count($items), 'cols' => count($columns), 'hosts' => count($host_meta)],
         ]);
