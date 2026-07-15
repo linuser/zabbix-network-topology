@@ -20,21 +20,29 @@ namespace Modules\NetworkTopologyV6\Topology;
  * Genau deshalb gehoert die Logik hier raus aus dem 1200-Zeilen-doAction() —
  * jetzt ist sie mit synthetischen Nachbarn testbar (siehe tests/).
  *
- * Rein: die Hosts + die rohen Nachbarmeldungen. Raus: Kanten, Qualitaets-
- * Statistik (was wurde gematcht, was nicht) und die unmatched-Liste fuers
- * Frontend. Kein API-Call, kein Controller-Zustand.
+ * Rein: die Hosts + die rohen Nachbarmeldungen (+ optional Remote-Port- und
+ * Per-Interface-Traffic-Maps). Raus: Kanten, Qualitaets-Statistik (was wurde
+ * gematcht, was nicht) und die unmatched-Liste fuers Frontend. Kein API-Call,
+ * kein Controller-Zustand.
  *
- * Der Code ist unveraendert aus Data.php uebernommen — reiner Struktur-Umbau.
+ * Urspruenglich reiner Struktur-Umbau aus Data.php; seit v4.35 zusaetzlich die
+ * Port-zu-Port-Zuordnung (Review „fehlende Funktionen" §3): Remote-Port am
+ * Nachbar-Ende (lldpRemPortId/-Desc, gleicher SNMPINDEX) und Per-Link-Traffic
+ * am lokalen Port des Reporters (port_traffic[hostid][ifIndex]).
  */
 final class LldpEdgeBuilder {
 
     /**
-     * @param array $hosts     hostid => Host-Datensatz (mit 'host', 'name', ...)
-     * @param array $lldp_raw  Roh-Nachbarmeldungen aus dem MetricExtractor
+     * @param array $hosts         hostid => Host-Datensatz (mit 'host', 'name', ...)
+     * @param array $lldp_raw      Roh-Nachbarmeldungen aus dem MetricExtractor
+     * @param array $lldp_ports    §3: hostid => [snmpindex => ['id'?, 'desc'?]] (Remote-Port)
+     * @param array $port_traffic  §3b: hostid => [ifIndex => ['in'=>bps,'out'=>bps]]
+     * @param array $port_speed    §3b: hostid => [ifIndex => bps] (Auslastungs-Divisor)
      *
      * @return array{edges: array, quality: array, unmatched: array}
      */
-    public static function build(array $hosts, array $lldp_raw): array {
+    public static function build(array $hosts, array $lldp_raw,
+            array $lldp_ports = [], array $port_traffic = [], array $port_speed = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         $name_map = [];
         $ip_map   = [];
@@ -167,35 +175,74 @@ final class LldpEdgeBuilder {
                 // die Mitte ist der lokale Port des Reporters. Keys wie
                 // lldp.rem.sysname[eth0] liefern den Namen direkt. Comma-
                 // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
+                // $idx = voller Index; korreliert Remote-Port + Traffic (§3).
+                $idx  = '';
                 $port = '';
                 if (strpos($item['key_'], '[') !== false) {
-                    $port = HostMetadata::ifaceParam($item['key_']);
-                    if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $port, $pm)) {
+                    $idx  = HostMetadata::ifaceParam($item['key_']);
+                    $port = $idx;
+                    if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $idx, $pm)) {
                         $port = $pm[2];
                     }
                     if (strlen($port) > 24) $port = substr($port, 0, 24);
                 }
+
+                // §3 Remote-Port des Nachbarn: gleicher SNMPINDEX wie der SysName
+                // (lldpRemPortId/-Desc bzw. cdpCacheDevicePort). PortDesc ("nic0",
+                // "Gi1/0/8") gewinnt vor PortId, die laut PortIdSubtype eine MAC
+                // sein kann. Ergibt das Port-Label am NACHBAR-Ende der Kante —
+                // Port-zu-Port auch dann, wenn nur der Reporter ueberwacht ist.
+                $remote_port = '';
+                if ($idx !== '' && isset($lldp_ports[$rid][$idx])) {
+                    $rp = $lldp_ports[$rid][$idx];
+                    $remote_port = trim((string) (($rp['desc'] ?? '') !== '' ? $rp['desc'] : ($rp['id'] ?? '')));
+                    if (strlen($remote_port) > 24) $remote_port = substr($remote_port, 0, 24);
+                }
+
+                // §3b Per-Link-Traffic am lokalen Port des Reporters. Setzt
+                // lldpRemLocalPortNum == ifIndex voraus (auf Aruba/ProCurve 1:1);
+                // passt es nicht, gibt es schlicht keinen Treffer → keine Metrik.
+                $my_metrics = null;
+                if ($port !== '' && isset($port_traffic[$rid][$port])) {
+                    $pt = $port_traffic[$rid][$port];
+                    $my_metrics = ['in' => round($pt['in']), 'out' => round($pt['out'])];
+                    if (isset($port_speed[$rid][$port]) && $port_speed[$rid][$port] > 0) {
+                        $my_metrics['speed'] = round($port_speed[$rid][$port]);
+                    }
+                }
+
                 $pair = [(string) $rid, (string) $rhid];
                 sort($pair);
                 $edge_key = implode('-', $pair);
                 if (!isset($seen_edges[$edge_key])) {
                     $seen_edges[$edge_key] = count($edges);
+                    // ports: lokaler Port am Reporter-Ende + Remote-Port am
+                    // Nachbar-Ende. Meldet die Gegenseite dieselbe Edge, ergaenzt
+                    // der Merge-Zweig unten ihre Sicht (first-wins).
+                    $ports = [];
+                    if ($port !== '')        $ports[(string) $rid]  = $port;
+                    if ($remote_port !== '') $ports[(string) $rhid] = $remote_port;
                     $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
                                 'to' => $rhid, 'iface' => $item['key_'],
                                 'src' => [$src => true],
-                                // Reporter-Hostid → lokaler Port. Meldet die
-                                // Gegenseite dieselbe Edge, ergaenzt der
-                                // Merge-Zweig unten ihre Port-Sicht.
-                                'ports' => $port !== '' ? [(string) $rid => $port] : []];
+                                'ports' => $ports,
+                                'port_metrics' => $my_metrics !== null ? [(string) $rid => $my_metrics] : []];
                 } else {
-                    // Edge schon bekannt (z.B. von LLDP) — Source ergaenzen
-                    // wenn jetzt CDP dieselbe Verbindung meldet (merge-Logik).
+                    // Edge schon bekannt (z.B. von LLDP) — Source/Ports/Metrik
+                    // ergaenzen, wenn jetzt CDP oder die Gegenseite dieselbe
+                    // Verbindung meldet (merge-Logik, first-wins pro Feld).
                     $eidx = $seen_edges[$edge_key];
                     if (!isset($edges[$eidx]['src'][$src])) {
                         $edges[$eidx]['src'][$src] = true;
                     }
                     if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
                         $edges[$eidx]['ports'][(string) $rid] = $port;
+                    }
+                    if ($remote_port !== '' && !isset($edges[$eidx]['ports'][(string) $rhid])) {
+                        $edges[$eidx]['ports'][(string) $rhid] = $remote_port;
+                    }
+                    if ($my_metrics !== null && !isset($edges[$eidx]['port_metrics'][(string) $rid])) {
+                        $edges[$eidx]['port_metrics'][(string) $rid] = $my_metrics;
                     }
                 }
             }

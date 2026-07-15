@@ -43,8 +43,10 @@ abstract class NetworkTopologyController extends CController {
     /**
      * Welche Modul-Features dieser Server unterstuetzt (Review §12). Server-Ebene,
      * NICHT per-User-Permission — ob der aktuelle User z.B. Wartung anlegen darf,
-     * steht in NT_CONFIG.can_edit. port_metrics ist bewusst false: die Port-zu-
-     * Port-Zuordnung (Review-„fehlende Funktionen" §3) ist noch nicht umgesetzt.
+     * steht in NT_CONFIG.can_edit. port_metrics: seit §3 liefern die Kanten
+     * Port-Labels an beiden Enden (edge.ports) und Per-Link-Traffic
+     * (edge.port_metrics), sofern die Geraete lldpRemPortId/-Desc bzw. per-
+     * Interface-Traffic (ifHCInOctets.<ifIndex>) per SNMP liefern.
      */
     protected function capabilities(): array {
         return [
@@ -54,7 +56,7 @@ abstract class NetworkTopologyController extends CController {
             'health'       => true,
             'forecast'     => true,
             'compliance'   => true,
-            'port_metrics' => false,
+            'port_metrics' => true,
         ];
     }
 

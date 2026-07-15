@@ -47,14 +47,19 @@ function check(string $what, $got, $want): void {
 
 /** Gibt es eine Kante zwischen zwei Hosts (Richtung egal)? */
 function hasEdge(array $edges, string $a, string $b): bool {
+    return findEdge($edges, $a, $b) !== null;
+}
+
+/** Liefert die Kante zwischen zwei Hosts (Richtung egal) oder null. */
+function findEdge(array $edges, string $a, string $b): ?array {
     foreach ($edges as $e) {
         $from = (string) ($e['from'] ?? '');
         $to   = (string) ($e['to']   ?? '');
         if (($from === $a && $to === $b) || ($from === $b && $to === $a)) {
-            return true;
+            return $e;
         }
     }
-    return false;
+    return null;
 }
 
 $hosts = [
@@ -89,6 +94,53 @@ check('und zwar namentlich',
 
 echo "\nQualitaets-Statistik\n";
 check('quality wird gefuellt',                        count($r['quality']) > 0,    true);
+
+// ── §3 Port-zu-Port ──────────────────────────────────────────────────────
+// Nachgebildet aus dem echten Aruba-Walk (192.168.33.4): der Switch meldet an
+// lokalem Port 8 den Nachbarn "pve" mit Remote-Port "nic0" (PortDesc; PortId
+// waere eine MAC), an Port 20 den TP-Link mit Remote-Port aus PortId (kein
+// PortDesc). ifIndex == lokaler Port → Per-Link-Traffic haengt am Reporter.
+echo "\n§3 Port-zu-Port\n";
+$hosts3 = [
+    'aruba' => ['host' => 'HP24GARUBA', 'name' => 'HP24GARUBA'],
+    'pve'   => ['host' => 'pve',        'name' => 'pve.fuchsbau.lan'],
+    'tp'    => ['host' => 'TL-SG2008P', 'name' => 'TL-SG2008P'],
+];
+$lldp_raw3 = [
+    ['hostid' => 'aruba', 'key_' => 'lldpRemSysName[0.8.1]',  'lastvalue' => 'pve.fuchsbau.lan', 'src' => 'lldp'],
+    ['hostid' => 'aruba', 'key_' => 'lldpRemSysName[0.20.2]', 'lastvalue' => 'TL-SG2008P',       'src' => 'lldp'],
+];
+$lldp_ports3 = [
+    'aruba' => [
+        '0.8.1'  => ['id' => '3C EC EF 79 2C 88', 'desc' => 'nic0'],   // PortDesc gewinnt vor MAC
+        '0.20.2' => ['id' => 'gigabitEthernet 1/0/8'],                 // nur PortId → Fallback
+    ],
+];
+$port_traffic3 = [
+    'aruba' => ['8' => ['in' => 1000000.0, 'out' => 2000000.0],
+                '20' => ['in' => 500000.0, 'out' => 750000.0]],
+];
+$port_speed3 = ['aruba' => ['8' => 1.0e9, '20' => 1.0e9]];
+
+$r3    = LldpEdgeBuilder::build($hosts3, $lldp_raw3, $lldp_ports3, $port_traffic3, $port_speed3);
+$e_pve = findEdge($r3['edges'], 'aruba', 'pve') ?? [];
+$e_tp  = findEdge($r3['edges'], 'aruba', 'tp')  ?? [];
+
+check('lokaler Port aus SNMPINDEX (Reporter-Ende)',   $e_pve['ports']['aruba'] ?? null, '8');
+check('Remote-Port am Nachbar-Ende (PortDesc)',        $e_pve['ports']['pve']   ?? null, 'nic0');
+check('PortDesc gewinnt vor PortId (MAC)',
+      ($e_pve['ports']['pve'] ?? '') !== '3C EC EF 79 2C 88', true);
+check('PortId-Fallback wenn kein PortDesc',            $e_tp['ports']['tp']     ?? null, 'gigabitEthernet 1/0/8');
+check('Per-Link-Traffic in (bps)',   $e_pve['port_metrics']['aruba']['in']    ?? null, 1000000.0);
+check('Per-Link-Traffic out (bps)',  $e_pve['port_metrics']['aruba']['out']   ?? null, 2000000.0);
+check('Per-Link-Speed als Divisor',  $e_pve['port_metrics']['aruba']['speed'] ?? null, 1.0e9);
+
+// Ohne §3-Maps (alte Aufrufer): keine Port-/Metrik-Felder, aber auch kein Crash.
+$r3b = LldpEdgeBuilder::build($hosts3, $lldp_raw3);
+$e2  = findEdge($r3b['edges'], 'aruba', 'pve') ?? [];
+check('Abwaertskompat: lokaler Port bleibt',           $e2['ports']['aruba'] ?? null, '8');
+check('Abwaertskompat: kein Remote-Port ohne Map',     isset($e2['ports']['pve']),    false);
+check('Abwaertskompat: leere port_metrics',            $e2['port_metrics'] ?? null,   []);
 
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"

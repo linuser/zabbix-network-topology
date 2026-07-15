@@ -40,7 +40,10 @@ final class MetricExtractor {
      *     cpu:      array<string, float>,
      *     memory:   array<string, int>,
      *     ping:     array<string, mixed>,
-     *     lldp_raw: array<int, array{hostid: string, key_: string, lastvalue: mixed, src: string}>
+     *     lldp_raw: array<int, array{hostid: string, key_: string, lastvalue: mixed, src: string}>,
+     *     port_traffic: array<string, array<string, array{in: float, out: float}>>,
+     *     port_speed:   array<string, array<string, float>>,
+     *     lldp_ports:   array<string, array<string, array{id?: string, desc?: string}>>
      * }
      */
     public static function extract(array $items_a): array {
@@ -56,6 +59,12 @@ final class MetricExtractor {
         $iface_admin    = [];   // hid => [ifaceParam => adminStatus] (fuer Korrelation)
         $host_speed     = [];   // hid => max Link-Speed in bps (Weathermap-Kapazitaet)
         $lldp_raw       = [];
+        // §3 Port-zu-Port: per-Interface-Traffic/-Speed (ifIndex-Key) + Remote-Port
+        // je LLDP/CDP-SNMPINDEX. Getrennt von den Host-Aggregaten oben, damit die
+        // bestehende Knoten-Metrik unveraendert bleibt.
+        $port_traffic   = [];   // hid => [ifIndex => ['in'=>bps, 'out'=>bps]]
+        $port_speed     = [];   // hid => [ifIndex => bps]
+        $lldp_ports     = [];   // hid => [snmpindex => ['id'=>?, 'desc'=>?]]
         $host_cpu       = [];
         $host_mem_used  = [];   // bytes (used)
         $host_mem_total = [];   // bytes (total)
@@ -73,6 +82,30 @@ final class MetricExtractor {
             $hid = $item['hostid'];
             $key = $item['key_'];
             $val = $item['lastvalue'];
+
+            // §3b Per-Interface-Traffic: ifIndex + Richtung aus SNMP-Octets-Keys
+            // (ifHCInOctets.8 / net.if.in[ifHCInOctets.8] / ifInOctets.8). Eigenes
+            // Array — stoert die Host-Aggregation unten NICHT. net.if.*-Werte sind
+            // schon bits/s (Template-Preprocessing ×8); rohe *Octets sind octets/s
+            // → hier ×8. Nur numerische ifIndex-Keys; agent-Namens-Interfaces
+            // ("ens18") haben ohnehin keinen LLDP-Port-Bezug.
+            // ifIndex-Trenner ist je nach Template ein Punkt (net.if.in[ifHCInOctets.8])
+            // oder eine Klammer (ifHCInOctets[8]) → [.\[] deckt beide.
+            if (preg_match('/(?:HC)?(In|Out)Octets[.\[](\d+)/', $key, $om)) {
+                $ifx  = $om[2];
+                $bits = (strpos($key, 'net.if') === 0) ? (float) $val : (float) $val * 8;
+                if (!isset($port_traffic[$hid][$ifx])) $port_traffic[$hid][$ifx] = ['in' => 0.0, 'out' => 0.0];
+                $port_traffic[$hid][$ifx][strtolower($om[1])] += $bits;
+            }
+            // §3b Per-Interface-Speed als Auslastungs-Divisor (optional). ifHighSpeed
+            // = Mbps (oder schon bps, gleiche Heuristik wie Host-Speed); ifSpeed = bps.
+            if (preg_match('/ifHighSpeed[.\[](\d+)/', $key, $sm)) {
+                $sp = (float) $val;
+                if ($sp > 0) { if ($sp < 1.0e7) $sp *= 1.0e6; $port_speed[$hid][$sm[1]] = $sp; }
+            } elseif (preg_match('/ifSpeed[.\[](\d+)/', $key, $sm)) {
+                $sp = (float) $val;
+                if ($sp > 0 && !isset($port_speed[$hid][$sm[1]])) $port_speed[$hid][$sm[1]] = $sp;
+            }
 
             // WICHTIG: Health-Branches VOR dem generischen net.if-Traffic-Branch.
             // Moderne SNMP-Template-Keys wie net.if.status[ifOperStatus.1] und
@@ -133,6 +166,18 @@ final class MetricExtractor {
                     $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
                 }
                 $host_traffic[$hid]['out'] += (float) $val * 8;
+            } elseif (strpos($key, 'lldpRemPortId') !== false) {
+                // §3 Remote-Port (LLDP). Gleicher SNMPINDEX wie lldpRemSysName →
+                // LldpEdgeBuilder ordnet ihn der Nachbar-Zeile zu. PortId kann laut
+                // PortIdSubtype eine MAC sein → beim Label gewinnt PortDesc.
+                $lldp_ports[$hid][HostMetadata::ifaceParam($key)]['id'] = (string) $val;
+            } elseif (strpos($key, 'lldpRemPortDesc') !== false) {
+                $lldp_ports[$hid][HostMetadata::ifaceParam($key)]['desc'] = (string) $val;
+            } elseif (strpos($key, 'cdpCacheDevicePort') !== false) {
+                // CDP-Remote-Port: menschenlesbar → als 'desc'. MUSS vor der
+                // Neighbor-Branch stehen, deren Regex "cdp.*device" diesen Port sonst
+                // faelschlich als Device-NAMEN (Nachbar) einsammeln wuerde.
+                $lldp_ports[$hid][HostMetadata::ifaceParam($key)]['desc'] = (string) $val;
             } elseif (!empty($val) && (
                     $key === 'lldpRemSysName'
                  || strpos($key, 'cdpCacheDeviceId')  !== false   // Cisco CDP
@@ -343,6 +388,11 @@ final class MetricExtractor {
             'memory'   => $host_memory,
             'ping'     => $host_ping,
             'lldp_raw' => $lldp_raw,
+            // §3 Port-zu-Port (Review „fehlende Funktionen" §3): per-Interface-
+            // Traffic/-Speed nach ifIndex + Remote-Port je LLDP/CDP-SNMPINDEX.
+            'port_traffic' => $port_traffic,
+            'port_speed'   => $port_speed,
+            'lldp_ports'   => $lldp_ports,
         ];
     }
 }

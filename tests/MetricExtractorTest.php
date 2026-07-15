@@ -99,6 +99,37 @@ check('ifHighSpeed 1000 (Mbps) -> 1e9 bps',    $m['speed']['h2']         ?? null
 check('lldp_raw: Nachbar erkannt',             count($m['lldp_raw']),             1);
 check('lldp_raw: Quelle klassifiziert',        $m['lldp_raw'][0]['src']  ?? null, 'lldp');
 
+// ── §3 Per-Interface-Traffic/-Speed (aus denselben h2-SNMP-Items) ─────────
+echo "\n§3 Per-Interface-Traffic/-Speed\n";
+check('port_traffic: ifHCInOctets[1] -> bits/s (x8)', $m['port_traffic']['h2']['1']['in'] ?? null, 8000.0);
+check('port_speed: ifHighSpeed[1] -> 1e9 bps',        $m['port_speed']['h2']['1']         ?? null, 1.0e9);
+
+// ── §3 Remote-Port + CDP-Regression (eigene Items, damit die Zaehler oben
+//     unberuehrt bleiben) ─────────────────────────────────────────────────
+echo "\n§3 Remote-Port + CDP-Regression\n";
+$items3 = [
+    // Aruba-Form: net.if.in[ifHCInOctets.8] ist schon bits/s (KEIN x8)
+    ['hostid' => 'a', 'key_' => 'net.if.in[ifHCInOctets.8]',   'name' => 'Interface 8: Bits received', 'lastvalue' => '1000000'],
+    ['hostid' => 'a', 'key_' => 'net.if.out[ifHCOutOctets.8]', 'name' => 'Interface 8: Bits sent',     'lastvalue' => '2000000'],
+    ['hostid' => 'a', 'key_' => 'lldpRemSysName[0.8.1]',       'name' => 'LLDP neighbor',              'lastvalue' => 'pve'],
+    ['hostid' => 'a', 'key_' => 'lldpRemPortId[0.8.1]',        'name' => 'LLDP port-id',               'lastvalue' => '3C EC EF 79 2C 88'],
+    ['hostid' => 'a', 'key_' => 'lldpRemPortDesc[0.8.1]',      'name' => 'LLDP port-desc',             'lastvalue' => 'nic0'],
+    // CDP: DeviceId = Nachbar, DevicePort = PORT (darf NICHT als Nachbar zaehlen)
+    ['hostid' => 'a', 'key_' => 'cdpCacheDeviceId[7.4]',       'name' => 'CDP neighbor',               'lastvalue' => 'switch-x'],
+    ['hostid' => 'a', 'key_' => 'cdpCacheDevicePort[7.4]',     'name' => 'CDP port',                   'lastvalue' => 'GigabitEthernet0/1'],
+];
+$m3 = MetricExtractor::extract($items3);
+
+check('net.if-Form: bits/s direkt (kein x8)',          $m3['port_traffic']['a']['8']['in']  ?? null, 1000000.0);
+check('net.if-Form out: bits/s direkt',                $m3['port_traffic']['a']['8']['out'] ?? null, 2000000.0);
+check('lldp_ports: PortDesc erfasst',                  $m3['lldp_ports']['a']['0.8.1']['desc'] ?? null, 'nic0');
+check('lldp_ports: PortId erfasst',                    $m3['lldp_ports']['a']['0.8.1']['id']   ?? null, '3C EC EF 79 2C 88');
+check('cdpCacheDevicePort -> lldp_ports (kein Nachbar)', $m3['lldp_ports']['a']['7.4']['desc'] ?? null, 'GigabitEthernet0/1');
+// Regression: nur ECHTE Nachbarn in lldp_raw (SysName + cdpCacheDeviceId = 2).
+check('lldp_raw: genau 2 Nachbarn (Port NICHT dabei)', count($m3['lldp_raw']), 2);
+$raw_vals = array_map(static fn($r) => $r['lastvalue'], $m3['lldp_raw']);
+check('lldp_raw: DevicePort-Wert nicht als Nachbar',   in_array('GigabitEthernet0/1', $raw_vals, true), false);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";
