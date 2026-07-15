@@ -1,7 +1,8 @@
 zabbix_export:
   version: '7.0'
   template_groups:
-    - name: Templates/Network devices
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates/Network devices
   templates:
     - uuid: 38caefc2777a4ea5a8e2f9a2060c0660
       template: 'NT LLDP Neighbors by SNMP'
