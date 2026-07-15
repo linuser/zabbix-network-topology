@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.35.3 — 2026-07-16
+
+### Fixed
+- **Konsolen-404 auf `leaflet.js.map`**: die vendored `leaflet.js` (Geo-Tab) trug am Ende einen `//# sourceMappingURL=leaflet.js.map`-Verweis, aber die `.map` wird nicht ausgeliefert (`deploy.sh` schließt `*.map` aus) → der Browser versuchte sie in den DevTools zu laden und bekam 404. Der Kommentar ist jetzt aus der Datei entfernt (analog zum eigenen Bundle, das bewusst ohne Sourcemap gebaut wird).
+
+### Removed
+- Verwaiste `cola.min.js.map` aus dem Repo gelöscht — das zugehörige `cola.min.js` wurde längst entfernt (kein `LAYOUT_OPTIONS`-Eintrag nutzte das cola-Layout), nur die Map-Datei blieb liegen.
+
 ## v4.35.2 — 2026-07-16
 
 Interner Debug-Sweep (Statik/Lint/Tests, Laufzeit-Logs beider Prod-Server, Multi-Agent-Bug-Hunt übers Codebase). Die sicherheitskritischen Pfade (CSRF, Autorisierung, Injection, XSS, Cache-Scoping) wurden geprüft und als korrekt bestätigt — **kein High-Severity-Security-Fund**. Behoben wurden Korrektheits-, Robustheits- und Aufräum-Themen:
