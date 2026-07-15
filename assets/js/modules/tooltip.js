@@ -228,12 +228,24 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
             + srcBadge
             + '</div>';
 
-        // Auslastung wenn Kapazitaet bekannt (Weathermap-Basis): Traffic ist
-        // die Summe beider Endpunkte → /2 fuer die Link-Schaetzung.
+        // §3 Port-zu-Port: lokaler Port ↔ Remote-Port, wenn das Backend sie
+        // gemeldet hat (portSrc/portTgt). "per-Link" markiert, dass Traffic +
+        // Auslastung unten aus der echten Port-Metrik stammen, nicht geschaetzt.
+        const pSrc = edgeData.portSrc || '', pTgt = edgeData.portTgt || '';
+        const portRow = (pSrc || pTgt)
+            ? '<div style="font-size:10px;color:#475569;margin-bottom:5px">'
+                + '<span style="color:#94a3b8">Port</span> '
+                + '<b>' + esc(pSrc || '?') + '</b> <span style="color:#94a3b8">↔</span> <b>' + esc(pTgt || '?') + '</b>'
+                + (edgeData.perLink ? ' <span style="font-size:9px;color:#16a34a;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">per-Link</span>' : '')
+                + '</div>'
+            : '';
+
+        // Auslastung wenn Kapazitaet bekannt (Weathermap-Basis). Node-Summen-
+        // Schaetzung → /2; §3-Per-Link-Metrik (perLink) ist schon der Link-Wert.
         const capBps = edgeData.capBps || 0;
         let utilPart = '';
         if (capBps > 0) {
-            const pct = Math.min(999, (Math.max(tIn, tOut) / 2 / capBps) * 100);
+            const pct = Math.min(999, (Math.max(tIn, tOut) / (edgeData.perLink ? 1 : 2) / capBps) * 100);
             const pctCol = pct >= 70 ? '#ef4444' : pct >= 40 ? '#f97316' : '#16a34a';
             utilPart = '<span style="color:#94a3b8">·</span>'
                 + '<span><b style="color:' + pctCol + '">' + pct.toFixed(1) + '%</b>'
@@ -264,7 +276,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
 
         if (!haveData && (sparkSrc || sparkTgt)) {
             // Daten geholt, aber keine Traffic-Items vorhanden
-            return header + liveRow + healthRow + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
+            return header + portRow + liveRow + healthRow + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
                 + esc(t('tip.no_traffic_history')) + '</div>';
         }
 
@@ -278,7 +290,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                 + '</div>'
             : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">⌛ ' + esc(t('tip.loading_history')) + '</div>';
 
-        return header + liveRow + healthRow + sparkBlock;
+        return header + portRow + liveRow + healthRow + sparkBlock;
     }
 
     _tip.style.width = '210px';

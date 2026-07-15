@@ -45,12 +45,15 @@ function utilizationTier(pct) {
     return           { w: 8,   col: '#a21caf' };        // magenta (>85, Weathermap-Klassiker)
 }
 
-// Auslastung einer Edge in % — Traffic ist die SUMME beider Endpunkte
-// (siehe build-elements), daher /2 fuer die Link-Schaetzung.
+// Auslastung einer Edge in %. Bei der Node-Summen-Schaetzung ist Traffic die
+// SUMME beider Endpunkte (siehe build-elements) → /2 fuer die Link-Schaetzung.
+// Bei §3-Per-Link-Metrik (perLink) ist trafficIn/Out bereits der echte Port-
+// Wert → NICHT teilen.
 function edgeUtilizationPct(edge) {
     const cap = edge.data('capBps') || 0;
     if (cap <= 0) return null;
-    const t = Math.max(edge.data('trafficIn') || 0, edge.data('trafficOut') || 0) / 2;
+    const raw = Math.max(edge.data('trafficIn') || 0, edge.data('trafficOut') || 0);
+    const t = edge.data('perLink') ? raw : raw / 2;
     return Math.min(999, (t / cap) * 100);
 }
 
