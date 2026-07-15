@@ -91,20 +91,27 @@ final class MetricExtractor {
             // ("ens18") haben ohnehin keinen LLDP-Port-Bezug.
             // ifIndex-Trenner ist je nach Template ein Punkt (net.if.in[ifHCInOctets.8])
             // oder eine Klammer (ifHCInOctets[8]) → [.\[] deckt beide.
-            if (preg_match('/(?:HC)?(In|Out)Octets[.\[](\d+)/', $key, $om)) {
+            // Billiger strpos-Vorfilter vor dem Regex: die grosse Mehrheit der
+            // Items (CPU/Mem/Ping/Status) enthaelt weder "Octets" noch "Speed",
+            // spart also je einen Regex-Lauf pro Item im Hot-Loop.
+            if (strpos($key, 'Octets') !== false
+                    && preg_match('/(?:HC)?(In|Out)Octets[.\[](\d+)/', $key, $om)) {
                 $ifx  = $om[2];
                 $bits = (strpos($key, 'net.if') === 0) ? (float) $val : (float) $val * 8;
                 if (!isset($port_traffic[$hid][$ifx])) $port_traffic[$hid][$ifx] = ['in' => 0.0, 'out' => 0.0];
                 $port_traffic[$hid][$ifx][strtolower($om[1])] += $bits;
             }
             // §3b Per-Interface-Speed als Auslastungs-Divisor (optional). ifHighSpeed
-            // = Mbps (oder schon bps, gleiche Heuristik wie Host-Speed); ifSpeed = bps.
-            if (preg_match('/ifHighSpeed[.\[](\d+)/', $key, $sm)) {
-                $sp = (float) $val;
-                if ($sp > 0) { if ($sp < 1.0e7) $sp *= 1.0e6; $port_speed[$hid][$sm[1]] = $sp; }
-            } elseif (preg_match('/ifSpeed[.\[](\d+)/', $key, $sm)) {
-                $sp = (float) $val;
-                if ($sp > 0 && !isset($port_speed[$hid][$sm[1]])) $port_speed[$hid][$sm[1]] = $sp;
+            // = Mbps (highSpeedBps normalisiert, gleiche Heuristik wie Host-Speed);
+            // ifSpeed = bps direkt.
+            if (strpos($key, 'Speed') !== false) {
+                if (preg_match('/ifHighSpeed[.\[](\d+)/', $key, $sm)) {
+                    $sp = self::highSpeedBps($val);
+                    if ($sp > 0) $port_speed[$hid][$sm[1]] = $sp;
+                } elseif (preg_match('/ifSpeed[.\[](\d+)/', $key, $sm)) {
+                    $sp = (float) $val;
+                    if ($sp > 0 && !isset($port_speed[$hid][$sm[1]])) $port_speed[$hid][$sm[1]] = $sp;
+                }
             }
 
             // WICHTIG: Health-Branches VOR dem generischen net.if-Traffic-Branch.
@@ -128,14 +135,11 @@ final class MetricExtractor {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
                 $host_iface[$hid]['discards'] += (float) $val;
             } elseif (strpos($key, 'ifHighSpeed') !== false) {
-                // ifHighSpeed = Mbps. ABER: das Zabbix-Standard-Template
-                // multipliziert per Preprocessing schon auf bps. Heuristik:
-                // Werte < 1e7 sind Mbps (800G-Link = 8e5 Mbps), Werte >= 1e7
-                // sind bereits bps (kleinster realer bps-Wert: 10M = 1e7).
-                $sp = (float) $val;
-                if ($sp > 0) {
-                    if ($sp < 1.0e7) $sp *= 1.0e6;
-                    if (!isset($host_speed[$hid]) || $sp > $host_speed[$hid]) $host_speed[$hid] = $sp;
+                // ifHighSpeed = Mbps (highSpeedBps normalisiert Mbps→bps; das
+                // Zabbix-Standard-Template liefert teils schon bps → Heuristik dort).
+                $sp = self::highSpeedBps($val);
+                if ($sp > 0 && (!isset($host_speed[$hid]) || $sp > $host_speed[$hid])) {
+                    $host_speed[$hid] = $sp;
                 }
             } elseif (strpos($key, 'ifSpeed') !== false) {
                 // ifSpeed = bps direkt (32bit-Counter, capped bei ~4.3G)
@@ -394,5 +398,18 @@ final class MetricExtractor {
             'port_speed'   => $port_speed,
             'lldp_ports'   => $lldp_ports,
         ];
+    }
+
+    /**
+     * ifHighSpeed → bps. ifHighSpeed ist Mbps, ABER das Zabbix-Standard-Template
+     * multipliziert per Preprocessing teils schon auf bps. Heuristik: < 1e7 = Mbps
+     * (800G-Link = 8e5 Mbps), >= 1e7 = bereits bps (kleinster realer bps: 10M = 1e7).
+     *
+     * @return float bps, oder 0.0 bei nicht-positivem Wert.
+     */
+    private static function highSpeedBps($val): float {
+        $sp = (float) $val;
+        if ($sp <= 0) return 0.0;
+        return $sp < 1.0e7 ? $sp * 1.0e6 : $sp;
     }
 }

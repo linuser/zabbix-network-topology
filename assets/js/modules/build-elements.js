@@ -230,8 +230,12 @@ export function buildEdgeElements(edges, nodes) {
         let perLink = false, eIn = tIn, eOut = tOut, eCap = capBps, tLbl = tLabel;
         if (pm) {
             perLink = true;
-            eIn  = pm.in  || 0;
-            eOut = pm.out || 0;
+            // in/out konsistent aus Sicht des SRC-Knotens: pm ist nach Reporter-
+            // Hostid gekeyt; ist der Reporter das TGT-Ende, sind pm.in/out relativ
+            // zu SRC gespiegelt → sonst kippen ↓/↑ je nach Melde-Reihenfolge.
+            const fromSrc = !!(e.port_metrics && e.port_metrics[src]);
+            eIn  = (fromSrc ? pm.in  : pm.out) || 0;
+            eOut = (fromSrc ? pm.out : pm.in)  || 0;
             if (pm.speed) eCap = pm.speed;
             tLbl = (srcDead >= 5 || tgtDead >= 5) ? '⚠ No Connection'
                  : (eIn || eOut) ? '↓' + fmt(eIn) + '\n↑' + fmt(eOut) : '';

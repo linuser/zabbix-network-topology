@@ -158,9 +158,15 @@ snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.8   # lldpRemPor
 Kommen Werte zurück → Port-zu-Port geht. Ob der Index-`<LokalPort>` als
 `net.if.in[ifHCInOctets.<LokalPort>]` existiert, entscheidet über die *gemessene* Auslastung.
 
-> **CDP-Einschränkung:** Der CDP-`{#SNMPINDEX}` ist zweiteilig (`ifIndex.devIndex`). Die
-> Remote-Port-*Labels* funktionieren, die *gemessene* Per-Link-Auslastung bei reinem CDP
-> aktuell noch nicht — bei Cisco daher am besten LLDP aktivieren (`lldp run`).
+> **CDP:** Der CDP-`{#SNMPINDEX}` ist zweiteilig (`cdpCacheIfIndex.devIndex`). Das Modul liest
+> den lokalen Port aus dem *ersten* Teil (= ifIndex) — Remote-Port-Labels **und** gemessene
+> Per-Link-Auslastung funktionieren damit auch bei reinem CDP.
+
+> **Default- vs. %-Weathermap:** Der Weathermap-**%-Modus** normiert jede Kante auf ihre
+> Kapazität und ist die konsistente Vergleichssicht. Der Default-**Absolut**-View färbt nach
+> Roh-Traffic — Port-zu-Port-Kanten mit *gemessener* Per-Link-Zahl stehen dort neben Kanten
+> mit *geschätzter* Node-Summe; für den direkten Farbvergleich zwischen Kanten also den
+> %-Modus nutzen.
 
 ---
 

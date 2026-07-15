@@ -142,6 +142,51 @@ check('Abwaertskompat: lokaler Port bleibt',           $e2['ports']['aruba'] ?? 
 check('Abwaertskompat: kein Remote-Port ohne Map',     isset($e2['ports']['pve']),    false);
 check('Abwaertskompat: leere port_metrics',            $e2['port_metrics'] ?? null,   []);
 
+// ── §3-Polish (v4.35.1): CDP-Index, Desc-Fallbacks, No-Match, Merge ────────
+echo "\n§3 CDP-Index (2-teilig: erster Teil = ifIndex)\n";
+$hCdp  = ['csw' => ['host' => 'csw', 'name' => 'csw'], 'srv' => ['host' => 'srv', 'name' => 'srv']];
+$rawCdp = [['hostid' => 'csw', 'key_' => 'cdpCacheDeviceId[7.4]', 'lastvalue' => 'srv', 'src' => 'cdp']];
+$rCdp  = LldpEdgeBuilder::build($hCdp, $rawCdp,
+    ['csw' => ['7.4' => ['desc' => 'GigabitEthernet0/1']]],   // Remote-Port (CDP)
+    ['csw' => ['7' => ['in' => 200000000.0, 'out' => 100000000.0]]],  // Traffic auf ifIndex 7
+    ['csw' => ['7' => 1.0e9]]);
+$eCdp  = findEdge($rCdp['edges'], 'csw', 'srv') ?? [];
+check('CDP lokaler Port = erster Index-Teil (ifIndex)', $eCdp['ports']['csw'] ?? null, '7');
+check('CDP Remote-Port (cdpCacheDevicePort)',           $eCdp['ports']['srv'] ?? null, 'GigabitEthernet0/1');
+check('CDP Per-Link-Traffic korreliert auf ifIndex 7',  $eCdp['port_metrics']['csw']['in'] ?? null, 200000000.0);
+
+echo "\n§3 Remote-Port-Fallback (leerer/whitespace PortDesc → PortId)\n";
+$hFb   = ['a' => ['host'=>'a','name'=>'a'], 'b' => ['host'=>'b','name'=>'b'], 'c' => ['host'=>'c','name'=>'c']];
+$rawFb = [['hostid'=>'a','key_'=>'lldpRemSysName[0.8.1]','lastvalue'=>'b','src'=>'lldp'],
+          ['hostid'=>'a','key_'=>'lldpRemSysName[0.9.1]','lastvalue'=>'c','src'=>'lldp']];
+$rFb   = LldpEdgeBuilder::build($hFb, $rawFb, ['a' => [
+            '0.8.1' => ['id' => 'Gi0/8', 'desc' => ''],       // leerer Desc → PortId
+            '0.9.1' => ['id' => 'Gi0/9', 'desc' => '   ']]]); // whitespace Desc → PortId
+check('leerer PortDesc → PortId-Fallback',      (findEdge($rFb['edges'],'a','b') ?? [])['ports']['b'] ?? null, 'Gi0/8');
+check('whitespace PortDesc → PortId-Fallback',  (findEdge($rFb['edges'],'a','c') ?? [])['ports']['c'] ?? null, 'Gi0/9');
+
+echo "\n§3 Kein ifIndex-Match → Kante mit Label, aber ohne Metrik\n";
+$rNm = LldpEdgeBuilder::build($hFb,
+    [['hostid'=>'a','key_'=>'lldpRemSysName[0.77.1]','lastvalue'=>'b','src'=>'lldp']],
+    ['a' => ['0.77.1' => ['desc' => 'Gi0/77']]],
+    ['a' => ['8' => ['in'=>1.0,'out'=>2.0]]]);   // Traffic NUR fuer Port 8, nicht 77
+$eNm = findEdge($rNm['edges'], 'a', 'b') ?? [];
+check('lokaler Port bleibt trotz No-Match',     $eNm['ports']['a'] ?? null, '77');
+check('Remote-Port bleibt trotz No-Match',      $eNm['ports']['b'] ?? null, 'Gi0/77');
+check('port_metrics leer bei No-Match',         $eNm['port_metrics'] ?? null, []);
+
+echo "\n§3 Merge: beidseitig gemeldete Kante bekommt BEIDE Metriken\n";
+$hM   = ['A' => ['host'=>'A','name'=>'A'], 'B' => ['host'=>'B','name'=>'B']];
+$rawM = [['hostid'=>'A','key_'=>'lldpRemSysName[0.8.1]','lastvalue'=>'B','src'=>'lldp'],
+         ['hostid'=>'B','key_'=>'lldpRemSysName[0.3.1]','lastvalue'=>'A','src'=>'lldp']];
+$rM   = LldpEdgeBuilder::build($hM, $rawM,
+    ['A' => ['0.8.1' => ['desc' => 'to-B']], 'B' => ['0.3.1' => ['desc' => 'to-A']]],
+    ['A' => ['8' => ['in'=>10.0,'out'=>20.0]], 'B' => ['3' => ['in'=>30.0,'out'=>40.0]]]);
+$eM = findEdge($rM['edges'], 'A', 'B') ?? [];
+check('beidseitige Kante bleibt EINE',                   count($rM['edges']), 1);
+check('Merge: Metrik des 1. Reporters (A) da',           $eM['port_metrics']['A']['in'] ?? null, 10.0);
+check('Merge: Metrik des 2. Reporters (B) angehaengt',   $eM['port_metrics']['B']['in'] ?? null, 30.0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";
