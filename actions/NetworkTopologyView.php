@@ -94,24 +94,9 @@ class NetworkTopologyView extends CController {
             ));
         }
 
-        // Permission-Filter: URL kann beliebige Group-IDs enthalten (Bookmark
-        // von einem anderen User, manueller Edit, alter Bookmark nach Group-
-        // Löschung). Wir filtern hier gegen die Hostgroups die der Session-
-        // User tatsächlich lesen darf, damit das Frontend keine "kaputten"
-        // IDs sieht und kein wirres Multiselect-Verhalten entsteht.
-        if ($selected_groupids) {
-            $allowed = API::HostGroup()->get([
-                'output'   => ['groupid'],
-                'groupids' => $selected_groupids
-            ]);
-            $allowed_ids = array_column($allowed, 'groupid');
-            $selected_groupids = array_values(array_filter(
-                $selected_groupids,
-                static function($id) use ($allowed_ids) {
-                    return in_array((string) $id, $allowed_ids, true);
-                }
-            ));
-        }
+        // (Der Permission-Filter oben deckt „URL enthält fremde/gelöschte
+        // Group-IDs" bereits ab — ein zweiter, identischer HostGroup.get-Filter
+        // stand hier frueher redundant; entfernt.)
 
         $response = new CControllerResponseData([
             'hostgroups'        => $hostgroups,

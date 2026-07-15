@@ -91,6 +91,9 @@ class NetworkTopologyMaintenance extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        // Write-Action drosseln (die Reads sind es alle) — Schutz vor Massen-
+        // Anlage von Wartungsfenstern durch ein Runaway-Skript/gekaperte Session.
+        if (!$this->throttle('maintenance', 15, 10)) return;
         // Eindeutige, normalisierte Host-ID-Liste (validateInput hat bereits
         // auf array_id geprueft).
         $hostids  = array_values(array_unique(array_map('strval',

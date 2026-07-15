@@ -209,12 +209,18 @@ function init() {
         // Wenn vorhanden: URL ergänzen und reload, damit das PHP-Backend die
         // Hostgroups validiert und das Multiselect korrekt vorbefüllt.
         const lastGroups = loadLastGroups();
-        if (lastGroups && lastGroups.length) {
+        // Marker _ntr: verhindert eine Reload-Schleife. Hat der User zu einer
+        // gespeicherten Gruppe die Permission verloren, strippt das Backend sie
+        // wieder → selected_groupids leer → ohne Marker wieder Auto-Restore →
+        // reload → endlos. Wir versuchen den Restore genau EINMAL pro Kette.
+        const _restoreTried = new URL(window.location.href).searchParams.has('_ntr');
+        if (lastGroups && lastGroups.length && !_restoreTried) {
             const u = new URL(window.location.href);
             // Bestehende groupids[]-Params (gibt's hier definitionsgemäß nicht,
             // aber sicher ist sicher) und ggf. action ungetastet lassen
             u.searchParams.delete('groupids[]');
             lastGroups.forEach(function(id) { u.searchParams.append('groupids[]', id); });
+            u.searchParams.set('_ntr', '1');
             window.location.replace(u.toString());
             return;
         }
