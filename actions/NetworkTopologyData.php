@@ -298,7 +298,10 @@ class NetworkTopologyData extends NetworkTopologyController {
         // Nachbar-Matching + Kantenbau ausgelagert nach
         // topology/LldpEdgeBuilder.php (Review §6). Hosts + Roh-Nachbarn rein,
         // Kanten + Qualitaetsstatistik raus — rein, kein API-Call, testbar.
-        $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw);
+        // §3 Port-zu-Port: Remote-Port + Per-Interface-Traffic mitgeben, damit die
+        // Kanten Port-Labels (beide Enden) und Per-Link-Auslastung tragen.
+        $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
+                              $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed']);
         $edges          = $lldp['edges'];
         $lldp_quality   = $lldp['quality'];
         $lldp_unmatched = $lldp['unmatched'];

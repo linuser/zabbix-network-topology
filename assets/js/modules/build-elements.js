@@ -217,12 +217,30 @@ export function buildEdgeElements(edges, nodes) {
         const spdB = (tgtNode && tgtNode.link_speed) || 0;
         const capBps = linkCapacity(spdA, spdB);
         // Port-Labels (Best-Effort aus dem LLDP-Item-Key des Reporters):
-        // Backend liefert edge.ports = {hostid: port} pro gemeldeter Seite.
+        // Backend liefert edge.ports = {hostid: port} pro gemeldeter Seite —
+        // seit §3 lokaler Port am Reporter- UND Remote-Port am Nachbar-Ende.
         const ports = e.ports || {};
+
+        // §3 Per-Link-Traffic: liegt fuer ein Ende eine echte Port-Metrik vor
+        // (LLDP-Lokalport ↔ ifIndex korreliert im Backend), ersetzt sie die
+        // Node-Summen-Schaetzung — aus geschaetzter Weathermap wird gemessene.
+        // port_metrics ist nach Reporter-Hostid gekeyt (in/out/speed des Ports).
+        // perLink steuert, dass traffic.js NICHT durch 2 teilt (kein Doppelzaehlen).
+        const pm = (e.port_metrics && (e.port_metrics[src] || e.port_metrics[tgt])) || null;
+        let perLink = false, eIn = tIn, eOut = tOut, eCap = capBps, tLbl = tLabel;
+        if (pm) {
+            perLink = true;
+            eIn  = pm.in  || 0;
+            eOut = pm.out || 0;
+            if (pm.speed) eCap = pm.speed;
+            tLbl = (srcDead >= 5 || tgtDead >= 5) ? '⚠ No Connection'
+                 : (eIn || eOut) ? '↓' + fmt(eIn) + '\n↑' + fmt(eOut) : '';
+        }
+
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
                     portSrc: ports[src] || '', portTgt: ports[tgt] || '',
-                    trafficIn: tIn, trafficOut: tOut, tLabel: tLabel, isLLDP: true,
+                    trafficIn: eIn, trafficOut: eOut, tLabel: tLbl, isLLDP: true,
                     // Discovery-Quelle(n): ['lldp'], ['cdp'], oder ['cdp','lldp']
                     // wenn die Verbindung von beiden Protokollen gemeldet wurde
                     src: e.src || [],
@@ -232,8 +250,9 @@ export function buildEdgeElements(edges, nodes) {
                     // mit vielen unbenutzten Ports jede Edge rot faerben.
                     ifaceDown: downCnt, ifaceErr: errorsRate, ifaceDrop: discardsRate,
                     ifaceDownRatio: downRatio,
-                    // Link-Kapazitaet in bps (0 = unbekannt) fuer Weathermap
-                    capBps: capBps }
+                    // Link-Kapazitaet in bps (0 = unbekannt) fuer Weathermap;
+                    // perLink=true → echte Port-Metrik statt Node-Schaetzung
+                    capBps: eCap, perLink: perLink }
         });
     });
     return elements;

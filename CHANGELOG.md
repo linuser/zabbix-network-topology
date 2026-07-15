@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.35.0 — 2026-07-15
+
+### Added
+- **Port-zu-Port-Verbindungen + Per-Link-Weathermap** (Feature-Vorschlag §3). LLDP-Kanten tragen jetzt an **beiden** Enden ein Port-Label und — wo verfügbar — die **gemessene** Auslastung des physischen Links statt der bisherigen Node-Summen-Schätzung.
+  - **Template** (`nt_lldp_snmp_template.yaml`): die LLDP-Discovery sammelt zusätzlich `lldpRemPortId` (OID …4.1.1.7) und `lldpRemPortDesc` (…1.8), CDP analog `cdpCacheDevicePort` (…23.1.2.1.1.7). Über denselben `{#SNMPINDEX}` wie der Nachbar-SysName ordnet das Modul den Remote-Port der richtigen Nachbar-Zeile zu.
+  - **Backend**: `MetricExtractor` erfasst Per-Interface-Traffic/-Speed nach ifIndex (`net.if.in[ifHCInOctets.<ifIndex>]`) und den Remote-Port je SNMPINDEX; `LldpEdgeBuilder` hängt das Port-Label ans Nachbar-Ende (`PortDesc` schlägt eine MAC-`PortId`) und die Per-Link-Metrik (`in`/`out`/`speed`) ans Reporter-Ende. Der lokale LLDP-Port (Mitte des Index) wird per `ifIndex == LocalPortNum` mit dem Interface-Traffic korreliert (auf Aruba/ProCurve 1:1; passt es nicht, bleibt die Kante schlicht ohne Metrik — kein Fehler).
+  - **Frontend**: Port-Labels an beiden Enden (`port-labels.js`), Weathermap färbt die Kante nach echter Auslastung (`traffic.js` teilt bei Per-Link-Daten nicht mehr durch 2), der Edge-Tooltip zeigt `Port <lokal> ↔ <remote> · per-Link` plus Traffic und %.
+  - `capabilities.port_metrics` ist jetzt `true`. Rein additiv — bestehende Top-Level-Felder und `api_version` (1) unverändert.
+  - Datenlage vorab per `snmpwalk` gegen einen echten Aruba-Switch verifiziert (`lldpRemPortId/-Desc` vorhanden, `ifIndex == lokaler LLDP-Port`). Abgesichert durch 20 neue Unit-Assertions: Remote-Port-Zuordnung, `PortDesc`-vor-MAC-Fallback, Per-Link-Traffic, „CDP-Port wird **nicht** als Nachbar fehlgedeutet", Abwärtskompatibilität ohne die neuen Maps.
+
 ## v4.34.15 — 2026-07-15
 
 ### Added

@@ -37,7 +37,8 @@ zabbix_export:
           description: |
             LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). Der {#SNMPINDEX}
             traegt TimeMark.LocalPort.RemIndex — das Modul liest daraus den lokalen
-            Port fuer die Port-Labels.
+            Port. Ueber denselben Index holt es lldpRemPortId (.7) und
+            lldpRemPortDesc (.8) fuer den Remote-Port → Port-zu-Port-Labels.
           item_prototypes:
             - uuid: 71e0268303f9471796f291808b05293b
               name: 'LLDP neighbor [{#SNMPINDEX}]: {#NT_SYSNAME}'
@@ -52,6 +53,34 @@ zabbix_export:
                 SysName des am lokalen Port gesehenen LLDP-Nachbarn. Wird vom
                 Network-Topology-Modul als Kante gezeichnet, wenn der Name auf einen
                 ueberwachten Zabbix-Host aufloest.
+            - uuid: 33e111c96b2e4ab4a5e0047ba739d05f
+              name: 'LLDP neighbor port-id [{#SNMPINDEX}]: {#NT_SYSNAME}'
+              type: SNMP_AGENT
+              key: 'lldpRemPortId[{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.7.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                Remote-Port-ID des Nachbarn (lldpRemPortId, OID ...4.1.1.7). Je nach
+                PortIdSubtype ein Interface-Name ("Gi1/0/8") ODER eine MAC-Adresse —
+                deshalb liest das Modul bevorzugt lldpRemPortDesc und faellt nur
+                hierauf zurueck. Gleicher {#SNMPINDEX} wie der SysName → dieselbe
+                Nachbar-Zeile (darueber korreliert das Modul).
+            - uuid: 296934a9b576433095c087dbdeb383e6
+              name: 'LLDP neighbor port-desc [{#SNMPINDEX}]: {#NT_SYSNAME}'
+              type: SNMP_AGENT
+              key: 'lldpRemPortDesc[{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.8.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                Menschenlesbare Remote-Port-Beschreibung (lldpRemPortDesc, OID
+                ...4.1.1.8), z.B. "nic0" oder "GigabitEthernet1/0/8". Bevorzugte
+                Quelle fuers Port-zu-Port-Label am Nachbar-Ende.
         - uuid: 8e6fb294701f48d3a41dd38e59d1fbf0
           name: 'CDP neighbor discovery (Cisco)'
           type: SNMP_AGENT
@@ -75,3 +104,16 @@ zabbix_export:
               description: |
                 Device-ID des CDP-Nachbarn (Cisco). Vom Modul wie ein LLDP-Nachbar
                 behandelt (Key enthaelt cdpCacheDeviceId).
+            - uuid: d23195fc34e14ebe9a1f0b1c0590221c
+              name: 'CDP neighbor port [{#SNMPINDEX}]: {#NT_DEVICEID}'
+              type: SNMP_AGENT
+              key: 'cdpCacheDevicePort[{#SNMPINDEX}]'
+              snmp_oid: '1.3.6.1.4.1.9.9.23.1.2.1.1.7.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                Remote-Port des CDP-Nachbarn (cdpCacheDevicePort, OID ...23.1.2.1.1.7),
+                z.B. "GigabitEthernet0/1". Gleicher {#SNMPINDEX} wie cdpCacheDeviceId →
+                dieselbe Nachbar-Zeile.
