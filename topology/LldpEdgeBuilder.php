@@ -176,15 +176,22 @@ final class LldpEdgeBuilder {
                 // lldp.rem.sysname[eth0] liefern den Namen direkt. Comma-
                 // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
                 // $idx = voller Index; korreliert Remote-Port + Traffic (§3).
+                // Lokaler Port auf den ifIndex reduzieren: LLDP-Index ist
+                // TimeMark.LocalPort.RemIndex (3-teilig, Mitte = Port), CDP-Index
+                // ist cdpCacheIfIndex.devIndex (2-teilig, erster Teil = ifIndex).
+                // Beide muessen auf den ifIndex zeigen, sonst verfehlt die
+                // Traffic-Korrelation (port_traffic ist nach ifIndex gekeyt).
                 $idx  = '';
                 $port = '';
                 if (strpos($item['key_'], '[') !== false) {
                     $idx  = HostMetadata::ifaceParam($item['key_']);
                     $port = $idx;
-                    if (preg_match('/^(\d+)\.(\d+)\.(\d+)$/', $idx, $pm)) {
-                        $port = $pm[2];
+                    if (preg_match('/^\d+\.(\d+)\.\d+$/', $idx, $pm)) {
+                        $port = $pm[1];            // LLDP: Mitte = lokaler Port
+                    } elseif (preg_match('/^(\d+)\.\d+$/', $idx, $pm)) {
+                        $port = $pm[1];            // CDP: erster Teil = ifIndex
                     }
-                    if (strlen($port) > 24) $port = substr($port, 0, 24);
+                    $port = self::capLabel($port);
                 }
 
                 // §3 Remote-Port des Nachbarn: gleicher SNMPINDEX wie der SysName
@@ -192,11 +199,13 @@ final class LldpEdgeBuilder {
                 // "Gi1/0/8") gewinnt vor PortId, die laut PortIdSubtype eine MAC
                 // sein kann. Ergibt das Port-Label am NACHBAR-Ende der Kante —
                 // Port-zu-Port auch dann, wenn nur der Reporter ueberwacht ist.
+                // trim() VOR dem Leer-Test, sonst gewinnt ein whitespace-only
+                // PortDesc den Ternary und faellt NICHT auf die PortId zurueck.
                 $remote_port = '';
                 if ($idx !== '' && isset($lldp_ports[$rid][$idx])) {
-                    $rp = $lldp_ports[$rid][$idx];
-                    $remote_port = trim((string) (($rp['desc'] ?? '') !== '' ? $rp['desc'] : ($rp['id'] ?? '')));
-                    if (strlen($remote_port) > 24) $remote_port = substr($remote_port, 0, 24);
+                    $rp   = $lldp_ports[$rid][$idx];
+                    $desc = trim((string) ($rp['desc'] ?? ''));
+                    $remote_port = self::capLabel($desc !== '' ? $desc : trim((string) ($rp['id'] ?? '')));
                 }
 
                 // §3b Per-Link-Traffic am lokalen Port des Reporters. Setzt
@@ -262,5 +271,10 @@ final class LldpEdgeBuilder {
             'quality'   => $lldp_quality,
             'unmatched' => $lldp_unmatched,
         ];
+    }
+
+    /** Port-Label auf 24 Zeichen kappen (einheitlich fuer lokalen + Remote-Port). */
+    private static function capLabel(string $s): string {
+        return strlen($s) > 24 ? substr($s, 0, 24) : $s;
     }
 }

@@ -15,6 +15,7 @@
 import { esc } from './modules/utils.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce } from './modules/toast.js';
+import { hideTip } from './modules/tooltip.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
@@ -109,6 +110,11 @@ function applyHistoryOverrides(nodes) {
 
 // ── Tab-Switch ─────────────────────────────────────────────────────────────
 function switchTab(tab, wrap, nodes, edges, dataUrl) {
+    // Einen evtl. noch offenen Node-/Edge-Tooltip wegraeumen: das cytoscape-
+    // mouseout feuert NICHT, wenn der Graph unter dem Cursor verschwindet (Klick
+    // direkt auf einen Tab-Button) → der Tooltip blieb sonst ueber dem neuen Tab
+    // haengen (z.B. Host-Tooltip auf dem Health-Tab).
+    hideTip();
     // Wenn wir den Geo-Tab verlassen, Leaflet-Map sauber abbauen
     // (sonst Memory-Leak durch hängende Event-Listener).
     if (_activeTab === 'geo' && tab !== 'geo') {

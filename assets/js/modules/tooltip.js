@@ -286,7 +286,11 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                     + '<span style="color:#06b6d4">↓ In</span>' + inSpark + '</div>' : '')
                 + (outSpark ? '<div style="display:flex;align-items:center;gap:6px">'
                     + '<span style="color:#f97316">↑ Out</span>' + outSpark + '</div>' : '')
-                + '<div style="font-size:9px;color:#cbd5e1;margin-top:3px">' + esc(t('tip.last_1h')) + '</div>'
+                + '<div style="font-size:9px;color:#cbd5e1;margin-top:3px">' + esc(t('tip.last_1h'))
+                    // Bei Per-Link-Kanten stammt die Live-Zeile oben aus der Port-Metrik,
+                    // die 1h-Sparkline aber aus der Host-History beider Endpunkte
+                    // (der Spark-Endpoint liefert nur Host-Werte) → ausweisen.
+                    + (edgeData.perLink ? ' · ' + esc(t('tip.host_total')) : '') + '</div>'
                 + '</div>'
             : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">⌛ ' + esc(t('tip.loading_history')) + '</div>';
 

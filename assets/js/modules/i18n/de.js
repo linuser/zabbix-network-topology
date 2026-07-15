@@ -368,6 +368,7 @@ export default {
     'tip.loading_history': 'Lade Verlauf...',
     'tip.no_traffic_history': 'Kein Traffic-Verlauf verfügbar (keine net.if-/ifIn/ifOut-Items)',
     'tip.last_1h': 'letzte 1h',
+    'tip.host_total': 'Host gesamt (beide Enden)',
     'app.pick_groups': '← Bitte Host-Gruppen wählen und Apply klicken.',
     'app.loading': 'Lade Topologie...',
     'app.error': 'Error: {msg}',
