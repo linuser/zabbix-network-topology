@@ -243,7 +243,7 @@ class NetworkTopologyItems extends NetworkTopologyController {
         NetworkTopologyDiag::record([
             'action'     => 'items',
             'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
-            'bytes'      => strlen(json_encode($_payload)),
+            'bytes'      => strlen($this->encodeJson($_payload)),
             'cache_hit'  => false,
             'counts'     => ['items' => count($items), 'cols' => count($columns), 'hosts' => count($host_meta)],
         ]);

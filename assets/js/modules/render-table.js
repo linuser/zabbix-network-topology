@@ -78,6 +78,9 @@ const BUILTIN_FILTER_PRESETS = [
 // triggern kann (Filter-Bar wird neu gebaut). Werden bei jedem renderTable
 // gesetzt.
 let _renderWrap = null;
+// Ein einziger Document-Close-Handler fuers Preset-Popup; vor Neu-Anlegen
+// entfernt (buildFilterBar laeuft bei jedem renderTable) — sonst Listener-Leak.
+let _tblDocClose = null;
 let _renderNodes = null;
 let _renderEdges = null;
 
@@ -672,9 +675,11 @@ function buildFilterBar(nodes, groupNames, theme) {
         presetPop.style.display = open ? 'none' : 'block';
         if (!open) _rebuildPresetPop(presetPop, theme);
     });
-    document.addEventListener('click', function(e) {
+    if (_tblDocClose) document.removeEventListener('click', _tblDocClose);
+    _tblDocClose = function(e) {
         if (!presetWrap.contains(e.target)) presetPop.style.display = 'none';
-    });
+    };
+    document.addEventListener('click', _tblDocClose);
 
     // Suche — flach, kein Lupen-Glyph (Zabbix nutzt das nicht), schmaler Focus.
     const search = document.createElement('input');

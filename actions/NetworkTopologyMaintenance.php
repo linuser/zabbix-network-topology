@@ -127,14 +127,18 @@ class NetworkTopologyMaintenance extends NetworkTopologyController {
 
         $now   = time();
         $label = self::DURATIONS[$duration];
-        // Sprechender, eindeutiger Name (Zabbix verlangt Unique). Erster
-        // Host + Timestamp; bei Bulk zusaetzlich Anzahl.
-        $first = reset($hosts);
+        // Sprechender, eindeutiger Name (Zabbix verlangt Unique). Der Unique-Teil
+        // ist Timestamp + Zufalls-Hex: Sekunden-Aufloesung allein kollidiert bei
+        // Doppelklick, und ein langer Hostname wuerde bei End-Truncation den
+        // Timestamp abschneiden. Darum den HOST-Teil vorab kappen (80 Zeichen),
+        // damit der Unique-Teil garantiert erhalten bleibt (Gesamtlaenge < 128).
+        $first  = reset($hosts);
         $suffix = count($hosts) > 1 ? sprintf(' +%d', count($hosts) - 1) : '';
-        $name = sprintf('NT map: %s%s (%s) @%d',
-            $first['host'], $suffix, $label, $now);
+        $uniq   = $now . '-' . bin2hex(random_bytes(3));
+        $name   = sprintf('NT map: %s%s (%s) @%s',
+            mb_substr((string) $first['host'], 0, 80), $suffix, $label, $uniq);
         if (mb_strlen($name) > 128) {
-            $name = mb_substr($name, 0, 128);
+            $name = mb_substr($name, 0, 128);   // Backstop, greift praktisch nie
         }
 
         try {

@@ -16,6 +16,7 @@ import { esc } from './modules/utils.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
+import { destroyGroupHulls } from './modules/group-hulls.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
@@ -123,6 +124,11 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     // Wenn wir den Tabellen-Tab verlassen, Detail-Panel-Container aus body entfernen
     if (_activeTab === 'tree' && tab !== 'tree') {
         cleanupTable();
+    }
+    // Beim Verlassen des Technical-Tabs die Group-Hull-SVG + deren ResizeObserver
+    // abbauen — sonst feuert der Observer weiter gegen ein zerstoertes cy.
+    if (_activeTab === 'tech' && tab !== 'tech') {
+        destroyGroupHulls();
     }
     _activeTab = tab;
     try { localStorage.setItem(NT_TAB_KEY, tab); } catch (e) {}

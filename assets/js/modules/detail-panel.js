@@ -192,12 +192,16 @@ export function showDetail(panel, d, cy) {
             + '</div>'
         : '';
 
+    // cy kann null sein (Tabellen-Tab ruft showDetail ohne Cytoscape) → Peers-
+    // Liste nur bauen, wenn ein Graph da ist; sonst leer statt null-Deref-Crash.
     let peers = '';
-    cy.getElementById(d.id).connectedEdges().forEach(function(edge) {
-        const other = edge.source().id() === d.id ? edge.target() : edge.source();
-        if (other.data('isGroup')) return;
-        peers += (peers ? '<br>' : '') + '&#8596; ' + esc(other.data('label'));
-    });
+    if (cy) {
+        cy.getElementById(d.id).connectedEdges().forEach(function(edge) {
+            const other = edge.source().id() === d.id ? edge.target() : edge.source();
+            if (other.data('isGroup')) return;
+            peers += (peers ? '<br>' : '') + '&#8596; ' + esc(other.data('label'));
+        });
+    }
 
     // Ring-Legend (CPU/Memory/Traffic/Ping als kleine Donuts)
     const _tPct = (!d.traffic) ? 0 : Math.min((d.traffic.in + d.traffic.out) / 2e7 * 100, 100);

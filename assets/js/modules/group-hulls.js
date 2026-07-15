@@ -92,7 +92,9 @@ function clearSvg() {
 // Sammelt pro Gruppe die Render-Positionen aller zugehörigen Knoten und
 // zeichnet das Polygon. Wird bei Pan/Zoom/Drag aufgerufen.
 function redraw(cy) {
-    if (!_svg) return;
+    // Der ResizeObserver kann nach einem Tab-Wechsel noch feuern, waehrend das
+    // cy schon zerstoert ist → auf zerstoertem/fehlendem Core nichts tun.
+    if (!_svg || !cy || (cy.destroyed && cy.destroyed())) return;
     clearSvg();
 
     // Knoten nach Gruppe sammeln (Internet-Wolke + Aggregate ausschließen)

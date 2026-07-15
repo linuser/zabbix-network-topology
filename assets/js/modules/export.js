@@ -14,6 +14,11 @@
 // Map-Screenshot via cy.png() wird oben eingebettet.
 
 import { esc, fmt } from './utils.js';
+
+// Ein einziger Document-Close-Handler (schliesst das Dropdown bei Aussenklick).
+// Modul-Level, damit setupExportMenu ihn vor dem Neu-Anlegen entfernen kann —
+// sonst sammelt sich pro Re-Render (im Group-View alle 30s) ein Listener an.
+let _expDocClose = null;
 import { loadLinks } from './storage.js';
 import { statsByGroup, scoreColor, scoreLabel } from './render-health.js';
 import { COMPLIANCE_CHECKS, fetchComplianceData } from './render-compliance.js';
@@ -516,7 +521,9 @@ export function setupExportMenu(bar, isFirstRun) {
         e.stopPropagation();
         expMenu.style.display = expMenu.style.display === 'none' ? 'block' : 'none';
     });
-    document.addEventListener('click', function() { expMenu.style.display = 'none'; });
+    if (_expDocClose) document.removeEventListener('click', _expDocClose);
+    _expDocClose = function() { expMenu.style.display = 'none'; };
+    document.addEventListener('click', _expDocClose);
 
     expWrap.appendChild(expBtn);
     expWrap.appendChild(expMenu);
