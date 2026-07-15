@@ -76,8 +76,11 @@ Liste aller Nachbarn enthalten.
   → Best Practice: **Zabbix-Hosts so benennen wie die Geräte-Hostnames** (oder SNMP-Interface-IP
   passend setzen). Mehrdeutige Short-Names (mehrere Hosts gleicher Kurzname) erzeugen **keine**
   Kante — sie landen im LLDP-Q-Tab als *ambiguous*.
-- **Port-Labels** (optional) kommen aus dem Item-Key-Bracket: `lldpRemSysName[0.24.1]` → mittlere
-  Zahl = lokaler Port; `lldp.rem.sysname[eth0]` → `eth0`.
+- **Port-Labels an beiden Enden** (optional, seit v4.35): der *lokale* Port kommt aus dem
+  Item-Key-Bracket (`lldpRemSysName[0.24.1]` → mittlere Zahl = lokaler Port; `lldp.rem.sysname[eth0]`
+  → `eth0`), der *Remote*-Port aus `lldpRemPortId`/`lldpRemPortDesc` mit demselben SNMPINDEX
+  (PortDesc bevorzugt — PortId kann eine MAC sein). Mehr unter
+  [Port-zu-Port](#port-zu-port--per-link-weathermap).
 
 ---
 
@@ -120,6 +123,44 @@ snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.9
   (Easy Smart, UniFi-ohne-API, sende-nur-Geräte) → [manuell ergänzen](#lücken-schließen-manuell).
 
 CDP-Äquivalent (Cisco): `1.3.6.1.4.1.9.9.23.1.2.1.1.6` (`cdpCacheDeviceId`).
+
+---
+
+## Port-zu-Port & Per-Link-Weathermap
+
+Ab **v4.35** trägt jede LLDP-Kante nicht nur den *lokalen* Port des meldenden Switches,
+sondern auch den **Remote-Port** am Nachbar-Ende — und, wo die Datenlage passt, die
+**gemessene** Auslastung des physischen Links (Weathermap-Modus) statt einer Schätzung aus
+den Host-Traffic-Summen.
+
+**Was das Modul dafür liest** (bringt das mitgelieferte Template automatisch mit):
+
+| Item-Key | OID | Wozu |
+|---|---|---|
+| `lldpRemPortId[{#SNMPINDEX}]` | `1.0.8802.1.1.2.1.4.1.1.7` | Remote-Port (kann je PortIdSubtype eine MAC sein) |
+| `lldpRemPortDesc[{#SNMPINDEX}]` | `1.0.8802.1.1.2.1.4.1.1.8` | Remote-Port-Klartext — **bevorzugt** fürs Label |
+| `cdpCacheDevicePort[{#SNMPINDEX}]` | `1.3.6.1.4.1.9.9.23.1.2.1.1.7` | Remote-Port bei CDP |
+| `net.if.in[ifHCInOctets.<ifIndex>]` / `…out` | Interface-MIB | Per-Link-Traffic (Standard-SNMP-Interface-Monitoring) |
+
+Der Remote-Port korreliert über **denselben `{#SNMPINDEX}`** wie der Nachbar-SysName; der
+lokale Port ist die mittlere Zahl des LLDP-Index (`…[TimeMark.LokalPort.RemIndex]`).
+
+**Voraussetzung für die *gemessene* Weathermap** (nicht nur die Labels): der lokale
+LLDP-Port muss dem **ifIndex** entsprechen, unter dem der Switch seinen Interface-Traffic
+zählt. Auf Aruba/ProCurve ist das 1:1. Passt es nicht, bleiben die Port-**Labels** trotzdem —
+nur die Kante fällt auf die Node-Summen-**Schätzung** zurück (kein Fehler). Verifizieren:
+
+```bash
+snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.7   # lldpRemPortId
+snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.8   # lldpRemPortDesc
+```
+
+Kommen Werte zurück → Port-zu-Port geht. Ob der Index-`<LokalPort>` als
+`net.if.in[ifHCInOctets.<LokalPort>]` existiert, entscheidet über die *gemessene* Auslastung.
+
+> **CDP-Einschränkung:** Der CDP-`{#SNMPINDEX}` ist zweiteilig (`ifIndex.devIndex`). Die
+> Remote-Port-*Labels* funktionieren, die *gemessene* Per-Link-Auslastung bei reinem CDP
+> aktuell noch nicht — bei Cisco daher am besten LLDP aktivieren (`lldp run`).
 
 ---
 

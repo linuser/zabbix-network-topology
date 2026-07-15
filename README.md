@@ -3,7 +3,7 @@
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.33.0-blue)
+![Version](https://img.shields.io/badge/version-4.35.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 ## Was ist das?
@@ -13,9 +13,9 @@ Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive
 Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es,
 _wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
 
-Highlights: Live-Graph mit Severity-Ringen · Weathermap (Link-Auslastung) ·
-What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus
-der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/EN.
+Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene
+Link-Auslastung) · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast ·
+Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/EN.
 
 > Technische Modul-ID: `network_topology_v6` (installiert als Verzeichnis gleichen
 > Namens). Das „v6" ist die interne Modul-Lineage, nicht die Release-Version — die
@@ -48,6 +48,7 @@ der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/E
 - **Item-Pivot** — beliebiges Item-Key-Pattern (z.B. `vfs.fs.size[*,pused]`) als Spalten
 - **Manuelle Links** zwischen Hosts (Star-Mode)
 - **Notizen + Pins** pro Host (lokal, im localStorage)
+- **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung (Setup: [LLDP-SETUP.md](LLDP-SETUP.md#port-zu-port--per-link-weathermap))
 
 ### Custom-Tags am Host
 
