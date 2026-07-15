@@ -2,6 +2,23 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.35.2 — 2026-07-16
+
+Interner Debug-Sweep (Statik/Lint/Tests, Laufzeit-Logs beider Prod-Server, Multi-Agent-Bug-Hunt übers Codebase). Die sicherheitskritischen Pfade (CSRF, Autorisierung, Injection, XSS, Cache-Scoping) wurden geprüft und als korrekt bestätigt — **kein High-Severity-Security-Fund**. Behoben wurden Korrektheits-, Robustheits- und Aufräum-Themen:
+
+### Fixed
+- **HTTP 500 bei ungültigem UTF-8 (Diag-Pfad)**: der Byte-Zähler `strlen(json_encode(...))` nutzte an fünf Stellen (Items, Compliance, DiscoverPatterns ×2, ItemHistory) rohes `json_encode` statt der zentralen `encodeJson()`. Ein Interface-/Gerätename mit Nicht-UTF-8-Byte ließ `json_encode` zu `false` werden → `strlen(false)` warf unter `strict_types` einen `TypeError`. Jetzt über die UTF-8-sichere Kodierung — genau der Fall, für den sie existiert.
+- **Table-Tab: Klick auf eine Host-Zeile ließ das Detail-Panel leer** (plus `TypeError`): `showDetail` dereferenzierte ein `null`-Cytoscape (nur die Tabelle übergibt keins). Peers-Block jetzt per `if (cy)` geschützt.
+- **Maintenance-Fenster für Hosts mit langem Namen nur einmal anlegbar**: der eindeutige `@timestamp`-Suffix wurde bei der 128-Zeichen-Truncation abgeschnitten (deterministischer Name → „already exists"), Doppelklick kollidierte in derselben Sekunde. Jetzt Host-Teil vorab gekappt + Zufalls-Suffix (`random_bytes`).
+- **Reload-Schleife** möglich, wenn eine zuletzt genutzte Hostgruppe die Leseberechtigung verlor (Auto-Restore → Reload → leer → …): Marker `_ntr` erlaubt den Restore-Versuch genau einmal pro Kette.
+- **0-%-CPU/-RAM sortierten wie „keine Daten"** in der Tabelle (`|| -1`); jetzt `== null`-Prüfung wie beim Ping — idle Hosts sind der niedrigste *echte* Wert.
+- **UINT64-Zähler > `PHP_INT_MAX`** (z. B. `ifHCInOctets` auf Langläufern) wurden im Items-Pivot auf `PHP_INT_MAX` geklemmt; jetzt als numerischer String erhalten.
+
+### Changed
+- **Listener/Timer-Leaks im Dauerbetrieb (Wallboard) beseitigt**: je Re-Render akkumulierender `document`-Click-Listener in Export-Menü und Tabellen-Preset-Popup (jetzt benannte Handler, remove-before-add); Group-Hull-`ResizeObserver` wird beim Verlassen des Technical-Tabs abgebaut, `redraw` prüft auf zerstörtes Cytoscape; Minimap-Boot-`setTimeout` wird gecleart und liest `window._ntCy` on-demand; **Topology-Widget** startet nach Deaktivierung (async Lib-Load) keinen Refresh-Timer mehr und bindet Button-Listener nicht mehr doppelt (das Health-Widget war schon korrekt).
+- **Rate-Limit** jetzt auch auf `items`, `itemcount`, `spark` (Reads) und der Write-Action `maintenance` — vorher als Einzige ungedrosselt.
+- **`NetworkTopologyView`**: redundanten zweiten, identischen Permission-Filter (`HostGroup.get`) entfernt — ein API-Roundtrip weniger pro View-Load.
+
 ## v4.35.1 — 2026-07-15
 
 ### Fixed
