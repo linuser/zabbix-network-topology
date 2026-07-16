@@ -29,6 +29,9 @@ export const NT_LINKS_KEY      = 'nt_' + PFX + 'manual_links';
 export const NT_LLDP_KEY       = 'nt_' + PFX + 'lldp_visible';
 export const NT_WEATHERMAP_KEY = 'nt_' + PFX + 'weathermap';
 export const NT_PORTLABELS_KEY = 'nt_' + PFX + 'portlabels';
+// §9: Ghost-Knoten (unmatched LLDP-Nachbarn) ein-/ausblenden. Default AUS —
+// in Netzen mit vielen unbekannten Geraeten wuerde die Karte sonst zuwuchern.
+export const NT_GHOSTS_KEY     = 'nt_' + PFX + 'ghosts';
 export const NT_LEGEND_COLLAPSED_KEY = 'nt_' + PFX + 'legend_collapsed';
 export const NT_PERF_KEY = 'nt_' + PFX + 'perf';
 export const NT_TAB_KEY        = 'nt_' + PFX + 'active_tab';

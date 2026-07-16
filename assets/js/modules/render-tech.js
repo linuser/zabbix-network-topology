@@ -43,10 +43,10 @@ import { ensureBaseToolbar } from './tabs.js';
 import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
 import { buildLayoutConfig } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
-import { injectInternetCloud, buildNodeElements, buildEdgeElements } from './build-elements.js';
+import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
-import { NT_GROUP_CLUSTER_KEY } from './storage.js';
+import { NT_GROUP_CLUSTER_KEY, NT_GHOSTS_KEY } from './storage.js';
 
 // ── Cross-Module-Glue: setupToolbar lebt im Hauptmodul ─────────────────────
 // (es ist 228 Zeilen und ist eng mit render() und vielen Buttons verknüpft;
@@ -149,6 +149,20 @@ export function render(wrap, nodes, edges, dataUrl) {
     const withInet = injectInternetCloud(nodes, edges, _currentLayout);
     nodes = withInet.nodes;
     edges = withInet.edges;
+
+    // §9 Ghost-Knoten: LLDP/CDP-Nachbarn ohne eigenen Zabbix-Host als
+    // Geisterknoten einblenden. Datenquelle ist lldp_quality aus dem letzten
+    // Fetch (das Backend liefert pro Reporter die unaufgeloesten Namen).
+    // Default AUS — in Netzen mit vielen Fremdgeraeten wuerde die Karte sonst
+    // zuwuchern; der Toolbar-Toggle schaltet sie zu.
+    let _ghostsOn = false;
+    try { _ghostsOn = localStorage.getItem(NT_GHOSTS_KEY) === '1'; } catch (e) {}
+    if (_ghostsOn) {
+        const _lq = (window._ntLastData && window._ntLastData.lldp_quality) || [];
+        const withGhosts = injectGhostNodes(nodes, edges, _lq);
+        nodes = withGhosts.nodes;
+        edges = withGhosts.edges;
+    }
 
     // Cytoscape-Elements (Nodes + Edges) bauen
     // ── Performance-Modus: vereinfachte Knoten (Severity-Punkt statt SVG-Pie)

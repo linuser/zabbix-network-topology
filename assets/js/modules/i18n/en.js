@@ -83,6 +83,8 @@ export default {
     // Port labels + root cause
     'toolbar.portlabels':     'Port labels: {state}',
     'toolbar.portlabels.tip': "Show the reporter's LLDP port at the edge ends (best effort from the item key)",
+    'toolbar.ghosts':     '👻 Ghost nodes: {state}',
+    'toolbar.ghosts.tip': 'Show LLDP/CDP neighbours that have no Zabbix host of their own — devices that exist on the network but are not monitored. Details in the LLDP-Q tab.',
     'rc.button':      '🔍 Root cause',
     'rc.button.tip':  'Split offline hosts into cause vs. consequence (reachability from the uplink)',
     'rc.none':        'No offline hosts — nothing to analyze.',

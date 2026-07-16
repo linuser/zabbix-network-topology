@@ -23,6 +23,10 @@ export const TYPE_ICON = {
     group:    'M-11,-9 h18 v14 h-18z M-7,-13 h18 v14 h-18z M-3,-5 h8 M-3,-1 h8 M-3,3 h8',
     // Wolke — virtueller Internet-Knoten (Hierarchie-Layout)
     internet: 'M-10,4 a6,6 0 0,1 0,-12 a6,6 0 0,1 5,3 a5,5 0 0,1 9,2 a5,5 0 0,1 0,7 z',
+    // Ghost-Knoten (§9) haben BEWUSST kein Icon hier: makeNodeImage wuerde einen
+    // Severity-Ring drumherum zeichnen (severity 0 = gruen = "OK"), was bei einem
+    // NICHT ueberwachten Geraet die falsche Aussage waere. Sie werden stattdessen
+    // per Style gezeichnet (gestrichelter grauer Kreis, render-tech-style.js).
 };
 
 // Ring-Geometrie

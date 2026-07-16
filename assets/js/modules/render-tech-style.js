@@ -75,6 +75,29 @@ export function buildCytoscapeStyle(dark) {
             'width': 4, 'line-color': '#3b82f6', 'line-style': 'solid',
             'opacity': 0.85, 'curve-style': 'straight'
         }},
+        // §9 Ghost-Knoten: LLDP/CDP-Nachbar, der auf keinen ueberwachten Host
+        // aufloest. BEWUSST "unfertig" gezeichnet — kleiner, halbtransparent,
+        // gestrichelter Rand, kursives Label: existiert im Netz, aber NICHT in
+        // der Ueberwachung. Kein bgImage (der Severity-Ring waere gruen = "OK"
+        // und damit eine Falschaussage) → wie nt-perf per Farbe/Rand statt Bild.
+        { selector: 'node[?_isGhost]', style: {
+            'background-image': 'none',
+            'background-opacity': 0.10,
+            'background-color': dark ? '#94a3b8' : '#64748b',
+            'width': 44, 'height': 44,
+            'border-width': 2, 'border-style': 'dashed',
+            'border-color': dark ? '#64748b' : '#94a3b8', 'border-opacity': 0.9,
+            'opacity': 0.7,
+            'color': dark ? '#94a3b8' : '#64748b',
+            'font-style': 'italic',
+            'min-zoomed-font-size': 9,
+        }},
+        { selector: 'edge[?_isGhostEdge]', style: {
+            'width': 1.5, 'line-color': dark ? '#64748b' : '#94a3b8',
+            'line-style': 'dashed', 'line-dash-pattern': [2, 5],
+            'opacity': 0.45, 'curve-style': 'straight',
+            'label': '', 'source-text-offset': 0, 'target-text-offset': 0,
+        }},
         { selector: 'node[!isGroup]:selected', style: {
             'underlay-color': '#6366f1', 'underlay-padding': 6,
             'underlay-opacity': 0.25, 'underlay-shape': 'ellipse',

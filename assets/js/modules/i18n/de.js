@@ -88,6 +88,8 @@ export default {
     // Port-Labels + Root-Cause
     'toolbar.portlabels':     'Port-Labels: {state}',
     'toolbar.portlabels.tip': 'LLDP-Port des Reporters an den Edge-Enden anzeigen (Best-Effort aus dem Item-Key)',
+    'toolbar.ghosts':     '👻 Ghost-Knoten: {state}',
+    'toolbar.ghosts.tip': 'LLDP/CDP-Nachbarn ohne eigenen Zabbix-Host als Geisterknoten zeigen — Geräte, die im Netz existieren, aber nicht überwacht werden. Details im LLDP-Q-Tab.',
     'rc.button':      '🔍 Root-Cause',
     'rc.button.tip':  'Offline-Hosts in Ursache vs. Folge trennen (Erreichbarkeit vom Uplink aus)',
     'rc.none':        'Keine Offline-Hosts — nichts zu analysieren.',
