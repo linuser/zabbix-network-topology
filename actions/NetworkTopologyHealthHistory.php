@@ -21,7 +21,7 @@ use API;
  * statt der Kurve.
  *
  * Request:  days (7|14|30|90, default 14)
- * Response: { item_found: bool, days: N,
+ * Response: { item_found: bool, days: N, truncated: bool,
  *             avg: [[clock, score], ...], min: [[clock, score], ...] }
  *           Serien sind auf max ~240 Buckets (Mittelwert) verdichtet —
  *           ein 2min-Sender x 90d waeren sonst 65k Punkte.
@@ -30,9 +30,17 @@ class NetworkTopologyHealthHistory extends NetworkTopologyController {
 
     private const KEY_AVG   = 'nt.health.score';
     private const KEY_MIN   = 'nt.health.score.min';
-    private const MAX_ROWS  = 40000;
+    // 90d ist das groesste erlaubte Fenster (validateInput). Beim dokumentierten
+    // 2min-Sender sind das ~64.800 Rohpunkte — MAX_ROWS muss das komplett fassen,
+    // sonst kappt der DESC-Fetch die AELTESTEN Punkte weg und die zugehoerigen
+    // Buckets bleiben leer (Chart-Anfang blank). 70k gibt Headroom; ein noch
+    // schnellerer Sender wird ueber das truncated-Flag ehrlich gemeldet.
+    private const MAX_ROWS  = 70000;
     private const BUCKETS   = 240;
     private const CACHE_TTL = 120;
+
+    /** true, wenn eine Serie am MAX_ROWS-Limit kappte (aelteste Punkte evtl. weg). */
+    private bool $truncated = false;
 
     protected function init(): void {
         $this->disableCsrfValidation();
@@ -85,6 +93,9 @@ class NetworkTopologyHealthHistory extends NetworkTopologyController {
             'days'       => $days,
             'avg'        => $this->fetchSeries($by_key[self::KEY_AVG] ?? null, $from, $now),
             'min'        => $this->fetchSeries($by_key[self::KEY_MIN] ?? null, $from, $now),
+            // true = Fenster reichte weiter zurueck als die geholten Rohdaten
+            // (sehr schneller Sender); der Chart-Anfang kann dann fehlen.
+            'truncated'  => $this->truncated,
         ];
 
         NtCache::set('health_history', [$days], $payload, self::CACHE_TTL);
@@ -108,6 +119,9 @@ class NetworkTopologyHealthHistory extends NetworkTopologyController {
             'limit'     => self::MAX_ROWS,
         ]);
         if (!$hist) return [];
+        // Am Limit gekappt → aelteste Rohpunkte (und damit die fruehesten
+        // Buckets) koennen fehlen; dem Frontend ehrlich mitteilen.
+        if (count($hist) >= self::MAX_ROWS) $this->truncated = true;
 
         $span = max(1, (int) ceil(($now - $from) / self::BUCKETS));
         $sum = [];

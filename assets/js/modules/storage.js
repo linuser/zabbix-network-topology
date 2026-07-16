@@ -101,12 +101,18 @@ function selectedGroupIds() {
 export function pinnedKey() { return NT_PINNED_PREFIX + selectedGroupIds(); }
 export function notesKey()  { return NT_NOTES_PREFIX  + selectedGroupIds(); }
 
-export function posKey() {
-    // Group-View hat eigene Positionen — Pseudo-Node-IDs (grp_Fox) würden
-    // sonst die Host-Positionen überschreiben.
-    let viewSuffix = '';
-    try { if (localStorage.getItem(NT_GROUP_VIEW_KEY) === '1') viewSuffix = '_grp'; } catch (e) {}
-    return NT_POS_PREFIX + selectedGroupIds() + viewSuffix;
+function _groupViewOn() {
+    try { return localStorage.getItem(NT_GROUP_VIEW_KEY) === '1'; } catch (e) { return false; }
+}
+
+// Group-View hat eigene Positionen — Pseudo-Node-IDs (grp_Fox) würden sonst die
+// Host-Positionen überschreiben. Ohne Argument gilt die AKTUELLE View; mit
+// explizitem Bool die gewünschte — Presets speichern ihre View mit (posGrp) und
+// schreiben beim Anwenden in den PASSENDEN Key statt in den der gerade aktiven
+// View (sonst landen z.B. Host-Positionen im _grp-Key → Mismatch → verpuffen).
+export function posKey(groupView) {
+    const gv = (groupView === undefined) ? _groupViewOn() : !!groupView;
+    return NT_POS_PREFIX + selectedGroupIds() + (gv ? '_grp' : '');
 }
 
 // ── Pinned helpers ───────────────────────────────────────────────────────────
@@ -322,9 +328,11 @@ export function applyPreset(preset) {
     if (!preset || !preset.data) return;
     const d = preset.data;
 
-    // Positionen
+    // Positionen in den Key der View schreiben, in der das Preset ERFASST wurde
+    // (posGrp), nicht in den der gerade aktiven View. Alte Presets ohne posGrp
+    // gelten als Host-View (der Normalfall) → posKey(false).
     if (d.positions) {
-        try { localStorage.setItem(posKey(), JSON.stringify(d.positions)); } catch (e) {}
+        try { localStorage.setItem(posKey(d.posGrp === true), JSON.stringify(d.positions)); } catch (e) {}
     }
     // Pinned
     if (d.pinned) {
@@ -346,6 +354,7 @@ export function applyPreset(preset) {
 export function collectCurrentState() {
     return {
         positions: loadPositions(),
+        posGrp:    _groupViewOn(),   // in welcher View wurden die Positionen erfasst
         pinned:    loadPinned(),
         notes:     loadNotes(),
         links:     loadLinks()
