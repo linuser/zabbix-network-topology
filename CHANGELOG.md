@@ -2,6 +2,12 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.35.4 — 2026-07-16
+
+### Fixed
+- **Preset-Positionen im Group-View gingen verloren**: `applyPreset` schrieb die Positionen immer in den Key der *gerade aktiven* View. Wer ein Preset in der Normal-Ansicht speicherte und im Group-View anwendete (oder umgekehrt), landete mit Host-Positionen im `_grp`-Key (bzw. Gruppen-Positionen im Host-Key) → kein Node-Match → die Positionen verpufften (Auto-Layout). Presets merken sich jetzt die View, aus der ihre Positionen stammen (`posGrp`), und schreiben beim Anwenden in den **passenden** Positions-Key. `posKey()` nimmt dafür ein optionales View-Argument (ohne Argument wie bisher = aktuelle View).
+- **`HealthHistory` deckte lange Zeitfenster nicht voll ab**: der `DESC`-Fetch war bei 40.000 Rohpunkten gedeckelt; das größte erlaubte Fenster (90 Tage) hat beim dokumentierten 2-Minuten-Sender ~65.000 Punkte, sodass die ältesten wegfielen — der Chart-Titel sagte „90 Tage", die (datengetriebene) Achse deckte nur ~55 ab. Limit auf 70.000 angehoben (90 Tage sind die harte Obergrenze via `validateInput`, also kein unbegrenzter Speicher), plus ein `truncated`-Flag im Payload für den Fall eines noch schnelleren Senders.
+
 ## v4.35.3 — 2026-07-16
 
 ### Fixed
