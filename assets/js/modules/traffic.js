@@ -61,6 +61,10 @@ export function applyTrafficHeatmap(cy) {
     if (!cy) return;
     cy.edges().forEach(function(edge) {
         if (edge.hasClass('dead-edge')) return;
+        // §9 Ghost-Kanten haben keine gemessenen Daten — die Heatmap wuerde ihre
+        // Inline-Styles ueber den (bewusst dezenten) Ghost-Style aus dem
+        // Stylesheet legen. Also auslassen.
+        if (edge.data('_isGhostEdge')) return;
         const tIn  = edge.data('trafficIn')  || 0;
         const tOut = edge.data('trafficOut') || 0;
         const total = Math.max(tIn, tOut);   // Spitzenwert entscheidet

@@ -15,6 +15,7 @@
 //     Lösung: setRenderCallback() injiziert die render-Funktion vom Hauptmodul.
 
 import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
+         NT_GHOSTS_KEY,
          clearPositions, savePositions, savePinned, loadLinks, saveLinks,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
@@ -336,6 +337,28 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         if (d.nodes && d.nodes.length) {
             // Original-Nodes mit slice() durchreichen — render setzt _primaryGroup
             // deterministisch, daher ist das wieder-mutieren unproblematisch.
+            _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');
+        }
+    };
+
+    // §9 Ghost-Knoten: LLDP/CDP-Nachbarn ohne eigenen Zabbix-Host einblenden.
+    // Braucht einen Re-Render (es kommen Knoten + Kanten dazu bzw. fallen weg) —
+    // anders als z.B. Port-Labels, die nur vorhandene Kanten stylen.
+    const bGhosts = mkbtn('nt-btn-ghosts', '', null);
+    const _setGhostLabel = function() {
+        let on = false;
+        try { on = localStorage.getItem(NT_GHOSTS_KEY) === '1'; } catch (e) {}
+        bGhosts.textContent  = t('toolbar.ghosts', { state: on ? t('toolbar.on') : t('toolbar.off') });
+        bGhosts.style.opacity = on ? '1' : '0.5';
+        bGhosts.title = t('toolbar.ghosts.tip');
+    };
+    _setGhostLabel();
+    bGhosts.onclick = function() {
+        const nowOn = localStorage.getItem(NT_GHOSTS_KEY) !== '1';
+        try { localStorage.setItem(NT_GHOSTS_KEY, nowOn ? '1' : '0'); } catch (e) {}
+        _setGhostLabel();
+        const d = window._ntLastData || {};
+        if (d.nodes && d.nodes.length) {
             _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');
         }
     };

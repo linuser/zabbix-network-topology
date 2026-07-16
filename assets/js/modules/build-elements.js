@@ -63,6 +63,65 @@ export function injectInternetCloud(nodes, edges, layoutId) {
     return { nodes: newNodes, edges: newEdges };
 }
 
+// §9 Ghost-Nodes: LLDP/CDP-Nachbarn, die auf KEINEN ueberwachten Zabbix-Host
+// aufloesen, als "Geisterknoten" zeigen. Sie existieren im Netz (ein Switch
+// meldet sie), aber nicht in Zabbix — genau die Luecke, die man sehen will.
+//
+// Datenquelle ist lldp_quality[].unmatched, das das Backend ohnehin liefert:
+// pro Reporter { id, label, unmatched: [{raw, src}] }. Mehrere Reporter koennen
+// denselben Unbekannten melden → EIN Ghost-Knoten, mehrere Kanten.
+//
+// Mutiert die Eingabe-Arrays NICHT — gibt neue zurueck (wie injectInternetCloud).
+export function injectGhostNodes(nodes, edges, lldpQuality) {
+    if (!lldpQuality || !lldpQuality.length) return { nodes: nodes, edges: edges };
+
+    const known = {};
+    nodes.forEach(function(n) { known[String(n.id)] = true; });
+
+    const ghosts     = {};   // gid → Ghost-Node
+    const ghostEdges = [];
+    const edgeSeen   = {};
+
+    lldpQuality.forEach(function(q) {
+        const reporter = String((q && q.id) || '');
+        // Reporter muss selbst auf der Karte sein, sonst haengt der Ghost im Nichts
+        // (z.B. wenn die Gruppen-Auswahl den meldenden Host gar nicht enthaelt).
+        if (!reporter || !known[reporter]) return;
+
+        (q.unmatched || []).forEach(function(u) {
+            const raw = String((u && u.raw) || '').trim();
+            if (!raw) return;
+            const gid = 'ghost_' + raw.toLowerCase().replace(/[^a-z0-9_.-]+/g, '_');
+            if (known[gid]) return;   // theoretische ID-Kollision → lieber auslassen
+
+            if (!ghosts[gid]) {
+                ghosts[gid] = {
+                    id: gid, label: raw, host: raw, ip: '', iftype: '',
+                    type: 'ghost', severity: 0, problems: 0,
+                    _isGhost: true,
+                    _ghostSrc:    [],   // 'lldp' / 'cdp'
+                    _ghostSeenBy: [],   // Labels der meldenden Hosts (fuer Tooltip)
+                    groups: [], traffic: { in: 0, out: 0 }
+                };
+            }
+            const g   = ghosts[gid];
+            const src = String((u && u.src) || 'lldp');
+            if (g._ghostSrc.indexOf(src) === -1) g._ghostSrc.push(src);
+            const rlbl = String((q && q.label) || reporter);
+            if (g._ghostSeenBy.indexOf(rlbl) === -1) g._ghostSeenBy.push(rlbl);
+
+            const eid = 'eghost_' + reporter + '_' + gid;
+            if (edgeSeen[eid]) return;
+            edgeSeen[eid] = true;
+            ghostEdges.push({ id: eid, source: reporter, target: gid, _isGhostEdge: true });
+        });
+    });
+
+    const list = Object.keys(ghosts).map(function(k) { return ghosts[k]; });
+    if (!list.length) return { nodes: nodes, edges: edges };
+    return { nodes: nodes.concat(list), edges: (edges || []).concat(ghostEdges) };
+}
+
 // Baut Cytoscape-Element-Array für alle Hosts.
 // Jedes Element bekommt:
 //   - data.bgImage: SVG-data:URL aus makeNodeImage (Severity-Ring + Icons)
@@ -113,6 +172,13 @@ export function buildNodeElements(nodes, perfMode) {
         };
         // Internet-Wolken-Marker durchreichen
         if (n._isInternet) nodeData._isInternet = true;
+        // Ghost-Marker + Herkunft durchreichen (§9) — Style, Tooltip und
+        // Kontextmenue erkennen daran den nicht-ueberwachten Nachbarn.
+        if (n._isGhost) {
+            nodeData._isGhost     = true;
+            nodeData._ghostSrc    = n._ghostSrc    || [];
+            nodeData._ghostSeenBy = n._ghostSeenBy || [];
+        }
         // Aggregat-Marker durchreichen, damit context-menu sie erkennt
         if (n._isAggregate) {
             nodeData._isAggregate = true;
@@ -167,6 +233,19 @@ export function buildEdgeElements(edges, nodes) {
                 data: { id: e.id || ('hosts_' + i), source: src, target: tgt,
                         kind: 'hosts', isLLDP: false,
                         trafficIn: 0, trafficOut: 0, tLabel: '' }
+            });
+            return;
+        }
+
+        // §9 Ghost-Kanten: KEINE Traffic-Berechnung. Sonst erbt die Kante den
+        // Node-Summen-Traffic des meldenden Hosts (der Ghost selbst hat 0) und
+        // die Weathermap faerbt sie als hoch ausgelastet — voellig irrefuehrend
+        // fuer eine Verbindung zu einem Geraet, das wir gar nicht messen.
+        if (e._isGhostEdge) {
+            elements.push({
+                data: { id: e.id || ('eghost_' + i), source: src, target: tgt,
+                        trafficIn: 0, trafficOut: 0, tLabel: '', isLLDP: false,
+                        _isGhostEdge: true }
             });
             return;
         }

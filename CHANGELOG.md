@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.36.0 — 2026-07-16
+
+### Added
+- **Ghost-Knoten** (Feature-Vorschlag §9): LLDP/CDP-Nachbarn, die auf **keinen überwachten Zabbix-Host** auflösen, erscheinen jetzt als Geisterknoten auf dem Graphen — mit Kante zum meldenden Host. Sie existieren im Netz, aber nicht in der Überwachung: genau die Lücke, die man sehen will. Bisher standen sie nur als Liste im LLDP-Q-Tab.
+  - **Kein Backend-Change nötig** — die Daten lagen längst im Payload (`lldp_quality[]` mit `{id, label, unmatched: [{raw, src}]}`).
+  - Melden **mehrere** Hosts denselben Unbekannten, entsteht **ein** Ghost mit mehreren Kanten. Ist der meldende Host nicht auf der Karte (z.B. durch die Gruppen-Auswahl), wird der Ghost weggelassen, statt im Nichts zu hängen.
+  - **Optik bewusst „unfertig"**: kleiner, halbtransparenter Kreis mit gestricheltem Rand und kursivem Label — und **ohne Severity-Ring**. Ein Ring wäre bei `severity 0` grün („OK") und damit eine Falschaussage über ein Gerät, das gar nicht überwacht wird.
+  - **Ghost-Kanten tragen keinen Traffic**: sonst erben sie die Node-Summe des meldenden Hosts (der Ghost selbst misst nichts) und die Weathermap färbte sie als hoch ausgelastet — irreführend für eine Verbindung zu einem ungemessenen Gerät. Die Traffic-Heatmap lässt sie entsprechend aus.
+  - **Toggle in der Toolbar**, Default **aus** (in Netzen mit vielen Fremdgeräten würde die Karte sonst zuwuchern). DE + EN.
+
 ## v4.35.4 — 2026-07-16
 
 ### Fixed
