@@ -184,16 +184,24 @@ final class MetricExtractor {
                 $lldp_ports[$hid][HostMetadata::ifaceParam($key)]['desc'] = (string) $val;
             } elseif (!empty($val) && (
                     $key === 'lldpRemSysName'
+                 || $key === 'uplink.id'                          // UniFi Network API
                  || strpos($key, 'cdpCacheDeviceId')  !== false   // Cisco CDP
                  || strpos($key, 'neighbor.sysName')  !== false   // generisch / Ubiquiti
                  || strpos($key, 'discovery.neighbor') !== false  // MikroTik & andere
                  || preg_match('/(?:^|\.)(lldp.*sysname|cdp.*device)/i', $key)
                  )) {
-                // Quelle merken (lldp/cdp/other) — Frontend kann das spaeter
-                // anzeigen oder zum Debuggen nutzen. Fuer den Match selber egal.
-                $src = (strpos($key, 'cdp') !== false)
-                    ? 'cdp'
-                    : ((strpos($key, 'lldp') !== false) ? 'lldp' : 'other');
+                // uplink.id (UniFi Network API): KEIN Geraete-Protokoll wie LLDP/CDP,
+                // sondern die Controller-Sicht — das Template holt per JSONPath
+                // $.uplinkDeviceId "an welchem Geraet haenge ich". Der Wert ist die
+                // UniFi-Geraete-UUID, und weil dasselbe Template seine Hosts nach
+                // eben dieser UUID benennt, ist er zugleich der technische Hostname
+                // des Uplink-Hosts → das bestehende Namens-Matching im
+                // LldpEdgeBuilder loest ihn ohne Sonderlogik auf.
+                // Quelle merken (lldp/cdp/unifi/other) — Frontend kann das anzeigen
+                // oder zum Debuggen nutzen. Fuer den Match selber egal.
+                $src = ($key === 'uplink.id')            ? 'unifi'
+                    : ((strpos($key, 'cdp')  !== false)  ? 'cdp'
+                    : ((strpos($key, 'lldp') !== false)  ? 'lldp' : 'other'));
                 $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val, 'src' => $src];
             }
         }

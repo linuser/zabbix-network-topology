@@ -39,9 +39,24 @@ Komma-/Zeilen-/Pipe-Liste mehrerer Nachbarn):
 | `cdpCacheDeviceId` | **CDP** (Cisco Discovery Protocol) — SNMP |
 | `neighbor.sysName` | Generisch / Ubiquiti UniFi (z. B. via Controller-API) |
 | `discovery.neighbor` | MikroTik & andere / custom |
+| `uplink.id` (exakter Key) | **UniFi Network API** — Controller-Sicht, siehe unten |
 
 Der Wert wird an `,`, Zeilenumbruch und `|` gesplittet — ein einzelnes Item darf also eine
 Liste aller Nachbarn enthalten.
+
+> **Sonderfall UniFi (`uplink.id`):** Ubiquiti gibt die LLDP-Nachbartabelle per SNMP in der
+> Regel **nicht** heraus — die Topologie kennt nur der Controller. Das offizielle
+> *UniFi Network API*-Template holt sie per JSONPath `$.uplinkDeviceId` aus `details.json`
+> in ein Item `uplink.id` („an welchem Gerät hänge ich"). Dessen Wert ist die **Geräte-UUID**
+> des Uplinks — und weil dasselbe Template seine Hosts technisch nach eben dieser UUID
+> benennt, löst das normale Namens-Matching sie direkt auf den richtigen Host auf. Quelle
+> erscheint im LLDP-Q-Tab als `unifi`.
+>
+> Zwei Einschränkungen, die man kennen muss: Es ist die **Controller-Sicht**, kein
+> Geräte-Protokoll (fällt der Controller aus, veraltet die Topologie). Und es funktioniert
+> nur, solange die Hosts **nach der UUID benannt** sind — benennt deine Discovery sie anders,
+> trifft das Matching nicht. `uplink.rx`/`uplink.tx` (Per-Link-Traffic) wertet das Modul
+> derzeit **nicht** aus.
 
 ---
 
@@ -97,14 +112,23 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 | **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ kein SNMP | **keine Kanten** | „dumb switch"-Fall → manuell |
 | **TP-Link unmanaged** | ✗ | unsichtbar | Geräte erscheinen direkt verbunden, Switch fehlt |
 | **Ubiquiti EdgeSwitch / EdgeMax** | ✓ meist | **funktioniert** | EdgeOS, ordentliches SNMP |
-| **Ubiquiti UniFi** (USW/UDM) | ⚠ SNMP schwach | **API-Weg** | LLDP lebt im Controller (Inform), nicht im SNMP → Controller-API → `neighbor.sysName` |
+| **Ubiquiti UniFi** (USW/UDM) | ✗ oft **gar kein** SNMP | **funktioniert via API** | LLDP lebt im Controller → offizielles *UniFi Network API*-Template liefert `uplink.id`, das Modul liest es direkt |
 | **Cisco** (IOS/NX-OS) | ✓ | **funktioniert** | CDP default an, LLDP opt-in (`lldp run`) |
 | **MikroTik** (RouterOS) | ✓ | **funktioniert** | via SNMP oder `discovery.neighbor`-Item |
 
-> **UniFi im Detail:** UniFi baut LLDP für den *eigenen* Controller, nicht primär fürs externe
-> SNMP-Polling — die `lldpRemTable` kommt per SNMP oft leer. Besser die **UniFi-Controller-API**
-> anzapfen (Zabbix HTTP-Agent-Item, das die Nachbar-SysNames als Wert liefert). Das Modul erkennt
-> dafür die Keys `neighbor.sysName` / `discovery.neighbor` — die Datenquelle musst du nur bauen.
+> **UniFi im Detail:** UniFi baut LLDP für den *eigenen* Controller, nicht fürs externe
+> SNMP-Polling. In der Praxis ist es sogar deutlicher: Auf einer **UDM Pro Max** mit aktiviertem
+> SNMP kam auf `sysDescr` (v1 *und* v2c, Community `public`) **gar keine Antwort** — obwohl das
+> Gerät pingbar war. Der SNMP-Schalter in der Network-App aktiviert SNMP auf den *adoptierten
+> Geräten*, nicht auf der Konsole selbst; und Ubiquiti baut SNMP seit Jahren zurück. Auf einen
+> LLDP-Walk gegen UniFi sollte man also nicht bauen.
+>
+> **Der Weg, der trägt:** das offizielle **UniFi Network API**-Template. Es legt pro Gerät/Client
+> ein Item **`uplink.id`** an (JSONPath `$.uplinkDeviceId` aus `details.json`) — die Geräte-UUID
+> des Uplinks. Da dasselbe Template seine Hosts nach der UUID benennt, löst das Modul die Kante
+> ohne Zusatzarbeit auf: **Template dranhängen genügt**, keine eigenen Items bauen. Quelle im
+> LLDP-Q-Tab: `unifi`. (Die Community ist bei UniFi übrigens fest `public` und nicht einstellbar
+> — deshalb fehlt das Feld in der UI.)
 
 ---
 

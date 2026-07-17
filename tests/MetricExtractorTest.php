@@ -130,6 +130,26 @@ check('lldp_raw: genau 2 Nachbarn (Port NICHT dabei)', count($m3['lldp_raw']), 2
 $raw_vals = array_map(static fn($r) => $r['lastvalue'], $m3['lldp_raw']);
 check('lldp_raw: DevicePort-Wert nicht als Nachbar',   in_array('GigabitEthernet0/1', $raw_vals, true), false);
 
+// ── UniFi: uplink.id als Nachbar-Quelle (Controller-Sicht statt LLDP) ─────
+// Das UniFi-Template holt per JSONPath $.uplinkDeviceId "an welchem Geraet
+// haenge ich"; der Wert ist die Geraete-UUID = technischer Hostname des Uplinks.
+echo "\nUniFi uplink.id\n";
+$itemsU = [
+    ['hostid' => 'c', 'key_' => 'uplink.id', 'name' => 'Uplink Device Id',
+     'lastvalue' => 'edd7d002-b7b6-3675-8663-608ae2466f0b'],
+];
+$mu = MetricExtractor::extract($itemsU);
+check('uplink.id wird als Nachbar erkannt',  count($mu['lldp_raw']),                1);
+check('uplink.id -> src=unifi',              $mu['lldp_raw'][0]['src'] ?? null,      'unifi');
+check('uplink.id -> Wert bleibt die UUID',   $mu['lldp_raw'][0]['lastvalue'] ?? null,
+      'edd7d002-b7b6-3675-8663-608ae2466f0b');
+// Abgrenzung: uplink.rx/tx sind Traffic, KEINE Nachbarn — duerfen nicht rein.
+$mu2 = MetricExtractor::extract([
+    ['hostid' => 'c', 'key_' => 'uplink.rx', 'name' => 'Uplink RX', 'lastvalue' => '12345'],
+    ['hostid' => 'c', 'key_' => 'uplink.tx', 'name' => 'Uplink TX', 'lastvalue' => '678'],
+]);
+check('uplink.rx/tx sind KEINE Nachbarn',    count($mu2['lldp_raw']),               0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";
