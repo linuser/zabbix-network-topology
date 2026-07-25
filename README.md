@@ -3,7 +3,7 @@
 Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.4-red)
-![Version](https://img.shields.io/badge/version-4.35.0-blue)
+![Version](https://img.shields.io/badge/version-4.36.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 ## Was ist das?
@@ -20,6 +20,33 @@ Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wall
 > Technische Modul-ID: `network_topology_v6` (installiert als Verzeichnis gleichen
 > Namens). Das „v6" ist die interne Modul-Lineage, nicht die Release-Version — die
 > steht im Badge oben und im [CHANGELOG](CHANGELOG.md).
+
+## Screenshots
+
+**Technische Topologie** — Force-Directed Graph mit Severity-Ringen, CPU/Memory/Ping/Traffic als Pie-Charts und Per-Link-Weathermap (gemessene Interface-Auslastung je Kante).
+
+![Technische Topologie](screenshots/01-technical-graph.png)
+
+**What-if-Ausfallsimulation** — Rechtsklick auf einen Host → „Simulate failure": das Modul markiert in Echtzeit, welche Hosts dadurch ihre Verbindung zum Netz-Uplink verlieren (hier: 1 Ausfall → 3 abgeschnittene Hosts).
+
+![What-if-Ausfallsimulation](screenshots/02-whatif-simulation.gif)
+
+**Item-Pivot mit Heatmap** — beliebiges Item-Key-Pattern (z. B. `vfs.fs.size[*,pused]`) als Spalten über alle Hosts der Gruppe, farbcodiert nach Wert, mit Perzentil-Aggregaten (P50/P95/P99) und CSV-Export.
+
+![Item-Pivot mit Heatmap](screenshots/07-table-items.png)
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/03-management.png" alt="Management-Wallboard"><br><sub><b>Management</b> — Hosts nach Gerätetyp gruppiert (Firewall/Switch/Server/…), mit Problem-Badges und CPU/RAM je Kachel.</sub></td>
+<td width="50%"><img src="screenshots/06-health.png" alt="Health-Score"><br><sub><b>Health</b> — Health-Score pro Hostgruppe mit 14-Tage-Verlauf und Offline/Stale/Critical-Aufschlüsselung.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/04-table.png" alt="Tabellen-Ansicht"><br><sub><b>Tabelle</b> — Nagios/Icinga-Style Hostliste mit Status, Typ, IP, CPU/Memory/Ping, Traffic und offenen Problemen.</sub></td>
+<td width="50%"><img src="screenshots/05-geo.jpg" alt="Geo-Karte"><br><sub><b>Geo</b> — Leaflet-Karte mit Host-Standorten aus dem Host-Inventory.</sub></td>
+</tr>
+</table>
+
+> Screenshots aus der öffentlichen Demo ([demo.zabfox.de](https://demo.zabfox.de)).
 
 ## Features
 
