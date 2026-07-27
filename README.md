@@ -3,8 +3,10 @@
 Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4-red)
-![Version](https://img.shields.io/badge/version-4.38.0-blue)
+![Version](https://img.shields.io/badge/version-4.38.1-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
+
+**[🌐 Projektseite zabfox.de](https://zabfox.de)** · **[▶ Live-Demo](https://demo.zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](INSTALL.md)**
 
 ## Was ist das?
 
@@ -262,6 +264,15 @@ Weitere Feature-Module (Auswahl): `whatif.js` (What-if-Ausfallsimulation),
 - LLDP-Edges brauchen Nachbar-Items per SNMP (`lldpRemSysName` / `cdpCacheDeviceId` / `neighbor.sysName` / …) — Setup + Vendor-Matrix: [LLDP-SETUP.md](LLDP-SETUP.md)
 - Zabbix 7.0+ für Proxy-Group-Info (in 6.x leer)
 - **Dashboard-Widgets nur Zabbix 7.4** (Widget-JS-API-Unterschied); das Hauptmodul selbst läuft auf **7.0 LTS + 7.4**
+
+## Feedback & Mitmachen
+
+Das Modul ist frisch veröffentlicht — Rückmeldungen sind ausdrücklich erwünscht.
+
+- **Erst ausprobieren, dann installieren:** [demo.zabfox.de](https://demo.zabfox.de) — läuft mit Demo-Daten, nichts zu installieren.
+- **Bug gefunden?** → [Issue anlegen](https://github.com/linuser/zabbix-network-topology/issues). Hilfreich sind: Zabbix-Version, PHP-Version, und bei fehlenden Kanten der SNMP-Vendor (siehe [LLDP-SETUP.md](LLDP-SETUP.md)).
+- **Sicherheitslücke?** Bitte **nicht** öffentlich melden, sondern per Mail an <fox@planetfox.biz>.
+- **Mehr zum Projekt und weiteren Zabbix-Modulen:** [zabfox.de](https://zabfox.de)
 
 ## Lizenz
 

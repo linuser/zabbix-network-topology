@@ -571,7 +571,7 @@ Keine neuen Features, nur Hardening und Backend-Optimierungen.
 - **Generic Search-Placeholder**: `host:web`, `group:dc1`, `proxy:zbx-px` statt umgebungsspezifischer Beispiele.
 - **MAX_GROUPS=100** in `NetworkTopologyData` als Hard-Limit gegen pathologisch große Group-Arrays.
 - **APCu-Cache Defense**: `cacheKey()` liefert leer bei `userid=0` (Session-Loss) → kein Cross-User-Bucket.
-- **Repo-Migration** auf `git.fox1.de/planet_fox/zabbix-network-topology-v2.git` (Mono-Repo-Wechsel der Vorgänger).
+- **Repo-Migration** in das heutige Repository (Mono-Repo-Wechsel der Vorgänger).
 
 ### Fixed
 - **Pin-Positions** bleiben beim Layout-Wechsel erhalten (vorher: unlock+layout+relock zerstörte Pin-Koordinaten).

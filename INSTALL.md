@@ -29,11 +29,11 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 #  z. B. /var/www/html/zabbix/ui/modules)
 cd /usr/share/zabbix/ui/modules
 
-# Variante A — Release-ZIP entpacken:
+# Variante A — Release-ZIP entpacken (Download: github.com/linuser/zabbix-network-topology/releases):
 sudo unzip /pfad/zu/network_topology_v6.zip
 
 # Variante B — aus dem Git-Repo:
-sudo git clone https://git.fox1.de/planet_fox/zabbix-network-topology-v2.git network_topology_v6
+sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology_v6
 
 # Rechte setzen (Owner wie der Rest deiner Zabbix-UI — meist root:root
 # oder www-data:www-data) und php-fpm neu laden:
@@ -128,11 +128,11 @@ Modul in der UI auf **Disabled**, dann Verzeichnis löschen und php-fpm reloaden
 #  e.g. /var/www/html/zabbix/ui/modules)
 cd /usr/share/zabbix/ui/modules
 
-# Option A — unzip the release ZIP:
+# Option A — unzip the release ZIP (download: github.com/linuser/zabbix-network-topology/releases):
 sudo unzip /path/to/network_topology_v6.zip
 
 # Option B — from the Git repo:
-sudo git clone https://git.fox1.de/planet_fox/zabbix-network-topology-v2.git network_topology_v6
+sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology_v6
 
 # Set ownership (same as the rest of your Zabbix UI — usually root:root
 # or www-data:www-data) and reload php-fpm:
@@ -205,5 +205,9 @@ Set the module to **Disabled** in the UI, then delete the directory and reload p
 | "Unknown action …" (maintenance/forecast) | You forgot "Scan directory" after the update. |
 
 ---
+
+---
+
+**Projektseite / project site: [zabfox.de](https://zabfox.de)** · **Live-Demo: [demo.zabfox.de](https://demo.zabfox.de)** · **Repo + Issues: [github.com/linuser/zabbix-network-topology](https://github.com/linuser/zabbix-network-topology)**
 
 *Lizenz / License: **AGPL-3.0-or-later** — © 2026 PlaNet Fox / Alexander Fox. Siehe / see [LICENSE](LICENSE) & [README](README.md).*
