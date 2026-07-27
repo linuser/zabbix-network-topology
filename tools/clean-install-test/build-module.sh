@@ -18,11 +18,14 @@ rm -rf "$HERE/module"
 mkdir -p "$DEST"
 rsync -a \
     --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
-    --exclude 'widget' --exclude 'widget_health' --exclude 'dashboards' \
+    --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
+    --exclude '.github' --exclude 'screenshots' --exclude 'dashboards' \
     --exclude 'tools' --exclude 'templates' \
     --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
-    --exclude '.DS_Store' --exclude '*.zip' \
+    --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
     --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-install.sh' \
+    --exclude 'tests' --exclude '.gitlab-ci.yml' \
+    --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
     "$REPO/" "$DEST/"
 
 echo "✓ fertig: $DEST"

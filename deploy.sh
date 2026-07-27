@@ -194,7 +194,8 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     STAGE=$(mktemp -d)
     rsync -a \
         --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
-        --exclude 'widget' --exclude 'widget_health' --exclude 'dashboards' \
+        --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
+        --exclude '.github' --exclude 'screenshots' --exclude 'dashboards' \
         --exclude 'tools' --exclude 'templates' \
         --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
         --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
