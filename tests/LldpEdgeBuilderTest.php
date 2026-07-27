@@ -96,19 +96,19 @@ echo "\nQualitaets-Statistik\n";
 check('quality wird gefuellt',                        count($r['quality']) > 0,    true);
 
 // ── §3 Port-zu-Port ──────────────────────────────────────────────────────
-// Nachgebildet aus dem echten Aruba-Walk (192.168.33.4): der Switch meldet an
+// Nachgebildet aus einem realen Aruba-SNMP-Walk: der Switch meldet an
 // lokalem Port 8 den Nachbarn "pve" mit Remote-Port "nic0" (PortDesc; PortId
 // waere eine MAC), an Port 20 den TP-Link mit Remote-Port aus PortId (kein
 // PortDesc). ifIndex == lokaler Port → Per-Link-Traffic haengt am Reporter.
 echo "\n§3 Port-zu-Port\n";
 $hosts3 = [
-    'aruba' => ['host' => 'HP24GARUBA', 'name' => 'HP24GARUBA'],
-    'pve'   => ['host' => 'pve',        'name' => 'pve.fuchsbau.lan'],
-    'tp'    => ['host' => 'TL-SG2008P', 'name' => 'TL-SG2008P'],
+    'aruba' => ['host' => 'SW-CORE-01', 'name' => 'SW-CORE-01'],
+    'pve'   => ['host' => 'pve',        'name' => 'hv-01.example.lan'],
+    'tp'    => ['host' => 'SW-EDGE-01', 'name' => 'SW-EDGE-01'],
 ];
 $lldp_raw3 = [
-    ['hostid' => 'aruba', 'key_' => 'lldpRemSysName[0.8.1]',  'lastvalue' => 'pve.fuchsbau.lan', 'src' => 'lldp'],
-    ['hostid' => 'aruba', 'key_' => 'lldpRemSysName[0.20.2]', 'lastvalue' => 'TL-SG2008P',       'src' => 'lldp'],
+    ['hostid' => 'aruba', 'key_' => 'lldpRemSysName[0.8.1]',  'lastvalue' => 'hv-01.example.lan', 'src' => 'lldp'],
+    ['hostid' => 'aruba', 'key_' => 'lldpRemSysName[0.20.2]', 'lastvalue' => 'SW-EDGE-01',       'src' => 'lldp'],
 ];
 $lldp_ports3 = [
     'aruba' => [

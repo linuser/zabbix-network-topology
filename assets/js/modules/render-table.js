@@ -829,7 +829,7 @@ function rowHtml(n, baseUrl, theme) {
             + 'padding:1px 7px;border-radius:' + NT_R.pill + ';background:' + grpCol + '22;'
             + 'color:' + grpCol + ';font-size:11px;font-weight:600">'
             + esc(grp || '\u2014') + '</span></td>'
-        // IP + Interface-Typ ("192.168.33.10 (SNMP)") — Iftype kommt vom Backend.
+        // IP + Interface-Typ ("192.0.2.10 (SNMP)") — Iftype kommt vom Backend.
         // Tooltip am Iftype-Span zeigt zusätzlich Proxy/Proxy-Group-Info
         // (oder "Server (kein Proxy)" wenn der Host direkt am Zabbix-Server hängt).
         + '<td style="' + cellPad + ';font-size:12px;color:' + metricColor

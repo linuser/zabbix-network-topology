@@ -22,7 +22,7 @@ Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 - **UniFi-Topologie via `uplink.id`** (Controller-Sicht statt SNMP): Geräte, die per UniFi-Network-API-Template überwacht werden, liefern mit `uplink.id` die **UUID ihres Uplink-Geräts**. Diese wird jetzt als Nachbar-Quelle (`src=unifi`) erkannt und über die **bestehende** Hostname-Matching-Logik zu einer Kante aufgelöst (die UUID = technischer Hostname des Uplink-Hosts) — `LldpEdgeBuilder` brauchte dafür keine Änderung. Damit entsteht die UniFi-Topologie **auch ohne LLDP/CDP**, praktisch für Umgebungen, in denen die UniFi-Geräte kein SNMP sprechen (z. B. UDM-Konsolen).
   - Uplinks, die auf **keinen** überwachten Host auflösen (z. B. der Top-Level-Gateway/Controller ohne eigenen Host), zeichnen keine Kante — bzw. erscheinen als **Ghost-Knoten**, wenn der §9-Toggle an ist.
   - `uplink.rx/tx` (UniFi-Traffic) wird **noch nicht** für die Weathermap genutzt (potenzieller Nachzieher).
-  - Verifiziert auf **zabbixcloud.de** (117 UniFi-Hosts, Zabbix-Prod) und per Unit-Tests (`MetricExtractorTest`, `LldpEdgeBuilderTest`).
+  - Verifiziert gegen eine produktive UniFi-Umgebung (>100 Geraete) und per Unit-Tests (`MetricExtractorTest`, `LldpEdgeBuilderTest`).
 
 ## v4.36.0 — 2026-07-16
 
@@ -548,7 +548,7 @@ Keine neuen Features, nur Hardening und Backend-Optimierungen.
 - **Path-Highlight** im Tech-Tab: Rechtsklick "Pfad von hier" + auf anderem Host "Pfad zu hier" → BFS-Pfad zwischen den beiden Hosts wird cyan hervorgehoben, Rest gedimmt. Manuelle BFS-Implementierung statt cytoscape's eingebauter (die war in der minifizierten Version unzuverlässig).
 - **Multi-Group-Filter** in der Tabelle: AND-Verknüpfung mehrerer Hostgroups via Chip-Row + Add-Dropdown. Match läuft über `n.groups[]` (alle Gruppen), nicht mehr nur `_primaryGroup`.
 - **Token-Suche** in der Tabelle: whitespace-getrennte Tokens, jeder muss matchen (AND), `-wort` für NOT. Haystack enthält Gruppennamen.
-- **Query-Sprache (`query.js`)** als Erweiterung der Token-Suche: `host:fox OR host:bar`, `(a OR b) c`, `-tag:wartung`, quoted strings, Field-Prefixe `host/label/ip/type/iftype/proxy/group`. Bare Tokens matchen Host/Label/IP only (nicht Proxy/Group — sonst matchte z.B. "prx" alle Hosts wenn der Zabbix-Proxy "fox-prx" heißt). Gleiche Syntax in Hosts- und Items-Modus.
+- **Query-Sprache (`query.js`)** als Erweiterung der Token-Suche: `host:fox OR host:bar`, `(a OR b) c`, `-tag:wartung`, quoted strings, Field-Prefixe `host/label/ip/type/iftype/proxy/group`. Bare Tokens matchen Host/Label/IP only (nicht Proxy/Group — sonst matchte z.B. "prx" alle Hosts wenn der Zabbix-Proxy "srv-prx" heißt). Gleiche Syntax in Hosts- und Items-Modus.
 - **Toast-Notifications** (`toast.js`) statt blockierender `alert()`-Dialoge. Info/Success/Warn/Error-Varianten.
 - **URL-Bookmark** der Tabellen-Sicht: Filter/Sort/Mode persistieren via `?t_sev=&t_g=&t_q=...` in der URL. Teilbar via Link, überlebt Reload.
 - **Maintenance-Ring** im Tech-Tab: orange-gestrichelter Außenring um Hosts in Maintenance (zusätzlich zum bestehenden Wrench-Badge).
@@ -713,7 +713,7 @@ Keine neuen Features, nur Hardening und Backend-Optimierungen.
 ## v4.13.1 — 2026-04-29
 
 ### Added
-- **Interface-Typ in IP-Spalte**: zeigt `192.168.33.10 (SNMP)` etc.
+- **Interface-Typ in IP-Spalte**: zeigt `192.0.2.10 (SNMP)` etc.
 - Suche akzeptiert iftype-Filter
 
 ## v4.13 — 2026-04-29
@@ -753,7 +753,7 @@ Keine neuen Features, nur Hardening und Backend-Optimierungen.
 
 ### Added
 - **Geräte-Typ im Detail-Panel**:
-  - Header: `🔀 HP24GARUBA [SWITCH]` mit Icon + Pille
+  - Header: `🔀 SW-CORE-01 [SWITCH]` mit Icon + Pille
   - Tabellen-Zeile "Type" zwischen Host und IP
   - Custom-Indikator (gelber `*`) wenn `nt:icon`-Tag den Auto-Detect überschreibt
   - 19 Device-Typen mit `TYPE_INFO` Map

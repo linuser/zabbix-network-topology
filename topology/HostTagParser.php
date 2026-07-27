@@ -88,7 +88,7 @@ final class HostTagParser {
                         $url   = trim(substr($value, $pipe_pos + 1));
                     } else {
                         $url   = trim($value);
-                        // Domain als Label extrahieren ("https://nas.fox1.de:5000" → "nas.fox1.de")
+                        // Domain als Label extrahieren ("https://nas.example.com:5000" → "nas.example.com")
                         $parsed = parse_url($url);
                         $label  = $parsed['host'] ?? $url;
                     }

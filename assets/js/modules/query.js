@@ -61,7 +61,7 @@ function _tokenize(input) {
         if (up === 'OR')  return { type: 'OR' };
         if (up === 'AND') return { type: 'AND' };
         // NOT-Prefix: nur wenn "-" am Anfang UND noch was danach kommt
-        // (sonst fox-prx als "NOT prx" interpretiert worden).
+        // (sonst srv-prx als "NOT prx" interpretiert worden).
         let neg = false;
         let body = raw;
         if (body[0] === '-' && body.length > 1) {
@@ -173,7 +173,7 @@ export function matchQuery(ast, fields) {
 //
 // _any wird fuer bare-Tokens (ohne Field-Prefix) benutzt und enthaelt
 // BEWUSST nur host/label/ip — NICHT proxy/group/type/iftype. Sonst matched
-// "prx" alle Hosts wenn der Proxy "fox-prx" heisst. Wer in diesen
+// "prx" alle Hosts wenn der Proxy "srv-prx" heisst. Wer in diesen
 // Sekundaer-Feldern suchen will, nutzt den jeweiligen Field-Prefix.
 export function nodeToQueryFields(n) {
     const fHost   = ((n.host || '') + ' ' + (n.label || '')).toLowerCase();

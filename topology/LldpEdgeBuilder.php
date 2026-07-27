@@ -98,7 +98,7 @@ final class LldpEdgeBuilder {
         };
 
         foreach ($lldp_raw as $item) {
-            // Wert kann komma-separierte Liste sein: "pve,HP24GARUBA".
+            // Wert kann komma-separierte Liste sein: "hv-01,SW-CORE-01".
             // CDP kann auch "\n"-separiert oder mit Pipe kommen.
             $neighbors = preg_split('/[,\n\r\|]+/', $item['lastvalue']);
             foreach ($neighbors as $neighbor_full) {
