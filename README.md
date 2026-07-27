@@ -1,14 +1,14 @@
 # Network Topology for Zabbix
 
-Zabbix 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
+Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
-![Status](https://img.shields.io/badge/zabbix-7.4-red)
+![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4-red)
 ![Version](https://img.shields.io/badge/version-4.36.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 ## Was ist das?
 
-**Network Topology for Zabbix** ist ein Frontend-Modul für Zabbix 7.4, das Hosts,
+**Network Topology for Zabbix** ist ein Frontend-Modul für **Zabbix 7.0 LTS und 7.4**, das Hosts,
 Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive
 Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es,
 _wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
@@ -133,6 +133,8 @@ Im Verzeichnis [`widget/`](widget/) liegt ein **separates Zabbix-Modul** vom Typ
 
 **Voraussetzung:** Hauptmodul muss installiert + enabled sein (das Widget ruft dessen `network.topology.v6.data`-Action).
 
+> **Zabbix-Version:** Die Dashboard-Widgets brauchen **Zabbix 7.4**. Auf **7.0 LTS** registrieren sie sich zwar (PHP-View liefert 200), bleiben aber wegen der abweichenden Widget-JS-Basisklasse auf „Loading…" hängen. Das **Hauptmodul** läuft dagegen auf **7.0 LTS und 7.4**.
+
 ```bash
 cd widget
 zip -r /tmp/widget.zip .
@@ -247,6 +249,7 @@ Weitere Feature-Module (Auswahl): `whatif.js` (What-if-Ausfallsimulation),
 - Geo-Tab braucht Hosts mit `inventory.location_lat` + `location_lon`
 - LLDP-Edges brauchen Nachbar-Items per SNMP (`lldpRemSysName` / `cdpCacheDeviceId` / `neighbor.sysName` / …) — Setup + Vendor-Matrix: [LLDP-SETUP.md](LLDP-SETUP.md)
 - Zabbix 7.0+ für Proxy-Group-Info (in 6.x leer)
+- **Dashboard-Widgets nur Zabbix 7.4** (Widget-JS-API-Unterschied); das Hauptmodul selbst läuft auf **7.0 LTS + 7.4**
 
 ## Lizenz
 

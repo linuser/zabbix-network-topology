@@ -12,7 +12,7 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 
 ### Voraussetzungen
 
-- **Zabbix 7.4+** (Frontend)
+- **Zabbix 7.0 LTS oder 7.4+** (Frontend) — die Dashboard-Widgets (Abschnitt 3) brauchen **7.4**
 - **PHP 8.x** mit php-fpm (bzw. der PHP-Handler deines Webservers)
 - Schreibzugriff auf das Zabbix-UI-Verzeichnis `modules/` und die Möglichkeit, php-fpm neu zu laden
 - Moderner Browser (ES2019 — Chrome/Firefox/Safari/Edge, aktuelle Versionen)
@@ -41,6 +41,11 @@ sudo chown -R root:root network_topology_v6
 sudo systemctl reload php8.3-fpm      # deinen php-fpm-Service anpassen
 ```
 
+> **RHEL / RedHat / Rocky / Alma** — drei Extra-Punkte:
+> - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology_v6`
+> - **Owner/Service**: Web-User ist `apache` (nicht www-data), der Dienst heißt `php-fpm` → `sudo chown -R apache:apache network_topology_v6` und `sudo systemctl reload php-fpm`
+> - **APCu** (optional, empfohlen für Cache + Rate-Limit): `sudo dnf install php-pecl-apcu` und für die **FPM**-SAPI aktivieren. Ohne APCu läuft das Modul trotzdem — nur ohne Cache/Drosselung (fail-open).
+
 ### 2. Modul aktivieren
 
 1. **Administration → General → Modules → Scan directory**
@@ -59,7 +64,7 @@ sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_wi
 sudo systemctl reload php8.3-fpm
 ```
 Dann **Scan directory** → „Network Topology for Zabbix — Widget" bzw. „— Health Widget" aktivieren → im Dashboard-Editor verfügbar.
-**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein.
+**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
 
 ### 4. Optional: Topologie-Events + Health-Score-Historie
 
@@ -105,7 +110,7 @@ Modul in der UI auf **Disabled**, dann Verzeichnis löschen und php-fpm reloaden
 
 ### Requirements
 
-- **Zabbix 7.4+** (frontend)
+- **Zabbix 7.0 LTS or 7.4+** (frontend) — the dashboard widgets (section 3) require **7.4**
 - **PHP 8.x** with php-fpm (or your web server's PHP handler)
 - Write access to the Zabbix UI `modules/` directory and the ability to reload php-fpm
 - A modern browser (ES2019 — current Chrome/Firefox/Safari/Edge)
@@ -134,6 +139,11 @@ sudo chown -R root:root network_topology_v6
 sudo systemctl reload php8.3-fpm      # adjust to your php-fpm service
 ```
 
+> **RHEL / RedHat / Rocky / Alma** — three extra points:
+> - **SELinux** (the usual reason for "module not shown"): restore the httpd read context after copying, otherwise php-fpm can't read the files → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology_v6`
+> - **Owner/service**: the web user is `apache` (not www-data), the service is `php-fpm` → `sudo chown -R apache:apache network_topology_v6` and `sudo systemctl reload php-fpm`
+> - **APCu** (optional, recommended for cache + rate-limit): `sudo dnf install php-pecl-apcu` and enable it for the **FPM** SAPI. Without APCu the module still works — just without cache/throttling (fail-open).
+
 ### 2. Enable the module
 
 1. **Administration → General → Modules → Scan directory**
@@ -152,7 +162,7 @@ sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_wi
 sudo systemctl reload php8.3-fpm
 ```
 Then **Scan directory** → enable "Network Topology for Zabbix — Widget" / "— Health Widget" → available in the dashboard editor.
-**Prerequisite:** the main module must be installed + enabled.
+**Prerequisite:** the main module must be installed + enabled — and **Zabbix 7.4** (the widgets don't run on 7.0 LTS; the main module does).
 
 ### 4. Optional: topology events + health-score history
 

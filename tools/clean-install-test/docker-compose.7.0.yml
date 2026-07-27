@@ -1,0 +1,63 @@
+# Clean-Install-Test — Wegwerf-Zabbix 7.0 LTS (PostgreSQL) zum Pruefen der
+# Modul-Kompatibilitaet mit dem aktuellen LTS. Analog docker-compose.yml, nur
+# 7.0-Images, eigenes DB-Volume (kein Mischen mit dem 7.4-Schema) und Port 18080
+# (8080 kollidiert oft mit lokalen Diensten).
+#
+#   ./build-module.sh
+#   docker compose -f docker-compose.7.0.yml -p ztest70 up -d
+#   http://localhost:18080       # Login: Admin / zabbix
+#   docker compose -f docker-compose.7.0.yml -p ztest70 down -v
+#
+# Ergebnis (2026-07-27, Image 7.0.28): Hauptmodul laeuft voll auf 7.0 LTS
+# (alle Views + Actions HTTP 200, Cytoscape/Leaflet rendern, keine PHP-Fatals).
+# Die Dashboard-Widgets sind 7.4-only — sie registrieren sich zwar und ihr
+# PHP-View liefert 200, haengen aber client-seitig auf "Loading..." (Zabbix'
+# Widget-JS-Basisklasse unterscheidet sich zwischen 7.0 und 7.4). Zum Nachtesten
+# die zwei Widget-Verzeichnisse stagen und die Mounts unten einkommentieren:
+#   rsync -a ../../widget/        module/network_topology_v6_widget/
+#   rsync -a ../../widget_health/ module/network_topology_v6_health_widget/
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      POSTGRES_DB: zabbix
+    volumes:
+      - db-data-70:/var/lib/postgresql/data
+
+  server:
+    image: zabbix/zabbix-server-pgsql:alpine-7.0-latest
+    environment:
+      DB_SERVER_HOST: db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      POSTGRES_DB: zabbix
+    depends_on:
+      - db
+    ports:
+      - "10051:10051"
+
+  web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    environment:
+      DB_SERVER_HOST: db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix
+      POSTGRES_DB: zabbix
+      ZBX_SERVER_HOST: server
+      PHP_TZ: Europe/Berlin
+    depends_on:
+      - db
+      - server
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./module/network_topology_v6:/usr/share/zabbix/modules/network_topology_v6:ro
+      # Widgets (7.4-only, s.o.) — zum Nachtesten stagen + einkommentieren:
+      # - ./module/network_topology_v6_widget:/usr/share/zabbix/modules/network_topology_v6_widget:ro
+      # - ./module/network_topology_v6_health_widget:/usr/share/zabbix/modules/network_topology_v6_health_widget:ro
+
+volumes:
+  db-data-70:
