@@ -146,7 +146,7 @@ class WidgetNetworkTopologyTable extends CWidget {
             if (ao !== bo) return bo - ao;
             var as = a.severity || 0, bs = b.severity || 0;
             if (as !== bs) return bs - as;
-            return String(a.name || '').localeCompare(String(b.name || ''));
+            return String(a.label || '').localeCompare(String(b.label || ''));
         });
 
         var total = rows.length;
@@ -190,7 +190,7 @@ class WidgetNetworkTopologyTable extends CWidget {
                 +   '<span style="color:' + st.color + ';font-weight:600">' + this._esc(st.label) + '</span>'
                 + '</td>'
                 + '<td style="' + td + ';max-width:220px;overflow:hidden;text-overflow:ellipsis;color:'
-                +     this._COL_TEXT + '" title="' + this._esc(r.name) + '">' + this._esc(r.name) + '</td>'
+                +     this._COL_TEXT + '" title="' + this._esc(r.label) + '">' + this._esc(r.label) + '</td>'
                 + '<td style="' + tdR + '">' + this._esc(this._pct(r.cpu)) + '</td>'
                 + '<td style="' + tdR + '">' + this._esc(this._pct(r.memory)) + '</td>'
                 + '<td style="' + tdR + '">' + this._esc(this._ms(r.ping)) + '</td>'
