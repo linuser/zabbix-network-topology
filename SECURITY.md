@@ -11,7 +11,7 @@
 **Bitte nicht** über einen öffentlichen Issue melden — sonst ist die Lücke bekannt,
 bevor ein Fix existiert.
 
-Stattdessen per Mail an **<fox@planetfox.biz>**, gerne mit dem Betreff
+Stattdessen per Mail an **<mail@zabfox.de>**, gerne mit dem Betreff
 `[SECURITY] network-topology`.
 
 Hilfreich im Bericht:
@@ -43,8 +43,7 @@ Fixes gibt es nur für die **jeweils neueste Version** (siehe
 
 **Nein:** Zabbix selbst (→ [Zabbix Security](https://www.zabbix.com/security)),
 die mitgelieferten Fremdbibliotheken (Cytoscape.js, Leaflet — bitte direkt
-upstream melden) und die öffentliche Demo-Instanz. Bitte **keine** automatisierten
-Scans oder Lasttests gegen die Demo.
+upstream melden).
 
 ### Sicherheitsmodell in Kürze
 
@@ -73,7 +72,7 @@ auch ohne fertigen Exploit.
 **Please do not** open a public issue — that would disclose the flaw before a fix
 exists.
 
-Email **<fox@planetfox.biz>** instead, ideally with the subject
+Email **<mail@zabfox.de>** instead, ideally with the subject
 `[SECURITY] network-topology`.
 
 Useful in a report:
@@ -100,10 +99,9 @@ Backports to older versions are not planned.
 `topology/`, the frontend in `assets/js/`, the three widget modules in `widget*/`,
 and the shipped scripts `deploy.sh`, `nt-install.sh`, `tools/`.
 
-**Out of scope:** Zabbix itself (→ [Zabbix Security](https://www.zabbix.com/security)),
-bundled third-party libraries (Cytoscape.js, Leaflet — please report upstream), and
-the public demo instance. Please run **no** automated scans or load tests against
-the demo.
+**Out of scope:** Zabbix itself (→ [Zabbix Security](https://www.zabbix.com/security))
+and the bundled third-party libraries (Cytoscape.js, Leaflet — please report those
+upstream).
 
 ### Security model in brief
 

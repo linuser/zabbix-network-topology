@@ -44,6 +44,12 @@ class WidgetNetworkTopologyTable extends CWidget {
             } catch (e) {
                 this._groupids = [];
             }
+            // s. Topology-Widget: data-groupids kommt leer an, die Feldwerte
+            // stehen nur in this._fields. Ohne Fallback haengt das Widget je
+            // nach Timing auf "Loading...".
+            if (!this._groupids.length && this._fields && this._fields.groupids) {
+                this._groupids = this._fields.groupids;
+            }
         } else {
             // Fallback: in Zabbix 7 ist die View-DOM bei onStart oft noch nicht
             // gesetzt -> Config direkt aus this._fields lesen (sonst haengt das

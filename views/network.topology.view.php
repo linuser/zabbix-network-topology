@@ -140,7 +140,7 @@ $selected_data = array_map(
                         'Network Topology for Zabbix ' . (static function() {
                             $m = @json_decode((string) @file_get_contents(dirname(__DIR__) . '/manifest.json'), true);
                             return 'v' . (is_array($m) && !empty($m['version']) ? $m['version'] : '?');
-                        })() . ' — © Alexander Fox | PlaNet Fox — AGPL-3.0'
+                        })() . ' — © Alexander Fox | PlaNet Fox — AGPL-3.0 — zabfox.de'
                     ))
             )
     )

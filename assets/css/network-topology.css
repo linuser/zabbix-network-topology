@@ -115,13 +115,6 @@ body.nt-wallboard .nt-footer { display: none; }
 #nt-detail::-webkit-scrollbar { width: 4px; }
 #nt-detail::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
 
-/* ── SVG node label (paint-order for text outline) ───────── */
-.nt-lbl {
-    paint-order: stroke;
-    stroke: rgba(240,242,245,0.8);
-    stroke-width: 3px;
-}
-
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 900px) {
     #nt-detail { width: 180px; }
@@ -178,28 +171,6 @@ body.nt-wallboard .nt-footer { display: none; }
 
 #nt-root.nt-dark .nt-legend span[style*="color:#475569"] {
     color: #8b949e !important;
-}
-
-#nt-root.nt-dark .nt-lbl {
-    fill: #e6edf3;
-    stroke: rgba(13,17,23,0.8);
-}
-
-/* Icons in dark mode */
-#nt-root.nt-dark .nt-node path[stroke="#475569"] {
-    stroke: #94a3b8;
-}
-
-/* Dead host skull — dark mode */
-#nt-root.nt-dark .nt-node path[fill="#cbd5e1"] {
-    fill: #334155;
-}
-#nt-root.nt-dark .nt-node rect[fill="#cbd5e1"] {
-    fill: #334155;
-}
-#nt-root.nt-dark .nt-node path[stroke="#94a3b8"],
-#nt-root.nt-dark .nt-node rect[stroke="#94a3b8"] {
-    stroke: #64748b;
 }
 
 /* ── Toolbar-Buttons: einheitliche einzeilige Höhe ─────────

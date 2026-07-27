@@ -1,127 +1,109 @@
 # Network Topology for Zabbix
 
 Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
+*Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisation, built on Cytoscape.js and Leaflet.*
 
 ![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4-red)
-![Version](https://img.shields.io/badge/version-4.38.2-blue)
+![Version](https://img.shields.io/badge/version-4.38.3-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
-**[🌐 Projektseite zabfox.de](https://zabfox.de)** · **[▶ Live-Demo](https://demo.zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](INSTALL.md)**
+**[🌐 zabfox.de](https://zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](INSTALL.md)** · **[🤝 Contributing](CONTRIBUTING.md)**
 
-## Was ist das?
+**🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english)**
 
-**Network Topology for Zabbix** ist ein Frontend-Modul für **Zabbix 7.0 LTS und 7.4**, das Hosts,
-Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive
-Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es,
-_wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
+> Technische Modul-ID / technical module id: `network_topology_v6` — das Installationsverzeichnis **muss** genau so heißen. Das „v6" ist die interne Modul-Lineage, nicht die Release-Version.
 
-Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene
-Link-Auslastung) · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast ·
-Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/EN.
-
-> Technische Modul-ID: `network_topology_v6` (installiert als Verzeichnis gleichen
-> Namens). Das „v6" ist die interne Modul-Lineage, nicht die Release-Version — die
-> steht im Badge oben und im [CHANGELOG](CHANGELOG.md).
+---
 
 ## Screenshots
 
-**Technische Topologie** — Force-Directed Graph mit Severity-Ringen, CPU/Memory/Ping/Traffic als Pie-Charts und Per-Link-Weathermap (gemessene Interface-Auslastung je Kante).
+**Technische Topologie** — Force-Directed Graph mit Severity-Ringen, CPU/Memory/Ping/Traffic als Pie-Charts und Per-Link-Weathermap.
+*Technical topology — force-directed graph with severity rings, CPU/memory/ping/traffic pie charts and per-link weathermap.*
 
-![Technische Topologie](screenshots/01-technical-graph.png)
+![Technische Topologie / technical topology](screenshots/01-technical-graph.png)
 
-**What-if-Ausfallsimulation** — Rechtsklick auf einen Host → „Simulate failure": das Modul markiert in Echtzeit, welche Hosts dadurch ihre Verbindung zum Netz-Uplink verlieren (hier: 1 Ausfall → 3 abgeschnittene Hosts).
+**What-if-Ausfallsimulation** — Rechtsklick auf einen Host → „Simulate failure": das Modul markiert, welche Hosts dadurch ihre Verbindung zum Netz-Uplink verlieren.
+*What-if failure simulation — right-click a host → "Simulate failure": the module marks every host that loses its path to the network uplink.*
 
-![What-if-Ausfallsimulation](screenshots/02-whatif-simulation.gif)
+![What-if-Simulation / what-if simulation](screenshots/02-whatif-simulation.gif)
 
-**Item-Pivot mit Heatmap** — beliebiges Item-Key-Pattern (z. B. `vfs.fs.size[*,pused]`) als Spalten über alle Hosts der Gruppe, farbcodiert nach Wert, mit Perzentil-Aggregaten (P50/P95/P99) und CSV-Export.
+**Item-Pivot mit Heatmap** — beliebiges Item-Key-Pattern (z. B. `vfs.fs.size[*,pused]`) als Spalten über alle Hosts, farbcodiert, mit Perzentilen (P50/P95/P99) und CSV-Export.
+*Item pivot with heatmap — any item key pattern as columns across all hosts, colour-coded, with percentiles and CSV export.*
 
-![Item-Pivot mit Heatmap](screenshots/07-table-items.png)
+![Item-Pivot / item pivot](screenshots/07-table-items.png)
 
 <table>
 <tr>
-<td width="50%"><img src="screenshots/03-management.png" alt="Management-Wallboard"><br><sub><b>Management</b> — Hosts nach Gerätetyp gruppiert (Firewall/Switch/Server/…), mit Problem-Badges und CPU/RAM je Kachel.</sub></td>
-<td width="50%"><img src="screenshots/06-health.png" alt="Health-Score"><br><sub><b>Health</b> — Health-Score pro Hostgruppe mit 14-Tage-Verlauf und Offline/Stale/Critical-Aufschlüsselung.</sub></td>
+<td width="50%"><img src="screenshots/03-management.png" alt="Management"><br><sub><b>Management</b> — Hosts nach Gerätetyp gruppiert, mit Problem-Badges und CPU/RAM je Kachel.<br><i>Hosts grouped by device type, with problem badges and CPU/RAM per tile.</i></sub></td>
+<td width="50%"><img src="screenshots/06-health.png" alt="Health"><br><sub><b>Health</b> — Health-Score pro Hostgruppe mit 14-Tage-Verlauf.<br><i>Health score per host group with a 14-day trend.</i></sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="screenshots/04-table.png" alt="Tabellen-Ansicht"><br><sub><b>Tabelle</b> — Nagios/Icinga-Style Hostliste mit Status, Typ, IP, CPU/Memory/Ping, Traffic und offenen Problemen.</sub></td>
-<td width="50%"><img src="screenshots/05-geo.jpg" alt="Geo-Karte"><br><sub><b>Geo</b> — Leaflet-Karte mit Host-Standorten aus dem Host-Inventory.</sub></td>
+<td width="50%"><img src="screenshots/04-table.png" alt="Tabelle / table"><br><sub><b>Tabelle / Table</b> — Nagios-Style Hostliste mit Status, Typ, IP, CPU/Memory/Ping, Traffic, Problemen.<br><i>Nagios-style host list with status, type, IP, metrics and open problems.</i></sub></td>
+<td width="50%"><img src="screenshots/05-geo.jpg" alt="Geo"><br><sub><b>Geo</b> — Leaflet-Karte mit Host-Standorten aus dem Host-Inventory.<br><i>Leaflet map with host locations from the host inventory.</i></sub></td>
 </tr>
 </table>
 
-> Screenshots aus der öffentlichen Demo ([demo.zabfox.de](https://demo.zabfox.de)).
+---
 
-## Features
+## 🇩🇪 Deutsch
 
-### Vier Visualisierungs-Modi
+### Was ist das?
+
+**Network Topology for Zabbix** ist ein Frontend-Modul für **Zabbix 7.0 LTS und 7.4**, das Hosts, Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es, _wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
+
+Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/EN.
+
+### Features
+
+**Vier Visualisierungs-Modi**
 
 - **Technisch** — Force-Directed Graph mit Cytoscape.js. Knoten zeigen CPU/Memory/Ping/Traffic als Pie-Charts, Severity als Ring-Farbe.
 - **Management** — Hosts gruppiert nach Device-Type (Firewall/Switch/Server/etc.) als Wallboard-Kacheln.
-- **Tabelle** — Nagios/Icinga-Style Hostliste mit zwei Modi:
-  - **Hosts** — Status, Type, IP, CPU, Memory, Ping, Traffic, Probleme pro Host
-  - **Items** — Pivot-Tabelle: Hosts × Items (z.B. alle Disks der Hostgruppe)
-- **Geo** — Leaflet-Karte mit GPS-Koordinaten aus dem Host-Inventory
+- **Tabelle** — Nagios/Icinga-Style Hostliste mit zwei Modi: **Hosts** (Status, Type, IP, CPU, Memory, Ping, Traffic, Probleme) und **Items** (Pivot: Hosts × Items, z. B. alle Disks der Hostgruppe).
+- **Geo** — Leaflet-Karte mit GPS-Koordinaten aus dem Host-Inventory.
 
-> **Items-Pivot — Voraussetzung (Templates):** Die eingebauten Presets suchen nach den Item-Keys der Standard-Linux-Templates. Ist keines davon zugewiesen, bleibt die Pivot leer („Keine matching Items gefunden") — der Pivot-*Mechanismus* ist ok, es fehlen nur die passenden Items.
+> **Items-Pivot — Voraussetzung (Templates):** Die eingebauten Presets suchen nach den Item-Keys der Standard-Linux-Templates. Ist keines davon zugewiesen, bleibt die Pivot leer („Keine matching Items gefunden") — der Mechanismus ist ok, es fehlen nur die passenden Items.
 >
 > | Preset | Item-Keys | Liefert das Template |
 > |---|---|---|
-> | Disks, Block-Device-IO | `vfs.fs.size[*,pused]`, `vfs.dev.util[*]`, `vfs.dev.*.rate[*]`, `vfs.dev.*.await[*]` | **Linux by Zabbix agent** (bzw. *… agent active*) — Filesystem- + Block-Device-Discovery |
+> | Disks, Block-Device-IO | `vfs.fs.size[*,pused]`, `vfs.dev.util[*]`, `vfs.dev.*.rate[*]` | **Linux by Zabbix agent** |
 > | CPU, Memory | `system.cpu.util`, `vm.memory.size[*]` | dasselbe Template |
-> | Netz | `net.if.in[*]`, `net.if.out[*]` | **Linux by Zabbix agent** — Network-Interface-Discovery |
+> | Netz | `net.if.in[*]`, `net.if.out[*]` | **Linux by Zabbix agent** |
 > | Ping | `icmpping*` | Template **ICMP Ping** |
 >
-> **SNMP-Switches** (`ifHCInOctets[…]`) und **Windows** liefern *andere* Keys — dafür statt der Presets ein **Custom-Pattern** eingeben (das Dropdown zeigt unter „Discovered" die real vorhandenen Keys deiner Auswahl).
+> **SNMP-Switches** (`ifHCInOctets[…]`) und **Windows** liefern *andere* Keys — dafür ein **Custom-Pattern** eingeben; das Dropdown zeigt unter „Discovered" die real vorhandenen Keys.
 
-### Layout-Optionen
+**Layout**
 
 - **Cluster-Modi** für Multi-Group-Auswahl: Auto / Spalten / Reihen / Aus
-  - 2-3 Gruppen → vertikale Spalten
-  - 4+ Gruppen → horizontale Reihen
 - **Group-View** — alle Hosts einer Gruppe als ein Aggregat-Knoten
-- **Force-Layout** mit cose, oder Hierarchie / Kreis / Concentric per Toggle
-- **Convex-Hull-Lassos** um Hostgroups (gestrichelte Linie + Label)
+- **Force-Layout** (cose), Hierarchie, Kreis oder Concentric per Toggle
+- **Convex-Hull-Lassos** um Hostgroups
 
-### Datenfluss
+**Datenfluss**
 
-- **Live-Refresh** alle 30s (toggelbar)
-- **History-Mode** mit Slider — Trigger-Status zur ausgewählten Zeit (1h/24h/7d)
-- **Item-Pivot** — beliebiges Item-Key-Pattern (z.B. `vfs.fs.size[*,pused]`) als Spalten
-- **Manuelle Links** zwischen Hosts (Star-Mode)
-- **Notizen + Pins** pro Host (lokal, im localStorage)
-- **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung (Setup: [LLDP-SETUP.md](LLDP-SETUP.md#port-zu-port--per-link-weathermap))
+- **Live-Refresh** alle 30 s (abschaltbar)
+- **History-Mode** mit Slider — Trigger-Status zur ausgewählten Zeit (1 h/24 h/7 d)
+- **Item-Pivot** — beliebiges Item-Key-Pattern als Spalten
+- **Manuelle Links** zwischen Hosts, **Notizen + Pins** pro Host (lokal im localStorage)
+- **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](LLDP-SETUP.md#port-zu-port--per-link-weathermap))
 
-### Custom-Tags am Host
+**Custom-Tags am Host**
 
-- `nt:icon=<typ>` — Device-Type überschreiben (firewall/router/switch/wireless/server/storage/...)
+- `nt:icon=<typ>` — Device-Type überschreiben (firewall/router/switch/server/storage/…)
 - `nt:label=<text>` — alternativer Anzeigename
 - `nt:note=<text>` — Notiz-Sticker am Knoten
 - `nt:link=<label>|<url>` — Custom-Link im Kontextmenü (mehrfach möglich)
 - `nt:show=<key>` — zusätzlicher Item-Wert im Tooltip
-- `nt:parent=<hostname>` — Träger-Host deklarieren (VM→Hypervisor, Container→Node, Blade→Chassis). Zeichnet eine gerichtete **hosts**-Kante Parent→Child (violett, Pfeil auf den gehosteten Host). Die What-if-Simulation behandelt sie als **harte Abhängigkeit**: fällt der Parent aus, fällt der Child — unabhängig vom Netzpfad. Wert = technischer oder Anzeige-Name des Parent-Hosts.
+- `nt:parent=<hostname>` — Träger-Host deklarieren (VM→Hypervisor, Container→Node). Zeichnet eine gerichtete **hosts**-Kante und gilt der What-if-Simulation als **harte Abhängigkeit**: fällt der Parent aus, fällt der Child — unabhängig vom Netzpfad.
 
-### Detail-Panel
+**Weitere UI**
 
-Klick auf Knoten/Zeile → rechte Seitenleiste mit:
-- Severity, CPU, Memory, Ping, Traffic
-- Geräte-Typ + Custom-Indikator
-- Interface (Agent/SNMP/IPMI/JMX) + Proxy-Info
-- Action-Buttons: Latest Data, Probleme, Graphs, Bearbeiten
+Detail-Panel je Host (Severity, Metriken, Interface, Proxy, Action-Buttons) · Dark-Mode · Fullscreen · Zoom + Fit · Mini-Map · Severity-Filter-Pills · Suchfeld mit Query-Sprache · Layout-Presets.
 
-### UI-Polish
+### Installation
 
-- Dark-Mode-Toggle
-- Fullscreen
-- Zoom-In/Out + Fit
-- Mini-Map unten rechts
-- Severity-Filter-Pills (Disaster/High/Avg/Warn/Info/Normal togglebar)
-- Suchfeld (Host/IP/Type/Interface/Proxy)
-- Hide/Show Labels
-- Layout-Presets (Save/Load/Delete)
-- Auto-Refresh-Toggle
-
-## Installation
-
-📦 **Ausführliche, zweisprachige Anleitung: [INSTALL.md](INSTALL.md) (DE/EN)** — Voraussetzungen, Widgets, Integration, Aus-Source-Bauen, Troubleshooting.
+📦 **Ausführliche, zweisprachige Anleitung: [INSTALL.md](INSTALL.md)** — Voraussetzungen, RHEL/SELinux, Widgets, Aus-Source-Bauen, Troubleshooting.
 
 Kurzfassung (das Verzeichnis **muss** `network_topology_v6` heißen):
 
@@ -132,161 +114,219 @@ sudo chown -R root:root network_topology_v6
 sudo systemctl reload php8.3-fpm
 ```
 
-In Zabbix-UI: Administration → General → Modules → Scan directory → "Network Topology for Zabbix" aktivieren.
+Dann in der Zabbix-UI: **Administration → General → Modules → Scan directory** → „Network Topology for Zabbix" aktivieren. Aufruf über **Monitoring → Network Topology for Zabbix**.
 
-Aufruf via Monitoring → Network Topology for Zabbix.
+### Kanten / Topologie (LLDP)
 
-## Kanten / Topologie (LLDP)
+Die **Verbindungen (Kanten)** entstehen aus den LLDP/CDP-Nachbar-Tabellen der Geräte, die per SNMP an Zabbix geliefert werden. **Knoten da, aber keine Kanten?** → 📡 **[LLDP-SETUP.md](LLDP-SETUP.md)**: was auf Switches/Clients/Zabbix zu tun ist, eine **Vendor-Matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / MikroTik) und ein Test-Kommando zum Gegenchecken.
 
-Die **Verbindungen (Kanten)** entstehen aus den LLDP/CDP-Nachbar-Tabellen der Geräte, die per SNMP an Zabbix geliefert werden. **Siehst du Knoten aber keine Kanten?** → 📡 **[LLDP-SETUP.md](LLDP-SETUP.md)**: was auf Switches/Clients/Zabbix zu tun ist, eine **Vendor-Matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / MikroTik — was liefert Kanten, was braucht API/Handarbeit) und ein Test-Kommando zum Gegenchecken.
+### Dashboard-Widgets (optional)
 
-## Dashboard-Widget (optional)
-
-Es gibt **drei separate Widget-Module**, die die Daten dieses Hauptmoduls in Dashboard-Kacheln rendern:
+Drei separate Widget-Module rendern die Daten des Hauptmoduls in Dashboard-Kacheln:
 
 - [`widget/`](widget/) — **Topologie-Graph** (reduzierte Tech-/Mgmt-Sicht)
 - [`widget_health/`](widget_health/) — **Health-Score** pro Hostgruppe
-- [`widget_table/`](widget_table/) — **Tabelle** (Nagios-Style Hostliste: Status/CPU/Mem/Ping/Traffic/Probleme)
+- [`widget_table/`](widget_table/) — **Tabelle** (Status/CPU/Mem/Ping/Traffic/Probleme)
 
-Alle nutzen dieselbe `network.topology.v6.data`-Action des Hauptmoduls (kein zweites Backend), konfigurierbar pro Widget-Instanz (Hostgroups, Filter, …).
+Alle nutzen dieselbe `network.topology.v6.data`-Action (kein zweites Backend). **Voraussetzung:** Hauptmodul installiert + aktiviert.
 
-**Voraussetzung:** Hauptmodul muss installiert + enabled sein.
+> **Zabbix-Version:** Die Widgets brauchen **Zabbix 7.4**. Auf **7.0 LTS** registrieren sie sich zwar, bleiben aber wegen der abweichenden Widget-JS-Basisklasse auf „Loading…" hängen. Das **Hauptmodul** läuft auf **7.0 LTS und 7.4**.
 
-> **Zabbix-Version:** Die Dashboard-Widgets brauchen **Zabbix 7.4**. Auf **7.0 LTS** registrieren sie sich zwar (PHP-View liefert 200), bleiben aber wegen der abweichenden Widget-JS-Basisklasse auf „Loading…" hängen. Das **Hauptmodul** läuft dagegen auf **7.0 LTS und 7.4**.
+### Sicherheit
 
-Am einfachsten alle drei per [`deploy.sh`](deploy.sh):
+- **CSRF:** Lesende Actions prüfen `requireAjax()` (Header `X-Requested-With`) — same-origin-Sessions können ihn setzen, cross-origin nicht (CORS-Preflight). Die einzige schreibende Action (Wartungsfenster) prüft zusätzlich einen echten Zabbix-CSRF-Token und ist auf `USER_TYPE_ZABBIX_ADMIN` **plus** Host-Schreibrecht gegated.
+- **Permissions:** Alle Actions prüfen den User-Typ; IDs vom Client werden gegen `API::…->get()` geschnitten statt ihnen zu vertrauen.
+- **XSS / Escaping-Konvention** (verbindlich): Jeder Wert aus Zabbix oder dem Netz — Host-/Gruppen-/Proxy-/Item-Name, Item-**Werte**, Notizen, IP und v. a. **LLDP/CDP-Nachbarnamen** (kommen per SNMP von _fremden_ Geräten; ein Rogue-Device kann `<script>` announcen) — muss durch `esc()` laufen oder über `textContent` gesetzt werden. Zwei CI-Gates wachen darüber: [`tools/check-xss.sh`](tools/check-xss.sh) und ESLint `no-unsanitized` — beide decken auch die Widget-Module ab.
+- **SQL-Injection:** `(int)`-Cast bzw. `dbConditionInt()`; genau eine Rohquery im gesamten Code.
+- **Grenzen:** Item-Pattern min. 3 Nicht-Wildcard-Zeichen / max. 5000 Items · History max. 50 000 Events und 7 Tage · Spark max. 50 hostids · `nt:link`-URL max. 2048 Zeichen, nur http/https.
+
+Sicherheitslücke gefunden? → [SECURITY.md](SECURITY.md) (bitte **nicht** als öffentliches Issue).
+
+### Browser
+
+Aktuelle Chrome, Firefox, Safari, Edge. ES6-Module (kein IE11), `fetch`, CSS `inset`. Mobil: Touch + Long-Press fürs Kontextmenü.
+
+### Bekannte Einschränkungen
+
+- Im History-Mode wird nur Severity zurückgespielt (CPU/Memory/Traffic bleiben live)
+- Items-Pivot zeigt nur numerische Items (FLOAT/UINT64)
+- Max. 7 Tage History-Range
+- Geo-Tab braucht Hosts mit `inventory.location_lat` + `location_lon`
+- LLDP-Kanten brauchen Nachbar-Items per SNMP → [LLDP-SETUP.md](LLDP-SETUP.md)
+- Zabbix 7.0+ für Proxy-Group-Info (in 6.x leer)
+- **Dashboard-Widgets nur Zabbix 7.4**; das Hauptmodul läuft auf 7.0 LTS + 7.4
+
+### Feedback & Mitmachen
+
+- **Bug gefunden?** → [Issue anlegen](https://github.com/linuser/zabbix-network-topology/issues). Bitte Zabbix-Version, PHP-Version und bei fehlenden Kanten den SNMP-Vendor angeben.
+- **Patch beisteuern?** → [CONTRIBUTING.md](CONTRIBUTING.md) — dort stehen die drei Dinge, die die CI hart erzwingt.
+- **Sicherheitslücke?** → [SECURITY.md](SECURITY.md), vertraulich per Mail.
+
+---
+
+## 🇬🇧 English
+
+### What is this?
+
+**Network Topology for Zabbix** is a frontend module for **Zabbix 7.0 LTS and 7.4** that visualises hosts, host groups, problems, traffic, health status and geo data as an **interactive network topology** — instead of seeing hosts as a flat list, you see _how_ they connect (discovered via LLDP/CDP), where it hurts, and what follows from it.
+
+Highlights: live graph with severity rings · **port-to-port weathermap** (measured link utilisation) · what-if failure simulation & root cause · capacity forecast · maintenance straight from the map · health score per host group · geo map · wallboard mode · German/English UI.
+
+### Features
+
+**Four visualisation modes**
+
+- **Technical** — force-directed graph (Cytoscape.js). Nodes show CPU/memory/ping/traffic as pie charts, severity as ring colour.
+- **Management** — hosts grouped by device type (firewall/switch/server/…) as wallboard tiles.
+- **Table** — Nagios/Icinga-style host list in two modes: **Hosts** (status, type, IP, CPU, memory, ping, traffic, problems) and **Items** (pivot: hosts × items, e.g. every disk in the group).
+- **Geo** — Leaflet map using GPS coordinates from the host inventory.
+
+> **Item pivot — prerequisite (templates):** the built-in presets look for the item keys of the standard Linux templates. With none of them linked, the pivot stays empty ("no matching items") — the mechanism is fine, the items are simply missing.
+>
+> | Preset | Item keys | Provided by |
+> |---|---|---|
+> | Disks, block device IO | `vfs.fs.size[*,pused]`, `vfs.dev.util[*]`, `vfs.dev.*.rate[*]` | **Linux by Zabbix agent** |
+> | CPU, memory | `system.cpu.util`, `vm.memory.size[*]` | same template |
+> | Network | `net.if.in[*]`, `net.if.out[*]` | **Linux by Zabbix agent** |
+> | Ping | `icmpping*` | **ICMP Ping** template |
+>
+> **SNMP switches** (`ifHCInOctets[…]`) and **Windows** expose *different* keys — use a **custom pattern** there; the dropdown lists the keys actually present under "Discovered".
+
+**Layout**
+
+- **Cluster modes** for multi-group selections: auto / columns / rows / off
+- **Group view** — every host of a group collapsed into one aggregate node
+- **Force layout** (cose), hierarchy, circle or concentric via toggle
+- **Convex-hull lassos** around host groups
+
+**Data flow**
+
+- **Live refresh** every 30 s (can be turned off)
+- **History mode** with slider — trigger state at the selected time (1 h/24 h/7 d)
+- **Item pivot** — any item key pattern as columns
+- **Manual links** between hosts, **notes + pins** per host (local, in localStorage)
+- **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](LLDP-SETUP.md))
+
+**Custom host tags**
+
+- `nt:icon=<type>` — override the device type (firewall/router/switch/server/storage/…)
+- `nt:label=<text>` — alternative display name
+- `nt:note=<text>` — note sticker on the node
+- `nt:link=<label>|<url>` — custom link in the context menu (repeatable)
+- `nt:show=<key>` — extra item value in the tooltip
+- `nt:parent=<hostname>` — declare a carrier host (VM→hypervisor, container→node). Draws a directed **hosts** edge, and the what-if simulation treats it as a **hard dependency**: if the parent dies, the child dies — regardless of the network path.
+
+**More UI**
+
+Per-host detail panel (severity, metrics, interface, proxy, action buttons) · dark mode · fullscreen · zoom + fit · mini-map · severity filter pills · search field with a small query language · layout presets.
+
+### Installation
+
+📦 **Full bilingual guide: [INSTALL.md](INSTALL.md)** — requirements, RHEL/SELinux, widgets, building from source, troubleshooting.
+
+Short version (the directory **must** be named `network_topology_v6`):
 
 ```bash
-./deploy.sh <server> widgets     # nur die Widgets (Hauptmodul schon da)
-# oder:  ./deploy.sh <server> all    (Hauptmodul + Widgets)
+cd /usr/share/zabbix/ui/modules
+sudo unzip ~/Downloads/network_topology_v6.zip
+sudo chown -R root:root network_topology_v6
+sudo systemctl reload php8.3-fpm
 ```
 
-Dann **Scan directory** → die drei Module enablen: „Network Topology for Zabbix — Widget", „— Health Widget", „NT Table" → im Dashboard-Editor verfügbar.
+Then in the Zabbix UI: **Administration → General → Modules → Scan directory** → enable "Network Topology for Zabbix". Open it via **Monitoring → Network Topology for Zabbix**.
 
-## Architektur
+### Edges / topology (LLDP)
+
+**Edges** come from the LLDP/CDP neighbour tables of your devices, delivered to Zabbix via SNMP. **Nodes but no edges?** → 📡 **[LLDP-SETUP.md](LLDP-SETUP.md)**: what to configure on switches/clients/Zabbix, a **vendor matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / MikroTik) and a test command to verify.
+
+### Dashboard widgets (optional)
+
+Three separate widget modules render the main module's data as dashboard tiles:
+
+- [`widget/`](widget/) — **topology graph** (reduced tech/mgmt view)
+- [`widget_health/`](widget_health/) — **health score** per host group
+- [`widget_table/`](widget_table/) — **table** (status/CPU/mem/ping/traffic/problems)
+
+All consume the same `network.topology.v6.data` action (no second backend). **Prerequisite:** the main module installed and enabled.
+
+> **Zabbix version:** the widgets require **Zabbix 7.4**. On **7.0 LTS** they do register, but stay stuck on "Loading…" because the widget JS base class differs. The **main module** runs on **7.0 LTS and 7.4**.
+
+### Security
+
+- **CSRF:** read actions require `requireAjax()` (`X-Requested-With` header) — same-origin sessions can set it, cross-origin cannot (CORS preflight). The single writing action (maintenance windows) additionally verifies a real Zabbix CSRF token and is gated on `USER_TYPE_ZABBIX_ADMIN` **plus** host write permission.
+- **Permissions:** every action checks the user type; client-supplied IDs are intersected against `API::…->get()` rather than trusted.
+- **XSS / escaping convention** (binding): every value from Zabbix or from the network — host/group/proxy/item names, item **values**, notes, IPs and especially **LLDP/CDP neighbour names** (announced by _foreign_ devices via SNMP; a rogue device can announce `<script>`) — must pass through `esc()` or be set via `textContent`. Two CI gates enforce this: [`tools/check-xss.sh`](tools/check-xss.sh) and ESLint `no-unsanitized` — both cover the widget modules as well.
+- **SQL injection:** `(int)` casts / `dbConditionInt()`; exactly one raw query in the whole codebase.
+- **Limits:** item pattern min. 3 non-wildcard chars / max. 5000 items · history max. 50,000 events and 7 days · spark max. 50 host ids · `nt:link` URL max. 2048 chars, http/https only.
+
+Found a vulnerability? → [SECURITY.md](SECURITY.md) (please **not** as a public issue).
+
+### Browsers
+
+Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inset`. Mobile: touch + long-press for the context menu.
+
+### Known limitations
+
+- History mode replays severity only (CPU/memory/traffic stay live)
+- Item pivot shows numeric items only (FLOAT/UINT64)
+- History range capped at 7 days
+- Geo tab needs hosts with `inventory.location_lat` + `location_lon`
+- LLDP edges need neighbour items via SNMP → [LLDP-SETUP.md](LLDP-SETUP.md)
+- Zabbix 7.0+ for proxy group info (empty on 6.x)
+- **Dashboard widgets are Zabbix 7.4 only**; the main module runs on 7.0 LTS + 7.4
+
+### Feedback & contributing
+
+- **Found a bug?** → [open an issue](https://github.com/linuser/zabbix-network-topology/issues). Please include your Zabbix version, PHP version, and for missing edges the SNMP vendor.
+- **Want to send a patch?** → [CONTRIBUTING.md](CONTRIBUTING.md) — it lists the three things CI enforces strictly.
+- **Security issue?** → [SECURITY.md](SECURITY.md), confidentially by mail.
+
+---
+
+## Architektur / Architecture
 
 ```
 network_topology_v6/
-├── manifest.json              Modul-Manifest mit 14 registrierten Actions
-├── Module.php                 Menü-Eintrag-Registration
+├── manifest.json              Modul-Manifest, 14 Actions / module manifest, 14 actions
+├── Module.php                 Menü-Eintrag / menu registration
 ├── views/
-│   └── network.topology.view.php   HTML-Container + JS-Loader
-├── actions/                        14 Actions (Daten als JSON via layout.json)
-│   ├── NetworkTopologyView.php               rendert die Seite (layout.htmlpage)
-│   ├── NetworkTopologyData.php               nodes + edges + traffic + LLDP/CDP + Health + topo_changes
-│   ├── NetworkTopologyHistory.php            Trigger-Events für ein Zeitfenster (Stats-Tab)
-│   ├── NetworkTopologyItems.php              Items-Pivot (Wildcard-Pattern)
-│   ├── NetworkTopologyItemHistory.php        Batch-Sparklines für den Pivot
-│   ├── NetworkTopologyItemCount.php          Live-Autocomplete-Count fürs Pattern
-│   ├── NetworkTopologySpark.php              CPU/Ping-History für Tooltip
-│   ├── NetworkTopologyDiscoverPatterns.php   Preset-Pattern-Vorschläge
-│   ├── NetworkTopologyCompliance.php         Compliance-Checks pro Host (Admin)
-│   ├── NetworkTopologyDiag.php               Backend-Telemetrie (Super-Admin)
-│   ├── NetworkTopologyCapacityForecast.php   Link-Kapazitäts-Forecast (Zabbix-Trends)
-│   ├── NetworkTopologyResourceForecast.php   CPU-/Memory-Forecast (Zabbix-Trends)
-│   ├── NetworkTopologyHealthHistory.php      Health-Score-Verlauf (Trapper-Items)
-│   └── NetworkTopologyMaintenance.php        One-Time-Wartung aus der Karte (WRITE, Admin)
+│   └── network.topology.view.php   HTML container + JS loader
+├── actions/                        14 actions (JSON via layout.json)
+│   ├── NetworkTopologyView.php               renders the page (layout.htmlpage)
+│   ├── NetworkTopologyData.php               nodes + edges + traffic + LLDP/CDP + health
+│   ├── NetworkTopologyHistory.php            trigger events for a time window
+│   ├── NetworkTopologyItems.php              item pivot (wildcard pattern)
+│   ├── NetworkTopologyItemHistory.php        batch sparklines for the pivot
+│   ├── NetworkTopologyItemCount.php          live autocomplete count
+│   ├── NetworkTopologySpark.php              CPU/ping history for tooltips
+│   ├── NetworkTopologyDiscoverPatterns.php   preset pattern suggestions
+│   ├── NetworkTopologyCompliance.php         per-host compliance checks (admin)
+│   ├── NetworkTopologyDiag.php               backend telemetry (super admin)
+│   ├── NetworkTopologyCapacityForecast.php   link capacity forecast (trends)
+│   ├── NetworkTopologyResourceForecast.php   CPU/memory forecast (trends)
+│   ├── NetworkTopologyHealthHistory.php      health score history (trapper items)
+│   └── NetworkTopologyMaintenance.php        one-time maintenance (WRITE, admin)
+├── topology/                       HostMetadata · HostTagParser · LldpEdgeBuilder
+│                                   MetricExtractor · NodeBuilder · ProblemLoader
 └── assets/
     ├── css/network-topology.css
     └── js/
-        ├── network-topology.js     Main: switchTab + Init + Refresh-Loop
-        └── modules/                44 ESM-Module (Auswahl s.u.)
+        ├── network-topology.js     main: tab switching, init, refresh loop
+        └── modules/                ~47 ES modules
 ```
 
-### Frontend-Module
+Key frontend modules: `build-elements.js` (Cytoscape node/edge builder) · `render-tech.js` / `render-mgmt.js` / `render-table.js` / `render-geo.js` (the four views) · `items-pivot.js` (pivot table) · `whatif.js` + `root-cause.js` (failure simulation) · `traffic.js` (weathermap) · `aggregation.js` (group view) · `query.js` (table query language) · `storage.js` (user-scoped localStorage) · `utils.js` (`esc()`, formatters) · `i18n.js` + `i18n/{de,en}.js`.
 
-| Datei | Aufgabe |
-|---|---|
-| `aggregation.js` | Group-View: Hostgroups als Aggregat-Knoten |
-| `build-elements.js` | Cytoscape Node/Edge-Builder |
-| `context-menu.js` | Rechtsklick-Menü auf Knoten |
-| `detail-panel.js` | Rechte Seitenleiste mit Host-Details |
-| `export.js` | PNG/PDF/HTML + Audit-Report-Export |
-| `geo-providers.js` | Tile-Server-Definitionen für Leaflet |
-| `group-cluster-layout.js` | Adaptiv: Spalten/Reihen-Layout pro Hostgroup |
-| `group-hulls.js` | Convex-Hull-Lassos um Gruppen |
-| `highlight.js` | Hover-Highlighting + Verbindungs-Edges |
-| `history-mode.js` | Toggle + Slider für Zeit-basierte Trigger-Sicht |
-| `icons.js` | SVG-Icons für 19 Device-Typen |
-| `items-pivot.js` | Items-Pivot-Tabelle mit Preset-Patterns |
-| `layouts.js` | Layout-Konfigurationen (cose, breadthfirst, etc.) |
-| `legend.js` | Severity-Farb-Legende |
-| `manual-links.js` | Star-Mode für manuelle Edges |
-| `minimap.js` | Mini-Map unten rechts |
-| `presets-ui.js` | Save/Load/Delete von Visual-States |
-| `render-geo.js` | Geo-Tab (Leaflet) |
-| `render-mgmt.js` | Management-Tab (Kachel-Layout) |
-| `render-table.js` | Tabellen-Tab mit Hosts/Items-Modi |
-| `render-tech.js` | Technisch-Tab (Hauptmodul, Cytoscape) |
-| `render-tech-style.js` | Cytoscape-Stylesheet-Builder |
-| `severity.js` | Severity-Farben + primaryGroup-Heuristik |
-| `sev-filter.js` | Severity-Filter-Pills |
-| `storage.js` | localStorage-Wrapper, User-scoped |
-| `tabs.js` | Tab-Bar + Switching |
-| `toolbar.js` | Top-Toolbar mit allen Buttons |
-| `tooltip.js` | Hover-Tooltip auf Knoten |
-| `traffic.js` | Edge-Animation + Traffic-Heatmap |
-| `utils.js` | esc(), fmt(), linkCapacity(), Aggregat-Helpers |
+## Lizenz / License
 
-Weitere Feature-Module (Auswahl): `whatif.js` (What-if-Ausfallsimulation),
-`root-cause.js` (Ursache vs. Folge), `render-stats.js` (Stats + Kapazitäts-/Ressourcen-Forecast),
-`render-health.js` (Health-Score + Verlauf), `render-compliance.js`, `render-lldp-quality.js`
-(LLDP-Match-Qualität), `render-diag.js` (Admin-Telemetrie), `path-highlight.js` (BFS-Pfad),
-`diff-mode.js` (Snapshot-Diff), `query.js` (Tabellen-Query-Sprache), `port-labels.js`,
-`topo-notify.js` (Topologie-Änderungs-Toasts), `i18n.js` + `i18n/{de,en}.js` (DE/EN).
+**AGPL-3.0-or-later** — © 2026 PlaNet Fox / Alexander Fox. Volltext / full text: [LICENSE](LICENSE).
 
-## Sicherheit
+Dieses Modul ist ein abgeleitetes Werk des Zabbix-Frontends — es leitet von Zabbix-Klassen (`CController` u. a.) ab und läuft im selben Prozess. Zabbix 7 steht unter der AGPL-3.0; das kombinierte Werk unterliegt daher ebenfalls der AGPL-3.0. Kurz: nutzen, weitergeben und ändern erlaubt — wer es (auch als Netzwerk-Dienst) bereitstellt, muss den Quellcode inkl. eigener Änderungen unter AGPL-3.0 verfügbar machen.
 
-- **CSRF**: Actions setzen `disableCsrfValidation()` (das Frontend hat keinen Zabbix-Form-Token) und prüfen stattdessen `requireAjax()` (Header `X-Requested-With`) als CSRF-Last-Schutz — same-origin-Sessions können den Header setzen, cross-origin nicht (CORS-Preflight). Die einzige schreibende Action (`maintenance`, One-Time-Wartung aus der Karte) ist zusätzlich auf `USER_TYPE_ZABBIX_ADMIN` + Host-Schreibrecht gegated.
-- **Permissions**: alle Actions prüfen `USER_TYPE_ZABBIX_USER`. Permission-Filter auf Hostgroups via `API::HostGroup()->get()` statt Frontend-trust.
-- **XSS / Escaping-Konvention** (verbindlich): Jeder Wert aus Zabbix oder dem Netz — Host-/Gruppen-/Proxy-/Trigger-/Item-Name, Item-**Werte** (String-Items!), Notizen, IP und v. a. **LLDP/CDP-Nachbarnamen** (kommen per SNMP von _entfernten_ Geräten, ein Rogue-Device kann `<script>` announcen) — muss vor dem Einfügen in HTML durch `esc()` (`utils.js`, escapet `& < > " '`) laufen **oder** über `el.textContent` gesetzt werden. Fallstricke: `t()` (i18n) escaped **nicht** (roher Platzhalter-Ersatz) → Werte an `t()` müssen selbst escaped/numerisch sein oder das Ergebnis in `textContent`/`esc()` landen; `toast()` nutzt `textContent` (sicher); Cytoscape-Node-Labels sind Canvas-Text (kein HTML). Der gesamte `innerHTML`-Bestand ist auditiert (0 Lücken). Tripwire fürs Review/CI: [`tools/check-xss.sh`](tools/check-xss.sh) (mit `--strict` Exit 1 bei Verdacht).
-- **SQL-Injection**: `(int)`-Cast oder `dbConditionInt()` bei DB-Zugriffen.
-- **Item-Pattern**: Min 3 Non-Wildcard-Zeichen, max 5000 matching Items.
-- **History**: max 50000 Events, max 7 Tage Range.
-- **Spark**: max 50 hostids pro Call.
-- **nt:link URL**: max 2048 Zeichen, nur http/https, kein CRLF.
-- **nt:link Label**: max 200 Zeichen, kein Control-Char.
-- **Race-Conditions**: Sequence-Counter bei async fetches (History/Items).
+*This module is a derivative work of the Zabbix frontend — it extends Zabbix classes (`CController` and others) and runs in the same process. Zabbix 7 is AGPL-3.0, so the combined work is AGPL-3.0 as well: use, share and modify freely — but anyone who provides it (including as a network service) must make the source, including their own changes, available under AGPL-3.0.*
 
-## Browser-Kompatibilität
+Mitgelieferte Fremdkomponenten / bundled third-party components (Cytoscape.js — MIT, Leaflet 1.9.4 — BSD-2-Clause): [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
-- **Modern Browsers**: Chrome, Firefox, Safari, Edge (alle aktuelle Versionen)
-- **ES6 Modules** (kein IE11)
-- **fetch API**, **CSS inset**, **Surrogate-Paare** für Emoji
-- **Mobile**: Touch + Long-Press für Kontextmenü (taphold-Duration konfigurierbar)
+## Autor / Author
 
-## Bekannte Einschränkungen
-
-- Im History-Mode wird nur Severity zurückgespielt (CPU/Memory/Traffic bleiben Live)
-- Items-Pivot zeigt nur numerische Items (FLOAT/UINT64)
-- Max 7 Tage History-Range
-- Geo-Tab braucht Hosts mit `inventory.location_lat` + `location_lon`
-- LLDP-Edges brauchen Nachbar-Items per SNMP (`lldpRemSysName` / `cdpCacheDeviceId` / `neighbor.sysName` / …) — Setup + Vendor-Matrix: [LLDP-SETUP.md](LLDP-SETUP.md)
-- Zabbix 7.0+ für Proxy-Group-Info (in 6.x leer)
-- **Dashboard-Widgets nur Zabbix 7.4** (Widget-JS-API-Unterschied); das Hauptmodul selbst läuft auf **7.0 LTS + 7.4**
-
-## Feedback & Mitmachen
-
-Das Modul ist frisch veröffentlicht — Rückmeldungen sind ausdrücklich erwünscht.
-
-- **Erst ausprobieren, dann installieren:** [demo.zabfox.de](https://demo.zabfox.de) — läuft mit Demo-Daten, nichts zu installieren.
-- **Bug gefunden?** → [Issue anlegen](https://github.com/linuser/zabbix-network-topology/issues). Hilfreich sind: Zabbix-Version, PHP-Version, und bei fehlenden Kanten der SNMP-Vendor (siehe [LLDP-SETUP.md](LLDP-SETUP.md)).
-- **Sicherheitslücke?** Bitte **nicht** öffentlich melden, sondern per Mail an <fox@planetfox.biz>.
-- **Mehr zum Projekt und weiteren Zabbix-Modulen:** [zabfox.de](https://zabfox.de)
-
-## Lizenz
-
-**AGPL-3.0-or-later** — © 2026 PlaNet Fox / Alexander Fox. Volltext: [LICENSE](LICENSE).
-
-Dieses Modul ist ein abgeleitetes Werk des Zabbix-Frontends — es leitet von
-Zabbix-Klassen (`CController` u. a.) ab und läuft im selben Prozess. Zabbix 7
-steht unter der AGPL-3.0; das kombinierte Werk unterliegt daher ebenfalls der
-AGPL-3.0. Kurz: nutzen, weitergeben und ändern erlaubt — wer es (auch als
-Netzwerk-Dienst) bereitstellt, muss den Quellcode inkl. eigener Änderungen unter
-AGPL-3.0 verfügbar machen.
-
-Mitgelieferte Fremdkomponenten (Cytoscape.js — MIT, Leaflet 1.9.4 — BSD-2-Clause) stehen unter ihren eigenen, permissiven Lizenzen: [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
-
-## Autor
-
-PlaNet Fox / Alexander Fox <fox@planetfox.biz>
+PlaNet Fox / Alexander Fox — <mail@zabfox.de> · [zabfox.de](https://zabfox.de)

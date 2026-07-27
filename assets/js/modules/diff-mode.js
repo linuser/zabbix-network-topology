@@ -12,7 +12,6 @@
 //   saveSnapshot(nodes)      Snapshot setzen aus aktuellem Daten-Array
 //   loadSnapshot()           {ts, byHost} oder null
 //   clearSnapshot()          loescht den Snapshot
-//   hasSnapshot()            bool
 //   computeDiff(nodes, snap) → { new: Set, gone: Set, up: Set, down: Set,
 //                                 sevByHost: Map<id, {old, now}> }
 
@@ -53,10 +52,6 @@ export function loadSnapshot() {
 
 export function clearSnapshot() {
     try { localStorage.removeItem(KEY); } catch (e) {}
-}
-
-export function hasSnapshot() {
-    return loadSnapshot() !== null;
 }
 
 // Vergleicht den aktuellen Daten-Stand gegen den Snapshot. Liefert Sets von

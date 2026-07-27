@@ -13,8 +13,8 @@
 // als die Data.php-Aufteilung und ist bewusst nicht Teil dieses Schritts.
 //
 // Der Gate ist damit scharf fuer alles NEUE: jeder neu hinzugefuegte unsichere
-// Sink laesst die CI rot werden. Fuer neuen Code gibt es die expliziten Helfer in
-// assets/js/modules/dom-safe.js (setText / setStaticHtml).
+// Sink laesst die CI rot werden. Fuer neuen Code gilt: Werte per textContent
+// setzen (kein HTML-Sink) oder vor der Interpolation durch esc() schicken.
 
 import noUnsanitized from 'eslint-plugin-no-unsanitized';
 

@@ -1,0 +1,94 @@
+name: Bug melden
+description: Etwas funktioniert nicht wie erwartet
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Melden! **Sicherheitslücken bitte nicht hier**, sondern
+        vertraulich per Mail — siehe [SECURITY.md](../blob/main/SECURITY.md).
+
+        Bei **fehlenden Kanten im Graphen** lohnt vorher ein Blick in die
+        Vendor-Matrix in [LLDP-SETUP.md](../blob/main/LLDP-SETUP.md) — viele
+        Geräte liefern schlicht keine LLDP-Daten per SNMP.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: Was passiert?
+      description: Und was hättest du stattdessen erwartet?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Schritte zum Reproduzieren
+      placeholder: |
+        1. Monitoring → Network Topology for Zabbix
+        2. Hostgruppe "…" wählen, Apply
+        3. Tab "…" öffnen
+    validations:
+      required: true
+
+  - type: input
+    id: module-version
+    attributes:
+      label: Modul-Version
+      description: Steht im Footer der Modul-Seite (z. B. 4.38.3)
+    validations:
+      required: true
+
+  - type: input
+    id: zabbix-version
+    attributes:
+      label: Zabbix-Version
+      description: z. B. 7.4.12 oder 7.0.28
+    validations:
+      required: true
+
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP-Version
+      description: "`php -v` auf dem Frontend-Server"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Betroffener Bereich
+      options:
+        - Technische Topologie (Graph)
+        - Management-Wallboard
+        - Tabelle / Items-Pivot
+        - Geo-Karte
+        - Health / Stats / Compliance
+        - Dashboard-Widget
+        - Installation / Deploy
+        - Sonstiges / weiß nicht
+    validations:
+      required: true
+
+  - type: input
+    id: snmp-vendor
+    attributes:
+      label: SNMP-Vendor (nur bei fehlenden Kanten)
+      description: Hersteller + Modell des Geräts, das keine Kante bekommt
+      placeholder: z. B. HPE Aruba 2530, Cisco C9200, MikroTik CRS326
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser-Konsole (F12)
+      description: Rote Fehlermeldungen — hilft bei allem, was nicht rendert
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Vorab geprüft
+      options:
+        - label: Nach dem Update „Administration → General → Modules → Scan directory" ausgeführt
+        - label: Seite einmal hart neu geladen (Strg+F5 / ⌘⇧R) — Browser-Cache ausgeschlossen

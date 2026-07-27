@@ -63,6 +63,15 @@ class WidgetNetworkTopology extends CWidget {
             } catch (e) {
                 this._groupids = [];
             }
+            // data-groupids kommt in Zabbix 7.4 leer am Client an — die Feldwerte
+            // stehen zu dem Zeitpunkt nur in this._fields. Ohne diesen Fallback
+            // fetcht das Widget nie und bleibt auf "Loading..." stehen. Welches
+            // Widget es trifft, entschied bisher das Timing: existiert der Canvas
+            // bei onStart schon, greift der (leere) dataset-Zweig; existiert er
+            // noch nicht, rettete der else-Zweig unten die Konfiguration.
+            if (!this._groupids.length && this._fields && this._fields.groupids) {
+                this._groupids = this._fields.groupids;
+            }
         } else {
             this._tab         = this._fields.view_mode === 1 ? 'mgmt' : 'tech';
             this._dataUrl     = 'zabbix.php?action=network.topology.v6.data';
@@ -209,6 +218,12 @@ class WidgetNetworkTopology extends CWidget {
     }
 
     _destroyCy() {
+        // Den ResizeObserver des Layout-Nachlaufs mit abraeumen — sonst bleibt
+        // pro Re-Render einer haengen (Wallboard-Betrieb: ein Leak je Refresh).
+        if (this._ro) {
+            try { this._ro.disconnect(); } catch (e) {}
+            this._ro = null;
+        }
         if (this._cy) {
             try { this._cy.destroy(); } catch (e) {}
             this._cy = null;
@@ -382,11 +397,53 @@ class WidgetNetworkTopology extends CWidget {
         });
 
         this._setupTooltip(canvas);
+        this._hasCola = hasCola;
 
-        var cy = this._cy;
-        setTimeout(function () {
-            if (cy) { cy.resize(); cy.fit(cy.nodes(), 16); }
-        }, 700);
+        // Layout-Nachlauf, sobald der Container echte Groesse hat.
+        //
+        // Im Dashboard ist die Widget-Flaeche beim Init haeufig noch 0px gross.
+        // cose/cola koennen dann nicht verteilen und legen ALLE Knoten auf
+        // {0,0}; das anschliessende fit() zoomt auf eine entartete Bounding-Box
+        // (Zoom 4) — der Graph ist geladen, aber unsichtbar. Ein blosses
+        // resize()+fit() heilt das NICHT, weil die Positionen da schon
+        // feststehen: das Layout muss neu laufen. Das Hauptmodul loest denselben
+        // Race in render-tech.js per ResizeObserver.
+        var self = this;
+        var cy   = this._cy;
+        var done = false;
+        var relayout = function () {
+            if (done || !cy) { return done; }
+            var c = cy.container();
+            if (!c || c.offsetWidth < 50 || c.offsetHeight < 50) { return false; }
+            done = true;
+            cy.resize();
+            var l = cy.layout(self._layoutOpts());
+            l.one('layoutstop', function () { cy.fit(cy.nodes(), 16); });
+            l.run();
+            return true;
+        };
+
+        if (!relayout() && window.ResizeObserver) {
+            if (this._ro) { try { this._ro.disconnect(); } catch (e) {} }
+            this._ro = new ResizeObserver(function () {
+                if (relayout() && self._ro) {
+                    try { self._ro.disconnect(); } catch (e) {}
+                    self._ro = null;
+                }
+            });
+            try { this._ro.observe(cyDiv); } catch (e) {}
+        }
+        // Fallback fuer Browser ohne ResizeObserver bzw. wenn er nicht feuert.
+        setTimeout(relayout, 700);
+    }
+
+    // Layout-Optionen fuer den Nachlauf — ohne Animation, damit das Ergebnis
+    // sofort steht (der Init-Lauf animiert, der Nachlauf soll nur korrigieren).
+    _layoutOpts() {
+        return this._hasCola
+            ? { name: 'cola', animate: false, padding: 16, nodeSpacing: 10,
+                edgeLength: 100, handleDisconnected: true }
+            : { name: 'cose', animate: false, padding: 16, nodeRepulsion: 5000 };
     }
 
     _setupTooltip(canvas) {

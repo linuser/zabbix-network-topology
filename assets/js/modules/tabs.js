@@ -38,7 +38,7 @@ export function applyDarkMode(forceState) {
     root.classList.toggle('nt-dark', nowDark);
 
     const btn = document.getElementById('nt-btn-dark');
-    if (btn) btn.textContent = nowDark ? 'Light' : 'Dark';
+    if (btn) btn.textContent = nowDark ? t('toolbar.light') : t('toolbar.dark');
 
     const activeTab = _getActiveTab();
 
@@ -137,7 +137,7 @@ export function ensureBaseToolbar(wrap) {
         bDark.style.marginLeft = '4px';
         const isDark = !!(document.getElementById('nt-root')
                        && document.getElementById('nt-root').classList.contains('nt-dark'));
-        bDark.textContent = isDark ? 'Light' : 'Dark';
+        bDark.textContent = isDark ? t('toolbar.light') : t('toolbar.dark');
         bDark.addEventListener('click', function() { applyDarkMode(); });
         bar.appendChild(bDark);
     }

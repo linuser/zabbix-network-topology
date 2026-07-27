@@ -208,6 +208,6 @@ Set the module to **Disabled** in the UI, then delete the directory and reload p
 
 ---
 
-**Projektseite / project site: [zabfox.de](https://zabfox.de)** · **Live-Demo: [demo.zabfox.de](https://demo.zabfox.de)** · **Repo + Issues: [github.com/linuser/zabbix-network-topology](https://github.com/linuser/zabbix-network-topology)**
+**Projektseite / project site: [zabfox.de](https://zabfox.de)** · **Repo + Issues: [github.com/linuser/zabbix-network-topology](https://github.com/linuser/zabbix-network-topology)**
 
 *Lizenz / License: **AGPL-3.0-or-later** — © 2026 PlaNet Fox / Alexander Fox. Siehe / see [LICENSE](LICENSE) & [README](README.md).*
