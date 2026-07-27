@@ -54,16 +54,17 @@ sudo systemctl reload php8.3-fpm      # deinen php-fpm-Service anpassen
 
 ### 3. Optional: Dashboard-Widgets
 
-Zwei separate Widget-Module (nutzen die Daten des Hauptmoduls):
+Drei separate Widget-Module (nutzen die Daten des Hauptmoduls) — Topologie-Graph, Health-Score und Tabelle:
 
 ```bash
 cd /usr/share/zabbix/ui/modules
 sudo unzip /pfad/network_topology_v6_widget.zip        -d network_topology_v6_widget
 sudo unzip /pfad/network_topology_v6_health_widget.zip -d network_topology_v6_health_widget
-sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget
+sudo unzip /pfad/network_topology_v6_table_widget.zip  -d network_topology_v6_table_widget
+sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
 sudo systemctl reload php8.3-fpm
 ```
-Dann **Scan directory** → „Network Topology for Zabbix — Widget" bzw. „— Health Widget" aktivieren → im Dashboard-Editor verfügbar.
+Dann **Scan directory** → „Network Topology for Zabbix — Widget", „— Health Widget" bzw. „NT Table" aktivieren → im Dashboard-Editor verfügbar.
 **Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
 
 ### 4. Optional: Topologie-Events + Health-Score-Historie
@@ -152,16 +153,17 @@ sudo systemctl reload php8.3-fpm      # adjust to your php-fpm service
 
 ### 3. Optional: dashboard widgets
 
-Two separate widget modules (they consume the main module's data):
+Three separate widget modules (they consume the main module's data) — topology graph, health score and table:
 
 ```bash
 cd /usr/share/zabbix/ui/modules
 sudo unzip /path/network_topology_v6_widget.zip        -d network_topology_v6_widget
 sudo unzip /path/network_topology_v6_health_widget.zip -d network_topology_v6_health_widget
-sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget
+sudo unzip /path/network_topology_v6_table_widget.zip  -d network_topology_v6_table_widget
+sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
 sudo systemctl reload php8.3-fpm
 ```
-Then **Scan directory** → enable "Network Topology for Zabbix — Widget" / "— Health Widget" → available in the dashboard editor.
+Then **Scan directory** → enable "Network Topology for Zabbix — Widget" / "— Health Widget" / "NT Table" → available in the dashboard editor.
 **Prerequisite:** the main module must be installed + enabled — and **Zabbix 7.4** (the widgets don't run on 7.0 LTS; the main module does).
 
 ### 4. Optional: topology events + health-score history

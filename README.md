@@ -3,7 +3,7 @@
 Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.
 
 ![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4-red)
-![Version](https://img.shields.io/badge/version-4.36.0-blue)
+![Version](https://img.shields.io/badge/version-4.38.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 ## Was ist das?
@@ -129,25 +129,26 @@ Die **Verbindungen (Kanten)** entstehen aus den LLDP/CDP-Nachbar-Tabellen der Ge
 
 ## Dashboard-Widget (optional)
 
-Im Verzeichnis [`widget/`](widget/) liegt ein **separates Zabbix-Modul** vom Typ `widget` das die Daten dieses Hauptmoduls in einer Dashboard-Kachel rendert. Reduzierte Sicht (Tech + Mgmt), gleiche Offline/Stale-Detection, konfigurierbar pro Widget-Instanz (Hostgroups, Default-View, LLDP, Hide-Offline).
+Es gibt **drei separate Widget-Module**, die die Daten dieses Hauptmoduls in Dashboard-Kacheln rendern:
 
-**Voraussetzung:** Hauptmodul muss installiert + enabled sein (das Widget ruft dessen `network.topology.v6.data`-Action).
+- [`widget/`](widget/) — **Topologie-Graph** (reduzierte Tech-/Mgmt-Sicht)
+- [`widget_health/`](widget_health/) — **Health-Score** pro Hostgruppe
+- [`widget_table/`](widget_table/) — **Tabelle** (Nagios-Style Hostliste: Status/CPU/Mem/Ping/Traffic/Probleme)
+
+Alle nutzen dieselbe `network.topology.v6.data`-Action des Hauptmoduls (kein zweites Backend), konfigurierbar pro Widget-Instanz (Hostgroups, Filter, …).
+
+**Voraussetzung:** Hauptmodul muss installiert + enabled sein.
 
 > **Zabbix-Version:** Die Dashboard-Widgets brauchen **Zabbix 7.4**. Auf **7.0 LTS** registrieren sie sich zwar (PHP-View liefert 200), bleiben aber wegen der abweichenden Widget-JS-Basisklasse auf „Loading…" hängen. Das **Hauptmodul** läuft dagegen auf **7.0 LTS und 7.4**.
 
+Am einfachsten alle drei per [`deploy.sh`](deploy.sh):
+
 ```bash
-cd widget
-zip -r /tmp/widget.zip .
-scp /tmp/widget.zip <server>:/tmp/
-ssh <server>
-cd /usr/share/zabbix/ui/modules
-sudo mkdir network_topology_v6_widget
-sudo unzip /tmp/widget.zip -d network_topology_v6_widget
-sudo chown -R root:root network_topology_v6_widget
-sudo systemctl reload php8.3-fpm
+./deploy.sh <server> widgets     # nur die Widgets (Hauptmodul schon da)
+# oder:  ./deploy.sh <server> all    (Hauptmodul + Widgets)
 ```
 
-Dann Scan directory → "Network Topology for Zabbix — Widget" enablen → im Dashboard-Editor verfügbar.
+Dann **Scan directory** → die drei Module enablen: „Network Topology for Zabbix — Widget", „— Health Widget", „NT Table" → im Dashboard-Editor verfügbar.
 
 ## Architektur
 
