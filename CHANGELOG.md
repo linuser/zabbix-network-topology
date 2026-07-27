@@ -2,6 +2,11 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.38.0 — 2026-07-27
+
+### Added
+- **Drittes Dashboard-Widget „NT Table"** (`network_topology_v6_table_widget`): die Tabellen-Ansicht (Nagios-/Icinga-Style Hostliste) als Dashboard-Kachel — **Status** (Severity/Offline/Stale), **Host**, **CPU**, **Mem**, **Ping**, **Traffic** (↓/↑), **offene Probleme**. Sortierung Offline → Severity → Name; konfigurierbar: Hostgroups, Hide-offline, Only-problems, Max-rows. Nutzt dieselbe `network.topology.v6.data`-Action wie der Haupt-Tab (kein zweites Backend), ES5-jsLoader-Stil (Zabbix 7.4) wie die bestehenden Widgets. `deploy.sh` liefert die Widgets jetzt zu dritt aus (`widgets`/`all`-Modus).
+
 ## v4.37.0 — 2026-07-27
 
 ### Added

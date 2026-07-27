@@ -33,9 +33,11 @@ readonly SCRIPT_DIR
 readonly TMP_MAIN="/tmp/network_topology_v6.zip"
 readonly TMP_WIDGET="/tmp/network_topology_v6_widget.zip"
 readonly TMP_HEALTH="/tmp/network_topology_v6_health_widget.zip"
+readonly TMP_TABLE="/tmp/network_topology_v6_table_widget.zip"
 readonly REMOTE_MAIN="/tmp/network_topology_v6.zip"
 readonly REMOTE_WIDGET="/tmp/network_topology_v6_widget.zip"
 readonly REMOTE_HEALTH="/tmp/network_topology_v6_health_widget.zip"
+readonly REMOTE_TABLE="/tmp/network_topology_v6_table_widget.zip"
 
 # ── Arg-Parsing ────────────────────────────────────────────────────────────
 if [[ $# -lt 1 ]]; then
@@ -176,11 +178,13 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     echo "  → $TMP_MAIN ($(du -h "$TMP_MAIN" | cut -f1))"
 fi
 if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
-    rm -f "$TMP_WIDGET" "$TMP_HEALTH"
+    rm -f "$TMP_WIDGET" "$TMP_HEALTH" "$TMP_TABLE"
     (cd "$SCRIPT_DIR/widget"        && zip -rq "$TMP_WIDGET" .)
     (cd "$SCRIPT_DIR/widget_health" && zip -rq "$TMP_HEALTH" .)
+    (cd "$SCRIPT_DIR/widget_table"  && zip -rq "$TMP_TABLE" .)
     echo "  → $TMP_WIDGET ($(du -h "$TMP_WIDGET" | cut -f1))"
     echo "  → $TMP_HEALTH ($(du -h "$TMP_HEALTH" | cut -f1))"
+    echo "  → $TMP_TABLE ($(du -h "$TMP_TABLE" | cut -f1))"
 fi
 
 # ── SCP zum Server ─────────────────────────────────────────────────────────
@@ -189,6 +193,7 @@ if [[ "$MODE" == "main"    || "$MODE" == "all" ]]; then scp -q "${SSH_OPTS[@]}" 
 if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
     scp -q "${SSH_OPTS[@]}" -- "$TMP_WIDGET" "$SERVER:$REMOTE_WIDGET"
     scp -q "${SSH_OPTS[@]}" -- "$TMP_HEALTH" "$SERVER:$REMOTE_HEALTH"
+    scp -q "${SSH_OPTS[@]}" -- "$TMP_TABLE"  "$SERVER:$REMOTE_TABLE"
 fi
 
 # ── Installieren auf dem Server ────────────────────────────────────────────
@@ -206,6 +211,7 @@ set -e
 R_MAIN="$REMOTE_MAIN"
 R_WIDGET="$REMOTE_WIDGET"
 R_HEALTH="$REMOTE_HEALTH"
+R_TABLE="$REMOTE_TABLE"
 cd "$REMOTE_MODULES"
 # Staging-Pattern: erst nach TEMP entpacken, dann atomar tauschen. Vorher
 # lief "rm -rf" VOR unzip — schlug unzip fehl (kaputtes/fehlendes Zip),
@@ -223,11 +229,13 @@ $([[ "$MODE" == "widgets" || "$MODE" == "all" ]] && cat <<'WIDGETS'
 STAGE_W=$(mktemp -d /tmp/nt_stage_w.XXXXXX)
 sudo unzip -q "$R_WIDGET" -d "$STAGE_W/network_topology_v6_widget"
 sudo unzip -q "$R_HEALTH" -d "$STAGE_W/network_topology_v6_health_widget"
-sudo rm -rf network_topology_v6_widget network_topology_v6_health_widget
+sudo unzip -q "$R_TABLE"  -d "$STAGE_W/network_topology_v6_table_widget"
+sudo rm -rf network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
 sudo mv "$STAGE_W/network_topology_v6_widget" network_topology_v6_widget
 sudo mv "$STAGE_W/network_topology_v6_health_widget" network_topology_v6_health_widget
+sudo mv "$STAGE_W/network_topology_v6_table_widget" network_topology_v6_table_widget
 sudo rm -rf "$STAGE_W"
-sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget
+sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
 WIDGETS
 )
 sudo systemctl reload "$FPM_SERVICE"
@@ -245,6 +253,7 @@ Naechste Schritte in der Zabbix-UI:
        Network Topology v6              (Hauptmodul)
        Network Topology v6 Widget       (Topology-Widget)
        NT Health Score Widget           (Health-Widget)
+       NT Table                         (Table-Widget)
   3. Aufruf via Monitoring → Network Topology v6
 
 Optional: Integration-Links via Global-Macros
