@@ -20,7 +20,10 @@ import noUnsanitized from 'eslint-plugin-no-unsanitized';
 
 export default [
     {
-        files: ['assets/js/**/*.js'],
+        // Auch die drei Widget-Module: sie bauen HTML per String-Konkatenation
+        // und liefen bis v4.38.2 durch kein Gate — genau dort ist deshalb ein
+        // unescapter innerHTML-Sink entstanden (widget/…/widget.class.js).
+        files: ['assets/js/**/*.js', 'widget*/assets/js/**/*.js'],
 
         // Nicht pruefen: das gebaute Bundle und die eingebundenen Fremd-Libs.
         ignores: [
@@ -42,8 +45,8 @@ export default [
         rules: {
             // esc() ist die Escaping-Konvention des Moduls — Aufrufe davon gelten
             // als sicher, alles andere Dynamische nicht.
-            'no-unsanitized/property': ['error', { escape: { methods: ['esc'] } }],
-            'no-unsanitized/method':   ['error', { escape: { methods: ['esc'] } }],
+            'no-unsanitized/property': ['error', { escape: { methods: ['esc', '_esc'] } }],
+            'no-unsanitized/method':   ['error', { escape: { methods: ['esc', '_esc'] } }],
         },
     },
 ];

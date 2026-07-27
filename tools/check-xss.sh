@@ -22,7 +22,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-JS_DIR="$ROOT/assets/js"
+# ALLE JS-Verzeichnisse des Moduls — inklusive der drei Widget-Module. Die
+# Widget-Klassen bauen ihr HTML ebenfalls per String-Konkatenation, liefen aber
+# bis v4.38.2 durch KEIN Gate (weder hier noch in eslint), weil beide nur
+# assets/js kannten. Ihr Escaping heisst dort this._esc() — der 'esc('-Filter
+# unten greift dadurch automatisch.
+JS_DIRS=("$ROOT/assets/js")
+for _w in "$ROOT"/widget*/assets/js; do
+    [[ -d "$_w" ]] && JS_DIRS+=("$_w")
+done
 STRICT=0
 [[ "${1:-}" == "--strict" ]] && STRICT=1
 
@@ -37,7 +45,7 @@ UNTRUSTED='\.(label|host|name|proxy_name|proxy_group_name|note|raw|ip|iftype|des
 # document.write), aber KEIN esc( auf derselben Zeile. Sichere Nicht-HTML-
 # Senken (textContent/.style/.title/dataset/…) werden ausgefiltert.
 mapfile -t hits < <(
-  grep -rnE "(innerHTML|insertAdjacentHTML|document\.write|<[a-zA-Z/]|>['\"])" "$JS_DIR" --include='*.js' 2>/dev/null \
+  grep -rnE "(innerHTML|insertAdjacentHTML|document\.write|<[a-zA-Z/]|>['\"])" "${JS_DIRS[@]}" --include='*.js' 2>/dev/null \
     | grep -vE '/(leaflet|cytoscape|cola|dagre|dist)' \
     | grep -E "\+[^+]*($UNTRUSTED)" \
     | grep -v 'esc(' \

@@ -192,9 +192,15 @@ class WidgetNetworkTopology extends CWidget {
         var el = this._target.querySelector('.nt-widget-loading');
         if (el) {
             el.style.display = 'flex';
-            el.innerHTML = '<span style="color:'
-                + (error ? this._COL.critical : this._COL.sub)
-                + '">' + msg + '</span>';
+            // textContent statt innerHTML: msg ist der einzige String hier, der
+            // nicht aus eigenem Code stammt (Fetch-/JSON-Fehlermeldungen, und
+            // bei einer Angleichung an die anderen Widgets auch data.error vom
+            // Backend). Per Konstruktion kein HTML-Sink — kein Escaping noetig.
+            el.textContent = '';
+            var span = document.createElement('span');
+            span.style.color = error ? this._COL.critical : this._COL.sub;
+            span.textContent = msg;
+            el.appendChild(span);
         }
     }
 

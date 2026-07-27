@@ -30,14 +30,23 @@ set -euo pipefail
 # ── Config ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly SCRIPT_DIR
-readonly TMP_MAIN="/tmp/network_topology_v6.zip"
-readonly TMP_WIDGET="/tmp/network_topology_v6_widget.zip"
-readonly TMP_HEALTH="/tmp/network_topology_v6_health_widget.zip"
-readonly TMP_TABLE="/tmp/network_topology_v6_table_widget.zip"
-readonly REMOTE_MAIN="/tmp/network_topology_v6.zip"
-readonly REMOTE_WIDGET="/tmp/network_topology_v6_widget.zip"
-readonly REMOTE_HEALTH="/tmp/network_topology_v6_health_widget.zip"
-readonly REMOTE_TABLE="/tmp/network_topology_v6_table_widget.zip"
+# Arbeitsverzeichnisse: mktemp -d (0700) statt fester /tmp-Pfade.
+#
+# Feste Namen in einem world-writable /tmp sind angreifbar: ein beliebiger
+# unprivilegierter User auf dem ZIELSERVER kann /tmp/network_topology_v6.zip
+# vorab als Symlink anlegen. scp oeffnet mit O_CREAT|O_TRUNC und folgt dem
+# Symlink — der Angreifer kontrolliert die Datei, die Sekunden spaeter von
+# "sudo unzip" als ROOT entpackt wird. Ein 0700-Verzeichnis mit zufaelligem
+# Namen schliesst das Zeitfenster komplett. Beide Verzeichnisse raeumt der
+# EXIT-Trap ab (vorher blieben die Remote-Zips dauerhaft liegen).
+LOCAL_TMP="$(mktemp -d "${TMPDIR:-/tmp}/nt-deploy.XXXXXXXX")"
+readonly LOCAL_TMP
+readonly TMP_MAIN="$LOCAL_TMP/network_topology_v6.zip"
+readonly TMP_WIDGET="$LOCAL_TMP/network_topology_v6_widget.zip"
+readonly TMP_HEALTH="$LOCAL_TMP/network_topology_v6_health_widget.zip"
+readonly TMP_TABLE="$LOCAL_TMP/network_topology_v6_table_widget.zip"
+# Remote-Pfade stehen erst fest, wenn die SSH-Verbindung steht (s.u.).
+REMOTE_DIR=""
 
 # ── Arg-Parsing ────────────────────────────────────────────────────────────
 if [[ $# -lt 1 ]]; then
@@ -74,12 +83,22 @@ esac
 # ServerAlive haelt die Verbindung wach und erkennt echte Abbrueche schnell.
 # ControlMaster degradiert sauber: faellt der Master aus, verbindet ssh
 # normal. Socket-Name aus dem (bereits validierten) Servernamen abgeleitet.
-SSH_CTL="/tmp/nt-ssh-$(printf '%s' "$SERVER" | tr -c 'A-Za-z0-9' '_').ctl"
-readonly SSH_CTL
+# Der Control-Socket liegt im eigenen 0700-Tempdir statt unter einem aus dem
+# Servernamen ableitbaren /tmp-Pfad.
+readonly SSH_CTL="$LOCAL_TMP/ssh.ctl"
 readonly SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=$SSH_CTL"
                    -o ControlPersist=60 -o ServerAliveInterval=5 -o ServerAliveCountMax=3)
-cleanup_ssh() { ssh "${SSH_OPTS[@]}" -O exit -- "$SERVER" 2>/dev/null || true; }
-trap cleanup_ssh EXIT
+# Reihenfolge im Cleanup: erst das Remote-Tempdir loeschen (braucht die
+# Verbindung), dann den Master beenden, dann lokal aufraeumen (enthaelt den
+# Socket).
+cleanup() {
+    if [[ -n "$REMOTE_DIR" ]]; then
+        ssh "${SSH_OPTS[@]}" -- "$SERVER" "rm -rf -- '$REMOTE_DIR'" 2>/dev/null || true
+    fi
+    ssh "${SSH_OPTS[@]}" -O exit -- "$SERVER" 2>/dev/null || true
+    rm -rf -- "$LOCAL_TMP"
+}
+trap cleanup EXIT
 
 # ── SSH-Reachability testen (etabliert zugleich die Master-Verbindung) ──────
 echo "→ Test SSH-Zugang: $SERVER"
@@ -87,6 +106,17 @@ if ! ssh "${SSH_OPTS[@]}" -o ConnectTimeout=8 -o BatchMode=yes -- "$SERVER" "tru
     echo "❌ SSH zu $SERVER fehlgeschlagen. Public-Key im ~/.ssh/authorized_keys?" >&2
     exit 1
 fi
+
+# ── Remote-Arbeitsverzeichnis (0700, zufaelliger Name) ─────────────────────
+REMOTE_DIR="$(ssh "${SSH_OPTS[@]}" -- "$SERVER" 'umask 077; mktemp -d /tmp/nt-deploy.XXXXXXXX')"
+if [[ -z "$REMOTE_DIR" || "$REMOTE_DIR" != /tmp/nt-deploy.* ]]; then
+    echo "❌ Konnte auf $SERVER kein Temp-Verzeichnis anlegen." >&2
+    exit 1
+fi
+readonly REMOTE_MAIN="$REMOTE_DIR/network_topology_v6.zip"
+readonly REMOTE_WIDGET="$REMOTE_DIR/network_topology_v6_widget.zip"
+readonly REMOTE_HEALTH="$REMOTE_DIR/network_topology_v6_health_widget.zip"
+readonly REMOTE_TABLE="$REMOTE_DIR/network_topology_v6_table_widget.zip"
 
 # ── Remote-Umgebung autodetecten ───────────────────────────────────────────
 echo "→ Autodetect PHP-FPM-Service + Zabbix-UI-Pfad auf $SERVER"

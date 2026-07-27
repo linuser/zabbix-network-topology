@@ -87,5 +87,20 @@
     "no-unsanitized/property": {
       "count": 6
     }
+  },
+  "widget/assets/js/widget.class.js": {
+    "no-unsanitized/property": {
+      "count": 2
+    }
+  },
+  "widget_health/assets/js/widget.class.js": {
+    "no-unsanitized/property": {
+      "count": 3
+    }
+  },
+  "widget_table/assets/js/widget.class.js": {
+    "no-unsanitized/property": {
+      "count": 3
+    }
   }
 }
