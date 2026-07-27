@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.37.0 — 2026-07-27
+
+### Added
+- **UniFi-Topologie via `uplink.id`** (Controller-Sicht statt SNMP): Geräte, die per UniFi-Network-API-Template überwacht werden, liefern mit `uplink.id` die **UUID ihres Uplink-Geräts**. Diese wird jetzt als Nachbar-Quelle (`src=unifi`) erkannt und über die **bestehende** Hostname-Matching-Logik zu einer Kante aufgelöst (die UUID = technischer Hostname des Uplink-Hosts) — `LldpEdgeBuilder` brauchte dafür keine Änderung. Damit entsteht die UniFi-Topologie **auch ohne LLDP/CDP**, praktisch für Umgebungen, in denen die UniFi-Geräte kein SNMP sprechen (z. B. UDM-Konsolen).
+  - Uplinks, die auf **keinen** überwachten Host auflösen (z. B. der Top-Level-Gateway/Controller ohne eigenen Host), zeichnen keine Kante — bzw. erscheinen als **Ghost-Knoten**, wenn der §9-Toggle an ist.
+  - `uplink.rx/tx` (UniFi-Traffic) wird **noch nicht** für die Weathermap genutzt (potenzieller Nachzieher).
+  - Verifiziert auf **zabbixcloud.de** (117 UniFi-Hosts, Zabbix-Prod) und per Unit-Tests (`MetricExtractorTest`, `LldpEdgeBuilderTest`).
+
 ## v4.36.0 — 2026-07-16
 
 ### Added

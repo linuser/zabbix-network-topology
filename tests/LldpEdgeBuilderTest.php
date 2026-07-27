@@ -187,6 +187,28 @@ check('beidseitige Kante bleibt EINE',                   count($rM['edges']), 1)
 check('Merge: Metrik des 1. Reporters (A) da',           $eM['port_metrics']['A']['in'] ?? null, 10.0);
 check('Merge: Metrik des 2. Reporters (B) angehaengt',   $eM['port_metrics']['B']['in'] ?? null, 30.0);
 
+// ── UniFi: UUID-Uplink loest ueber das normale Namens-Matching auf ────────
+// Nachgebildet aus echten Daten: das UniFi-Template benennt Hosts technisch
+// nach der Geraete-UUID, und uplink.id enthaelt genau diese UUID des Uplinks.
+// Damit braucht es KEINE Sonderlogik — der bestehende Matcher trifft.
+echo "\nUniFi uplink.id -> Kante\n";
+$hU = [
+    'sw'  => ['host' => 'edd7d002-b7b6-3675-8663-608ae2466f0b', 'name' => 'HSINSW02'],
+    'cli' => ['host' => '74f8d353-6b79-3645-81c1-9376cdc8ea42', 'name' => 'npu 2d:23'],
+];
+$rawU = [['hostid' => 'cli', 'key_' => 'uplink.id',
+          'lastvalue' => 'edd7d002-b7b6-3675-8663-608ae2466f0b', 'src' => 'unifi']];
+$rU = LldpEdgeBuilder::build($hU, $rawU);
+check('UUID matcht technischen Hostnamen -> Kante', hasEdge($rU['edges'], 'cli', 'sw'), true);
+check('genau eine Kante',                           count($rU['edges']),               1);
+check('Quelle als unifi markiert',   ($rU['edges'][0]['src'] ?? [])[0] ?? null,        'unifi');
+// Zeigt der Uplink auf ein Geraet, das NICHT ueberwacht wird (nicht in $hosts),
+// entsteht keine Kante — der Wert landet als unmatched (→ §9-Ghost, wenn an).
+$rU2 = LldpEdgeBuilder::build($hU,
+    [['hostid' => 'cli', 'key_' => 'uplink.id', 'lastvalue' => 'aaaaaaaa-0000-0000-0000-000000000000', 'src' => 'unifi']]);
+check('unbekannter Uplink -> keine Kante',  count($rU2['edges']),      0);
+check('unbekannter Uplink -> unmatched',    count($rU2['unmatched']),  1);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";
