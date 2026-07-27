@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Modul. Versionsschema: MAJOR.MINOR.PATCH.
 
+## v4.38.1 — 2026-07-27
+
+### Fixed
+- **i18n-Lücke in der Items-Pivot**: ~15 Strings waren hart auf Deutsch codiert und blieben im EN-Modus deutsch — der Fehler-/Empty-State (inkl. der vier Erklär-Zeilen), „Alles leer", der Gruppen-Separator „Ohne Gruppe", Anomalie-Tooltips, „In Latest Data öffnen", Pattern-Label + -Placeholder. Alle laufen jetzt über `t()`, neue Keys in `i18n/{de,en}.js`. Dass es ein Versehen war zeigt `— Custom-Pattern —`: derselbe String lief an zwei Stellen bereits über `t('items.custom_pattern')`, an einer dritten hart-codiert.
+
+### Added
+- `fmtVal` formatiert jetzt auch die Zabbix-Unit **`Bps`** (Byte/s → B/s, KB/s, MB/s, GB/s). Bisher fiel sie auf die rohe Zahlenausgabe zurück (`bps` = Bit/s war bereits abgedeckt).
+- **README**: Tabelle, welche **Linux-Templates** für die Items-Pivot-Presets nötig sind (`Linux by Zabbix agent` für Disks/Block-IO/CPU/Memory/Netz, `ICMP Ping` für Ping) — plus der Hinweis, dass SNMP-Switches/Windows andere Keys liefern und dort das Custom-Pattern bzw. die „Discovered"-Liste zu nutzen ist. Ohne passendes Template bleibt die Pivot leer, was bisher wie ein Fehler wirkte.
+
 ## v4.38.0 — 2026-07-27
 
 ### Added

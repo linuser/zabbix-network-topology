@@ -59,6 +59,17 @@ Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wall
   - **Items** — Pivot-Tabelle: Hosts × Items (z.B. alle Disks der Hostgruppe)
 - **Geo** — Leaflet-Karte mit GPS-Koordinaten aus dem Host-Inventory
 
+> **Items-Pivot — Voraussetzung (Templates):** Die eingebauten Presets suchen nach den Item-Keys der Standard-Linux-Templates. Ist keines davon zugewiesen, bleibt die Pivot leer („Keine matching Items gefunden") — der Pivot-*Mechanismus* ist ok, es fehlen nur die passenden Items.
+>
+> | Preset | Item-Keys | Liefert das Template |
+> |---|---|---|
+> | Disks, Block-Device-IO | `vfs.fs.size[*,pused]`, `vfs.dev.util[*]`, `vfs.dev.*.rate[*]`, `vfs.dev.*.await[*]` | **Linux by Zabbix agent** (bzw. *… agent active*) — Filesystem- + Block-Device-Discovery |
+> | CPU, Memory | `system.cpu.util`, `vm.memory.size[*]` | dasselbe Template |
+> | Netz | `net.if.in[*]`, `net.if.out[*]` | **Linux by Zabbix agent** — Network-Interface-Discovery |
+> | Ping | `icmpping*` | Template **ICMP Ping** |
+>
+> **SNMP-Switches** (`ifHCInOctets[…]`) und **Windows** liefern *andere* Keys — dafür statt der Presets ein **Custom-Pattern** eingeben (das Dropdown zeigt unter „Discovered" die real vorhandenen Keys deiner Auswahl).
+
 ### Layout-Optionen
 
 - **Cluster-Modi** für Multi-Group-Auswahl: Auto / Spalten / Reihen / Aus

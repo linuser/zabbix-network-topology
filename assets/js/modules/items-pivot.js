@@ -236,6 +236,12 @@ function fmtVal(v, unit) {
         if (v < 1e9) return (v / 1e6).toFixed(1) + ' Mbps';
         return (v / 1e9).toFixed(2) + ' Gbps';
     }
+    if (unit === 'Bps') {
+        if (v < 1024) return Math.round(v) + ' B/s';
+        if (v < 1048576) return (v / 1024).toFixed(1) + ' KB/s';
+        if (v < 1073741824) return (v / 1048576).toFixed(1) + ' MB/s';
+        return (v / 1073741824).toFixed(2) + ' GB/s';
+    }
     if (unit === 'ms') return v.toFixed(2) + ' ms';
     // uptime / s: Sekunden -> lesbare Dauer. Gilt bewusst auch fuer die Aggregat-
     // Zeilen (Avg/P50/Max einer Uptime als "5h 20m" ist lesbarer als 19206).
@@ -578,7 +584,7 @@ export function buildPivotToolbar(onApply, theme) {
     const patWrap = document.createElement('span');
     patWrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;min-width:200px';
     const patLbl = document.createElement('span');
-    patLbl.textContent = 'Pattern';
+    patLbl.textContent = tr('items.pattern_label');
     patLbl.style.cssText = 'font-size:11px;color:' + t.sub
         + ';font-weight:700;text-transform:uppercase;letter-spacing:0.06em';
     patWrap.appendChild(patLbl);
@@ -586,7 +592,7 @@ export function buildPivotToolbar(onApply, theme) {
     const pat = document.createElement('input');
     pat.type = 'text';
     pat.id = 'nt-items-pattern';
-    pat.placeholder = 'z.B. vfs.fs.size[*,pused]';
+    pat.placeholder = tr('items.pattern_ph');
     pat.value = PRESETS[0].pattern;
     pat.style.cssText = 'flex:1;padding:3px 8px;border:1px solid ' + t.border
         + ';border-radius:2px;font-size:12px;font-family:'
@@ -621,7 +627,7 @@ export function buildPivotToolbar(onApply, theme) {
             trigger.firstChild.nodeValue = matchPreset.lbl;
         } else {
             const matchDisc = (_disc.patterns || []).find(function(p) { return p.stem === v; });
-            trigger.firstChild.nodeValue = matchDisc ? matchDisc.stem : '— Custom-Pattern —';
+            trigger.firstChild.nodeValue = matchDisc ? matchDisc.stem : tr('items.custom_pattern');
         }
         _scheduleCountProbe(v);
     });
@@ -704,22 +710,22 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
 
     if (!data || data.error) {
         container.innerHTML = '<div style="padding:30px;text-align:center;color:' + t.subSoft + '">'
-            + 'Fehler beim Laden: ' + esc((data && data.error) || 'unbekannt') + '</div>';
+            + esc(tr('items.load_error', { msg: (data && data.error) || tr('items.unknown') })) + '</div>';
         return;
     }
     if (!data.columns || data.columns.length === 0) {
         // Empty-State mit Hilfetext
         const reasons = '<ul style="text-align:left;display:inline-block;margin-top:10px;'
             + 'color:' + t.sub + ';font-size:12px;line-height:1.7">'
-            + '<li>Pattern matched keine Items in den ausgew\u00E4hlten Hostgroups</li>'
-            + '<li>Items sind nicht numerisch (nur Float/Int werden angezeigt)</li>'
-            + '<li>Items sind nicht aktiviert (disabled/unsupported)</li>'
-            + '<li>Pattern zu spezifisch \u2014 versuche z.B. mit \u201E*\u201D zu erweitern</li>'
+            + '<li>' + esc(tr('items.empty.reason1')) + '</li>'
+            + '<li>' + esc(tr('items.empty.reason2')) + '</li>'
+            + '<li>' + esc(tr('items.empty.reason3')) + '</li>'
+            + '<li>' + esc(tr('items.empty.reason4')) + '</li>'
             + '</ul>';
         container.innerHTML = '<div style="padding:48px 30px;text-align:center;color:' + t.text + '">'
             + '<div style="font-size:32px;margin-bottom:10px;opacity:0.4">\u{1F50D}</div>'
             + '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'
-            + 'Keine matching Items gefunden.</div>'
+            + esc(tr('items.empty.title')) + '</div>'
             + reasons + '</div>';
         return;
     }
@@ -791,10 +797,9 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             container.innerHTML = '<div style="padding:48px 30px;text-align:center;color:' + t.text + '">'
                 + '<div style="font-size:32px;margin-bottom:10px;opacity:0.4">\u{1F4ED}</div>'
                 + '<div style="font-size:14px;font-weight:600;margin-bottom:4px">'
-                + 'Alles leer.</div>'
+                + esc(tr('items.allempty.title')) + '</div>'
                 + '<div style="color:' + t.sub + ';font-size:12px;margin-top:6px">'
-                + '"Leere ausblenden" hat alle Hosts/Items entfernt — '
-                + 'Toggle deaktivieren um die volle Pivot zu sehen.</div></div>';
+                + esc(tr('items.allempty.desc')) + '</div></div>';
             return;
         }
     }
@@ -965,7 +970,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
                 + 'text-transform:uppercase;letter-spacing:0.04em;'
                 + 'border-top:1px solid ' + t.border + ';border-bottom:1px solid ' + t.borderSoft
                 + ';position:sticky;left:0">'
-                + esc(grp || '— Ohne Gruppe —') + '</td></tr>');
+                + esc(grp || tr('items.no_group')) + '</td></tr>');
             _lastGroup = grp;
         }
 
@@ -1008,7 +1013,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             const anomalous = isAnomaly(v, c.key);
             const anomalyBorder = anomalous ? ';box-shadow:inset 3px 0 0 #a855f7' : '';
             const anomalyMark = anomalous
-                ? '<span title="Anomalie: weicht deutlich vom Spalten-Median ab" '
+                ? '<span title="' + esc(tr('items.anomaly_tt')) + '" '
                     + 'style="color:#a855f7;font-weight:700;margin-right:2px">◆</span>'
                 : '';
             // Tooltip: Item-Name + Description (falls vorhanden) — deutlich
@@ -1019,9 +1024,9 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
             // Bei Dauer-Units den Rohwert (Sekunden) im Tooltip mitgeben.
             if ((c.unit === 'uptime' || c.unit === 's') && v != null) ttParts.push(Math.round(v) + ' s');
             if (anomalous && _anomalyStats[c.key]) {
-                ttParts.push('◆ Anomalie: Spalten-Median ' + fmtVal(_anomalyStats[c.key].median, c.unit));
+                ttParts.push(tr('items.anomaly_median', { median: fmtVal(_anomalyStats[c.key].median, c.unit) }));
             }
-            const tt = ttParts.length ? ttParts.join('\n') : 'In Latest Data oeffnen';
+            const tt = ttParts.length ? ttParts.join('\n') : tr('items.open_latest');
             // Sparkline-Placeholder-Span (leer). Wird nach dem Fetch via
             // updateSparkline() gefuellt. data-itemid liefert den Key fuer
             // das Batch-Ergebnis.
