@@ -217,12 +217,53 @@ Häufigste Ursachen:
 ## Lücken schließen (manuell)
 
 Für alles, was LLDP/SNMP nicht hergibt (Easy-Smart-Switches, unmanaged, UniFi-ohne-API,
-sende-nur-Geräte) bleibt die **Deklaration von Hand** — der bewährte Ansatz ist
-**LLDP-Backbone + gezielte manuelle Ergänzung**:
+sende-nur-Geräte) bleibt die **Deklaration von Hand**. Bewährt hat sich
+**LLDP-Backbone + gezielte manuelle Ergänzung** — so bekommst du die Selbst-Aktualität von
+LLDP *und* die Vollständigkeit der Handarbeit.
 
-- **Star-Mode-Handverknüpfungen** (Manuelle Links) — Verbindungen im UI selbst ziehen.
-- **`nt:parent`-Tag** — Containment-Beziehungen (VM→Hypervisor, Container→Node), die LLDP
-  ohnehin nie sieht.
+### Was passiert mit Geräten, die gar nichts melden?
 
-So bekommst du die Selbst-Aktualität von LLDP **und** die Vollständigkeit der Handarbeit,
-ohne dass die Karte von der Realität wegdriftet.
+Zwei Fälle, die sich unterschiedlich auswirken:
+
+**Ein unmanaged Switch ist meist unsichtbar.** Er spricht kein LLDP, reicht die Frames aber
+durch, weil er sie nicht verarbeitet. Die gemanagten Geräte links und rechts sehen dadurch
+*sich gegenseitig* und erscheinen direkt verbunden. Topologisch falsch — die Aussage „diese
+beiden hängen zusammen" stimmt aber trotzdem.
+
+**Eine Firewall ohne LLDP ist der unangenehmere Fall.** Sie wird überwacht, erscheint also als
+Knoten — aber ohne Kanten. Sie liegt als **Insel** auf der Karte, obwohl der halbe Verkehr
+durch sie läuft.
+
+### Die drei Werkzeuge
+
+**1. Host-Tag `nt:parent=<hostname>`** — der empfohlene Weg. Am Host ein Tag mit dem Namen des
+Geräts setzen, an dem er hängt:
+
+```
+nt:parent = fw-core
+```
+
+Ein normales Zabbix-Host-Tag, also **serverseitig** gespeichert und für alle Benutzer sichtbar.
+Gedacht für Träger-Beziehungen (VM→Hypervisor, Container→Node), funktioniert aber genauso für
+„dieser Host hängt hinter dieser Firewall". Die Ausfallsimulation behandelt es als **harte
+Abhängigkeit**: Fällt der Parent, fällt der Child — unabhängig vom Netzpfad.
+
+**2. Manuelle Links** im Star-Mode direkt in der Karte ziehen. Schnell für die eigene Sicht.
+> ⚠ **Einschränkung:** Sie liegen im `localStorage` des Browsers — also **pro Benutzer und pro
+> Gerät**. Deine Kollegen sehen sie nicht. Zum Dokumentieren einer *gemeinsamen* Topologie ist
+> das `nt:parent`-Tag das richtige Werkzeug.
+
+**3. Ghost-Knoten** decken den umgekehrten Fall ab: Meldet ein Nachbar ein Gerät, das in Zabbix
+gar nicht überwacht wird, erscheint es als gestrichelter Platzhalter (Toggle in der Toolbar,
+Default aus). So wird die Lücke **sichtbar**, statt zu verschwinden.
+
+### Wichtig für die Ausfallsimulation
+
+Die Simulation kennt **nur die Kanten, die sie bekommen hat**. Daraus folgen zwei Dinge:
+
+- Ein Gerät, das nicht im Graphen steht, kann nicht als Ausfallpunkt simuliert werden.
+- Eine handgezeichnete Kante, die nicht der Realität entspricht, macht die Simulation
+  **zuverlässig falsch** — sie meldet dann Hosts als „sicher", die es physisch nicht sind.
+
+Für die Pfade, auf die es wirklich ankommt, lohnt sich deshalb ein Gegencheck: Sind die Kanten
+**gemessen** oder **angenommen**?
