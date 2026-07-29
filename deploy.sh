@@ -123,14 +123,30 @@ echo "→ Autodetect PHP-FPM-Service + Zabbix-UI-Pfad auf $SERVER"
 REMOTE_ENV=$(ssh "${SSH_OPTS[@]}" -- "$SERVER" bash <<'REMOTE_EOF'
 set -e
 # PHP-FPM-Service: die genaue Version finden (php8.2-fpm, php8.3-fpm, ...)
-fpm=$(systemctl list-units --type=service --all 2>/dev/null \
-      | awk '/^\s*php[0-9.]+-fpm\.service/ {print $1; exit}' \
-      | sed 's/\.service$//')
+# PHP-FPM-Service finden.
+#
+# Frueher stand hier ein awk-Muster mit '\s' — das ist eine GNU-awk-Erweiterung.
+# Debian nutzt per Default mawk, wo '\s' NICHT als Whitespace gilt: die Erkennung
+# schlug dort still fehl, obwohl php8.2-fpm.service lief. Deshalb jetzt:
+#   --plain --no-legend  entfernt Markierungsspalte (●) und Kopf-/Fusszeilen
+#   $1 ~ /.../           Feldvergleich statt Zeilenanker (kein Whitespace noetig)
+#   $2 == "loaded"       ueberspringt not-found-Reste (z.B. ein altes
+#                        php8.3-fpm.service nach einem PHP-Upgrade)
+# Das Muster deckt "php8.2-fpm" und "php-fpm" (RedHat) gleichermassen ab.
+# Ueberschreibbar per NT_FPM_SERVICE, falls das Frontend anders neu geladen wird
+# (mod_php -> apache2, Container-Setups, ...).
+fpm="${NT_FPM_SERVICE:-}"
 if [[ -z "$fpm" ]]; then
-    # RedHat/Rocky nutzen manchmal einfach "php-fpm"
-    if systemctl list-units --type=service --all 2>/dev/null | grep -q '^\s*php-fpm\.service'; then
-        fpm="php-fpm"
-    fi
+    fpm=$(systemctl list-units --type=service --all --plain --no-legend 2>/dev/null \
+          | awk '$1 ~ /^php[0-9.]*-fpm\.service$/ && $2 == "loaded" {
+                     sub(/\.service$/, "", $1); print $1; exit }')
+fi
+# Kein FPM? Dann laeuft PHP vermutlich als Webserver-Modul (mod_php) — in dem
+# Fall den Webserver neu laden statt hart abzubrechen.
+if [[ -z "$fpm" ]]; then
+    for svc in apache2 httpd nginx; do
+        if systemctl is-active --quiet "$svc" 2>/dev/null; then fpm="$svc"; break; fi
+    done
 fi
 
 # Zabbix-UI-Pfad: der Ordner in dem /modules/ liegt
@@ -153,7 +169,15 @@ FPM_SERVICE=$(echo "$REMOTE_ENV" | grep '^FPM=' | cut -d= -f2 || true)
 UI_PATH=$(echo "$REMOTE_ENV" | grep '^UI=' | cut -d= -f2 || true)
 
 if [[ "$FPM_SERVICE" == "NONE" || -z "$FPM_SERVICE" ]]; then
-    echo "❌ Kein php-fpm-Service auf $SERVER gefunden." >&2
+    cat >&2 <<EOF
+❌ Kein php-fpm- oder Webserver-Dienst auf $SERVER gefunden.
+
+   Nachsehen, was dort laeuft:
+     ssh $SERVER "systemctl list-units --type=service --all | grep -iE 'php|apache|httpd|nginx'"
+
+   Dann den passenden Dienst vorgeben, z.B.:
+     NT_FPM_SERVICE=php8.2-fpm ./deploy.sh $SERVER $MODE
+EOF
     exit 1
 fi
 if [[ "$UI_PATH" == "NONE" || -z "$UI_PATH" ]]; then
