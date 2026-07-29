@@ -111,7 +111,7 @@ Kurzfassung (das Verzeichnis **muss** `network_topology_v6` heißen):
 cd /usr/share/zabbix/ui/modules
 sudo unzip ~/Downloads/network_topology_v6.zip
 sudo chown -R root:root network_topology_v6
-sudo systemctl reload php8.3-fpm
+sudo systemctl reload php8.2-fpm      # Dienstname je nach Distro/PHP-Version
 ```
 
 Dann in der Zabbix-UI: **Administration → General → Modules → Scan directory** → „Network Topology for Zabbix" aktivieren. Aufruf über **Monitoring → Network Topology for Zabbix**.
@@ -230,7 +230,7 @@ Short version (the directory **must** be named `network_topology_v6`):
 cd /usr/share/zabbix/ui/modules
 sudo unzip ~/Downloads/network_topology_v6.zip
 sudo chown -R root:root network_topology_v6
-sudo systemctl reload php8.3-fpm
+sudo systemctl reload php8.2-fpm      # Dienstname je nach Distro/PHP-Version
 ```
 
 Then in the Zabbix UI: **Administration → General → Modules → Scan directory** → enable "Network Topology for Zabbix". Open it via **Monitoring → Network Topology for Zabbix**.
