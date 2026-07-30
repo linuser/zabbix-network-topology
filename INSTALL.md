@@ -99,6 +99,8 @@ sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
 Dann **Scan directory** → „Network Topology for Zabbix — Widget", „— Health Widget" bzw. „NT Table" aktivieren → im Dashboard-Editor verfügbar.
 **Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
 
+> **Warum nicht eigenständig?** Die Daten-Action `network.topology.v6.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology_v6/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
+
 ### 4. Optional: Topologie-Events + Health-Score-Historie
 
 Für echte Zabbix-Events bei Topologie-Änderungen und einen Health-Score-Verlauf:
@@ -231,6 +233,8 @@ sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
 ```
 Then **Scan directory** → enable "Network Topology for Zabbix — Widget" / "— Health Widget" / "NT Table" → available in the dashboard editor.
 **Prerequisite:** the main module must be installed + enabled — and **Zabbix 7.4** (the widgets don't run on 7.0 LTS; the main module does).
+
+> **Why not standalone?** The data action `network.topology.v6.data` belongs to the main module, and the topology widget loads Cytoscape.js from `modules/network_topology_v6/assets/js/` — the library ships only once on purpose. Without the main module (or with it disabled) the tiles show an error. So **install and enable the main module first, then the widgets.**
 
 ### 4. Optional: topology events + health-score history
 

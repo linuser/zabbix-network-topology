@@ -130,6 +130,8 @@ Drei separate Widget-Module rendern die Daten des Hauptmoduls in Dashboard-Kache
 
 Alle nutzen dieselbe `network.topology.v6.data`-Action (kein zweites Backend). **Voraussetzung:** Hauptmodul installiert + aktiviert.
 
+> **Die Widgets funktionieren nicht eigenständig** — und zwar aus zwei Gründen: Die Daten-Action `network.topology.v6.data` registriert das **Hauptmodul**, und das Topologie-Widget lädt zusätzlich Cytoscape.js aus dessen Verzeichnis (`modules/network_topology_v6/assets/js/`), damit die ~360 KB große Bibliothek nur einmal im Paket liegt. Fehlt oder deaktivierst du das Hauptmodul, zeigen die Kacheln eine Fehlermeldung („Hauptmodul nicht erreichbar" bzw. „Cytoscape.js not loaded"). Reihenfolge beim Installieren also: **erst Hauptmodul, dann Widgets.**
+
 > **Zabbix-Version:** Die Widgets brauchen **Zabbix 7.4**. Auf **7.0 LTS** registrieren sie sich zwar, bleiben aber wegen der abweichenden Widget-JS-Basisklasse auf „Loading…" hängen. Das **Hauptmodul** läuft auf **7.0 LTS und 7.4**.
 
 ### Sicherheit
@@ -248,6 +250,8 @@ Three separate widget modules render the main module's data as dashboard tiles:
 - [`widget_table/`](widget_table/) — **table** (status/CPU/mem/ping/traffic/problems)
 
 All consume the same `network.topology.v6.data` action (no second backend). **Prerequisite:** the main module installed and enabled.
+
+> **The widgets do not work standalone** — for two reasons: the data action `network.topology.v6.data` is registered by the **main module**, and the topology widget additionally loads Cytoscape.js from its directory (`modules/network_topology_v6/assets/js/`), so the ~360 KB library ships only once. Without the main module — or with it disabled — the tiles show an error ("main module unreachable" / "Cytoscape.js not loaded"). So install in this order: **main module first, widgets second.**
 
 > **Zabbix version:** the widgets require **Zabbix 7.4**. On **7.0 LTS** they do register, but stay stuck on "Loading…" because the widget JS base class differs. The **main module** runs on **7.0 LTS and 7.4**.
 
