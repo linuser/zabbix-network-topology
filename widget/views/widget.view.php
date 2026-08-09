@@ -20,7 +20,6 @@ declare(strict_types = 0);
         (new CDiv())
             ->addClass('nt-widget-canvas')
             ->setAttribute('data-view-mode',  $data['view_mode']  ?? 'tech')
-            ->setAttribute('data-data-url',   $data['data_url']   ?? '')
             ->setAttribute('data-show-lldp',  !empty($data['show_lldp'])    ? '1' : '0')
             ->setAttribute('data-hide-offline', !empty($data['hide_offline']) ? '1' : '0')
             ->setAttribute('data-groupids',   json_encode($data['groupids'] ?? [],

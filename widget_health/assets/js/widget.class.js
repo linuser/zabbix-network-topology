@@ -11,10 +11,64 @@
  * verfuegbar). Wenn sich die Formel im Haupt-Tab aendert, hier mitziehen.
  */
 
+/*
+ * Geteilter Datenzugriff fuer alle NT-Widgets.
+ *
+ * Liegen mehrere davon auf einem Dashboard, fragen sie dieselbe Action mit
+ * denselben Hostgruppen ab — network.topology.data, laut eigenem Kommentar
+ * "der teuerste Endpoint" (Host + Trigger + Problem + Item + Lastvalues +
+ * LLDP). Ein Response-Cache existiert serverseitig nicht; NtCache haelt nur
+ * die Topologie-Baseline. Drei Widgets bedeuteten also drei volle Laeufe.
+ *
+ * Deshalb hier zwei Dinge:
+ *   Coalescing  laeuft schon eine Anfrage fuer denselben Schluessel, bekommen
+ *               alle Aufrufer dasselbe Promise statt einer zweiten Anfrage.
+ *   Kurzer TTL  ein frisches Ergebnis wird ein paar Sekunden weitergereicht.
+ *               15 s liegen deutlich unter jedem Refresh-Intervall, die Daten
+ *               sind also nie aelter als eine Runde.
+ *
+ * Fehler werden NICHT gecacht — sonst haengt ein Aussetzer 15 s lang an allen
+ * Widgets. Definiert wird nur einmal; welches Widget zuerst laedt, ist egal.
+ */
+if (!window.NtWidgetData) {
+    window.NtWidgetData = (function () {
+        var cache = {};
+        var TTL   = 15000;
+
+        return function (groupids) {
+            var ids = (groupids || []).map(String).sort();
+            var key = ids.join(',');
+            var now = new Date().getTime();
+            var hit = cache[key];
+
+            if (hit && (now - hit.t) < TTL) {
+                return hit.p;
+            }
+
+            var params = new URLSearchParams();
+            params.append('action', 'network.topology.data');
+            for (var i = 0; i < ids.length; i++) {
+                params.append('groupids[]', ids[i]);
+            }
+
+            var p = fetch('zabbix.php?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.json(); });
+
+            p.catch(function () {
+                if (cache[key] && cache[key].p === p) { delete cache[key]; }
+            });
+
+            cache[key] = { t: now, p: p };
+            return p;
+        };
+    })();
+}
+
 class WidgetNetworkTopologyHealth extends CWidget {
 
     onInitialize() {
-        this._timer       = null;
         this._groupids    = [];
         this._worstFirst  = true;
         this._maxGroups   = 0;
@@ -61,19 +115,19 @@ class WidgetNetworkTopologyHealth extends CWidget {
         }
     }
 
-    onActivate() {
-        // Laden + Rendern gehoert in onActivate (Widget aktiv, DOM bereit) —
-        // NICHT in onStart. Genau das war der zweite Teil des Bugs: onStart lief
-        // zu frueh, der Canvas war noch nicht da. Spiegelt das Topology-Widget.
-        this._loadAndRender();
-        if (this._timer) clearInterval(this._timer);
-        // Refresh-Cycle: 60s — Health-Aenderungen entwickeln sich langsam.
+    /*
+     * Refresh ueber Zabbix' eigenen Update-Zyklus statt ueber einen Timer.
+     * Begruendung wie im Tabellen-Widget: die Basisklasse ruft periodisch die
+     * View-Action und ersetzt den Koerper durch den "Loading..."-Platzhalter;
+     * ein danebenlaufender setInterval fuellte ihn erst bis zu 60 s spaeter.
+     * Jetzt haengt das Rendern hinter super.promiseUpdate(), und die Kadenz
+     * bestimmt die Refresh-Einstellung des Dashboards.
+     */
+    promiseUpdate() {
         var self = this;
-        this._timer = setInterval(function() { self._loadAndRender(); }, 60000);
-    }
-
-    onDeactivate() {
-        if (this._timer) { clearInterval(this._timer); this._timer = null; }
+        return Promise.resolve(super.promiseUpdate()).then(function () {
+            return self._loadAndRender();
+        });
     }
 
     _loadAndRender() {
@@ -81,18 +135,10 @@ class WidgetNetworkTopologyHealth extends CWidget {
         var ids = this._groupids;
         if (!ids || !ids.length) {
             // Backend liefert ohne groupids nichts — UX-Hinweis statt 0/0
-            this._renderError('Bitte Host groups in der Widget-Konfiguration waehlen.');
-            return;
+            this._renderError('Select host groups in the widget configuration.');
+            return Promise.resolve();
         }
-        var params = new URLSearchParams();
-        params.append('action', 'network.topology.data');
-        for (var i = 0; i < ids.length; i++) params.append('groupids[]', String(ids[i]));
-        var url = 'zabbix.php?' + params.toString();
-        fetch(url, {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-            .then(function(r) { return r.json(); })
+        return window.NtWidgetData(ids)
             .then(function(data) {
                 if (data && data.error) {
                     self._renderError(String(data.error));
@@ -101,7 +147,7 @@ class WidgetNetworkTopologyHealth extends CWidget {
                 self._render((data && data.nodes) || []);
             })
             .catch(function(e) {
-                self._renderError(e && e.message || 'Fehler');
+                self._renderError(e && e.message || 'Request failed');
             });
     }
 

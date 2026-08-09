@@ -15,6 +15,61 @@
  * (das Widget ruft die network.topology.data Action auf).
  */
 
+/*
+ * Geteilter Datenzugriff fuer alle NT-Widgets.
+ *
+ * Liegen mehrere davon auf einem Dashboard, fragen sie dieselbe Action mit
+ * denselben Hostgruppen ab — network.topology.data, laut eigenem Kommentar
+ * "der teuerste Endpoint" (Host + Trigger + Problem + Item + Lastvalues +
+ * LLDP). Ein Response-Cache existiert serverseitig nicht; NtCache haelt nur
+ * die Topologie-Baseline. Drei Widgets bedeuteten also drei volle Laeufe.
+ *
+ * Deshalb hier zwei Dinge:
+ *   Coalescing  laeuft schon eine Anfrage fuer denselben Schluessel, bekommen
+ *               alle Aufrufer dasselbe Promise statt einer zweiten Anfrage.
+ *   Kurzer TTL  ein frisches Ergebnis wird ein paar Sekunden weitergereicht.
+ *               15 s liegen deutlich unter jedem Refresh-Intervall, die Daten
+ *               sind also nie aelter als eine Runde.
+ *
+ * Fehler werden NICHT gecacht — sonst haengt ein Aussetzer 15 s lang an allen
+ * Widgets. Definiert wird nur einmal; welches Widget zuerst laedt, ist egal.
+ */
+if (!window.NtWidgetData) {
+    window.NtWidgetData = (function () {
+        var cache = {};
+        var TTL   = 15000;
+
+        return function (groupids) {
+            var ids = (groupids || []).map(String).sort();
+            var key = ids.join(',');
+            var now = new Date().getTime();
+            var hit = cache[key];
+
+            if (hit && (now - hit.t) < TTL) {
+                return hit.p;
+            }
+
+            var params = new URLSearchParams();
+            params.append('action', 'network.topology.data');
+            for (var i = 0; i < ids.length; i++) {
+                params.append('groupids[]', ids[i]);
+            }
+
+            var p = fetch('zabbix.php?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.json(); });
+
+            p.catch(function () {
+                if (cache[key] && cache[key].p === p) { delete cache[key]; }
+            });
+
+            cache[key] = { t: now, p: p };
+            return p;
+        };
+    })();
+}
+
 class WidgetNetworkTopology extends CWidget {
 
     onInitialize() {
@@ -22,7 +77,6 @@ class WidgetNetworkTopology extends CWidget {
         this._nodes        = [];
         this._edges        = [];
         this._tab          = 'tech';
-        this._timer        = null;
         this._libsOk       = false;
         this._nodeMap      = {};
         // Zabbix-native Farb-Palette (matches Hauptmodul mkTheme light).
@@ -55,7 +109,6 @@ class WidgetNetworkTopology extends CWidget {
         var root = this._target.querySelector('[data-view-mode]');
         if (root) {
             this._tab         = root.dataset.viewMode  || 'tech';
-            this._dataUrl     = root.dataset.dataUrl   || 'zabbix.php?action=network.topology.data';
             this._showLldp    = root.dataset.showLldp  !== '0';
             this._hideOffline = root.dataset.hideOffline === '1';
             try {
@@ -74,7 +127,6 @@ class WidgetNetworkTopology extends CWidget {
             }
         } else {
             this._tab         = this._fields.view_mode === 1 ? 'mgmt' : 'tech';
-            this._dataUrl     = 'zabbix.php?action=network.topology.data';
             this._showLldp    = this._fields.show_lldp !== false && this._fields.show_lldp !== 0;
             this._hideOffline = this._fields.hide_offline === 1 || this._fields.hide_offline === true;
             this._groupids    = this._fields.groupids || [];
@@ -83,23 +135,41 @@ class WidgetNetworkTopology extends CWidget {
 
     onActivate() {
         this._active = true;
-        if (this._timer) { clearInterval(this._timer); this._timer = null; }
         this._setupButtons();
-        var self = this;
-        this._loadLibs(function () {
-            // _loadLibs ist async — wurde das Widget waehrenddessen deaktiviert,
-            // keinen Timer/Load mehr starten (sonst laeuft ein Refresh-Loop auf
-            // einem deaktivierten Widget und wird nie gecleart).
-            if (!self._active) return;
-            self._loadData();
-            self._timer = setInterval(function () { self._loadData(); }, 30000);
-        });
     }
 
     onDeactivate() {
         this._active = false;
-        if (this._timer) { clearInterval(this._timer); this._timer = null; }
         this._destroyCy();
+    }
+
+    /*
+     * Refresh ueber Zabbix' eigenen Update-Zyklus statt ueber einen Timer.
+     *
+     * Vorher lief hier ein setInterval, waehrend die Basisklasse parallel
+     * periodisch die View-Action rief und den Widget-Koerper durch frisches
+     * View-HTML ersetzte — den "Loading..."-Platzhalter, den der Timer erst bis
+     * zu 30 s spaeter ueberschrieb. Auf der Demo war der zweite Zyklus im
+     * Zugriffslog als POST auf widget.network_topology_widget.view alle 60 s zu
+     * sehen. Fuer den Graphen war das besonders unangenehm: der Cytoscape-
+     * Container verschwand mitsamt gerendertem Graph.
+     *
+     * Cytoscape wird weiterhin nachgeladen, aber innerhalb der Promise-Kette —
+     * ohne das gaebe es ein Zeitfenster, in dem gerendert wird, bevor die
+     * Bibliothek da ist. _active bleibt als Wache: laedt die Bibliothek erst
+     * nach dem Deaktivieren fertig, wird nicht mehr gerendert.
+     */
+    promiseUpdate() {
+        var self = this;
+        return Promise.resolve(super.promiseUpdate())
+            .then(function () {
+                return new Promise(function (resolve) { self._loadLibs(resolve); });
+            })
+            .then(function () {
+                if (!self._active) return;
+                self._setupButtons();
+                return self._loadData();
+            });
     }
 
     _setupButtons() {
@@ -167,21 +237,18 @@ class WidgetNetworkTopology extends CWidget {
         var groupids = this._groupids;
         if (!groupids.length) {
             this._showMsg('Select host groups in widget settings');
-            return;
+            return Promise.resolve();
         }
-        var params = new URLSearchParams();
-        groupids.forEach(function (id) { params.append('groupids[]', id); });
-        fetch(this._dataUrl + '&' + params, {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            self._nodes = data.nodes || [];
-            self._edges = data.edges || [];
-            self._render();
-        })
-        .catch(function (err) { self._showMsg('Error: ' + err.message, true); });
+        // Geteilt mit den anderen NT-Widgets auf derselben Seite: liegen
+        // mehrere auf einem Dashboard, holt nur eines die Daten.
+        return window.NtWidgetData(groupids)
+            .then(function (data) {
+                if (data && data.error) { self._showMsg(String(data.error), true); return; }
+                self._nodes = (data && data.nodes) || [];
+                self._edges = (data && data.edges) || [];
+                self._render();
+            })
+            .catch(function (err) { self._showMsg('Error: ' + err.message, true); });
     }
 
     _render() {

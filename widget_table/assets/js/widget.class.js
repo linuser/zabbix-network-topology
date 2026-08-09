@@ -11,10 +11,64 @@
  * dupliziert (keine ESM-Imports verfuegbar).
  */
 
+/*
+ * Geteilter Datenzugriff fuer alle NT-Widgets.
+ *
+ * Liegen mehrere davon auf einem Dashboard, fragen sie dieselbe Action mit
+ * denselben Hostgruppen ab — network.topology.data, laut eigenem Kommentar
+ * "der teuerste Endpoint" (Host + Trigger + Problem + Item + Lastvalues +
+ * LLDP). Ein Response-Cache existiert serverseitig nicht; NtCache haelt nur
+ * die Topologie-Baseline. Drei Widgets bedeuteten also drei volle Laeufe.
+ *
+ * Deshalb hier zwei Dinge:
+ *   Coalescing  laeuft schon eine Anfrage fuer denselben Schluessel, bekommen
+ *               alle Aufrufer dasselbe Promise statt einer zweiten Anfrage.
+ *   Kurzer TTL  ein frisches Ergebnis wird ein paar Sekunden weitergereicht.
+ *               15 s liegen deutlich unter jedem Refresh-Intervall, die Daten
+ *               sind also nie aelter als eine Runde.
+ *
+ * Fehler werden NICHT gecacht — sonst haengt ein Aussetzer 15 s lang an allen
+ * Widgets. Definiert wird nur einmal; welches Widget zuerst laedt, ist egal.
+ */
+if (!window.NtWidgetData) {
+    window.NtWidgetData = (function () {
+        var cache = {};
+        var TTL   = 15000;
+
+        return function (groupids) {
+            var ids = (groupids || []).map(String).sort();
+            var key = ids.join(',');
+            var now = new Date().getTime();
+            var hit = cache[key];
+
+            if (hit && (now - hit.t) < TTL) {
+                return hit.p;
+            }
+
+            var params = new URLSearchParams();
+            params.append('action', 'network.topology.data');
+            for (var i = 0; i < ids.length; i++) {
+                params.append('groupids[]', ids[i]);
+            }
+
+            var p = fetch('zabbix.php?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.json(); });
+
+            p.catch(function () {
+                if (cache[key] && cache[key].p === p) { delete cache[key]; }
+            });
+
+            cache[key] = { t: now, p: p };
+            return p;
+        };
+    })();
+}
+
 class WidgetNetworkTopologyTable extends CWidget {
 
     onInitialize() {
-        this._timer        = null;
         this._groupids     = [];
         this._hideOffline  = false;
         this._problemsOnly = false;
@@ -61,39 +115,44 @@ class WidgetNetworkTopologyTable extends CWidget {
         }
     }
 
-    onActivate() {
-        // Laden + Rendern in onActivate (DOM bereit), nicht in onStart.
-        this._loadAndRender();
-        if (this._timer) clearInterval(this._timer);
+    /*
+     * Refresh laeuft ueber Zabbix' eigenen Update-Zyklus, nicht ueber einen
+     * eigenen Timer.
+     *
+     * Vorher stand hier ein setInterval — parallel dazu ruft die Basisklasse
+     * aber ohnehin periodisch die View-Action auf und ersetzt den Widget-
+     * Koerper durch frisches View-HTML. Das enthaelt den "Loading..."-
+     * Platzhalter, den unser Timer erst bis zu 30 s spaeter wieder ueberschrieb:
+     * das Widget flackerte regelmaessig auf "Loading..." zurueck. Im Zugriffslog
+     * der Demo war der zweite Zyklus als POST auf
+     * widget.network_topology_table_widget.view alle 60 s sichtbar.
+     *
+     * Jetzt haengt das Rendern hinter super.promiseUpdate(): erst holt die
+     * Basisklasse den Koerper, dann fuellen wir ihn — in derselben Promise-
+     * Kette, waehrend der Preloader noch laeuft. Nebenbei gilt damit die
+     * Refresh-Einstellung des Dashboards statt einer fest verdrahteten Zahl,
+     * und bei inaktiver Seite pausiert der Zyklus von selbst.
+     */
+    promiseUpdate() {
         var self = this;
-        // 30s Refresh — die Tabelle zeigt Live-CPU/-Mem/-Traffic.
-        this._timer = setInterval(function() { self._loadAndRender(); }, 30000);
-    }
-
-    onDeactivate() {
-        if (this._timer) { clearInterval(this._timer); this._timer = null; }
+        return Promise.resolve(super.promiseUpdate()).then(function () {
+            return self._loadAndRender();
+        });
     }
 
     _loadAndRender() {
         var self = this;
         var ids = this._groupids;
         if (!ids || !ids.length) {
-            this._renderError('Bitte Host groups in der Widget-Konfiguration waehlen.');
-            return;
+            this._renderError('Select host groups in the widget configuration.');
+            return Promise.resolve();
         }
-        var params = new URLSearchParams();
-        params.append('action', 'network.topology.data');
-        for (var i = 0; i < ids.length; i++) params.append('groupids[]', String(ids[i]));
-        fetch('zabbix.php?' + params.toString(), {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-            .then(function(r) { return r.json(); })
+        return window.NtWidgetData(ids)
             .then(function(data) {
                 if (data && data.error) { self._renderError(String(data.error)); return; }
                 self._render((data && data.nodes) || []);
             })
-            .catch(function(e) { self._renderError((e && e.message) || 'Fehler'); });
+            .catch(function(e) { self._renderError((e && e.message) || 'Request failed'); });
     }
 
     _esc(s) {

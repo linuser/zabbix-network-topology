@@ -29,9 +29,9 @@ class WidgetView extends CControllerDashboardWidgetView {
             'view_mode'    => $view_mode,
             'show_lldp'    => (bool) ($this->fields_values['show_lldp'] ?? true),
             'hide_offline' => (bool) ($this->fields_values['hide_offline'] ?? false),
-            'data_url'     => (new \CUrl('zabbix.php'))
-                ->setArgument('action', 'network.topology.data')
-                ->getUrl(),
+            // data_url ist entfallen: seit die Widgets ueber den geteilten
+            // Zugriff (window.NtWidgetData) laufen, bauen sie die URL selbst —
+            // sonst haetten drei Widgets drei Wahrheiten ueber dieselbe Action.
             'user' => ['debug_mode' => $this->getDebugMode()]
         ]));
     }
