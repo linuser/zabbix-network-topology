@@ -3,7 +3,7 @@
 # topo-change-sender.sh — Topologie-Aenderungen + Health-Score als
 # Zabbix-Items/-Events.
 #
-# Pollt die network.topology.v6.data-Action und pusht per zabbix_sender:
+# Pollt die network.topology.data-Action und pusht per zabbix_sender:
 #
 #   nt.topo.changes        Anzahl added+removed Edges seit letztem Poll
 #   nt.topo.changes.text   menschenlesbare Liste ("-" wenn nichts)
@@ -53,7 +53,7 @@ curl -sfk -c "$JAR" -o /dev/null \
     "$ZBX_URL/index.php"
 
 # 2. Data-Action pollen (rollt die Topo-Baseline serverseitig weiter)
-QS="action=network.topology.v6.data"
+QS="action=network.topology.data"
 IFS=',' read -ra GIDS <<< "$GROUPIDS"
 for g in "${GIDS[@]}"; do
     QS="$QS&groupids%5B%5D=$g"

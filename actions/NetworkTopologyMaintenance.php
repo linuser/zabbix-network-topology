@@ -3,7 +3,7 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 1);
 
-namespace Modules\NetworkTopologyV6\Actions;
+namespace Modules\NetworkTopology\Actions;
 
 use CCsrfTokenHelper;
 use API;
@@ -18,7 +18,7 @@ use API;
  *
  * WRITE-Action. Schutz (Defense in Depth):
  *   - Echter CSRF-Token: action- + session-gebunden, im View via
- *     CCsrfTokenHelper::get('network.topology.v6.maintenance') erzeugt, ueber
+ *     CCsrfTokenHelper::get('network.topology.maintenance') erzeugt, ueber
  *     NT_CONFIG ans JS gereicht und hier per CCsrfTokenHelper::check geprueft.
  *     Ein Cross-Site-Request kann den Token nicht kennen → wird abgelehnt.
  *     (disableCsrfValidation() schaltet nur Zabbix' automatische Form-Token-
@@ -77,7 +77,7 @@ class NetworkTopologyMaintenance extends NetworkTopologyController {
         // muss stimmen. X-Requested-With allein waere fuer eine schreibende
         // Action kein ausreichender Schutz.
         if (!CCsrfTokenHelper::check((string) $this->getInput('nt_csrf', ''),
-                'network.topology.v6.maintenance')) {
+                'network.topology.maintenance')) {
             $this->jsonResponse(['error' => 'CSRF token invalid']);
             return false;
         }

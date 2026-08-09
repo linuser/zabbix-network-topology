@@ -20,7 +20,7 @@
 //   matchQuery(ast, fields) → bool. fields ist {host: 'lowercase', ip: ...}
 //   FIELD_PREFIXES — Set bekannter Field-Namen
 
-export const FIELD_PREFIXES = ['host', 'label', 'ip', 'type', 'iftype', 'proxy', 'group'];
+const FIELD_PREFIXES = ['host', 'label', 'ip', 'type', 'iftype', 'proxy', 'group'];
 const _FIELD_SET = {};
 FIELD_PREFIXES.forEach(function(f) { _FIELD_SET[f] = true; });
 

@@ -3,7 +3,7 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 0);
 
-namespace Modules\NetworkTopologyV6TableWidget\Actions;
+namespace Modules\NetworkTopologyTableWidget\Actions;
 
 use CControllerDashboardWidgetView;
 use CControllerResponseData;
@@ -12,9 +12,9 @@ use CControllerResponseData;
  * Table-Widget-Backend: reicht die Form-Werte (Hostgroups, Filter, Zeilen-
  * Limit) an die View weiter. Die Tabelle wird im Frontend (widget.class.js)
  * aus denselben Daten gerendert, die auch der Haupt-Tab nutzt
- * (network.topology.v6.data) — keine zweite Backend-Action noetig.
+ * (network.topology.data) — keine zweite Backend-Action noetig.
  *
- * Voraussetzung: Hauptmodul "network_topology_v6" ist installiert + enabled.
+ * Voraussetzung: Hauptmodul "network_topology" ist installiert + enabled.
  * Fehlt es, liefert die Data-Action 404 und das Widget zeigt einen Fehler.
  */
 class WidgetView extends CControllerDashboardWidgetView {

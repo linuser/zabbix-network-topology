@@ -9,8 +9,8 @@
 #   ./nt-install.sh update  [<zip>]       Update in place (backs up first)
 #   ./nt-install.sh update  --rollback    Restore the pre-update backup
 #
-# If <zip> is omitted it looks for  ./network_topology_v6.zip  then ~/network_topology_v6.zip
-# The module is ALWAYS installed as  <ui>/modules/network_topology_v6  (the name is mandatory).
+# If <zip> is omitted it looks for  ./network_topology.zip  then ~/network_topology.zip
+# The module is ALWAYS installed as  <ui>/modules/network_topology  (the name is mandatory).
 #
 # Requirements: bash, unzip, sudo (or run as root), a Zabbix 7.4+ frontend.
 # Autodetect override:  ZBX_UI_PATH=/path/to/zabbix/ui  ./nt-install.sh ...
@@ -22,7 +22,7 @@ set -uo pipefail   # NICHT -e: check() erwartet fehlschlagende Tests; kritische
 # (z.B. sudo -E / root-cron) keine Trojaner-Binary vor systemctl/unzip/awk schiebt.
 export PATH="/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
 
-readonly MODULE="network_topology_v6"
+readonly MODULE="network_topology"
 readonly MIN_MAJOR=7 MIN_MINOR=4
 readonly MAX_UNPACKED=$((100 * 1024 * 1024))   # 100 MiB — Cap gegen Zip-Bomben
 readonly REQUIRED_FILES=(
@@ -206,6 +206,25 @@ do_deploy() {
                 || warn "Backup-Umbenennung fehlgeschlagen — alte Version liegt unter: $prev"
         else $SUDO rm -rf "$prev"; fi
     fi
+
+    # Migration 4.x → 5.0: bis 4.38.3 hieß das Verzeichnis network_topology_v6.
+    # Bleibt es liegen, registriert Zabbix beide Module und der Menüeintrag
+    # erscheint doppelt — deshalb wird genau dieser Konflikt entfernt.
+    local moddir legacy
+    moddir=$(dirname "$mod")
+    if [[ -d "$moddir/network_topology_v6" ]]; then
+        $SUDO rm -rf "$moddir/network_topology_v6" \
+            && echo "→ entfernt: network_topology_v6 (Altbestand vor 5.0, sonst doppelter Menüeintrag)" \
+            || warn "konnte $moddir/network_topology_v6 nicht entfernen — bitte von Hand löschen."
+    fi
+    # Alte Widgets werden nur gemeldet, nicht gelöscht: sie rufen die entfallenen
+    # network.topology.v6.*-Actions und zeigen deshalb ab 5.0 einen Fehler.
+    for legacy in network_topology_v6_widget network_topology_v6_health_widget \
+                  network_topology_v6_table_widget; do
+        if [[ -d "$moddir/$legacy" ]]; then
+            warn "Alt-Widget gefunden: $moddir/$legacy — funktioniert ab 5.0 nicht mehr, bitte löschen und die 5.0-Widgets installieren."
+        fi
+    done
 
     echo "→ Reload $FPM"
     $SUDO systemctl reload "$FPM" || die "php-fpm reload fehlgeschlagen ($FPM) — Modul liegt, aber Opcache evtl. alt."

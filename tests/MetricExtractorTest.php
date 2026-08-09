@@ -22,7 +22,7 @@ declare(strict_types = 1);
 // Namespace-Segmente unterhalb des Modul-Namespace werden zu kleingeschriebenen
 // Verzeichnissen (Topology\MetricExtractor -> topology/MetricExtractor.php).
 spl_autoload_register(static function (string $class): void {
-    $prefix = 'Modules\\NetworkTopologyV6\\';
+    $prefix = 'Modules\\NetworkTopology\\';
     if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
         return;
     }
@@ -35,7 +35,7 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-use Modules\NetworkTopologyV6\Topology\MetricExtractor;
+use Modules\NetworkTopology\Topology\MetricExtractor;
 
 $failures = 0;
 

@@ -3,7 +3,7 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 0);
 
-namespace Modules\NetworkTopologyV6HealthWidget\Actions;
+namespace Modules\NetworkTopologyHealthWidget\Actions;
 
 use CControllerDashboardWidgetView;
 use CControllerResponseData;
@@ -15,7 +15,7 @@ use CControllerResponseData;
  * weil das Hauptmodul ohnehin die Topology-Daten liefert und wir damit
  * eine zweite Backend-Action sparen.
  *
- * Voraussetzung: Hauptmodul "network_topology_v6" ist installiert + enabled.
+ * Voraussetzung: Hauptmodul "network_topology" ist installiert + enabled.
  */
 class WidgetView extends CControllerDashboardWidgetView {
 

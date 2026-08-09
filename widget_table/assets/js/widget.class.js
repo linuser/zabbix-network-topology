@@ -5,7 +5,7 @@
  * kein Spread, kein const/let, keine Arrow-Functions).
  *
  * Rendert eine kompakte Tabellen-Ansicht (Nagios-/Icinga-Style Hostliste) aus
- * den Daten des Hauptmoduls (network.topology.v6.data): Status, Host, CPU,
+ * den Daten des Hauptmoduls (network.topology.data): Status, Host, CPU,
  * Mem, Ping, Traffic, Probleme. Spiegelt eine reduzierte Variante von
  * assets/js/modules/render-table.js — ES5-konform fuer den Widget-Loader
  * dupliziert (keine ESM-Imports verfuegbar).
@@ -82,7 +82,7 @@ class WidgetNetworkTopologyTable extends CWidget {
             return;
         }
         var params = new URLSearchParams();
-        params.append('action', 'network.topology.v6.data');
+        params.append('action', 'network.topology.data');
         for (var i = 0; i < ids.length; i++) params.append('groupids[]', String(ids[i]));
         fetch('zabbix.php?' + params.toString(), {
             credentials: 'same-origin',

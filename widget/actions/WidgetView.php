@@ -3,18 +3,18 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 0);
 
-namespace Modules\NetworkTopologyV6Widget\Actions;
+namespace Modules\NetworkTopologyWidget\Actions;
 
 use CControllerDashboardWidgetView;
 use CControllerResponseData;
-use Modules\NetworkTopologyV6Widget\Includes\WidgetForm;
+use Modules\NetworkTopologyWidget\Includes\WidgetForm;
 
 /**
  * Widget-Backend: liest die Form-Werte (Hostgroups, Default-View, LLDP)
  * und gibt sie an die View weiter. Reicht zusaetzlich die Data-URL durch
- * die auf die Action des Hauptmoduls (network.topology.v6.data) zeigt.
+ * die auf die Action des Hauptmoduls (network.topology.data) zeigt.
  *
- * Voraussetzung: Hauptmodul "network_topology_v6" ist installiert + enabled.
+ * Voraussetzung: Hauptmodul "network_topology" ist installiert + enabled.
  * Falls nicht, liefert die Data-Action 404 und das Widget zeigt einen Fehler.
  */
 class WidgetView extends CControllerDashboardWidgetView {
@@ -30,7 +30,7 @@ class WidgetView extends CControllerDashboardWidgetView {
             'show_lldp'    => (bool) ($this->fields_values['show_lldp'] ?? true),
             'hide_offline' => (bool) ($this->fields_values['hide_offline'] ?? false),
             'data_url'     => (new \CUrl('zabbix.php'))
-                ->setArgument('action', 'network.topology.v6.data')
+                ->setArgument('action', 'network.topology.data')
                 ->getUrl(),
             'user' => ['debug_mode' => $this->getDebugMode()]
         ]));

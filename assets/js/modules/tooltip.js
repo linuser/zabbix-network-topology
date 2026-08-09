@@ -31,7 +31,7 @@ function fetchSparkData(hostid, d, onDone) {
 
     const cfg = window.NT_CONFIG;
     if (!cfg || !cfg.data_url) { delete _sparkPending[hostid]; return; }
-    const sparkUrl = cfg.data_url.replace('network.topology.v6.data', 'network.topology.v6.spark')
+    const sparkUrl = cfg.data_url.replace('network.topology.data', 'network.topology.spark')
         + '&hostids%5B%5D=' + encodeURIComponent(hostid);
 
     fetch(sparkUrl, { credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'} })
@@ -312,7 +312,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
         _tip.innerHTML = buildHtml(cacheS, cacheT);
         return;
     }
-    const url = cfg.data_url.replace('network.topology.v6.data', 'network.topology.v6.spark')
+    const url = cfg.data_url.replace('network.topology.data', 'network.topology.spark')
         + '&hostids%5B%5D=' + encodeURIComponent(srcId)
         + '&hostids%5B%5D=' + encodeURIComponent(tgtId);
     fetch(url, { credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'} })

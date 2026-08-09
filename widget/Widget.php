@@ -3,13 +3,13 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 0);
 
-namespace Modules\NetworkTopologyV6Widget;
+namespace Modules\NetworkTopologyWidget;
 
 use Zabbix\Core\CWidget;
 
 class Widget extends CWidget {
 
     public function getDefaultName(): string {
-        return _('Network Topology v6');
+        return _('Network Topology');
     }
 }

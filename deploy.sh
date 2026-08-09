@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# deploy.sh — Deploy Zabbix Network Topology v6 auf einen Ziel-Server.
+# deploy.sh — Deploy Zabbix Network Topology auf einen Ziel-Server.
 #
 # Verwendung:
 #   ./deploy.sh <server>              # nur Hauptmodul
@@ -33,7 +33,7 @@ readonly SCRIPT_DIR
 # Arbeitsverzeichnisse: mktemp -d (0700) statt fester /tmp-Pfade.
 #
 # Feste Namen in einem world-writable /tmp sind angreifbar: ein beliebiger
-# unprivilegierter User auf dem ZIELSERVER kann /tmp/network_topology_v6.zip
+# unprivilegierter User auf dem ZIELSERVER kann /tmp/network_topology.zip
 # vorab als Symlink anlegen. scp oeffnet mit O_CREAT|O_TRUNC und folgt dem
 # Symlink — der Angreifer kontrolliert die Datei, die Sekunden spaeter von
 # "sudo unzip" als ROOT entpackt wird. Ein 0700-Verzeichnis mit zufaelligem
@@ -41,10 +41,10 @@ readonly SCRIPT_DIR
 # EXIT-Trap ab (vorher blieben die Remote-Zips dauerhaft liegen).
 LOCAL_TMP="$(mktemp -d "${TMPDIR:-/tmp}/nt-deploy.XXXXXXXX")"
 readonly LOCAL_TMP
-readonly TMP_MAIN="$LOCAL_TMP/network_topology_v6.zip"
-readonly TMP_WIDGET="$LOCAL_TMP/network_topology_v6_widget.zip"
-readonly TMP_HEALTH="$LOCAL_TMP/network_topology_v6_health_widget.zip"
-readonly TMP_TABLE="$LOCAL_TMP/network_topology_v6_table_widget.zip"
+readonly TMP_MAIN="$LOCAL_TMP/network_topology.zip"
+readonly TMP_WIDGET="$LOCAL_TMP/network_topology_widget.zip"
+readonly TMP_HEALTH="$LOCAL_TMP/network_topology_health_widget.zip"
+readonly TMP_TABLE="$LOCAL_TMP/network_topology_table_widget.zip"
 # Remote-Pfade stehen erst fest, wenn die SSH-Verbindung steht (s.u.).
 REMOTE_DIR=""
 
@@ -113,10 +113,10 @@ if [[ -z "$REMOTE_DIR" || "$REMOTE_DIR" != /tmp/nt-deploy.* ]]; then
     echo "❌ Konnte auf $SERVER kein Temp-Verzeichnis anlegen." >&2
     exit 1
 fi
-readonly REMOTE_MAIN="$REMOTE_DIR/network_topology_v6.zip"
-readonly REMOTE_WIDGET="$REMOTE_DIR/network_topology_v6_widget.zip"
-readonly REMOTE_HEALTH="$REMOTE_DIR/network_topology_v6_health_widget.zip"
-readonly REMOTE_TABLE="$REMOTE_DIR/network_topology_v6_table_widget.zip"
+readonly REMOTE_MAIN="$REMOTE_DIR/network_topology.zip"
+readonly REMOTE_WIDGET="$REMOTE_DIR/network_topology_widget.zip"
+readonly REMOTE_HEALTH="$REMOTE_DIR/network_topology_health_widget.zip"
+readonly REMOTE_TABLE="$REMOTE_DIR/network_topology_table_widget.zip"
 
 # ── Remote-Umgebung autodetecten ───────────────────────────────────────────
 echo "→ Autodetect PHP-FPM-Service + Zabbix-UI-Pfad auf $SERVER"
@@ -226,9 +226,9 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
         --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-install.sh' \
         --exclude 'tests' --exclude '.gitlab-ci.yml' \
         --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
-        "$SCRIPT_DIR/" "$STAGE/network_topology_v6/"
+        "$SCRIPT_DIR/" "$STAGE/network_topology/"
     rm -f "$TMP_MAIN"
-    (cd "$STAGE" && zip -rq "$TMP_MAIN" network_topology_v6)
+    (cd "$STAGE" && zip -rq "$TMP_MAIN" network_topology)
     rm -rf "$STAGE"
     echo "  → $TMP_MAIN ($(du -h "$TMP_MAIN" | cut -f1))"
 fi
@@ -274,23 +274,37 @@ cd "$REMOTE_MODULES"
 $([[ "$MODE" == "main" || "$MODE" == "all" ]] && cat <<'MAIN'
 STAGE=$(mktemp -d /tmp/nt_stage.XXXXXX)
 sudo unzip -q "$R_MAIN" -d "$STAGE"
-sudo rm -rf network_topology_v6
-sudo mv "$STAGE/network_topology_v6" network_topology_v6
+sudo rm -rf network_topology
+sudo mv "$STAGE/network_topology" network_topology
 sudo rm -rf "$STAGE"
-sudo chown -R root:root network_topology_v6
+sudo chown -R root:root network_topology
+# Migration 4.x -> 5.0: das Verzeichnis hiess frueher network_topology_v6.
+# Bleibt es liegen, registriert Zabbix beide Module und der Menueintrag
+# erscheint doppelt.
+if [ -d network_topology_v6 ]; then
+    sudo rm -rf network_topology_v6
+    echo "  entfernt: network_topology_v6 (Altbestand vor 5.0)"
+fi
 MAIN
 )
 $([[ "$MODE" == "widgets" || "$MODE" == "all" ]] && cat <<'WIDGETS'
 STAGE_W=$(mktemp -d /tmp/nt_stage_w.XXXXXX)
-sudo unzip -q "$R_WIDGET" -d "$STAGE_W/network_topology_v6_widget"
-sudo unzip -q "$R_HEALTH" -d "$STAGE_W/network_topology_v6_health_widget"
-sudo unzip -q "$R_TABLE"  -d "$STAGE_W/network_topology_v6_table_widget"
-sudo rm -rf network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
-sudo mv "$STAGE_W/network_topology_v6_widget" network_topology_v6_widget
-sudo mv "$STAGE_W/network_topology_v6_health_widget" network_topology_v6_health_widget
-sudo mv "$STAGE_W/network_topology_v6_table_widget" network_topology_v6_table_widget
+sudo unzip -q "$R_WIDGET" -d "$STAGE_W/network_topology_widget"
+sudo unzip -q "$R_HEALTH" -d "$STAGE_W/network_topology_health_widget"
+sudo unzip -q "$R_TABLE"  -d "$STAGE_W/network_topology_table_widget"
+sudo rm -rf network_topology_widget network_topology_health_widget network_topology_table_widget
+sudo mv "$STAGE_W/network_topology_widget" network_topology_widget
+sudo mv "$STAGE_W/network_topology_health_widget" network_topology_health_widget
+sudo mv "$STAGE_W/network_topology_table_widget" network_topology_table_widget
 sudo rm -rf "$STAGE_W"
-sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
+sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget
+# Migration 4.x -> 5.0: siehe oben, gilt genauso fuer die drei Widgets.
+for legacy in network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget; do
+    if [ -d "$legacy" ]; then
+        sudo rm -rf "$legacy"
+        echo "  entfernt: $legacy (Altbestand vor 5.0)"
+    fi
+done
 WIDGETS
 )
 sudo systemctl reload "$FPM_SERVICE"
@@ -305,11 +319,11 @@ cat <<EOF
 Naechste Schritte in der Zabbix-UI:
   1. Administration → General → Modules → Scan directory
   2. Betroffene Module aktivieren:
-       Network Topology v6              (Hauptmodul)
-       Network Topology v6 Widget       (Topology-Widget)
+       Network Topology              (Hauptmodul)
+       Network Topology Widget       (Topology-Widget)
        NT Health Score Widget           (Health-Widget)
        NT Table                         (Table-Widget)
-  3. Aufruf via Monitoring → Network Topology v6
+  3. Aufruf via Monitoring → Network Topology
 
 Optional: Integration-Links via Global-Macros
   Administration → General → Macros

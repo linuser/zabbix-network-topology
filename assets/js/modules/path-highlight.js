@@ -85,7 +85,7 @@ export function applyPathHighlight(cy, fromId, toId) {
     return true;
 }
 
-export function clearPathHighlight(cy) {
+function clearPathHighlight(cy) {
     if (!cy) return;
     cy.elements().removeClass('nt-path-dim nt-path-edge nt-path-node');
     _active = false;

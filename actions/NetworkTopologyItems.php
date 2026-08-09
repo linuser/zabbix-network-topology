@@ -3,7 +3,7 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 1);
 
-namespace Modules\NetworkTopologyV6\Actions;
+namespace Modules\NetworkTopology\Actions;
 
 use API;
 
@@ -240,7 +240,7 @@ class NetworkTopologyItems extends NetworkTopologyController {
             'hosts'   => $host_meta ?: new \stdClass(),
             // item_meta pro (hid, colKey): itemid + name + description +
             // value_type. Frontend nutzt das fuer Zellen-Tooltip und
-            // fuer Sparkline-Lazyfetch via network.topology.v6.item_history
+            // fuer Sparkline-Lazyfetch via network.topology.item_history
             'item_meta' => $item_meta ?: new \stdClass(),
             'truncated' => count($items) >= self::MAX_ITEMS,
         ];

@@ -3,7 +3,7 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 0);
 
-namespace Modules\NetworkTopologyV6Widget\Includes;
+namespace Modules\NetworkTopologyWidget\Includes;
 
 use Zabbix\Widgets\CWidgetForm;
 use Zabbix\Widgets\Fields\CWidgetFieldMultiSelectGroup;

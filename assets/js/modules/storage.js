@@ -22,10 +22,10 @@ const LEG = {
 };
 
 const PFX = userPrefix();
-export const NT_POS_PREFIX     = 'nt_' + PFX + 'pos_';
-export const NT_PINNED_PREFIX  = 'nt_' + PFX + 'pinned_';
-export const NT_NOTES_PREFIX   = 'nt_' + PFX + 'notes_';
-export const NT_LINKS_KEY      = 'nt_' + PFX + 'manual_links';
+const NT_POS_PREFIX     = 'nt_' + PFX + 'pos_';
+const NT_PINNED_PREFIX  = 'nt_' + PFX + 'pinned_';
+const NT_NOTES_PREFIX   = 'nt_' + PFX + 'notes_';
+const NT_LINKS_KEY      = 'nt_' + PFX + 'manual_links';
 export const NT_LLDP_KEY       = 'nt_' + PFX + 'lldp_visible';
 export const NT_WEATHERMAP_KEY = 'nt_' + PFX + 'weathermap';
 export const NT_PORTLABELS_KEY = 'nt_' + PFX + 'portlabels';
@@ -36,10 +36,10 @@ export const NT_LEGEND_COLLAPSED_KEY = 'nt_' + PFX + 'legend_collapsed';
 export const NT_PERF_KEY = 'nt_' + PFX + 'perf';
 export const NT_TAB_KEY        = 'nt_' + PFX + 'active_tab';
 export const NT_GROUP_VIEW_KEY = 'nt_' + PFX + 'group_view';
-export const NT_SEV_FILTER_KEY = 'nt_' + PFX + 'sev_filter';
-export const NT_LAYOUT_KEY     = 'nt_' + PFX + 'layout';
-export const NT_GEO_PROVIDER_KEY = 'nt_' + PFX + 'geo_provider';
-export const NT_TAPHOLD_KEY    = 'nt_' + PFX + 'taphold_ms';
+const NT_SEV_FILTER_KEY = 'nt_' + PFX + 'sev_filter';
+const NT_LAYOUT_KEY     = 'nt_' + PFX + 'layout';
+const NT_GEO_PROVIDER_KEY = 'nt_' + PFX + 'geo_provider';
+const NT_TAPHOLD_KEY    = 'nt_' + PFX + 'taphold_ms';
 export const NT_TABLE_MODE_KEY     = 'nt_' + PFX + 'table_mode';
 export const NT_ITEMS_PATTERN_KEY  = 'nt_' + PFX + 'items_pattern';
 export const NT_ITEMS_HIDE_EMPTY_KEY = 'nt_' + PFX + 'items_hide_empty';
@@ -101,8 +101,8 @@ function selectedGroupIds() {
     return ids.join('_');
 }
 
-export function pinnedKey() { return NT_PINNED_PREFIX + selectedGroupIds(); }
-export function notesKey()  { return NT_NOTES_PREFIX  + selectedGroupIds(); }
+function pinnedKey() { return NT_PINNED_PREFIX + selectedGroupIds(); }
+function notesKey()  { return NT_NOTES_PREFIX  + selectedGroupIds(); }
 
 function _groupViewOn() {
     try { return localStorage.getItem(NT_GROUP_VIEW_KEY) === '1'; } catch (e) { return false; }
@@ -113,7 +113,7 @@ function _groupViewOn() {
 // explizitem Bool die gewünschte — Presets speichern ihre View mit (posGrp) und
 // schreiben beim Anwenden in den PASSENDEN Key statt in den der gerade aktiven
 // View (sonst landen z.B. Host-Positionen im _grp-Key → Mismatch → verpuffen).
-export function posKey(groupView) {
+function posKey(groupView) {
     const gv = (groupView === undefined) ? _groupViewOn() : !!groupView;
     return NT_POS_PREFIX + selectedGroupIds() + (gv ? '_grp' : '');
 }
@@ -238,7 +238,7 @@ export function saveTapholdMs(ms) {
 const NT_PRESETS_KEY        = 'nt_' + PFX + 'presets';
 const NT_ACTIVE_PRESET_KEY  = 'nt_' + PFX + 'active_preset';
 
-export function loadPresets() {
+function loadPresets() {
     try { return JSON.parse(localStorage.getItem(NT_PRESETS_KEY) || '[]'); }
     catch (e) { return []; }
 }

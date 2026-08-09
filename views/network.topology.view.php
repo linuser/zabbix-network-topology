@@ -27,7 +27,7 @@ $selected_data = array_map(
     ->setDocUrl('')
     ->addItem(
         (new CForm('get', 'zabbix.php'))
-            ->addVar('action', 'network.topology.v6.view')
+            ->addVar('action', 'network.topology.view')
             ->setId('nt-filter-form')
             ->addItem(
                 (new CDiv())
@@ -68,7 +68,7 @@ $selected_data = array_map(
                             )
                             ->addItem(
                                 (new CRedirectButton(_('Reset'),
-                                    (new CUrl('zabbix.php'))->setArgument('action', 'network.topology.v6.view')
+                                    (new CUrl('zabbix.php'))->setArgument('action', 'network.topology.view')
                                 ))->addClass('btn-alt')
                             )
 
@@ -165,8 +165,8 @@ $_nt_v = (string) max(
 if ($_nt_v === '0' || $_nt_v === '') $_nt_v = (string) time();
 ?>
 <link rel="stylesheet" type="text/css"
-      href="modules/network_topology_v6/assets/css/network-topology.css?v=<?= $_nt_v ?>">
-<script src="modules/network_topology_v6/assets/js/cytoscape.min.js"></script>
+      href="modules/network_topology/assets/css/network-topology.css?v=<?= $_nt_v ?>">
+<script src="modules/network_topology/assets/js/cytoscape.min.js"></script>
 <?php // Leaflet (CSS+JS, ~144 KB) wird NICHT upfront geladen — nur im Geo-Tab
       // gebraucht; render-geo.js injiziert es per ensureLeaflet() lazy.
       // cola-Layout wurde entfernt (kein LAYOUT_OPTIONS-Eintrag nutzte es). ?>
@@ -174,7 +174,7 @@ if ($_nt_v === '0' || $_nt_v === '') $_nt_v = (string) time();
 
 <?php
 $data_url = (new CUrl('zabbix.php'))
-    ->setArgument('action', 'network.topology.v6.data')
+    ->setArgument('action', 'network.topology.data')
     ->getUrl();
 
 ?>
@@ -193,7 +193,7 @@ window.NT_CONFIG = <?= json_encode([
     // CSRF-Token fuer die schreibende Maintenance-Action (action- + session-
     // gebunden). Das JS sendet es mit; NetworkTopologyMaintenance prueft es via
     // CCsrfTokenHelper::check -> echter CSRF-Schutz statt nur X-Requested-With.
-    'csrf_token' => \CCsrfTokenHelper::get('network.topology.v6.maintenance'),
+    'csrf_token' => \CCsrfTokenHelper::get('network.topology.maintenance'),
     // Optionaler Provider-Name für die Internet-Wolke im Hierarchie-Layout.
     // Aus URL-Parameter ?internet=Vodafone gelesen; leer = "Internet" als Default.
     'internet_label' => (string) ($data['internet_label'] ?? ''),
@@ -217,7 +217,7 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
         window.NT_CONFIG = window.NT_CONFIG || {};
         window.NT_CONFIG.selected_groupids = _g;
         window.NT_CONFIG.selected_group_names = [];
-        window.NT_CONFIG.data_url = 'zabbix.php?action=network.topology.v6.data';
+        window.NT_CONFIG.data_url = 'zabbix.php?action=network.topology.data';
         // Fail closed: dieser Fallback greift nur wenn PHP NT_CONFIG NICHT
         // geliefert hat (also auch die serverseitig ermittelte Admin-Rolle
         // fehlt). can_edit steuert Admin-only-UI (Bearbeiten-Links, Wartung).
@@ -233,7 +233,7 @@ if (!window.NT_CONFIG || !window.NT_CONFIG.selected_groupids || !window.NT_CONFI
       // echte Stacktraces, kein Import-Rewriting-Regex. defer = Modul-
       // defer-Semantik (DOM fertig, cytoscape davor geladen). Nach
       // JS-Aenderungen `npm run build` (deploy.sh baut ausserdem selbst). ?>
-<script defer src="modules/network_topology_v6/assets/js/dist/nt-bundle.js?v=<?= $_nt_v ?>"></script>
+<script defer src="modules/network_topology/assets/js/dist/nt-bundle.js?v=<?= $_nt_v ?>"></script>
 <script>window.addEventListener("load", function(){
     // Wallboard-Mode: Body-Klasse setzen damit CSS Header/Filter ausblendet,
     // und Auto-Tab-Switch starten (Tech ↔ Geo alle 30s).

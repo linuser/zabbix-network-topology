@@ -46,7 +46,7 @@ services:
       # Das gebaute Modul read-only in den Frontend-Modul-Ordner mounten.
       # Falls das Image den Frontend-Root anders legt: Pfad anpassen
       # (im Container:  find / -name manifest.json -path '*modules*' 2>/dev/null).
-      - ./module/network_topology_v6:/usr/share/zabbix/modules/network_topology_v6:ro
+      - ./module/network_topology:/usr/share/zabbix/modules/network_topology:ro
 
 volumes:
   db-data:

@@ -29,7 +29,7 @@ let _onMgmtRerender = null;
 export function setActiveTabGetter(fn) { _getActiveTab = fn; }
 export function setMgmtRerenderCallback(fn) { _onMgmtRerender = fn; }
 
-export function applyDarkMode(forceState) {
+function applyDarkMode(forceState) {
     const root = document.getElementById('nt-root');
     if (!root) return;
     const nowDark = (forceState !== undefined)

@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-**Network Topology for Zabbix** (module id `network_topology_v6`) is licensed under
+**Network Topology for Zabbix** (module id `network_topology`) is licensed under
 **AGPL-3.0-or-later** (see [LICENSE](LICENSE)).
 
 It bundles and redistributes the third-party components listed below. Each is

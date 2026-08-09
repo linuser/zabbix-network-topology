@@ -1,6 +1,6 @@
 // render-compliance.js — Security/Compliance-Tab.
 //
-// Fetcht network.topology.v6.compliance fuer die aktuell ausgewaehlten
+// Fetcht network.topology.compliance fuer die aktuell ausgewaehlten
 // Hostgroups und zeigt:
 //   - Aggregat-Header: Counter pro Check (klickbar → Host-Filter)
 //   - Per-Host-Tabelle: ein Symbol pro Check + Host-Spalte
@@ -44,7 +44,7 @@ export function fetchComplianceData() {
     const groupids = (cfg && cfg.selected_groupids) || [];
     if (!groupids.length) return Promise.resolve(null);
     const params = new URLSearchParams();
-    params.append('action', 'network.topology.v6.compliance');
+    params.append('action', 'network.topology.compliance');
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
     return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })

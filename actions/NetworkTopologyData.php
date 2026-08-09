@@ -3,14 +3,14 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 1);
 
-namespace Modules\NetworkTopologyV6\Actions;
+namespace Modules\NetworkTopology\Actions;
 
-use Modules\NetworkTopologyV6\Topology\HostMetadata;
-use Modules\NetworkTopologyV6\Topology\MetricExtractor;
-use Modules\NetworkTopologyV6\Topology\LldpEdgeBuilder;
-use Modules\NetworkTopologyV6\Topology\HostTagParser;
-use Modules\NetworkTopologyV6\Topology\NodeBuilder;
-use Modules\NetworkTopologyV6\Topology\ProblemLoader;
+use Modules\NetworkTopology\Topology\HostMetadata;
+use Modules\NetworkTopology\Topology\MetricExtractor;
+use Modules\NetworkTopology\Topology\LldpEdgeBuilder;
+use Modules\NetworkTopology\Topology\HostTagParser;
+use Modules\NetworkTopology\Topology\NodeBuilder;
+use Modules\NetworkTopology\Topology\ProblemLoader;
 use CControllerResponseFatal;
 use API;
 

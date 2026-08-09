@@ -233,7 +233,7 @@ let _leafletPromise = null;
 function ensureLeaflet() {
     if (window.L) return Promise.resolve();
     if (_leafletPromise) return _leafletPromise;
-    const BASE = 'modules/network_topology_v6/assets/js/leaflet/';
+    const BASE = 'modules/network_topology/assets/js/leaflet/';
     _leafletPromise = new Promise(function(resolve, reject) {
         if (!document.getElementById('nt-leaflet-css')) {
             const link = document.createElement('link');

@@ -3,6 +3,100 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
+## v5.0.0 — 2026-08-08
+
+### ⚠️ Breaking — der `_v6`-Suffix entfällt
+
+Das Modul hieß intern seit jeher `network_topology_v6`; die „v6" war eine
+Entwicklungsnummer aus der Zeit vor dem ersten Release und hatte nie etwas mit
+der Zabbix- oder der Modulversion zu tun. Sie führte regelmäßig zu der Annahme,
+das Modul sei an Zabbix 6 gebunden — das Gegenteil stimmt, es läuft auf 7.0 LTS
+und 7.4. Der Suffix verschwindet daher restlos aus allen Bezeichnern.
+
+*The `_v6` suffix is gone. It was a pre-release development number, never a
+Zabbix-version marker, and it kept being read as „requires Zabbix 6". Migration
+steps below.*
+
+| | vorher | jetzt |
+|---|---|---|
+| Verzeichnis | `network_topology_v6` | `network_topology` |
+| Modul-ID | `network_topology_v6` | `network_topology` |
+| PHP-Namespace | `Modules\NetworkTopologyV6` | `Modules\NetworkTopology` |
+| Actions | `network.topology.v6.*` | `network.topology.*` |
+| Widget-IDs | `network_topology_v6_*_widget` | `network_topology_*_widget` |
+
+**Es gibt bewusst keine Kompatibilitäts-Aliase.** Die alten Action-Namen sind
+weg, nicht deprecated.
+
+### Migration von 4.x
+
+1. **Altes Verzeichnis entfernen**, sonst registriert Zabbix beide Module und
+   der Menüeintrag erscheint doppelt:
+   ```bash
+   cd /usr/share/zabbix/ui/modules
+   sudo rm -rf network_topology_v6 network_topology_v6_widget \
+               network_topology_v6_health_widget network_topology_v6_table_widget
+   ```
+2. Neue ZIPs entpacken (siehe `INSTALL.md`), dann
+   **Administration → General → Modules → Scan directory** und die Module auf
+   *Enabled* setzen. Die alten Einträge verschwinden dabei von selbst.
+3. **Dashboards nachziehen.** Die drei Widget-IDs stehen in `widget.type`; mit
+   dem Umbenennen kennt Zabbix den alten Typ nicht mehr und blendet die Kacheln
+   aus. Sie müssen einmalig neu hinzugefügt und konfiguriert werden. Betroffen
+   ist nur die Kachel, nicht das Dashboard.
+4. **Lesezeichen aktualisieren** — die Ansicht liegt jetzt unter
+   `zabbix.php?action=network.topology.view`.
+
+#### Optional: Dashboards per SQL erhalten
+
+Wer die Kacheln nicht neu bestücken will, kann die Bezeichner stattdessen in
+der Datenbank umschreiben. Das ist genau das, was „Scan directory" plus ein
+manueller Neuaufbau täte — nur ohne Klickarbeit. **Vorher Backup ziehen**, und
+erst ausführen, wenn die neuen Verzeichnisse schon auf der Platte liegen:
+
+```sql
+BEGIN;
+UPDATE module SET id = 'network_topology',
+                  relative_path = 'modules/network_topology'
+ WHERE id = 'network_topology_v6';
+UPDATE module SET id = 'network_topology_widget',
+                  relative_path = 'modules/network_topology_widget'
+ WHERE id = 'network_topology_v6_widget';
+UPDATE module SET id = 'network_topology_health_widget',
+                  relative_path = 'modules/network_topology_health_widget'
+ WHERE id = 'network_topology_v6_health_widget';
+UPDATE module SET id = 'network_topology_table_widget',
+                  relative_path = 'modules/network_topology_table_widget'
+ WHERE id = 'network_topology_v6_table_widget';
+
+UPDATE widget SET type = 'network_topology_widget'
+ WHERE type = 'network_topology_v6_widget';
+UPDATE widget SET type = 'network_topology_health_widget'
+ WHERE type = 'network_topology_v6_health_widget';
+UPDATE widget SET type = 'network_topology_table_widget'
+ WHERE type = 'network_topology_v6_table_widget';
+COMMIT;
+```
+
+`UPDATE` statt `DELETE`+`INSERT` ist Absicht: es erhält die `moduleid`, an der
+`role_rule.value_moduleid` per Fremdschlüssel mit `ON DELETE CASCADE` hängt —
+ein Löschen würde rollenbasierte Modulrechte stillschweigend mit entfernen.
+Danach php-fpm neu laden. Auf der Projekt-Demo ist genau dieser Weg gelaufen;
+Modulstatus und alle drei Kacheln blieben erhalten.
+
+**Erhalten bleibt alles Nutzerseitige:** Knotenpositionen, Pins, Notizen,
+manuelle Links, Filter-Presets und sämtliche Toolbar-Einstellungen. Die
+localStorage-Schlüssel tragen ein User-Präfix (`u<id>_`) und waren nie an den
+Modulnamen gebunden. Host-Tags (`nt:parent`) sind ohnehin unberührt.
+
+### Changed
+- Widget-Versionen ziehen wegen der geänderten IDs je einen Major nach:
+  Topologie-Graph `2.0.0 → 3.0.0`, Health-Score `1.0.1 → 2.0.0`,
+  Tabelle `1.0.0 → 2.0.0`.
+- Release-Assets heißen entsprechend `network_topology.zip`,
+  `network_topology_widget.zip`, `network_topology_health_widget.zip`,
+  `network_topology_table_widget.zip`.
+
 ## v4.38.3 — 2026-07-27
 
 ### Fixed

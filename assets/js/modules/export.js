@@ -335,7 +335,7 @@ function buildAuditHtml(complianceData) {
         + '</tbody></table></section>';
 
     // Compliance-Sektion — nur wenn der Caller die Daten geliefert hat
-    // (network.topology.v6.compliance Action). Sonst leer.
+    // (network.topology.compliance Action). Sonst leer.
     let complianceSection = '';
     if (complianceData && complianceData.aggregate) {
         // Check-Definitionen aus render-compliance.js (Single Source) —

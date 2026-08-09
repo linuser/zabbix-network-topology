@@ -4,7 +4,7 @@
  * Fixes: BUG-4 (namespace), BUG-5 (APP::Component), BUG-6 (CSS via view)
  */
 
-namespace Modules\NetworkTopologyV6;
+namespace Modules\NetworkTopology;
 
 use Zabbix\Core\CModule;
 use APP;
@@ -22,7 +22,7 @@ class Module extends CModule {
             ->getSubmenu()
             ->add(
                 (new CMenuItem(_('Network Topology for Zabbix')))
-                    ->setAction('network.topology.v6.view')
+                    ->setAction('network.topology.view')
             );
     }
 }
