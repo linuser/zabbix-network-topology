@@ -31,12 +31,14 @@
 // Disziplin korrekt und das XSS-Gate hat nichts zu pruefen.
 
 import { t } from './i18n.js';
+import { injectGhostNodes } from './build-elements.js';
+import { NT_GHOSTS_KEY } from './storage.js';
 
 const COL = {
     neutral: { light: '#334155', dark: '#f1f5f9' },
     ok:      { light: '#16a34a', dark: '#22c55e' },
     warn:    { light: '#d97706', dark: '#f59e0b' },
-    down:    { light: '#dc2626', dark: '#ef4444' },
+    crit:    { light: '#dc2626', dark: '#ef4444' },
     link:    { light: '#7c3aed', dark: '#a78bfa' },
     ghost:   { light: '#64748b', dark: '#94a3b8' }
 };
@@ -158,32 +160,57 @@ function tile(value, label, colour, sub) {
  * Kanten aus der Cytoscape-Instanz.
  */
 function collect(nodes, cy) {
-    let ok = 0, warn = 0, down = 0;
+    // Severity-Stufen sind ['Normal','Info','Warning','Average','High','Disaster'].
+    //
+    // Die alte, nie ausgefuehrte updateBadge()-Logik warf alles ausser 0 und
+    // >=5 in einen Topf "Warn" — damit stand ein High-Problem unter "Warn",
+    // waehrend die Toolbar direkt darueber getrennte Pillen fuer Warn, Avg und
+    // High zeigt und der Knoten im Graphen rot leuchtet. Deshalb hier:
+    //   ok    Normal
+    //   warn  Info, Warning, Average   (1-3)
+    //   crit  High, Disaster           (4-5)
+    let ok = 0, warn = 0, crit = 0;
 
     nodes.forEach(function(n) {
         const s = n.severity || 0;
-        if (s === 0)      ok++;
-        else if (s >= 5)  down++;
-        else              warn++;
+        if (s === 0)     ok++;
+        else if (s >= 4) crit++;
+        else             warn++;
     });
 
-    let edges = 0, manual = 0, ghostEdges = 0, ghosts = 0;
+    let edges = 0, manual = 0;
 
     if (cy) {
         cy.edges().forEach(function(e) {
-            if (e.data('_isGhostEdge')) { ghostEdges++; return; }
+            if (e.data('_isGhostEdge')) return;
             edges++;
             if (String(e.id()).indexOf('ml_') === 0) manual++;
         });
-        ghosts = cy.nodes().filter(function(n) {
-            return n.data('type') === 'ghost';
-        }).length;
     }
 
+    // Ghosts NICHT aus dem Graphen zaehlen: sie werden nur injiziert, wenn der
+    // Toolbar-Toggle an ist (Default aus). Sonst stuende hier "0 Ghosts", waehrend
+    // es in Wahrheit welche gibt — eine Null, die etwas behauptet statt zu messen.
+    //
+    // Gezaehlt wird stattdessen aus derselben Quelle, aus der auch injiziert
+    // wird. injectGhostNodes ist frei von Nebenwirkungen (nodes.concat), laesst
+    // sich also gefahrlos zum Zaehlen aufrufen — und weil es dieselbe Funktion
+    // ist, koennen Zaehlung und Darstellung nicht auseinanderlaufen.
+    const lq = (window._ntLastData && window._ntLastData.lldp_quality) || [];
+    const ghosts = lq.length
+        ? Math.max(0, injectGhostNodes(nodes, [], lq).nodes.length - nodes.length)
+        : 0;
+
+    // Sind sie zwar gezaehlt, aber im Graphen ausgeblendet? Dann sagt die
+    // Kachel das dazu — sonst sucht jemand drei Knoten, die er nicht sieht.
+    let ghostsHidden = true;
+    try { ghostsHidden = localStorage.getItem(NT_GHOSTS_KEY) !== '1'; } catch (e) {}
+
     return {
-        hosts: nodes.length, ok: ok, warn: warn, down: down,
-        edges: edges, manual: manual, ghostEdges: ghostEdges, ghosts: ghosts,
-        lldp: Math.max(0, edges - manual)
+        hosts: nodes.length, ok: ok, warn: warn, crit: crit,
+        edges: edges, manual: manual, ghosts: ghosts,
+        lldp: Math.max(0, edges - manual),
+        ghostsHidden: ghostsHidden
     };
 }
 
@@ -200,27 +227,32 @@ export function updateKpi(nodes, cy) {
     row.textContent = '';
     row.classList.toggle('nt-kpi--tiles', isWallboard());
 
+    // Ghosts zaehlen wir immer, gezeigt werden sie nur bei aktivem Toggle. Ist
+    // er aus, sagt der Zusatz das — eine blanke 3 waere sonst irrefuehrend,
+    // weil im Graphen nichts davon zu sehen ist.
+    const ghostSub = g.ghosts && g.ghostsHidden ? t('kpi.ghosts.hidden') : '';
+
     if (isWallboard()) {
         // Vier Kacheln: verdichtet, weil aus drei Metern niemand sechs Zahlen
-        // auseinanderhaelt. Warn und Down wandern in eine Stoerungs-Kachel,
-        // die Aufschluesselung steht klein darunter.
-        const problems = g.warn + g.down;
+        // auseinanderhaelt. Warn und Krit wandern in eine Stoerungs-Kachel, die
+        // Aufschluesselung steht klein darunter.
+        const problems = g.warn + g.crit;
         row.appendChild(tile(g.hosts, t('kpi.hosts'), col('neutral'), ''));
         row.appendChild(tile(problems, t('kpi.problems'),
-            problems ? col(g.down ? 'down' : 'warn') : col('ok'),
-            t('kpi.problems.split', { down: g.down, warn: g.warn })));
+            problems ? col(g.crit ? 'crit' : 'warn') : col('ok'),
+            t('kpi.problems.split', { crit: g.crit, warn: g.warn })));
         row.appendChild(tile(g.edges, t('kpi.edges'), col('link'),
             t('kpi.edges.split', { lldp: g.lldp, manual: g.manual })));
         row.appendChild(tile(g.ghosts, t('kpi.unmonitored'), col('ghost'),
-            t('kpi.unmonitored.sub')));
+            ghostSub || t('kpi.unmonitored.sub')));
         return;
     }
 
     row.appendChild(chip(g.hosts, t('kpi.hosts'), null, ''));
     row.appendChild(chip(g.ok,    t('kpi.ok'),    col('ok'), ''));
     row.appendChild(chip(g.warn,  t('kpi.warn'),  col('warn'), ''));
-    row.appendChild(chip(g.down,  t('kpi.down'),  col('down'), ''));
+    row.appendChild(chip(g.crit,  t('kpi.crit'),  col('crit'), ''));
     row.appendChild(chip(g.edges, t('kpi.edges'), col('link'),
         g.manual ? t('kpi.edges.manual', { n: g.manual }) : ''));
-    row.appendChild(chip(g.ghosts, t('kpi.ghosts'), col('ghost'), ''));
+    row.appendChild(chip(g.ghosts, t('kpi.ghosts'), col('ghost'), ghostSub));
 }
