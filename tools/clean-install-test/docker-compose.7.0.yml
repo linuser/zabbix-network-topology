@@ -14,8 +14,8 @@
 # PHP-View liefert 200, haengen aber client-seitig auf "Loading..." (Zabbix'
 # Widget-JS-Basisklasse unterscheidet sich zwischen 7.0 und 7.4). Zum Nachtesten
 # die zwei Widget-Verzeichnisse stagen und die Mounts unten einkommentieren:
-#   rsync -a ../../widget/        module/network_topology_v6_widget/
-#   rsync -a ../../widget_health/ module/network_topology_v6_health_widget/
+#   rsync -a ../../widget/        module/network_topology_widget/
+#   rsync -a ../../widget_health/ module/network_topology_health_widget/
 
 services:
   db:
@@ -54,10 +54,10 @@ services:
     ports:
       - "18080:8080"
     volumes:
-      - ./module/network_topology_v6:/usr/share/zabbix/modules/network_topology_v6:ro
+      - ./module/network_topology:/usr/share/zabbix/modules/network_topology:ro
       # Widgets (7.4-only, s.o.) — zum Nachtesten stagen + einkommentieren:
-      # - ./module/network_topology_v6_widget:/usr/share/zabbix/modules/network_topology_v6_widget:ro
-      # - ./module/network_topology_v6_health_widget:/usr/share/zabbix/modules/network_topology_v6_health_widget:ro
+      # - ./module/network_topology_widget:/usr/share/zabbix/modules/network_topology_widget:ro
+      # - ./module/network_topology_health_widget:/usr/share/zabbix/modules/network_topology_health_widget:ro
 
 volumes:
   db-data-70:

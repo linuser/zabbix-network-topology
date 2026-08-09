@@ -18,7 +18,7 @@ declare(strict_types = 1);
  */
 
 spl_autoload_register(static function (string $class): void {
-    $prefix = 'Modules\\NetworkTopologyV6\\';
+    $prefix = 'Modules\\NetworkTopology\\';
     if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
         return;
     }
@@ -31,7 +31,7 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-use Modules\NetworkTopologyV6\Topology\NodeBuilder;
+use Modules\NetworkTopology\Topology\NodeBuilder;
 
 $failures = 0;
 

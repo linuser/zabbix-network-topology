@@ -1,7 +1,7 @@
 // render-stats.js — Wochen-/Monatsuebersicht aus dem History-Backend.
 //
 // Holt fuer einen waehlbaren Zeitraum (7d/14d/30d) die Problem-Events aus
-// network.topology.v6.history und aggregiert sie:
+// network.topology.history und aggregiert sie:
 //   - Tagesbalken (Bar-Chart, SVG)
 //   - Top 10 Hosts mit den meisten Events
 //   - Top 10 Trigger-Namen mit den meisten Events
@@ -336,7 +336,7 @@ export function renderStats(wrap, nodes) {
         const now = Math.floor(Date.now() / 1000);
         const from = now - _days * 86400;
         const params = new URLSearchParams();
-        params.append('action', 'network.topology.v6.history');
+        params.append('action', 'network.topology.history');
         params.append('from', String(from));
         params.append('to',   String(now));
         groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
@@ -434,7 +434,7 @@ export function renderStats(wrap, nodes) {
 
         const cfg = window.NT_CONFIG || {};
         const params = new URLSearchParams();
-        params.append('action', 'network.topology.v6.capacity_forecast');
+        params.append('action', 'network.topology.capacity_forecast');
         params.append('days', String(_fcDays));
         ((cfg && cfg.selected_groupids) || []).forEach(function(g) { params.append('groupids[]', String(g)); });
         Object.keys(hostSet).forEach(function(h) { params.append('hostids[]', h); });
@@ -581,7 +581,7 @@ export function renderStats(wrap, nodes) {
             return;
         }
         const params = new URLSearchParams();
-        params.append('action', 'network.topology.v6.resource_forecast');
+        params.append('action', 'network.topology.resource_forecast');
         params.append('days', String(_fcDays));
         groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
 

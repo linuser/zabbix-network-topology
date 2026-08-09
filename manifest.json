@@ -1,66 +1,66 @@
 {
     "manifest_version": 2.0,
-    "id": "network_topology_v6",
+    "id": "network_topology",
     "name": "Network Topology for Zabbix",
-    "version": "4.38.3",
+    "version": "5.0.0",
     "author": "PlaNet Fox | Alexander Fox",
     "description": "Interactive network topology map with Cytoscape.js, clustering and severity filter",
-    "namespace": "NetworkTopologyV6",
+    "namespace": "NetworkTopology",
     "actions": {
-        "network.topology.v6.view": {
+        "network.topology.view": {
             "class": "NetworkTopologyView",
             "view": "network.topology.view",
             "layout": "layout.htmlpage"
         },
-        "network.topology.v6.data": {
+        "network.topology.data": {
             "class": "NetworkTopologyData",
             "layout": "layout.json"
         },
-        "network.topology.v6.spark": {
+        "network.topology.spark": {
             "class": "NetworkTopologySpark",
             "layout": "layout.json"
         },
-        "network.topology.v6.history": {
+        "network.topology.history": {
             "class": "NetworkTopologyHistory",
             "layout": "layout.json"
         },
-        "network.topology.v6.items": {
+        "network.topology.items": {
             "class": "NetworkTopologyItems",
             "layout": "layout.json"
         },
-        "network.topology.v6.discover_patterns": {
+        "network.topology.discover_patterns": {
             "class": "NetworkTopologyDiscoverPatterns",
             "layout": "layout.json"
         },
-        "network.topology.v6.diag": {
+        "network.topology.diag": {
             "class": "NetworkTopologyDiag",
             "layout": "layout.json"
         },
-        "network.topology.v6.compliance": {
+        "network.topology.compliance": {
             "class": "NetworkTopologyCompliance",
             "layout": "layout.json"
         },
-        "network.topology.v6.item_history": {
+        "network.topology.item_history": {
             "class": "NetworkTopologyItemHistory",
             "layout": "layout.json"
         },
-        "network.topology.v6.item_count": {
+        "network.topology.item_count": {
             "class": "NetworkTopologyItemCount",
             "layout": "layout.json"
         },
-        "network.topology.v6.capacity_forecast": {
+        "network.topology.capacity_forecast": {
             "class": "NetworkTopologyCapacityForecast",
             "layout": "layout.json"
         },
-        "network.topology.v6.health_history": {
+        "network.topology.health_history": {
             "class": "NetworkTopologyHealthHistory",
             "layout": "layout.json"
         },
-        "network.topology.v6.resource_forecast": {
+        "network.topology.resource_forecast": {
             "class": "NetworkTopologyResourceForecast",
             "layout": "layout.json"
         },
-        "network.topology.v6.maintenance": {
+        "network.topology.maintenance": {
             "class": "NetworkTopologyMaintenance",
             "layout": "layout.json"
         }

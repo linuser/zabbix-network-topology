@@ -4,7 +4,7 @@
 // UI-Flow:
 //   - Toggle "Hosts/Items" im Tabellen-Tab schaltet zwischen Standard und Pivot
 //   - Im Pivot: Preset-Dropdown + Custom-Pattern-Input
-//   - Beim Apply: fetch network.topology.v6.items, render Pivot-Tabelle
+//   - Beim Apply: fetch network.topology.items, render Pivot-Tabelle
 //   - Hostnames als Zeilen (Link → Latest Data), Item-Discovery-Werte als Spalten
 //
 // Presets sind in PRESETS definiert — typische Item-Key-Muster für die
@@ -111,7 +111,7 @@ function _fetchAndRenderSparklines(container, baseUrl, theme) {
     for (let i = 0; i < wanted.length; i += 500) chunks.push(wanted.slice(i, i + 500));
     chunks.forEach(function(chunk) {
         const params = new URLSearchParams();
-        params.append('action', 'network.topology.v6.item_history');
+        params.append('action', 'network.topology.item_history');
         chunk.forEach(function(iid) { params.append('itemids[]', iid); });
         const url = baseUrl + 'zabbix.php?' + params.toString();
         fetch(url, {
@@ -258,7 +258,7 @@ export async function fetchItemsPivot(pattern) {
     if (!groupids.length || !pattern) return null;
 
     const params = new URLSearchParams();
-    params.append('action', 'network.topology.v6.items');
+    params.append('action', 'network.topology.items');
     params.append('pattern', pattern);
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
 
@@ -297,7 +297,7 @@ function fetchPatternSuggestions() {
     if (_discoverCache.has(cacheKey)) return _discoverCache.get(cacheKey);
 
     const params = new URLSearchParams();
-    params.append('action', 'network.topology.v6.discover_patterns');
+    params.append('action', 'network.topology.discover_patterns');
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
 
@@ -663,7 +663,7 @@ export function buildPivotToolbar(onApply, theme) {
             const groupids = cfg.selected_groupids || [];
             if (!groupids.length) { countHint.textContent = ''; return; }
             const params = new URLSearchParams();
-            params.append('action', 'network.topology.v6.item_count');
+            params.append('action', 'network.topology.item_count');
             params.append('pattern', p);
             groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
             const seq = ++_probeSeq;

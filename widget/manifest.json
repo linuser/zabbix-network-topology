@@ -1,14 +1,14 @@
 {
     "manifest_version": 2.0,
-    "id": "network_topology_v6_widget",
+    "id": "network_topology_widget",
     "type": "widget",
     "name": "Network Topology for Zabbix — Widget",
-    "namespace": "NetworkTopologyV6Widget",
-    "version": "2.0.0",
+    "namespace": "NetworkTopologyWidget",
+    "version": "3.0.0",
     "author": "PlaNet Fox | Alexander Fox",
-    "description": "Dashboard-Widget fuer Network Topology v6. Setzt das Hauptmodul (network_topology_v6) voraus — nutzt dessen network.topology.v6.data Action.",
+    "description": "Dashboard-Widget fuer Network Topology. Setzt das Hauptmodul (network_topology) voraus — nutzt dessen network.topology.data Action.",
     "actions": {
-        "widget.network.topology.v6.view": {
+        "widget.network.topology.view": {
             "class": "WidgetView"
         }
     },

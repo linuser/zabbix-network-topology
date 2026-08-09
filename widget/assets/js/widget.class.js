@@ -1,5 +1,5 @@
 /*
- * Network Topology v6 — Dashboard Widget
+ * Network Topology — Dashboard Widget
  * PlaNet Fox | Alexander Fox
  * Compatible with Zabbix 7.4 jsLoader (no template literals, no spread, no const).
  *
@@ -11,8 +11,8 @@
  *   - Optional: hide_offline-Setting blendet Offline-Hosts komplett aus
  *   - Zabbix-native Farb-Palette + flache 2px Ecken
  *
- * Voraussetzung: Hauptmodul "network_topology_v6" muss installiert sein
- * (das Widget ruft die network.topology.v6.data Action auf).
+ * Voraussetzung: Hauptmodul "network_topology" muss installiert sein
+ * (das Widget ruft die network.topology.data Action auf).
  */
 
 class WidgetNetworkTopology extends CWidget {
@@ -55,7 +55,7 @@ class WidgetNetworkTopology extends CWidget {
         var root = this._target.querySelector('[data-view-mode]');
         if (root) {
             this._tab         = root.dataset.viewMode  || 'tech';
-            this._dataUrl     = root.dataset.dataUrl   || 'zabbix.php?action=network.topology.v6.data';
+            this._dataUrl     = root.dataset.dataUrl   || 'zabbix.php?action=network.topology.data';
             this._showLldp    = root.dataset.showLldp  !== '0';
             this._hideOffline = root.dataset.hideOffline === '1';
             try {
@@ -74,7 +74,7 @@ class WidgetNetworkTopology extends CWidget {
             }
         } else {
             this._tab         = this._fields.view_mode === 1 ? 'mgmt' : 'tech';
-            this._dataUrl     = 'zabbix.php?action=network.topology.v6.data';
+            this._dataUrl     = 'zabbix.php?action=network.topology.data';
             this._showLldp    = this._fields.show_lldp !== false && this._fields.show_lldp !== 0;
             this._hideOffline = this._fields.hide_offline === 1 || this._fields.hide_offline === true;
             this._groupids    = this._fields.groupids || [];
@@ -139,7 +139,7 @@ class WidgetNetworkTopology extends CWidget {
             return;
         }
         var self    = this;
-        var base    = 'modules/network_topology_v6/assets/js/';
+        var base    = 'modules/network_topology/assets/js/';
         var scripts = [base + 'cytoscape.min.js'];
         var loaded  = 0;
         scripts.forEach(function (src) {

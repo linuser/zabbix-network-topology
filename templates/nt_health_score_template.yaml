@@ -7,7 +7,7 @@ zabbix_export:
       template: 'NT Health Score'
       name: 'NT Health Score'
       description: |
-        Empfaengt den Topology-Health-Score des Network-Topology-v6-Moduls
+        Empfaengt den Topology-Health-Score des Network-Topology-Moduls
         via zabbix_sender (tools/topo-change-sender.sh als Cron — derselbe
         Cron pusht auch die Topologie-Aenderungen).
 

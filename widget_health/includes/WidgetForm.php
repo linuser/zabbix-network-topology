@@ -3,7 +3,7 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 0);
 
-namespace Modules\NetworkTopologyV6HealthWidget\Includes;
+namespace Modules\NetworkTopologyHealthWidget\Includes;
 
 use Zabbix\Widgets\CWidgetForm;
 use Zabbix\Widgets\Fields\CWidgetFieldMultiSelectGroup;

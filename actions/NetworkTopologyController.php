@@ -3,7 +3,7 @@
 // Copyright (C) 2026 PlaNet Fox / Alexander Fox
 declare(strict_types = 1);
 
-namespace Modules\NetworkTopologyV6\Actions;
+namespace Modules\NetworkTopology\Actions;
 
 use CController;
 use CControllerResponseData;

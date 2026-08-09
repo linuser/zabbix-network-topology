@@ -4,14 +4,16 @@ Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualis
 *Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisation, built on Cytoscape.js and Leaflet.*
 
 ![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4-red)
-![Version](https://img.shields.io/badge/version-4.38.3-blue)
+![Version](https://img.shields.io/badge/version-5.0.0-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 **[🌐 zabfox.de](https://zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](INSTALL.md)** · **[🤝 Contributing](CONTRIBUTING.md)**
 
 **🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english)**
 
-> Technische Modul-ID / technical module id: `network_topology_v6` — das Installationsverzeichnis **muss** genau so heißen. Das „v6" ist die interne Modul-Lineage, nicht die Release-Version.
+> Technische Modul-ID / technical module id: `network_topology` — das Installationsverzeichnis **muss** genau so heißen. *The installation directory must carry exactly this name.*
+>
+> **Umstieg von 4.x:** In 5.0 ist der `_v6`-Suffix entfallen; das alte Verzeichnis `network_topology_v6` muss weg, und die Dashboard-Kacheln sind einmalig neu einzufügen — siehe [CHANGELOG](CHANGELOG.md) und [INSTALL.md](INSTALL.md). *Upgrading from 4.x: the `_v6` suffix is gone — remove the old directory and re-add the dashboard tiles once.*
 
 ---
 
@@ -105,12 +107,12 @@ Detail-Panel je Host (Severity, Metriken, Interface, Proxy, Action-Buttons) · D
 
 📦 **Ausführliche, zweisprachige Anleitung: [INSTALL.md](INSTALL.md)** — Voraussetzungen, RHEL/SELinux, Widgets, Aus-Source-Bauen, Troubleshooting.
 
-Kurzfassung (das Verzeichnis **muss** `network_topology_v6` heißen):
+Kurzfassung (das Verzeichnis **muss** `network_topology` heißen):
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-sudo unzip ~/Downloads/network_topology_v6.zip
-sudo chown -R root:root network_topology_v6
+sudo unzip ~/Downloads/network_topology.zip
+sudo chown -R root:root network_topology
 sudo systemctl reload php8.2-fpm      # Dienstname je nach Distro/PHP-Version
 ```
 
@@ -128,9 +130,9 @@ Drei separate Widget-Module rendern die Daten des Hauptmoduls in Dashboard-Kache
 - [`widget_health/`](widget_health/) — **Health-Score** pro Hostgruppe
 - [`widget_table/`](widget_table/) — **Tabelle** (Status/CPU/Mem/Ping/Traffic/Probleme)
 
-Alle nutzen dieselbe `network.topology.v6.data`-Action (kein zweites Backend). **Voraussetzung:** Hauptmodul installiert + aktiviert.
+Alle nutzen dieselbe `network.topology.data`-Action (kein zweites Backend). **Voraussetzung:** Hauptmodul installiert + aktiviert.
 
-> **Die Widgets funktionieren nicht eigenständig** — und zwar aus zwei Gründen: Die Daten-Action `network.topology.v6.data` registriert das **Hauptmodul**, und das Topologie-Widget lädt zusätzlich Cytoscape.js aus dessen Verzeichnis (`modules/network_topology_v6/assets/js/`), damit die ~360 KB große Bibliothek nur einmal im Paket liegt. Fehlt oder deaktivierst du das Hauptmodul, zeigen die Kacheln eine Fehlermeldung („Hauptmodul nicht erreichbar" bzw. „Cytoscape.js not loaded"). Reihenfolge beim Installieren also: **erst Hauptmodul, dann Widgets.**
+> **Die Widgets funktionieren nicht eigenständig** — und zwar aus zwei Gründen: Die Daten-Action `network.topology.data` registriert das **Hauptmodul**, und das Topologie-Widget lädt zusätzlich Cytoscape.js aus dessen Verzeichnis (`modules/network_topology/assets/js/`), damit die ~360 KB große Bibliothek nur einmal im Paket liegt. Fehlt oder deaktivierst du das Hauptmodul, zeigen die Kacheln eine Fehlermeldung („Hauptmodul nicht erreichbar" bzw. „Cytoscape.js not loaded"). Reihenfolge beim Installieren also: **erst Hauptmodul, dann Widgets.**
 
 > **Zabbix-Version:** Die Widgets brauchen **Zabbix 7.4**. Auf **7.0 LTS** registrieren sie sich zwar, bleiben aber wegen der abweichenden Widget-JS-Basisklasse auf „Loading…" hängen. Das **Hauptmodul** läuft auf **7.0 LTS und 7.4**.
 
@@ -226,12 +228,12 @@ Per-host detail panel (severity, metrics, interface, proxy, action buttons) · d
 
 📦 **Full bilingual guide: [INSTALL.md](INSTALL.md)** — requirements, RHEL/SELinux, widgets, building from source, troubleshooting.
 
-Short version (the directory **must** be named `network_topology_v6`):
+Short version (the directory **must** be named `network_topology`):
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-sudo unzip ~/Downloads/network_topology_v6.zip
-sudo chown -R root:root network_topology_v6
+sudo unzip ~/Downloads/network_topology.zip
+sudo chown -R root:root network_topology
 sudo systemctl reload php8.2-fpm      # Dienstname je nach Distro/PHP-Version
 ```
 
@@ -249,9 +251,9 @@ Three separate widget modules render the main module's data as dashboard tiles:
 - [`widget_health/`](widget_health/) — **health score** per host group
 - [`widget_table/`](widget_table/) — **table** (status/CPU/mem/ping/traffic/problems)
 
-All consume the same `network.topology.v6.data` action (no second backend). **Prerequisite:** the main module installed and enabled.
+All consume the same `network.topology.data` action (no second backend). **Prerequisite:** the main module installed and enabled.
 
-> **The widgets do not work standalone** — for two reasons: the data action `network.topology.v6.data` is registered by the **main module**, and the topology widget additionally loads Cytoscape.js from its directory (`modules/network_topology_v6/assets/js/`), so the ~360 KB library ships only once. Without the main module — or with it disabled — the tiles show an error ("main module unreachable" / "Cytoscape.js not loaded"). So install in this order: **main module first, widgets second.**
+> **The widgets do not work standalone** — for two reasons: the data action `network.topology.data` is registered by the **main module**, and the topology widget additionally loads Cytoscape.js from its directory (`modules/network_topology/assets/js/`), so the ~360 KB library ships only once. Without the main module — or with it disabled — the tiles show an error ("main module unreachable" / "Cytoscape.js not loaded"). So install in this order: **main module first, widgets second.**
 
 > **Zabbix version:** the widgets require **Zabbix 7.4**. On **7.0 LTS** they do register, but stay stuck on "Loading…" because the widget JS base class differs. The **main module** runs on **7.0 LTS and 7.4**.
 
@@ -290,7 +292,7 @@ Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inse
 ## Architektur / Architecture
 
 ```
-network_topology_v6/
+network_topology/
 ├── manifest.json              Modul-Manifest, 14 Actions / module manifest, 14 actions
 ├── Module.php                 Menü-Eintrag / menu registration
 ├── views/

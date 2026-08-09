@@ -9,7 +9,7 @@ zabbix_export:
         - name: 'Overview'
           display_period: '0'
           widgets:
-            - type: network_topology_v6_widget
+            - type: network_topology_widget
               name: 'Topology'
               'y': '0'
               x: '0'
@@ -26,7 +26,7 @@ zabbix_export:
                   name: hide_offline
                   value: '0'
 
-            - type: network_topology_v6_health_widget
+            - type: network_topology_health_widget
               name: 'Health Score'
               'y': '8'
               x: '0'

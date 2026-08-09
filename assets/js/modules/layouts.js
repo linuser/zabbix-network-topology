@@ -30,7 +30,7 @@ export const LAYOUT_OPTIONS = [
 // Internet (Tier -1) wird ggf. virtuell oben drüber gesetzt.
 // Spiegelt die Logik in render-mgmt.js MGMT_LEVEL — Single Source of Truth
 // wäre theoretisch besser, aber render-mgmt nutzt eigene Layer-Labels.
-export const TIER_ORDER = {
+const TIER_ORDER = {
     firewall: 0, router: 1, switch: 2, wireless: 3,
     hypervisor: 4, linux: 4, windows: 4, macos: 4,
     webserver: 4, container: 4, mailserver: 4, server: 4,
@@ -49,7 +49,7 @@ const TIER_DEFAULT = 4;   // unbekannte Device-Types landen bei "Server"
 //   nodeGap     — horizontaler Abstand zwischen Nodes derselben Tier
 //
 // Returns: { 'nodeId': {x, y}, ... } — Map für Cytoscape preset-Layout.
-export function buildHierarchyPositions(nodes) {
+function buildHierarchyPositions(nodes) {
     const tierGap = 180;
     const nodeGap = 150;
 

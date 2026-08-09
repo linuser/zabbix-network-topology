@@ -1,14 +1,14 @@
 {
     "manifest_version": 2.0,
-    "id": "network_topology_v6_health_widget",
+    "id": "network_topology_health_widget",
     "type": "widget",
     "name": "Network Topology for Zabbix — Health Widget",
-    "namespace": "NetworkTopologyV6HealthWidget",
-    "version": "1.0.1",
+    "namespace": "NetworkTopologyHealthWidget",
+    "version": "2.0.0",
     "author": "PlaNet Fox | Alexander Fox",
-    "description": "Dashboard-Widget: Topology Health Score pro Hostgroup. Setzt das Hauptmodul (network_topology_v6) voraus.",
+    "description": "Dashboard-Widget: Topology Health Score pro Hostgroup. Setzt das Hauptmodul (network_topology) voraus.",
     "actions": {
-        "widget.network.topology.v6.health.view": {
+        "widget.network.topology.health.view": {
             "class": "WidgetView"
         }
     },

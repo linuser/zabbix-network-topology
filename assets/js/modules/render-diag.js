@@ -138,7 +138,7 @@ export function renderDiag(wrap) {
 
     wrap.appendChild(root);
 
-    const url = buildBaseUrl() + 'zabbix.php?action=network.topology.v6.diag';
+    const url = buildBaseUrl() + 'zabbix.php?action=network.topology.diag';
     fetch(url, {
         credentials: 'same-origin',
         headers: { 'X-Requested-With': 'XMLHttpRequest' }

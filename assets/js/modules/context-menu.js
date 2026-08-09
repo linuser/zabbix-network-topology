@@ -77,7 +77,7 @@ export function hideCtx() {
 function _createMaintenance(hostId, durationSec, durLabel, hostLabel) {
     const base = window.location.pathname.replace('zabbix.php', '');
     const params = new URLSearchParams();
-    params.append('action', 'network.topology.v6.maintenance');
+    params.append('action', 'network.topology.maintenance');
     params.append('hostids[]', hostId);
     params.append('duration', String(durationSec));
     params.append('nt_csrf', (window.NT_CONFIG && window.NT_CONFIG.csrf_token) || '');

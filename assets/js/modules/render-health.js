@@ -132,7 +132,7 @@ const HIST_DAYS = 14;
 
 function _loadScoreHistory(box, theme) {
     const params = new URLSearchParams();
-    params.append('action', 'network.topology.v6.health_history');
+    params.append('action', 'network.topology.health_history');
     params.append('days', String(HIST_DAYS));
     fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(),
           { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })

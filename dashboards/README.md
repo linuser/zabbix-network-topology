@@ -5,9 +5,9 @@ Vorgefertigte Zabbix-Dashboards die das Hauptmodul + die Widgets nutzen.
 ## Voraussetzungen
 
 Beide Module müssen installiert + enabled sein:
-- `network_topology_v6` (Hauptmodul)
-- `network_topology_v6_widget` (Topology-Widget)
-- `network_topology_v6_health_widget` (Health-Score-Widget)
+- `network_topology` (Hauptmodul)
+- `network_topology_widget` (Topology-Widget)
+- `network_topology_health_widget` (Health-Score-Widget)
 
 Wenn ein Widget-Modul fehlt, schlägt der Import mit "unknown widget type" fehl.
 
@@ -38,8 +38,8 @@ Geeignet als Standard-Dashboard für Operator-Sicht.
 Manuell ist einfacher als YAML-Import wenn du nur ein Setup pflegst:
 
 1. *Dashboards → Create dashboard*
-2. *Add widget → Type "Topology"* (= `network_topology_v6_widget`) → Hostgroups wählen
-3. *Add widget → Type "NT Health Score"* (= `network_topology_v6_health_widget`)
+2. *Add widget → Type "Topology"* (= `network_topology_widget`) → Hostgroups wählen
+3. *Add widget → Type "NT Health Score"* (= `network_topology_health_widget`)
 4. Optional: native Zabbix-Widgets ergänzen (*Problems*, *Top hosts*, *Trigger overview*, *Geomap*)
 5. *Save dashboard*
 

@@ -2,7 +2,7 @@
 
 **🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english)**
 
-Technische Modul-ID / technical module id: **`network_topology_v6`** — das
+Technische Modul-ID / technical module id: **`network_topology`** — das
 Installationsverzeichnis **muss** genau so heißen / the install directory
 **must** be named exactly like this.
 
@@ -21,7 +21,7 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 
 ### 1. Hauptmodul installieren
 
-> Das Verzeichnis **muss** `network_topology_v6` heißen (= die Modul-ID). Ein direkt heruntergeladenes Repo heißt evtl. `zabbix-network-topology-v2-main` o. ä. → **umbenennen**.
+> Das Verzeichnis **muss** `network_topology` heißen (= die Modul-ID). Ein direkt heruntergeladenes Repo heißt evtl. `zabbix-network-topology-v2-main` o. ä. → **umbenennen**.
 
 ```bash
 # In den Modules-Ordner deiner Zabbix-UI wechseln
@@ -30,14 +30,14 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 cd /usr/share/zabbix/ui/modules
 
 # Variante A — Release-ZIP entpacken (Download: github.com/linuser/zabbix-network-topology/releases):
-sudo unzip /pfad/zu/network_topology_v6.zip
+sudo unzip /pfad/zu/network_topology.zip
 
 # Variante B — aus dem Git-Repo:
-sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology_v6
+sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology
 
 # Rechte setzen (Owner wie der Rest deiner Zabbix-UI — meist root:root
 # oder www-data:www-data)
-sudo chown -R root:root network_topology_v6
+sudo chown -R root:root network_topology
 
 # php-fpm neu laden. ACHTUNG: Der Dienstname haengt von Distribution UND
 # PHP-Version ab — erst nachsehen, dann neu laden:
@@ -58,11 +58,11 @@ sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
 >
 > ```bash
 > # auf dem Arbeitsplatz
-> scp network_topology_v6*.zip <server>:/tmp/
+> scp network_topology*.zip <server>:/tmp/
 >
 > # auf dem Zabbix-Server
 > cd /usr/share/zabbix/ui/modules
-> sudo unzip -q /tmp/network_topology_v6.zip && rm /tmp/network_topology_v6*.zip
+> sudo unzip -q /tmp/network_topology.zip && rm /tmp/network_topology*.zip
 > ```
 >
 > Merke: Der Server antwortet auf `ping`, aber `curl` scheitert nach wenigen
@@ -74,8 +74,8 @@ sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
 > per SSH und braucht auf dem Server **keinerlei** Internet-Zugang.
 
 > **RHEL / RedHat / Rocky / Alma** — drei Extra-Punkte:
-> - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology_v6`
-> - **Owner/Service**: Web-User ist `apache` (nicht www-data), der Dienst heißt `php-fpm` → `sudo chown -R apache:apache network_topology_v6` und `sudo systemctl reload php-fpm`
+> - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`
+> - **Owner/Service**: Web-User ist `apache` (nicht www-data), der Dienst heißt `php-fpm` → `sudo chown -R apache:apache network_topology` und `sudo systemctl reload php-fpm`
 > - **APCu** (optional, empfohlen für Cache + Rate-Limit): `sudo dnf install php-pecl-apcu` und für die **FPM**-SAPI aktivieren. Ohne APCu läuft das Modul trotzdem — nur ohne Cache/Drosselung (fail-open).
 
 ### 2. Modul aktivieren
@@ -90,16 +90,16 @@ Drei separate Widget-Module (nutzen die Daten des Hauptmoduls) — Topologie-Gra
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-sudo unzip /pfad/network_topology_v6_widget.zip        -d network_topology_v6_widget
-sudo unzip /pfad/network_topology_v6_health_widget.zip -d network_topology_v6_health_widget
-sudo unzip /pfad/network_topology_v6_table_widget.zip  -d network_topology_v6_table_widget
-sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
+sudo unzip /pfad/network_topology_widget.zip        -d network_topology_widget
+sudo unzip /pfad/network_topology_health_widget.zip -d network_topology_health_widget
+sudo unzip /pfad/network_topology_table_widget.zip  -d network_topology_table_widget
+sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget
 sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
 ```
 Dann **Scan directory** → „Network Topology for Zabbix — Widget", „— Health Widget" bzw. „NT Table" aktivieren → im Dashboard-Editor verfügbar.
 **Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
 
-> **Warum nicht eigenständig?** Die Daten-Action `network.topology.v6.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology_v6/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
+> **Warum nicht eigenständig?** Die Daten-Action `network.topology.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
 
 ### 4. Optional: Topologie-Events + Health-Score-Historie
 
@@ -124,7 +124,26 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 ### Update
 
-Verzeichnis `network_topology_v6` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Pins/Notizen/Presets liegen im Browser-`localStorage` und bleiben erhalten. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
+Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Pins/Notizen/Presets liegen im Browser-`localStorage` und bleiben erhalten. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
+
+#### Umstieg von 4.x auf 5.0
+
+In 5.0 ist der `_v6`-Suffix aus allen Bezeichnern entfallen — das Verzeichnis heißt jetzt `network_topology` statt `network_topology_v6`. **Das alte Verzeichnis muss weg**, sonst registriert Zabbix beide Module und der Menüeintrag erscheint doppelt:
+
+```bash
+cd /usr/share/zabbix/ui/modules
+sudo rm -rf network_topology_v6 network_topology_v6_widget \
+            network_topology_v6_health_widget network_topology_v6_table_widget
+```
+
+Danach normal installieren (Schritt 1–3) und **Scan directory** ausführen; die alten Einträge verschwinden dabei von selbst.
+
+Zwei Dinge musst du danach von Hand nachziehen:
+
+- **Dashboard-Kacheln.** Die Widget-IDs sind Teil des Dashboards; Zabbix kennt den alten Typ nicht mehr und blendet die Kacheln aus. Einmalig neu hinzufügen und konfigurieren — das Dashboard selbst bleibt intakt. Wer das vermeiden will, findet im [CHANGELOG](CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein geprüftes `UPDATE`-Skript, das Modul- und Widget-Bezeichner direkt in der Datenbank umschreibt.
+- **Lesezeichen.** Die Ansicht liegt jetzt unter `zabbix.php?action=network.topology.view`.
+
+Alles Nutzerseitige bleibt erhalten: Knotenpositionen, Pins, Notizen, manuelle Links, Filter-Presets und Toolbar-Einstellungen. Die `localStorage`-Schlüssel waren nie an den Modulnamen gebunden. Host-Tags (`nt:parent`) sind ohnehin unberührt.
 
 ### Deinstallation
 
@@ -136,7 +155,7 @@ Modul in der UI auf **Disabled**, dann Verzeichnis löschen und php-fpm reloaden
 |---|---|
 | `Unit php8.3-fpm.service not found` | Dein php-fpm heißt anders. `systemctl list-units --type=service \| grep -i fpm` zeigt den echten Namen (Debian 12 → `php8.2-fpm`, RHEL → `php-fpm`). |
 | `curl: (7) Failed to connect … after 1 ms` | Firewall blockt ausgehend TCP/443. ZIP auf einem Arbeitsplatz laden und per `scp` übertragen — oder `deploy.sh` nutzen (braucht kein Server-Internet). |
-| Modul erscheint nicht in der Liste | Verzeichnis heißt nicht exakt `network_topology_v6`, oder falsche Rechte/Owner. Auf **RHEL/Rocky/Alma** zusätzlich `sudo restorecon -Rv …` (SELinux). |
+| Modul erscheint nicht in der Liste | Verzeichnis heißt nicht exakt `network_topology`, oder falsche Rechte/Owner. Auf **RHEL/Rocky/Alma** zusätzlich `sudo restorecon -Rv …` (SELinux). |
 | „Loading topology…" bleibt / leerer Bereich | Browser-**Console** öffnen (F12). Häufigste Ursache in gehärteten Setups: eine **Content-Security-Policy**. Ab v4.30.0 (Bundle) reicht `script-src 'self'`; es werden echte Stacktraces (Datei + Zeile) angezeigt. |
 | Weathermap färbt Edges nicht | Kein `ifSpeed`/`ifHighSpeed`-Item auf den Hosts → SNMP-Interface-Monitoring nötig. |
 | „Unknown action …" (Wartung/Forecast) | Nach dem Update „Scan directory" vergessen. |
@@ -156,7 +175,7 @@ Modul in der UI auf **Disabled**, dann Verzeichnis löschen und php-fpm reloaden
 
 ### 1. Install the main module
 
-> The directory **must** be named `network_topology_v6` (the module id). A repo downloaded directly may be named `zabbix-network-topology-v2-main` or similar → **rename it**.
+> The directory **must** be named `network_topology` (the module id). A repo downloaded directly may be named `zabbix-network-topology-v2-main` or similar → **rename it**.
 
 ```bash
 # Go to your Zabbix UI modules folder
@@ -165,14 +184,14 @@ Modul in der UI auf **Disabled**, dann Verzeichnis löschen und php-fpm reloaden
 cd /usr/share/zabbix/ui/modules
 
 # Option A — unzip the release ZIP (download: github.com/linuser/zabbix-network-topology/releases):
-sudo unzip /path/to/network_topology_v6.zip
+sudo unzip /path/to/network_topology.zip
 
 # Option B — from the Git repo:
-sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology_v6
+sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology
 
 # Set ownership (same as the rest of your Zabbix UI — usually root:root
 # or www-data:www-data)
-sudo chown -R root:root network_topology_v6
+sudo chown -R root:root network_topology
 
 # Reload php-fpm. NOTE: the service name depends on both the distribution AND
 # the PHP version — look it up first, then reload:
@@ -193,11 +212,11 @@ sudo systemctl reload php8.2-fpm       # use the name you found!
 >
 > ```bash
 > # on your workstation
-> scp network_topology_v6*.zip <server>:/tmp/
+> scp network_topology*.zip <server>:/tmp/
 >
 > # on the Zabbix server
 > cd /usr/share/zabbix/ui/modules
-> sudo unzip -q /tmp/network_topology_v6.zip && rm /tmp/network_topology_v6*.zip
+> sudo unzip -q /tmp/network_topology.zip && rm /tmp/network_topology*.zip
 > ```
 >
 > Note: the server answers `ping` but `curl` fails after a few milliseconds? Then a
@@ -209,8 +228,8 @@ sudo systemctl reload php8.2-fpm       # use the name you found!
 > transfers over SSH and needs **no** internet access on the server at all.
 
 > **RHEL / RedHat / Rocky / Alma** — three extra points:
-> - **SELinux** (the usual reason for "module not shown"): restore the httpd read context after copying, otherwise php-fpm can't read the files → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology_v6`
-> - **Owner/service**: the web user is `apache` (not www-data), the service is `php-fpm` → `sudo chown -R apache:apache network_topology_v6` and `sudo systemctl reload php-fpm`
+> - **SELinux** (the usual reason for "module not shown"): restore the httpd read context after copying, otherwise php-fpm can't read the files → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`
+> - **Owner/service**: the web user is `apache` (not www-data), the service is `php-fpm` → `sudo chown -R apache:apache network_topology` and `sudo systemctl reload php-fpm`
 > - **APCu** (optional, recommended for cache + rate-limit): `sudo dnf install php-pecl-apcu` and enable it for the **FPM** SAPI. Without APCu the module still works — just without cache/throttling (fail-open).
 
 ### 2. Enable the module
@@ -225,16 +244,16 @@ Three separate widget modules (they consume the main module's data) — topology
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-sudo unzip /path/network_topology_v6_widget.zip        -d network_topology_v6_widget
-sudo unzip /path/network_topology_v6_health_widget.zip -d network_topology_v6_health_widget
-sudo unzip /path/network_topology_v6_table_widget.zip  -d network_topology_v6_table_widget
-sudo chown -R root:root network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget
+sudo unzip /path/network_topology_widget.zip        -d network_topology_widget
+sudo unzip /path/network_topology_health_widget.zip -d network_topology_health_widget
+sudo unzip /path/network_topology_table_widget.zip  -d network_topology_table_widget
+sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget
 sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
 ```
 Then **Scan directory** → enable "Network Topology for Zabbix — Widget" / "— Health Widget" / "NT Table" → available in the dashboard editor.
 **Prerequisite:** the main module must be installed + enabled — and **Zabbix 7.4** (the widgets don't run on 7.0 LTS; the main module does).
 
-> **Why not standalone?** The data action `network.topology.v6.data` belongs to the main module, and the topology widget loads Cytoscape.js from `modules/network_topology_v6/assets/js/` — the library ships only once on purpose. Without the main module (or with it disabled) the tiles show an error. So **install and enable the main module first, then the widgets.**
+> **Why not standalone?** The data action `network.topology.data` belongs to the main module, and the topology widget loads Cytoscape.js from `modules/network_topology/assets/js/` — the library ships only once on purpose. Without the main module (or with it disabled) the tiles show an error. So **install and enable the main module first, then the widgets.**
 
 ### 4. Optional: topology events + health-score history
 
@@ -259,7 +278,26 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 ### Update
 
-Replace the `network_topology_v6` directory with the new version, `chown`, reload php-fpm, **Scan directory**. Pins/notes/presets live in the browser `localStorage` and are preserved. After an update that adds new actions, "Scan directory" is **mandatory**.
+Replace the `network_topology` directory with the new version, `chown`, reload php-fpm, **Scan directory**. Pins/notes/presets live in the browser `localStorage` and are preserved. After an update that adds new actions, "Scan directory" is **mandatory**.
+
+#### Upgrading from 4.x to 5.0
+
+5.0 drops the `_v6` suffix from every identifier — the directory is now `network_topology` instead of `network_topology_v6`. **The old directory has to go**, otherwise Zabbix registers both modules and the menu entry shows up twice:
+
+```bash
+cd /usr/share/zabbix/ui/modules
+sudo rm -rf network_topology_v6 network_topology_v6_widget \
+            network_topology_v6_health_widget network_topology_v6_table_widget
+```
+
+Then install as usual (steps 1–3) and run **Scan directory**; the stale entries disappear on their own.
+
+Two things need a manual follow-up:
+
+- **Dashboard tiles.** The widget IDs are part of the dashboard; Zabbix no longer recognises the old type and hides the tiles. Add and configure them once more — the dashboard itself stays intact. To avoid that, the [CHANGELOG](CHANGELOG.md) section "Optional: Dashboards per SQL erhalten" carries a tested `UPDATE` script that rewrites the module and widget identifiers directly in the database.
+- **Bookmarks.** The view now lives at `zabbix.php?action=network.topology.view`.
+
+Everything user-side is preserved: node positions, pins, notes, manual links, filter presets and toolbar settings. The `localStorage` keys were never tied to the module name. Host tags (`nt:parent`) are unaffected anyway.
 
 ### Uninstall
 
@@ -271,7 +309,7 @@ Set the module to **Disabled** in the UI, then delete the directory and reload p
 |---|---|
 | `Unit php8.3-fpm.service not found` | Your php-fpm has a different name. `systemctl list-units --type=service \| grep -i fpm` shows the real one (Debian 12 → `php8.2-fpm`, RHEL → `php-fpm`). |
 | `curl: (7) Failed to connect … after 1 ms` | A firewall rejects outbound TCP/443. Download the ZIP on a workstation and `scp` it over — or use `deploy.sh` (needs no internet on the server). |
-| Module not shown in the list | Directory isn't named exactly `network_topology_v6`, or wrong permissions/owner. On **RHEL/Rocky/Alma** also run `sudo restorecon -Rv …` (SELinux). |
+| Module not shown in the list | Directory isn't named exactly `network_topology`, or wrong permissions/owner. On **RHEL/Rocky/Alma** also run `sudo restorecon -Rv …` (SELinux). |
 | Stuck on "Loading topology…" / blank area | Open the browser **console** (F12). Most common cause in hardened setups: a **Content-Security-Policy**. As of v4.30.0 (bundle) `script-src 'self'` is enough; you get real stack traces (file + line). |
 | Weathermap doesn't color edges | No `ifSpeed`/`ifHighSpeed` item on the hosts → SNMP interface monitoring required. |
 | "Unknown action …" (maintenance/forecast) | You forgot "Scan directory" after the update. |

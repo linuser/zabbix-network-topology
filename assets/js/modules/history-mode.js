@@ -16,7 +16,7 @@
 //
 // Datenfluss:
 //   - Beim Range-Wechsel oder Aktivierung: ein Backend-Call
-//     (network.topology.v6.history?from=...&to=...&groupids[]=...)
+//     (network.topology.history?from=...&to=...&groupids[]=...)
 //   - Antwort wird gecached (im Modul)
 //   - Slider-Move filtert clientseitig: pro Host wird die zur Zeit T
 //     aktive Severity berechnet (höchste sev der zu T offenen Trigger)
@@ -117,7 +117,7 @@ async function fetchHistory(rangeSec) {
     const to = now;
 
     const params = new URLSearchParams();
-    params.append('action', 'network.topology.v6.history');
+    params.append('action', 'network.topology.history');
     params.append('from', String(from));
     params.append('to', String(to));
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });

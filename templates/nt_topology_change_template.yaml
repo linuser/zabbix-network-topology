@@ -7,7 +7,7 @@ zabbix_export:
       template: 'NT Topology Change'
       name: 'NT Topology Change'
       description: |
-        Empfaengt Topologie-Aenderungen des Network-Topology-v6-Moduls via
+        Empfaengt Topologie-Aenderungen des Network-Topology-Moduls via
         zabbix_sender (tools/topo-change-sender.sh als Cron).
 
         Items sind Trapper — der Sender pusht:

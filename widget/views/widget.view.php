@@ -4,7 +4,7 @@
 declare(strict_types = 0);
 
 /**
- * Network Topology v6 - Widget View
+ * Network Topology - Widget View
  * PlaNet Fox | Alexander Fox
  *
  * Setzt data-* Attribute auf den Canvas-Container damit das JS-Modul

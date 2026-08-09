@@ -85,7 +85,7 @@ class WidgetNetworkTopologyHealth extends CWidget {
             return;
         }
         var params = new URLSearchParams();
-        params.append('action', 'network.topology.v6.data');
+        params.append('action', 'network.topology.data');
         for (var i = 0; i < ids.length; i++) params.append('groupids[]', String(ids[i]));
         var url = 'zabbix.php?' + params.toString();
         fetch(url, {
