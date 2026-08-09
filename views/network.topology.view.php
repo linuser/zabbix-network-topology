@@ -52,7 +52,7 @@ $selected_data = array_map(
                             )
                             ->addRow(
                                 '',
-                                (new CButton('clear_groups', _('Auswahl leeren')))
+                                (new CButton('clear_groups', _('Clear selection')))
                                     ->setAttribute('type', 'button')
                                     ->setAttribute('onclick',
                                         'document.querySelectorAll("#groupids_ span.zi-remove-smaller").forEach(function(s){s.click();});'
