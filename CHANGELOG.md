@@ -5,6 +5,49 @@
 
 ## Unreleased
 
+### Added
+- **Manuelle Verbindungen liegen jetzt auf dem Server, nicht mehr im
+  `localStorage`.** Bisher waren die handgezogenen Kanten an einen Browser
+  gebunden: weg beim Cache-Leeren, unsichtbar für Kollegen, weg auf dem
+  Zweitrechner. Sie liegen jetzt in **zwei Ebenen**:
+
+  | Ebene | Speicher | schreibt | sieht es |
+  |---|---|---|---|
+  | geteilt | `module.config` | nur Super-Admins | alle |
+  | persönlich | `CProfile` des Users | jeder für sich | nur er selbst |
+
+  Wer die geteilte Karte pflegen darf, pflegt sie auch: ein Super-Admin zeichnet
+  in die geteilte Ebene, alle anderen in ihre persönliche. Beide werden beim
+  Laden zusammengeführt, geteilte Kanten gewinnen bei Dopplung. In der Karte
+  sind sie unterscheidbar — geteilt kräftiger und länger gestrichelt.
+
+  Die Rechtegrenze ist keine Design-Entscheidung, sondern Zabbix: `CModule`
+  prüft in `update()` hart auf `USER_TYPE_SUPER_ADMIN`. Gelesen wird
+  `module.config` deshalb **nicht** über die API — die verweigert
+  Nicht-Super-Admins auch das Lesen — sondern über den ModuleManager, in dem
+  Zabbix die Config beim Bootstrap ohnehin schon liegen hat.
+
+  Vorhandene `localStorage`-Links wandern beim ersten Aufruf einmalig in die
+  persönliche Ebene, sofern serverseitig noch nichts liegt. Der alte Eintrag
+  bleibt als Sicherheitsnetz stehen, wird aber nicht mehr gelesen.
+
+  Kein Host-Tag wie bei `nt:parent`: ein Link darf auf einen **Ghost-Knoten**
+  zeigen — einen per LLDP gemeldeten Nachbarn, den es in Zabbix gar nicht gibt.
+  Ein Tag bräuchte einen Host, den es hier nicht gibt.
+
+  Geschrieben wird über die neue Action `network.topology.links` (POST, eigener
+  CSRF-Token, Drosselung, `USER_TYPE_ZABBIX_USER` für die persönliche und
+  Super-Admin für die geteilte Ebene). Das Frontend schreibt optimistisch: die
+  Kante erscheint sofort, scheitert der POST, wird zurückgerollt und der Fehler
+  gemeldet — sonst stünde eine Kante auf dem Schirm, die es serverseitig nicht
+  gibt.
+
+  `tests/ManualLinksTest.php` deckt die Validierung ab (21 Prüfungen). Zwei
+  Regeln sind dabei leicht zu übersehen: der **Pipe** ist in Node-IDs verboten,
+  weil persönliche Links als `s|t` je einer `CProfile`-Zeile liegen; und das
+  Paar wird **sortiert** abgelegt, weil eine Kante ungerichtet ist und `{a,b}`
+  sonst neben `{b,a}` landet.
+
 ### Fixed
 - **Beide Installer setzen den SELinux-Kontext jetzt selbst.** `nt-install.sh`
   und `deploy.sh` entpacken nach `/tmp` und schieben das Ergebnis per `cp -a`

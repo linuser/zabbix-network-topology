@@ -11,7 +11,22 @@
 //   _linkFirst  — die Source-Node (Cytoscape-Node-Object)
 
 import { fmt } from './utils.js';
-import { loadLinks } from './storage.js';
+import { loadLinks, setLinkErrorHandler } from './storage.js';
+import { toast } from './toast.js';
+import { t } from './i18n.js';
+
+// storage.js schreibt optimistisch: die Kante erscheint sofort, der POST laeuft
+// hinterher. Scheitert er, rollt storage.js den Speicher zurueck und meldet es
+// hier — sonst haette der Nutzer eine Kante vor sich, die es serverseitig nicht
+// gibt, und wuerde es erst beim naechsten Laden merken. Der Umweg ueber einen
+// Handler haelt storage.js frei von Toast- und Uebersetzungswissen.
+setLinkErrorHandler(function(err) {
+    toast(t('links.save_failed', { err: (err && err.message) || '?' }), 'error', 6000);
+    if (window._ntCy) {
+        window._ntCy.edges('[id^="ml_"]').remove();
+        applyManualLinks(window._ntCy);
+    }
+});
 
 let _linkMode  = false;
 let _linkFirst = null;
@@ -68,7 +83,12 @@ export function applyManualLinks(cyInst) {
         if (!cyInst.getElementById(String(l.t)).length) return;
         const ml2 = edgeLabel(cyInst, l.s, l.t);
         cyInst.add({
-            data: { id: id, source: String(l.s), target: String(l.t), tLabel: ml2, trafficIn: 0, trafficOut: 0 }
+            data: { id: id, source: String(l.s), target: String(l.t), tLabel: ml2,
+                    // Ebene mitgeben: geteilte Kanten werden anders gezeichnet
+                    // als persoenliche, sonst ist nicht erkennbar, was fuer alle
+                    // gilt und was nur die eigene Notiz ist.
+                    mlScope: l.scope || 'personal',
+                    trafficIn: 0, trafficOut: 0 }
         });
     });
 }

@@ -205,7 +205,18 @@ window.NT_CONFIG = <?= json_encode([
     'user_id'    => (string) (\CWebUser::$data['userid'] ?? 0),
     // Zabbix-User-Sprache ("de_DE", "en_US", "default") \u2014 i18n.js mappt
     // das auf de/en, bei "default" entscheidet die Browser-Sprache.
-    'lang'       => (string) (\CWebUser::$data['lang'] ?? 'default')
+    'lang'       => (string) (\CWebUser::$data['lang'] ?? 'default'),
+    // Manuell gezogene Kanten, serverseitig seit 5.0.1. Zwei Ebenen:
+    // shared kommt aus module.config und gilt fuer alle, personal aus dem
+    // CProfile des Users. Direkt eingebettet, damit die Karte beim ersten
+    // Rendern schon vollstaendig ist.
+    'manual_links' => [
+        'shared'   => $data['manual_links']['shared']   ?? [],
+        'personal' => $data['manual_links']['personal'] ?? []
+    ],
+    // Eigener Token fuer die schreibende Links-Action.
+    'links_csrf' => \CCsrfTokenHelper::get('network.topology.links'),
+    'links_url'  => 'zabbix.php?action=network.topology.links'
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert

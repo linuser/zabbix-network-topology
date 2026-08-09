@@ -63,6 +63,10 @@
         "network.topology.maintenance": {
             "class": "NetworkTopologyMaintenance",
             "layout": "layout.json"
+        },
+        "network.topology.links": {
+            "class": "NetworkTopologyLinks",
+            "layout": "layout.json"
         }
     }
 }

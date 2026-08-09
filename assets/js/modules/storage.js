@@ -168,14 +168,152 @@ export function clearPositions() {
     try { localStorage.removeItem(posKey()); } catch (e) {}
 }
 
-// ── Manual Links helpers ─────────────────────────────────────────────────────
+// ── Manual Links ─────────────────────────────────────────────────────────────
+//
+// Serverseitig seit 5.0.1. Vorher lagen die handgezogenen Kanten im
+// localStorage: an einen Browser gebunden, weg beim Cache-Leeren, und der
+// Kollege sah sie nie.
+//
+// Zwei Ebenen (Details in topology/ManualLinks.php):
+//   shared    module.config — gilt fuer alle, schreiben nur Super-Admins
+//   personal  CProfile      — jeder seine eigenen, ueber Rechner hinweg
+//
+// Gehalten wird beides im Speicher und beim Laden aus NT_CONFIG befuellt, damit
+// loadLinks() SYNCHRON bleiben kann — die Aufrufer zeichnen damit mitten im
+// Cytoscape-Rendering, ein Promise waere dort nicht unterzubringen. Schreiben
+// laeuft optimistisch: erst der Speicher (die Kante erscheint sofort), dann der
+// POST; scheitert er, wird zurueckgerollt und der Nutzer informiert.
+
+const SCOPE_SHARED   = 'shared';
+const SCOPE_PERSONAL = 'personal';
+
+let _linksShared   = [];
+let _linksPersonal = [];
+
+function _cfg() { return window.NT_CONFIG || {}; }
+
+(function hydrateLinks() {
+    const ml = _cfg().manual_links || {};
+    _linksShared   = Array.isArray(ml.shared)   ? ml.shared.slice()   : [];
+    _linksPersonal = Array.isArray(ml.personal) ? ml.personal.slice() : [];
+})();
+
+// Welche Ebene beschreibt ein Klick? Wer die geteilte Karte pflegen darf, pflegt
+// sie auch — fuer alle anderen sind es persoenliche Notizen.
+export function defaultLinkScope() {
+    return _cfg().is_super_admin ? SCOPE_SHARED : SCOPE_PERSONAL;
+}
+
+// Beide Ebenen zusammengefuehrt. Jeder Eintrag traegt seinen scope, damit die
+// Darstellung geteilte und persoenliche Kanten unterscheiden kann.
 export function loadLinks() {
-    try { return JSON.parse(localStorage.getItem(NT_LINKS_KEY) || '[]'); }
-    catch (e) { return []; }
+    const out  = [];
+    const seen = {};
+
+    [[_linksShared, SCOPE_SHARED], [_linksPersonal, SCOPE_PERSONAL]].forEach(function(pair) {
+        pair[0].forEach(function(l) {
+            if (!l || !l.s || !l.t) return;
+            // Geteilt gewinnt: dieselbe Kante nicht doppelt zeichnen, wenn
+            // jemand sie zusaetzlich persoenlich angelegt hat.
+            const key = String(l.s) < String(l.t) ? l.s + '|' + l.t : l.t + '|' + l.s;
+            if (seen[key]) return;
+            seen[key] = true;
+            out.push({ s: l.s, t: l.t, scope: pair[1] });
+        });
+    });
+
+    return out;
 }
-export function saveLinks(links) {
-    try { localStorage.setItem(NT_LINKS_KEY, JSON.stringify(links)); } catch (e) {}
+
+// Serverfahrt. Gibt ein Promise zurueck, das die Aufrufer ignorieren duerfen —
+// der Speicher ist zu dem Zeitpunkt schon aktuell.
+function _persist(scope, links) {
+    const cfg = _cfg();
+    const url = cfg.links_url || 'zabbix.php?action=network.topology.links';
+    const body = new URLSearchParams();
+    body.set('links', JSON.stringify(links.map(function(l) { return { s: l.s, t: l.t }; })));
+    body.set('scope', scope);
+    body.set('nt_csrf', cfg.links_csrf || '');
+
+    return fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest',
+                   'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body: body.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (!d || d.error) throw new Error((d && d.error) || 'unknown');
+        return d;
+    });
 }
+
+function _rollback(scope, snapshot, err) {
+    if (scope === SCOPE_SHARED) _linksShared = snapshot;
+    else                        _linksPersonal = snapshot;
+    if (typeof _onLinkError === 'function') _onLinkError(err);
+}
+
+// Fehlerkanal: manual-links.js haengt sich hier ein, damit storage.js nichts
+// ueber Toasts oder Uebersetzungen wissen muss.
+let _onLinkError = null;
+export function setLinkErrorHandler(fn) { _onLinkError = fn; }
+
+export function addLink(s, t, scope) {
+    const sc   = scope || defaultLinkScope();
+    const list = sc === SCOPE_SHARED ? _linksShared : _linksPersonal;
+    const snap = list.slice();
+
+    list.push({ s: s, t: t });
+    _persist(sc, list).catch(function(e) { _rollback(sc, snap, e); });
+
+    return sc;
+}
+
+// Leert eine Ebene. Ohne scope: die, die der User ohnehin beschreibt.
+export function clearLinks(scope) {
+    const sc   = scope || defaultLinkScope();
+    const snap = (sc === SCOPE_SHARED ? _linksShared : _linksPersonal).slice();
+
+    if (sc === SCOPE_SHARED) _linksShared = [];
+    else                     _linksPersonal = [];
+
+    _persist(sc, []).catch(function(e) { _rollback(sc, snap, e); });
+}
+
+// Ersetzt eine Ebene komplett — genutzt vom Preset-Import.
+export function setLinks(links, scope) {
+    const sc    = scope || defaultLinkScope();
+    const clean = (Array.isArray(links) ? links : [])
+        .filter(function(l) { return l && l.s && l.t; })
+        .map(function(l) { return { s: l.s, t: l.t }; });
+    const snap  = (sc === SCOPE_SHARED ? _linksShared : _linksPersonal).slice();
+
+    if (sc === SCOPE_SHARED) _linksShared = clean;
+    else                     _linksPersonal = clean;
+
+    _persist(sc, clean).catch(function(e) { _rollback(sc, snap, e); });
+}
+
+// Einmalige Uebernahme der alten localStorage-Links in die persoenliche Ebene.
+// Laeuft nur, wenn serverseitig noch nichts liegt — sonst wuerde ein alter
+// Browser-Stand einen gepflegten Serverstand ueberschreiben. Der localStorage-
+// Eintrag bleibt als Sicherheitsnetz liegen; er wird nur nicht mehr gelesen.
+(function migrateLegacyLinks() {
+    try {
+        if (_linksPersonal.length || _linksShared.length) return;
+        const raw = localStorage.getItem(NT_LINKS_KEY);
+        if (!raw) return;
+        const old = JSON.parse(raw);
+        if (!Array.isArray(old) || !old.length) return;
+        const clean = old.filter(function(l) { return l && l.s && l.t; })
+                         .map(function(l) { return { s: String(l.s), t: String(l.t) }; });
+        if (!clean.length) return;
+        _linksPersonal = clean;
+        _persist(SCOPE_PERSONAL, clean).catch(function() { _linksPersonal = []; });
+    } catch (e) {}
+})();
 
 // ── Severity-Filter helpers ──────────────────────────────────────────────────
 // Persistiert die aktiven Severity-Pillen als Array von Integers (0..5).
@@ -345,9 +483,11 @@ export function applyPreset(preset) {
     if (d.notes) {
         try { localStorage.setItem(notesKey(), JSON.stringify(d.notes)); } catch (e) {}
     }
-    // Manual-Links
+    // Manual-Links — gehen seit 5.0.1 auf den Server. Ein Preset schreibt in
+    // die Ebene, die der User ohnehin beschreibt; ein Nicht-Super-Admin kann
+    // ueber einen Preset-Import also keine geteilten Kanten setzen.
     if (d.links) {
-        try { localStorage.setItem(NT_LINKS_KEY, JSON.stringify(d.links)); } catch (e) {}
+        setLinks(d.links);
     }
     saveActivePreset(preset.name, preset.scope, preset.scopeKey);
 }

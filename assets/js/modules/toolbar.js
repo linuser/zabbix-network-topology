@@ -16,7 +16,7 @@
 
 import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
          NT_GHOSTS_KEY,
-         clearPositions, savePositions, savePinned, loadLinks, saveLinks,
+         clearPositions, savePositions, savePinned, clearLinks, defaultLinkScope,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
 import { resetHighlight } from './highlight.js';
@@ -551,9 +551,17 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     const bUnlink = mkbtn('nt-btn-unlink', t('toolbar.unlink'), null);
     bUnlink.title = t('toolbar.unlink.tip');
     bUnlink.onclick = function() {
-        if (!confirm(t('toolbar.unlink.confirm'))) return;
-        saveLinks([]);
-        if (window._ntCy) window._ntCy.edges('[id^="ml_"]').remove();
+        // Loescht nur die eigene Ebene: ein Super-Admin raeumt die geteilten
+        // Kanten ab, alle anderen ihre persoenlichen. Die Rueckfrage muss das
+        // sagen — bei geteilten Kanten trifft es alle Benutzer.
+        const gone = defaultLinkScope();
+        if (!confirm(t('toolbar.unlink.confirm.' + gone))) return;
+        clearLinks(gone);
+        if (window._ntCy) {
+            window._ntCy.edges('[id^="ml_"]').forEach(function(e) {
+                if (e.data('mlScope') === gone) e.remove();
+            });
+        }
     };
 
     // History-Button (Toggle für History-Slider)

@@ -98,6 +98,19 @@ export function buildCytoscapeStyle(dark) {
             'opacity': 0.45, 'curve-style': 'straight',
             'label': '', 'source-text-offset': 0, 'target-text-offset': 0,
         }},
+        // Manuell gezogene Kanten. Seit 5.0.1 gibt es zwei Ebenen, und man muss
+        // ihnen ansehen, welche man vor sich hat: eine geteilte Kante ist eine
+        // Aussage ueber das Netz, die alle sehen — eine persoenliche nur die
+        // eigene Notiz. Beide gestrichelt, weil sie nicht gemessen, sondern
+        // behauptet sind; die geteilte kraeftiger und durchgezogener.
+        { selector: 'edge[mlScope = "shared"]', style: {
+            'width': 2.5, 'line-color': dark ? '#a78bfa' : '#7c3aed',
+            'line-style': 'dashed', 'line-dash-pattern': [8, 3], 'opacity': 0.9,
+        }},
+        { selector: 'edge[mlScope = "personal"]', style: {
+            'width': 1.5, 'line-color': dark ? '#818cf8' : '#6366f1',
+            'line-style': 'dashed', 'line-dash-pattern': [3, 4], 'opacity': 0.6,
+        }},
         { selector: 'node[!isGroup]:selected', style: {
             'underlay-color': '#6366f1', 'underlay-padding': 6,
             'underlay-opacity': 0.25, 'underlay-shape': 'ellipse',

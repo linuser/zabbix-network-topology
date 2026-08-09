@@ -20,7 +20,7 @@ import { primaryGroup, SEV_COL } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import {
     NT_GROUP_VIEW_KEY, NT_LLDP_KEY, NT_PERF_KEY,
-    loadPositions, savePositions, loadPinned, loadNotes, loadLinks, saveLinks,
+    loadPositions, savePositions, loadPinned, loadNotes, loadLinks, addLink,
     loadLayout, loadTapholdMs
 } from './storage.js';
 import { aggregateByGroup } from './aggregation.js';
@@ -342,8 +342,13 @@ export function render(wrap, nodes, edges, dataUrl) {
                 const eid2 = 'ml_' + t + '_' + s;
                 if (!cy.getElementById(eid).length && !cy.getElementById(eid2).length) {
                     const ml = edgeLabel(cy, s, t);
-                    cy.add({ data: { id: eid, source: s, target: t, tLabel: ml, trafficIn: 0, trafficOut: 0 }});
-                    const lnks = loadLinks(); lnks.push({ s: s, t: t }); saveLinks(lnks);
+                    // addLink schreibt optimistisch auf den Server und liefert
+                    // die Ebene zurueck, in der die Kante gelandet ist —
+                    // geteilt (Super-Admin) oder persoenlich. Die Farbe haengt
+                    // daran, deshalb wandert sie als mlScope in die Edge-Daten.
+                    const mlScope = addLink(s, t);
+                    cy.add({ data: { id: eid, source: s, target: t, tLabel: ml,
+                                     mlScope: mlScope, trafficIn: 0, trafficOut: 0 }});
                     node.style('opacity', 1);
                     node.style('underlay-color', '#22c55e');
                     node.style('underlay-opacity', 0.3);

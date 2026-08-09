@@ -13,6 +13,7 @@ namespace Modules\NetworkTopology\Actions;
 use CController;
 use CControllerResponseData;
 use CControllerResponseFatal;
+use Modules\NetworkTopology\Topology\ManualLinks;
 use API;
 
 class NetworkTopologyView extends CController {
@@ -107,6 +108,13 @@ class NetworkTopologyView extends CController {
                 'type'           => $this->getUserType(),
                 'can_edit'       => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN,
                 'is_super_admin' => $this->getUserType() === USER_TYPE_SUPER_ADMIN
+            ],
+            // Manuelle Kanten direkt mitliefern statt per zweitem Request: sie
+            // werden beim ersten Rendern gebraucht, und ein eigener Roundtrip
+            // wuerde die Karte kurz ohne die Links zeigen.
+            'manual_links'      => [
+                'shared'   => ManualLinks::loadShared(),
+                'personal' => ManualLinks::loadPersonal()
             ]
         ]);
 
