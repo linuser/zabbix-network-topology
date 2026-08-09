@@ -40,6 +40,33 @@ bad()  { echo "  ${C_ERR}✗${C_RST} $*"; }
 warn() { echo "  ${C_WARN}!${C_RST} $*"; }
 die()  { echo "${C_ERR}❌ $*${C_RST}" >&2; exit 1; }
 
+# SELinux-Kontext wiederherstellen (RHEL/Rocky/Alma, Fedora).
+#
+# Das Modul wird aus einem Staging-Verzeichnis unter /tmp per "cp -a" bzw. "mv"
+# an seinen Platz gebracht — beide ERHALTEN den Kontext. Dateien aus /tmp tragen
+# user_tmp_t; php-fpm laeuft als httpd_t und darf das nicht lesen. Ergebnis:
+# das Modul liegt korrekt, mit richtigen Rechten und Owner, und taucht in der
+# UI trotzdem nicht auf — der haeufigste Stolperstein auf der RHEL-Familie.
+# restorecon setzt den Typ auf das, was die Policy fuer den Pfad vorsieht
+# (httpd_sys_content_t unter /usr/share/zabbix).
+#
+# Nie fatal: auf Debian/Ubuntu ohne SELinux existiert restorecon gar nicht, und
+# bei abgeschaltetem SELinux waere der Aufruf sinnlos.
+restore_context() {
+    local target="$1"
+    command -v restorecon >/dev/null 2>&1 || return 0
+    # selinuxenabled fehlt auf manchen Minimal-Images; dann einfach versuchen.
+    if command -v selinuxenabled >/dev/null 2>&1 && ! selinuxenabled 2>/dev/null; then
+        return 0
+    fi
+    if $SUDO restorecon -R "$target" 2>/dev/null; then
+        ok "SELinux-Kontext gesetzt: $target"
+    else
+        warn "restorecon fehlgeschlagen fuer $target — bei aktivem SELinux von Hand nachziehen:"
+        warn "    sudo restorecon -R '$target'"
+    fi
+}
+
 # Privileg-Eskalation: NT_SUDO override (z.B. "doas", oder "" zum Testen),
 # sonst automatisch: als root nichts, sonst sudo.
 if [[ -n "${NT_SUDO+x}" ]]; then
@@ -191,6 +218,7 @@ do_deploy() {
         # aus dem Archiv. Verzeichnisse 0755, Dateien 0644 (Webserver liest nur).
         $SUDO find "$mod" -type d -exec chmod 0755 {} + 2>/dev/null || true
         $SUDO find "$mod" -type f -exec chmod 0644 {} + 2>/dev/null || true
+        restore_context "$mod"
     else
         $SUDO rm -rf "$mod"
         if [[ -n "$prev" ]]; then

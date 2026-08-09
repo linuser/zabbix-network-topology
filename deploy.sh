@@ -268,6 +268,28 @@ R_WIDGET="$REMOTE_WIDGET"
 R_HEALTH="$REMOTE_HEALTH"
 R_TABLE="$REMOTE_TABLE"
 cd "$REMOTE_MODULES"
+
+# SELinux-Kontext wiederherstellen (RHEL/Rocky/Alma, Fedora).
+#
+# Wir entpacken nach /tmp und schieben das Ergebnis per "mv" an seinen Platz —
+# mv ERHAELT den Kontext. Dateien aus /tmp tragen user_tmp_t, php-fpm laeuft
+# als httpd_t und darf das nicht lesen. Das Modul liegt dann mit korrekten
+# Rechten und Owner da und erscheint trotzdem nicht in der UI.
+# Escaping: der aeussere Heredoc ist unquoted, deshalb \$ fuer alles, was erst
+# auf dem Zielserver expandieren soll.
+nt_restorecon() {
+    command -v restorecon >/dev/null 2>&1 || return 0
+    if command -v selinuxenabled >/dev/null 2>&1 && ! selinuxenabled 2>/dev/null; then
+        return 0
+    fi
+    if sudo restorecon -R "\$@" 2>/dev/null; then
+        echo "  SELinux-Kontext gesetzt: \$*"
+    else
+        echo "  ! restorecon fehlgeschlagen — bei aktivem SELinux von Hand nachziehen:"
+        echo "      sudo restorecon -R \$*"
+    fi
+}
+
 # Staging-Pattern: erst nach TEMP entpacken, dann atomar tauschen. Vorher
 # lief "rm -rf" VOR unzip — schlug unzip fehl (kaputtes/fehlendes Zip),
 # war das laufende Modul geloescht, kein Rollback.
@@ -278,6 +300,7 @@ sudo rm -rf network_topology
 sudo mv "$STAGE/network_topology" network_topology
 sudo rm -rf "$STAGE"
 sudo chown -R root:root network_topology
+nt_restorecon network_topology
 # Migration 4.x -> 5.0: das Verzeichnis hiess frueher network_topology_v6.
 # Bleibt es liegen, registriert Zabbix beide Module und der Menueintrag
 # erscheint doppelt.
@@ -298,6 +321,7 @@ sudo mv "$STAGE_W/network_topology_health_widget" network_topology_health_widget
 sudo mv "$STAGE_W/network_topology_table_widget" network_topology_table_widget
 sudo rm -rf "$STAGE_W"
 sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget
+nt_restorecon network_topology_widget network_topology_health_widget network_topology_table_widget
 # Migration 4.x -> 5.0: siehe oben, gilt genauso fuer die drei Widgets.
 for legacy in network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget; do
     if [ -d "$legacy" ]; then

@@ -74,7 +74,7 @@ sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
 > per SSH und braucht auf dem Server **keinerlei** Internet-Zugang.
 
 > **RHEL / RedHat / Rocky / Alma** — drei Extra-Punkte:
-> - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`
+> - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`. **Wer `nt-install.sh` oder `deploy.sh` nutzt, braucht das nicht** — beide rufen `restorecon` seit 5.0 selbst auf. Nötig ist es nur beim Entpacken von Hand.
 > - **Owner/Service**: Web-User ist `apache` (nicht www-data), der Dienst heißt `php-fpm` → `sudo chown -R apache:apache network_topology` und `sudo systemctl reload php-fpm`
 > - **APCu** (optional, empfohlen für Cache + Rate-Limit): `sudo dnf install php-pecl-apcu` und für die **FPM**-SAPI aktivieren. Ohne APCu läuft das Modul trotzdem — nur ohne Cache/Drosselung (fail-open).
 
@@ -228,7 +228,7 @@ sudo systemctl reload php8.2-fpm       # use the name you found!
 > transfers over SSH and needs **no** internet access on the server at all.
 
 > **RHEL / RedHat / Rocky / Alma** — three extra points:
-> - **SELinux** (the usual reason for "module not shown"): restore the httpd read context after copying, otherwise php-fpm can't read the files → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`
+> - **SELinux** (the usual reason for "module not shown"): restore the httpd read context after copying, otherwise php-fpm can't read the files → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`. **Not needed when using `nt-install.sh` or `deploy.sh`** — both call `restorecon` themselves as of 5.0. It only applies to unpacking by hand.
 > - **Owner/service**: the web user is `apache` (not www-data), the service is `php-fpm` → `sudo chown -R apache:apache network_topology` and `sudo systemctl reload php-fpm`
 > - **APCu** (optional, recommended for cache + rate-limit): `sudo dnf install php-pecl-apcu` and enable it for the **FPM** SAPI. Without APCu the module still works — just without cache/throttling (fail-open).
 

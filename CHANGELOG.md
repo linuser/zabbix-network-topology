@@ -3,6 +3,20 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
+## Unreleased
+
+### Fixed
+- **Beide Installer setzen den SELinux-Kontext jetzt selbst.** `nt-install.sh`
+  und `deploy.sh` entpacken nach `/tmp` und schieben das Ergebnis per `cp -a`
+  bzw. `mv` an seinen Platz — beide **erhalten** den Kontext. Dateien aus
+  `/tmp` tragen `user_tmp_t`, php-fpm läuft als `httpd_t` und darf das nicht
+  lesen. Das Modul lag damit auf RHEL/Rocky/Alma mit korrekten Rechten und
+  korrektem Owner am richtigen Platz — und erschien trotzdem nicht in der UI.
+  Beide rufen nun `restorecon -R` auf, sofern vorhanden und SELinux aktiv;
+  auf Debian/Ubuntu ist der Aufruf ein stiller No-Op und niemals fatal.
+  `INSTALL.md` weist in beiden Sprachen darauf hin, dass der Handgriff nur
+  noch beim Entpacken von Hand nötig ist.
+
 ## v5.0.0 — 2026-08-08
 
 ### ⚠️ Breaking — der `_v6`-Suffix entfällt
