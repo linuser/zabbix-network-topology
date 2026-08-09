@@ -157,11 +157,9 @@ body.nt-wallboard .nt-footer { display: none; }
     background: #30363d;
 }
 
-#nt-root.nt-dark .nt-badge {
-    background: #161b22 !important;
-    border-color: #30363d !important;
-    color: #e6edf3 !important;
-}
+/* .nt-badge ist ersatzlos entfallen: die Klasse wurde nie gesetzt und das
+   zugehoerige Element #nt-badge nie erzeugt — die Regel hat in der gesamten
+   Historie nichts getroffen. An seine Stelle tritt .nt-kpi (siehe unten). */
 
 #nt-root.nt-dark .nt-legend {
     background: #161b22 !important;
@@ -211,8 +209,19 @@ body.nt-wallboard .wrapper {
     padding: 0 !important;
     max-width: 100% !important;
 }
+/* Frueher stand hier #nt-canvas-wrap { height: 100vh } — ein Notbehelf, weil
+   #nt-root mit calc(100vh - 112px) den (im Wallboard versteckten) Zabbix-
+   Header einrechnet. Mit der Kennzahlen-Zeile darueber ging das nicht mehr
+   auf: der Canvas haette volle Viewport-Hoehe beansprucht und die Kacheln aus
+   dem Bild geschoben. Jetzt bekommt #nt-root die volle Hoehe und der Canvas
+   nimmt sich per flex, was uebrig bleibt — das gilt fuer die Zeile ebenso wie
+   fuer die Topbar. */
+body.nt-wallboard #nt-root {
+    height: 100vh;
+}
 body.nt-wallboard #nt-canvas-wrap {
-    height: 100vh !important;
+    height: auto !important;
+    flex: 1;
 }
 body.nt-wallboard .nt-topbar__actions .btn-alt,
 body.nt-wallboard .nt-topbar__actions .btn-small {
@@ -243,3 +252,111 @@ body:has(#nt-root.nt-dark) #nt-filter-form .multiselect .selected li {
     background: #334155 !important;
     color: #e2e8f0 !important;
 }
+
+/* ── Kennzahlen-Zeile (kpi.js) ────────────────────────────────────────────
+ *
+ * Sitzt zwischen Topbar und Canvas. Zwei Darstellungen, umgeschaltet ueber
+ * .nt-kpi--tiles:
+ *
+ *   Standard   Chips in einer Zeile, ~40 px hoch. Darunter liegt der Graph,
+ *              und Hoehe die hier weggeht fehlt dem Canvas dauerhaft.
+ *   Wallboard  Kacheln, ablesbar aus drei Metern. Nur bei ?wallboard=1.
+ *
+ * Farben der Zahlen setzt kpi.js inline (severity-abhaengig, hell/dunkel);
+ * hier steht nur das Gerüst.
+ */
+.nt-kpi {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    /* #nt-root ist eine Flex-Spalte mit overflow:hidden — ohne flex-shrink:0
+       wuerde die Zeile zusammengedrueckt statt den Canvas zu verkuerzen.
+       Horizontales Padding wie die Topbar (12px), damit die Kanten fluchten. */
+    flex-shrink: 0;
+    padding: 8px 12px;
+    box-sizing: border-box;
+}
+
+.nt-kpi__chip {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 11px;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    background: #f8fafc;
+}
+
+.nt-kpi__n {
+    font-size: 17px;
+    font-weight: 700;
+    /* Tabellenziffern: sonst springt die Zeile bei jedem Auto-Refresh, weil
+       die 1 schmaler ist als die 8. */
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.nt-kpi__k {
+    font-size: 11px;
+    color: #64748b;
+}
+
+.nt-kpi__sub {
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+.nt-kpi__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+    align-self: center;
+}
+
+/* Wallboard: aus Chips werden Kacheln */
+.nt-kpi--tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.nt-kpi__tile {
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #f8fafc;
+}
+
+.nt-kpi__tile .nt-kpi__k {
+    display: block;
+    margin-bottom: 7px;
+}
+
+.nt-kpi__row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.nt-kpi__big {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.nt-kpi__tile .nt-kpi__sub {
+    display: block;
+    margin-top: 5px;
+}
+
+/* Dark-Mode */
+#nt-root.nt-dark .nt-kpi__chip,
+#nt-root.nt-dark .nt-kpi__tile {
+    background: #1e293b;
+    border-color: #334155;
+}
+#nt-root.nt-dark .nt-kpi__k   { color: #94a3b8; }
+#nt-root.nt-dark .nt-kpi__sub { color: #64748b; }

@@ -73,11 +73,6 @@
       "count": 5
     }
   },
-  "assets/js/modules/render-tech.js": {
-    "no-unsanitized/property": {
-      "count": 1
-    }
-  },
   "assets/js/modules/sev-filter.js": {
     "no-unsanitized/property": {
       "count": 1

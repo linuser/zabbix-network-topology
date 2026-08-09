@@ -40,6 +40,7 @@ import {
     isLinkModeActive, getLinkFirst, setLinkFirst, exitLinkMode
 } from './manual-links.js';
 import { ensureBaseToolbar } from './tabs.js';
+import { updateKpi } from './kpi.js';
 import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
 import { buildLayoutConfig } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
@@ -57,22 +58,6 @@ export function setSetupToolbarCallback(fn) { _setupToolbar = fn; }
 // ── Modul-State ────────────────────────────────────────────────────────────
 let _posSaveTimer = null;
 
-// ── updateBadge: wird nur in render() benutzt, daher hier ──────────────────
-function updateBadge(nodes) {
-    const badge = document.getElementById('nt-badge');
-    if (!badge) return;
-    let ok = 0, warn = 0, down = 0;
-    nodes.forEach(function(n) {
-        const s = n.severity || 0;
-        if (s === 0) ok++;
-        else if (s >= 5) down++;
-        else warn++;
-    });
-    badge.innerHTML = '<b>' + nodes.length + '</b> ' + esc(t('tech.badge.hosts')) + ' &nbsp;|&nbsp; '
-        + '<span style="color:#22c55e"><b>' + ok   + '</b> ' + esc(t('tech.badge.ok'))   + '</span> &nbsp;|&nbsp; '
-        + '<span style="color:#f59e0b"><b>' + warn + '</b> ' + esc(t('tech.badge.warn')) + '</span> &nbsp;|&nbsp; '
-        + '<span style="color:#ef4444"><b>' + down + '</b> ' + esc(t('tech.badge.down')) + '</span>';
-}
 
 // ── Auto-Refresh-Fehler dezent sichtbar machen ─────────────────────────────
 // Der 30s-Refresh zeigte Fehler bisher gar nicht (kein .catch, data.error
@@ -439,7 +424,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     setupLegend(groupNames, nodes);
     // Farbcode-Erklaerung unten im Canvas (einklappbar, was bedeuten die Farben)
     setupBottomLegend(wrap, dark);
-    updateBadge(nodes);
+    updateKpi(nodes, cy);
 
     // Group-Hulls: nur wenn Cluster-Layout aktiv ist (sonst überlappen sich
     // die Hüllen bei verstreuten Knoten und sehen kaputt aus). Im Group-View
@@ -578,7 +563,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                         node.data('bgImage', makeNodeImage(node.data()));
                     }
                 });
-                updateBadge(data.nodes || []);
+                updateKpi(data.nodes || [], window._ntCy);
                 window._ntCy && window._ntCy.edges('[id^="ml_"]').forEach(function(e) {
                     e.data('tLabel', edgeLabel(window._ntCy, e.source().id(), e.target().id()));
                 });
