@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "network_topology_kpi_widget",
+    "type": "widget",
+    "name": "Network Topology for Zabbix — KPI Widget",
+    "namespace": "NetworkTopologyKpiWidget",
+    "version": "1.0.0",
+    "author": "PlaNet Fox | Alexander Fox",
+    "description": "Dashboard widget: the key figures of the topology — hosts, severity split, edges by origin and neighbours seen via LLDP but not monitored. Requires the main module (network_topology) — uses its network.topology.data action.",
+    "actions": {
+        "widget.network.topology.kpi.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetNetworkTopologyKpi"
+    },
+    "assets": {
+        "js": [
+            "widget.class.js"
+        ],
+        "css": []
+    }
+}

@@ -4,7 +4,7 @@
 #
 # Verwendung:
 #   ./deploy.sh <server>              # nur Hauptmodul
-#   ./deploy.sh <server> all          # Hauptmodul + beide Widgets
+#   ./deploy.sh <server> all          # Hauptmodul + alle Widgets
 #   ./deploy.sh <server> widgets      # nur die Widgets (Hauptmodul schon da)
 #
 # Voraussetzungen auf dem Ziel:
@@ -45,6 +45,7 @@ readonly TMP_MAIN="$LOCAL_TMP/network_topology.zip"
 readonly TMP_WIDGET="$LOCAL_TMP/network_topology_widget.zip"
 readonly TMP_HEALTH="$LOCAL_TMP/network_topology_health_widget.zip"
 readonly TMP_TABLE="$LOCAL_TMP/network_topology_table_widget.zip"
+readonly TMP_KPI="$LOCAL_TMP/network_topology_kpi_widget.zip"
 # Remote-Pfade stehen erst fest, wenn die SSH-Verbindung steht (s.u.).
 REMOTE_DIR=""
 
@@ -53,7 +54,7 @@ if [[ $# -lt 1 ]]; then
     cat >&2 <<EOF
 Usage: $0 <server> [main|widgets|all]
   main    (Default) — nur das Hauptmodul
-  widgets           — nur die beiden Widget-Module
+  widgets           — nur die Widget-Module
   all               — Hauptmodul + Widgets
 EOF
     exit 1
@@ -117,6 +118,7 @@ readonly REMOTE_MAIN="$REMOTE_DIR/network_topology.zip"
 readonly REMOTE_WIDGET="$REMOTE_DIR/network_topology_widget.zip"
 readonly REMOTE_HEALTH="$REMOTE_DIR/network_topology_health_widget.zip"
 readonly REMOTE_TABLE="$REMOTE_DIR/network_topology_table_widget.zip"
+readonly REMOTE_KPI="$REMOTE_DIR/network_topology_kpi_widget.zip"
 
 # ── Remote-Umgebung autodetecten ───────────────────────────────────────────
 echo "→ Autodetect PHP-FPM-Service + Zabbix-UI-Pfad auf $SERVER"
@@ -219,6 +221,7 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     rsync -a \
         --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
         --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
+        --exclude 'widget_kpi' \
         --exclude '.github' --exclude 'screenshots' --exclude 'dashboards' \
         --exclude 'tools' --exclude 'templates' \
         --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
@@ -233,13 +236,15 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     echo "  → $TMP_MAIN ($(du -h "$TMP_MAIN" | cut -f1))"
 fi
 if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
-    rm -f "$TMP_WIDGET" "$TMP_HEALTH" "$TMP_TABLE"
+    rm -f "$TMP_WIDGET" "$TMP_HEALTH" "$TMP_TABLE" "$TMP_KPI"
     (cd "$SCRIPT_DIR/widget"        && zip -rq "$TMP_WIDGET" .)
     (cd "$SCRIPT_DIR/widget_health" && zip -rq "$TMP_HEALTH" .)
     (cd "$SCRIPT_DIR/widget_table"  && zip -rq "$TMP_TABLE" .)
+    (cd "$SCRIPT_DIR/widget_kpi"    && zip -rq "$TMP_KPI" .)
     echo "  → $TMP_WIDGET ($(du -h "$TMP_WIDGET" | cut -f1))"
     echo "  → $TMP_HEALTH ($(du -h "$TMP_HEALTH" | cut -f1))"
     echo "  → $TMP_TABLE ($(du -h "$TMP_TABLE" | cut -f1))"
+    echo "  → $TMP_KPI ($(du -h "$TMP_KPI" | cut -f1))"
 fi
 
 # ── SCP zum Server ─────────────────────────────────────────────────────────
@@ -249,6 +254,7 @@ if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
     scp -q "${SSH_OPTS[@]}" -- "$TMP_WIDGET" "$SERVER:$REMOTE_WIDGET"
     scp -q "${SSH_OPTS[@]}" -- "$TMP_HEALTH" "$SERVER:$REMOTE_HEALTH"
     scp -q "${SSH_OPTS[@]}" -- "$TMP_TABLE"  "$SERVER:$REMOTE_TABLE"
+    scp -q "${SSH_OPTS[@]}" -- "$TMP_KPI"    "$SERVER:$REMOTE_KPI"
 fi
 
 # ── Installieren auf dem Server ────────────────────────────────────────────
@@ -267,6 +273,7 @@ R_MAIN="$REMOTE_MAIN"
 R_WIDGET="$REMOTE_WIDGET"
 R_HEALTH="$REMOTE_HEALTH"
 R_TABLE="$REMOTE_TABLE"
+R_KPI="$REMOTE_KPI"
 cd "$REMOTE_MODULES"
 
 # SELinux-Kontext wiederherstellen (RHEL/Rocky/Alma, Fedora).
@@ -315,13 +322,15 @@ STAGE_W=$(mktemp -d /tmp/nt_stage_w.XXXXXX)
 sudo unzip -q "$R_WIDGET" -d "$STAGE_W/network_topology_widget"
 sudo unzip -q "$R_HEALTH" -d "$STAGE_W/network_topology_health_widget"
 sudo unzip -q "$R_TABLE"  -d "$STAGE_W/network_topology_table_widget"
-sudo rm -rf network_topology_widget network_topology_health_widget network_topology_table_widget
+sudo unzip -q "$R_KPI"    -d "$STAGE_W/network_topology_kpi_widget"
+sudo rm -rf network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget
 sudo mv "$STAGE_W/network_topology_widget" network_topology_widget
 sudo mv "$STAGE_W/network_topology_health_widget" network_topology_health_widget
 sudo mv "$STAGE_W/network_topology_table_widget" network_topology_table_widget
+sudo mv "$STAGE_W/network_topology_kpi_widget" network_topology_kpi_widget
 sudo rm -rf "$STAGE_W"
-sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget
-nt_restorecon network_topology_widget network_topology_health_widget network_topology_table_widget
+sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget
+nt_restorecon network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget
 # Migration 4.x -> 5.0: siehe oben, gilt genauso fuer die drei Widgets.
 for legacy in network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget; do
     if [ -d "$legacy" ]; then
