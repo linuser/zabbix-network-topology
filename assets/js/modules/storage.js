@@ -248,6 +248,17 @@ export function savePositions(cyInst) {
         _posShared[view] = pos;
         _persistPositions(SCOPE_SHARED, _posShared)
             .catch(function(e) { if (_onPosError) _onPosError(e); });
+
+        // Eine eigene Abweichung fuer diese Ansicht loesen wir dabei auf.
+        // Sonst gewinnt sie pro Knoten weiter — und der Admin saehe seine
+        // gerade gespeicherte Karte selbst nicht. Genau das passierte, wenn
+        // eine alte localStorage-Anordnung vorher in die persoenliche Ebene
+        // gewandert war.
+        if (_posPersonal[view]) {
+            delete _posPersonal[view];
+            _persistPositions(SCOPE_PERSONAL, _posPersonal)
+                .catch(function(e) { if (_onPosError) _onPosError(e); });
+        }
         return;
     }
 
@@ -296,9 +307,16 @@ export function setPositionErrorHandler(fn) { _onPosError = fn; }
         if (!raw) return;
         const old = JSON.parse(raw);
         if (!old || typeof old !== 'object' || !Object.keys(old).length) return;
-        _posPersonal[view] = old;
-        _persistPositions(SCOPE_PERSONAL, _posPersonal)
-            .catch(function() { delete _posPersonal[view]; });
+        // In die Ebene, die dieser Nutzer ohnehin beschreibt. Fuer einen
+        // Super-Admin wird seine bisherige Anordnung damit zur GETEILTEN
+        // Karte — was richtig ist: wer die Karte pflegt, soll die behalten,
+        // die er schon hatte. Ginge sie stur in die persoenliche Ebene,
+        // verdeckte sie ihm anschliessend seine eigene geteilte Karte.
+        const mscope = defaultPositionScope();
+        const mstore = mscope === SCOPE_SHARED ? _posShared : _posPersonal;
+        mstore[view] = old;
+        _persistPositions(mscope, mstore)
+            .catch(function() { delete mstore[view]; });
     } catch (e) {}
 })();
 
