@@ -86,17 +86,25 @@ sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
 
 ### 3. Optional: Dashboard-Widgets
 
-Drei separate Widget-Module (nutzen die Daten des Hauptmoduls) — Topologie-Graph, Health-Score und Tabelle:
+Fünf separate Widget-Module (alle nutzen die Daten des Hauptmoduls):
+
+| ZIP | Im Dashboard-Menü | Zeigt |
+|---|---|---|
+| `network_topology_widget.zip` | **NT Topology** | die Karte als Kachel |
+| `network_topology_health_widget.zip` | **NT Health Score** | Score je Hostgruppe |
+| `network_topology_table_widget.zip` | **NT Table** | Nagios-Style Hostliste |
+| `network_topology_kpi_widget.zip` | **NT KPI** | Kennzahlen als Ring oder Kacheln |
+| `network_topology_items_widget.zip` | **NT Items** | ein Item-Muster über alle Hosts |
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-sudo unzip /pfad/network_topology_widget.zip        -d network_topology_widget
-sudo unzip /pfad/network_topology_health_widget.zip -d network_topology_health_widget
-sudo unzip /pfad/network_topology_table_widget.zip  -d network_topology_table_widget
-sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget
+for w in widget health_widget table_widget kpi_widget items_widget; do
+    sudo unzip "/pfad/network_topology_$w.zip" -d "network_topology_$w"
+done
+sudo chown -R root:root network_topology_*_widget network_topology_widget
 sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
 ```
-Dann **Scan directory** → „Network Topology for Zabbix — Widget", „— Health Widget" bzw. „NT Table" aktivieren → im Dashboard-Editor verfügbar.
+Dann **Scan directory** → die gewünschten Module auf *Enabled* → im Dashboard-Editor verfügbar. Die ZIPs enthalten ihre Dateien **direkt**, ohne Oberordner — deshalb ist `-d <ziel>` zwingend.
 **Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
 
 > **Warum nicht eigenständig?** Die Daten-Action `network.topology.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
@@ -124,7 +132,7 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 ### Update
 
-Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Pins/Notizen/Presets liegen im Browser-`localStorage` und bleiben erhalten. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
+Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
 
 #### Umstieg von 4.x auf 5.0
 
@@ -145,7 +153,7 @@ Zwei Dinge musst du danach von Hand nachziehen:
   Wer das vermeiden will, findet im [CHANGELOG](CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein `UPDATE`-Skript, das die Bezeichner direkt in der Datenbank umschreibt. **Auf diesem Weg entfallen auch Schritt 2 und 3**: die Module bleiben aktiviert, „Scan directory" ist nicht nötig, und die Kacheln bleiben stehen. Nachgefahren auf zwei unabhängigen Installationen, davon eine auf PostgreSQL.
 - **Lesezeichen.** Die Ansicht liegt jetzt unter `zabbix.php?action=network.topology.view`.
 
-Alles Nutzerseitige bleibt erhalten: Knotenpositionen, Pins, Notizen, manuelle Links, Filter-Presets und Toolbar-Einstellungen. Die `localStorage`-Schlüssel waren nie an den Modulnamen gebunden. Host-Tags (`nt:parent`) sind ohnehin unberührt.
+Alles Nutzerseitige bleibt erhalten. Kartenanordnung und manuelle Links liegen serverseitig — an `module.config` und am Benutzerprofil, nicht am Modulnamen. Pins, Notizen, Filter-Presets und Toolbar-Einstellungen liegen im `localStorage`, dessen Schlüssel nie an den Modulnamen gebunden waren. Host-Tags (`nt:parent`) sind ohnehin unberührt.
 
 ### Deinstallation
 
@@ -242,17 +250,25 @@ sudo systemctl reload php8.2-fpm       # use the name you found!
 
 ### 3. Optional: dashboard widgets
 
-Three separate widget modules (they consume the main module's data) — topology graph, health score and table:
+Five separate widget modules (they all consume the main module's data):
+
+| ZIP | In the dashboard menu | Shows |
+|---|---|---|
+| `network_topology_widget.zip` | **NT Topology** | the map as a tile |
+| `network_topology_health_widget.zip` | **NT Health Score** | score per host group |
+| `network_topology_table_widget.zip` | **NT Table** | Nagios-style host list |
+| `network_topology_kpi_widget.zip` | **NT KPI** | key figures as a ring or tiles |
+| `network_topology_items_widget.zip` | **NT Items** | one item pattern across all hosts |
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-sudo unzip /path/network_topology_widget.zip        -d network_topology_widget
-sudo unzip /path/network_topology_health_widget.zip -d network_topology_health_widget
-sudo unzip /path/network_topology_table_widget.zip  -d network_topology_table_widget
-sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget
-sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
+for w in widget health_widget table_widget kpi_widget items_widget; do
+    sudo unzip "/path/network_topology_$w.zip" -d "network_topology_$w"
+done
+sudo chown -R root:root network_topology_*_widget network_topology_widget
+sudo systemctl reload php8.2-fpm      # service name as determined above
 ```
-Then **Scan directory** → enable "Network Topology for Zabbix — Widget" / "— Health Widget" / "NT Table" → available in the dashboard editor.
+Then **Scan directory** → set the modules you want to *Enabled* → available in the dashboard editor. The widget ZIPs carry their files **directly**, without a top-level folder — that is why `-d <target>` is required.
 **Prerequisite:** the main module must be installed + enabled — and **Zabbix 7.4** (the widgets don't run on 7.0 LTS; the main module does).
 
 > **Why not standalone?** The data action `network.topology.data` belongs to the main module, and the topology widget loads Cytoscape.js from `modules/network_topology/assets/js/` — the library ships only once on purpose. Without the main module (or with it disabled) the tiles show an error. So **install and enable the main module first, then the widgets.**
@@ -280,7 +296,7 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 ### Update
 
-Replace the `network_topology` directory with the new version, `chown`, reload php-fpm, **Scan directory**. Pins/notes/presets live in the browser `localStorage` and are preserved. After an update that adds new actions, "Scan directory" is **mandatory**.
+Replace the `network_topology` directory with the new version, `chown`, reload php-fpm, **Scan directory**. The map layout and manual links are stored server-side and survive regardless; pins, notes and presets live in the browser `localStorage`. After an update that adds new actions, "Scan directory" is **mandatory**.
 
 #### Upgrading from 4.x to 5.0
 
@@ -301,7 +317,7 @@ Two things need a manual follow-up:
   To avoid that, the [CHANGELOG](CHANGELOG.md) section "Optional: Dashboards per SQL erhalten" carries an `UPDATE` script that rewrites the identifiers directly in the database. **That path also removes steps 2 and 3**: the modules stay enabled, "Scan directory" is not required, and the tiles stay in place. Rehearsed on two independent installations, one of them on PostgreSQL.
 - **Bookmarks.** The view now lives at `zabbix.php?action=network.topology.view`.
 
-Everything user-side is preserved: node positions, pins, notes, manual links, filter presets and toolbar settings. The `localStorage` keys were never tied to the module name. Host tags (`nt:parent`) are unaffected anyway.
+Everything user-side is preserved. The map layout and manual links live server-side — in `module.config` and the user profile, not tied to the module name. Pins, notes, filter presets and toolbar settings live in `localStorage`, whose keys were never tied to the module name either. Host tags (`nt:parent`) are unaffected anyway.
 
 ### Uninstall
 

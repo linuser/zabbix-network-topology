@@ -87,7 +87,7 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - **Live-Refresh** alle 30 s (abschaltbar)
 - **History-Mode** mit Slider — Trigger-Status zur ausgewählten Zeit (1 h/24 h/7 d)
 - **Item-Pivot** — beliebiges Item-Key-Pattern als Spalten
-- **Manuelle Links** zwischen Hosts, **Notizen + Pins** pro Host (lokal im localStorage)
+- **Manuelle Links** zwischen Hosts und **Kartenanordnung** — serverseitig, in zwei Ebenen: ein Super-Admin pflegt die für alle sichtbare Karte, jeder andere weicht persönlich davon ab. Notizen und Pins liegen weiterhin im `localStorage`
 - **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](LLDP-SETUP.md#port-zu-port--per-link-weathermap))
 
 **Custom-Tags am Host**
@@ -208,7 +208,7 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - **Live refresh** every 30 s (can be turned off)
 - **History mode** with slider — trigger state at the selected time (1 h/24 h/7 d)
 - **Item pivot** — any item key pattern as columns
-- **Manual links** between hosts, **notes + pins** per host (local, in localStorage)
+- **Manual links** between hosts and the **map layout** — stored server-side in two layers: a Super admin curates the map everyone sees, anyone else deviates personally. Notes and pins still live in `localStorage`
 - **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](LLDP-SETUP.md))
 
 **Custom host tags**

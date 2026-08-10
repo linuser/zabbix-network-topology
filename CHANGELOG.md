@@ -76,6 +76,35 @@
   Beide bauen mit `createElement`/`textContent` statt `innerHTML` und brauchen
   deshalb keinen Eintrag in `eslint-suppressions.json`.
 
+- **Die Kartenanordnung liegt jetzt auf dem Server — mit einer geteilten
+  Ebene.** Wo die Knoten liegen, lag bisher im `localStorage`: an einen Browser
+  gebunden, weg beim Cache-Leeren, und jeder ordnete sich seine eigene Karte.
+
+  Zwei Ebenen wie bei den manuellen Links: ein **Super-Admin** pflegt *die*
+  Karte — die, die alle sehen, die man in ein Ticket verlinkt, die im Wallboard
+  hängt. Jeder andere weicht persönlich davon ab.
+
+  Der Unterschied zu den Links steckt im Zusammenführen: die persönliche Ebene
+  gewinnt **pro Knoten**, nicht als Ganzes. Wer drei Geräte verschiebt, behält
+  drei eigene Positionen — alles andere folgt weiter der geteilten Karte, auch
+  wenn ein Admin sie später neu ordnet. Gespeichert wird bei Nicht-Admins nur
+  die **Abweichung**; läge dort die volle Anordnung, verdeckte sie die geteilte
+  Ebene für immer.
+
+  Positionen hängen an der Gruppenauswahl, deshalb ist der View-Schlüssel Teil
+  der Struktur — mit eigenem Eintrag für die Group-View, die eigene
+  Pseudo-Knoten hat. Vorhandene `localStorage`-Anordnungen wandern beim ersten
+  Aufruf einmalig in die persönliche Ebene, sofern serverseitig für diese
+  Ansicht noch nichts liegt.
+
+  Geschrieben wird über die neue Action `network.topology.positions` (POST,
+  eigener CSRF-Token, Drosselung). `tests/NodePositionsTest.php` deckt die
+  Validierung mit 23 Prüfungen ab — der View-Schlüssel wird dabei genauso
+  streng geprüft wie die Knoten-IDs: wäre er frei wählbar, könnte ein Client
+  `module.config` mit beliebigen Schlüsseln vollschreiben.
+
+  **Pins und Notizen bleiben vorerst im `localStorage`.**
+
 - **Aus einem unüberwachten Nachbarn einen Host machen.** Ghost-Knoten haben
   jetzt ein eigenes Kontextmenü mit Herkunftsangabe (welcher Host sie per
   LLDP/CDP gemeldet hat) und — für Admins — einem Eintrag, der Zabbix' eigenes

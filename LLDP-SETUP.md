@@ -248,10 +248,14 @@ Gedacht für Träger-Beziehungen (VM→Hypervisor, Container→Node), funktionie
 „dieser Host hängt hinter dieser Firewall". Die Ausfallsimulation behandelt es als **harte
 Abhängigkeit**: Fällt der Parent, fällt der Child — unabhängig vom Netzpfad.
 
-**2. Manuelle Links** im Star-Mode direkt in der Karte ziehen. Schnell für die eigene Sicht.
-> ⚠ **Einschränkung:** Sie liegen im `localStorage` des Browsers — also **pro Benutzer und pro
-> Gerät**. Deine Kollegen sehen sie nicht. Zum Dokumentieren einer *gemeinsamen* Topologie ist
-> das `nt:parent`-Tag das richtige Werkzeug.
+**2. Manuelle Links** im Star-Mode direkt in der Karte ziehen. Seit 5.0 **serverseitig**, in zwei
+Ebenen: Zeichnet ein **Super-Admin**, gilt die Kante für alle. Zeichnet jemand anderes, ist sie
+seine persönliche Notiz — folgt ihm aber über Browser und Rechner hinweg. In der Karte sind beide
+unterscheidbar, die geteilte kräftiger gestrichelt.
+> Damit taugen manuelle Links auch für eine *gemeinsame* Topologie. Wo ein `nt:parent`-Tag besser
+> passt: es ist eine **harte Abhängigkeit** in der Ausfallsimulation, ein manueller Link nur eine
+> Kante auf der Karte. Für „hängt hinter dieser Firewall" nimm das Tag, für „hier liegt ein Kabel,
+> das keiner meldet" den Link.
 
 **3. Ghost-Knoten** decken den umgekehrten Fall ab: Meldet ein Nachbar ein Gerät, das in Zabbix
 gar nicht überwacht wird, erscheint es als gestrichelter Platzhalter (Toggle in der Toolbar,
