@@ -199,10 +199,10 @@ class WidgetNetworkTopologyHealth extends CWidget {
     }
 
     _scoreLabel(s) {
-        if (s >= 85) return 'Gesund';
+        if (s >= 85) return 'Healthy';
         if (s >= 65) return 'OK';
-        if (s >= 40) return 'Achtung';
-        return 'Kritisch';
+        if (s >= 40) return 'Warning';
+        return 'Critical';
     }
 
     _esc(s) {
@@ -276,8 +276,8 @@ class WidgetNetworkTopologyHealth extends CWidget {
         var html = ''
             + '<div style="padding:10px 12px;font-family:sans-serif">'
             + '<div style="font-size:11px;color:' + this._COL_SUB + ';margin-bottom:8px">'
-            +   stats.length + ' Gruppen · Ø '
-            +   '<b style="color:' + this._scoreColor(avg)      + '">' + avg      + '</b> · Min '
+            +   stats.length + (stats.length === 1 ? ' group' : ' groups') + ' · avg '
+            +   '<b style="color:' + this._scoreColor(avg)      + '">' + avg      + '</b> · min '
             +   '<b style="color:' + this._scoreColor(minScore) + '">' + minScore + '</b>'
             + '</div>'
             + '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));gap:8px">';
@@ -286,10 +286,10 @@ class WidgetNetworkTopologyHealth extends CWidget {
         if (this._showLegend) {
             html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid ' + this._COL_BORDER
                 + ';font-size:10px;color:' + this._COL_SUB + ';display:flex;gap:12px;flex-wrap:wrap">'
-                + '<span><b style="color:' + this._COL_OK   + '">85+</b> Gesund</span>'
+                + '<span><b style="color:' + this._COL_OK   + '">85+</b> Healthy</span>'
                 + '<span><b style="color:' + this._COL_WARN + '">65-85</b> OK</span>'
-                + '<span><b style="color:' + this._COL_BAD  + '">40-65</b> Achtung</span>'
-                + '<span><b style="color:' + this._COL_CRIT + '">&lt;40</b> Kritisch</span>'
+                + '<span><b style="color:' + this._COL_BAD  + '">40-65</b> Warning</span>'
+                + '<span><b style="color:' + this._COL_CRIT + '">&lt;40</b> Critical</span>'
                 + '</div>';
         }
         html += '</div>';

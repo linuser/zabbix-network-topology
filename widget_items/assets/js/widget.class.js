@@ -129,7 +129,10 @@ class WidgetNetworkTopologyItems extends CWidget {
         if (isNaN(n)) return String(v);
 
         if (unit === '%') {
-            return (Math.round(n * 10) / 10) + '%';
+            // Feste Nachkommastelle statt Math.round(n*10)/10: letzteres
+            // schneidet die abschliessende Null ab, wodurch in einer Spalte
+            // "5.9%" neben "6%" steht und die Zahlen optisch springen.
+            return n.toFixed(1) + '%';
         }
         if (unit === 'B' || unit === 'Bps' || unit === 'bps') {
             var suffix = unit === 'B' ? ['B', 'KB', 'MB', 'GB', 'TB']
