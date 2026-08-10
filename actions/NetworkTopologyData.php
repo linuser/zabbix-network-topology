@@ -242,9 +242,22 @@ class NetworkTopologyData extends NetworkTopologyController {
                 // net.if.speed[ifHighSpeed.X]-Template-Keys via Substring)
                 'ifHighSpeed', 'ifSpeed',
                 // LLDP (IEEE 802.1AB standard MIB)
-                'lldpRemSysName',
+                //
+                // 'lldpRemPort' MUSS hier stehen, nicht nur 'lldpRemSysName':
+                // die Suche ist eine Substring-Suche, und lldpRemPortId /
+                // lldpRemPortDesc enthalten "lldpRemSysName" natuerlich nicht.
+                // Sie wurden deshalb NIE geholt — der MetricExtractor hat
+                // Zweige dafuer, LldpEdgeBuilder wertet sie aus, und beides
+                // lief ins Leere, weil die Items nie ankamen. Damit konnten die
+                // Port-zu-Port-Labels nicht funktionieren, obwohl README und
+                // LLDP-SETUP sie als Hauptmerkmal fuehren und das Template die
+                // Werte einsammelt.
+                'lldpRemSysName', 'lldpRemPort',
                 // CDP (Cisco Discovery Protocol, Cisco-spezifisch)
-                'cdpCacheDeviceId',
+                //
+                // cdpCacheDevicePort traf 'cdpCacheDeviceId' ebenfalls nicht —
+                // dieselbe Luecke auf der CDP-Seite.
+                'cdpCacheDeviceId', 'cdpCacheDevicePort',
                 // Generische Neighbor-Discovery: Ubiquiti UniFi, MikroTik, custom
                 'neighbor.sysName', 'discovery.neighbor',
                 // CPU — Agent + SNMP variants
