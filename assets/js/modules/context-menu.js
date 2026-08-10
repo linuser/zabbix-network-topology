@@ -107,6 +107,58 @@ export function showCtx(cx, cy2, d) {
     const base   = window.location.pathname.replace('zabbix.php', '');
     const hostId = String(d.id);
 
+    // ── Ghost-Knoten ────────────────────────────────────────────────────────
+    //
+    // Ein Ghost ist ein per LLDP/CDP gemeldeter Nachbar, den Zabbix nicht
+    // kennt — ein Geraet, das im Netz steht und nicht ueberwacht wird. Bisher
+    // war das eine Feststellung; hier wird eine Handlung daraus.
+    //
+    // Angelegt wird der Host NICHT von uns. Wir oeffnen Zabbix' eigenes
+    // Formular mit vorbefuelltem Namen (dieselbe popup=host.edit-URL, die das
+    // Menue schon fuers Bearbeiten nutzt). Damit gibt es keine schreibende
+    // Action, keine eigene Rechtepruefung und keine halbe Host-Anlage: Zabbix
+    // validiert, Zabbix legt an, Zabbix lehnt ab. Der Eintrag erscheint nur
+    // fuer Admins — das Formular selbst weist andere ohnehin ab, aber ein
+    // Menuepunkt, der in "Access denied" laeuft, ist keiner.
+    if (d._isGhost) {
+        const gh = document.createElement('div');
+        gh.style.cssText = 'padding:8px 12px 6px;font-weight:700;border-bottom:1px solid #f1f5f9;font-size:12px;color:#0f172a';
+        gh.textContent = d.label || d.host || String(d.id);
+
+        const ghSub = document.createElement('div');
+        ghSub.style.cssText = 'font-size:10px;font-weight:400;color:#64748b;margin-top:2px';
+        const seenBy = (d._ghostSeenBy || []).join(', ');
+        const via    = (d._ghostSrc || ['lldp']).join('/').toUpperCase();
+        ghSub.textContent = seenBy
+            ? t('ctx.ghost.seen_by', { via: via, hosts: seenBy })
+            : t('ctx.ghost.unmonitored');
+        gh.appendChild(ghSub);
+        _ctx.appendChild(gh);
+
+        if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
+            _ctx.appendChild(_ctxRow(t('ctx.ghost.create'), '#0275b8', function() {
+                // Gruppe vorbelegen: die erste der gerade gewaehlten. Eine
+                // bessere Vermutung gibt es nicht — der Nachbar traegt keine
+                // Gruppenzugehoerigkeit, er ist ja nirgends erfasst. Im
+                // Formular laesst sich das aendern.
+                const cfg  = window.NT_CONFIG || {};
+                const grp  = (cfg.selected_groupids || [])[0];
+                const note = seenBy
+                    ? 'Discovered via ' + via + ' by ' + seenBy + ' (Network Topology)'
+                    : 'Discovered via ' + via + ' (Network Topology)';
+                let url = window.location.origin + base
+                    + 'zabbix.php?action=popup&popup=host.edit'
+                    + '&host=' + encodeURIComponent(d.label || d.host || '')
+                    + '&description=' + encodeURIComponent(note.slice(0, 250));
+                if (grp) url += '&groupids[]=' + encodeURIComponent(grp);
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }));
+        }
+
+        _showCtxAt(cx, cy2);
+        return;
+    }
+
     // ── Aggregat-Node (Group-View) ──────────────────────────────────────────
     if (d._isAggregate) {
         const header = document.createElement('div');
