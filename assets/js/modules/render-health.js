@@ -10,6 +10,12 @@
 // Score-Formel (gewichteter Abzug, clamp 0..100):
 //   100 − offline%·40 − stale%·15 − critical%·25 − unacked%·20
 //
+// Dieselbe Formel steht ES5-konform in widget_health/assets/js/widget.class.js
+// (die Widget-Loader kennen keine ES-Module). tools/check-parity.mjs vergleicht
+// Gewichte und Schwellen beider Stellen und bricht die CI ab, wenn sie
+// auseinanderlaufen — sonst zeigte dieselbe Hostgroup auf Karte und Dashboard
+// verschiedene Scores.
+//
 // Rendern: Karten-Grid, sortiert nach worst Score zuerst. Jede Karte zeigt
 // den Score gross + farbig (rot/orange/gelb/gruen) plus die Detail-Zahlen.
 

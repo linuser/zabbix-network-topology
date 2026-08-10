@@ -52,10 +52,27 @@ ohne dass klar ist warum:
    sauber escapen. Neue Einträge dort sind kein akzeptierter Weg, um das Gate
    ruhigzustellen — neuer Code soll ohne Suppression auskommen.
 
+4. **Die beiden bewussten Duplikate müssen synchron bleiben.** Die
+   Widget-Module können den Code des Hauptmoduls nicht importieren — Zabbix'
+   jsLoader kennt keine ES-Module. Zweimal steht deshalb dasselbe da, und
+   `npm run ci:parity` bewacht beide Stellen:
+
+   - Die **Health-Score-Formel** in `assets/js/modules/render-health.js` und
+     `widget_health/`. Gewichte und Schwellen werden verglichen. Läuft das
+     auseinander, zeigt dieselbe Hostgroup auf der Karte und im Dashboard
+     verschiedene Scores — und niemand sieht, welcher stimmt.
+   - Der **geteilte Datenzugriff** (`window.NtWidgetData`) in vier
+     Widget-Dateien. Byte-Vergleich: liefe eine Kopie mit anderem TTL oder
+     Cache-Schlüssel, hinge das Verhalten des Dashboards an der
+     Ladereihenfolge — ein Fehler, der sich nicht reproduzieren lässt.
+
+   Wer eine der Stellen ändert, ändert die andere mit. Das Gate sagt genau,
+   welche Datei ausschert.
+
 Alles zusammen lokal prüfen:
 
 ```bash
-npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:test
+npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity && npm run ci:test
 ```
 
 ## Tests

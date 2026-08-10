@@ -8,7 +8,9 @@
  *
  * Die Logik spiegelt assets/js/modules/render-health.js des Hauptmoduls
  * (ES5-konform fuer den Widget-Loader dupliziert — keine ESM-Imports
- * verfuegbar). Wenn sich die Formel im Haupt-Tab aendert, hier mitziehen.
+ * verfuegbar). Wenn sich die Formel im Haupt-Tab aendert, hier mitziehen;
+ * tools/check-parity.mjs vergleicht Gewichte und Schwellen und bricht die
+ * CI ab, wenn beide auseinanderlaufen.
  */
 
 /*

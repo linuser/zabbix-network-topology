@@ -78,3 +78,13 @@ bundle-drift:
     - npm run build
     # Exit 1, wenn das eingecheckte Bundle nicht zu den Quellmodulen passt.
     - git diff --exit-code -- assets/js/dist/nt-bundle.js
+
+# Bewacht die zwei bewussten Duplikate: die Health-Score-Formel (Hauptmodul vs.
+# Widget) und den geteilten Datenzugriff, der in vier Widget-Dateien liegt. Die
+# Widget-Loader kennen keine ES-Module, deshalb ist die Doppelung nicht
+# aufloesbar — aber sie muss bewacht werden.
+parity:
+  stage: test
+  image: node:22-alpine
+  script:
+    - node tools/check-parity.mjs
