@@ -48,6 +48,65 @@
   Paar wird **sortiert** abgelegt, weil eine Kante ungerichtet ist und `{a,b}`
   sonst neben `{b,a}` landet.
 
+- **Kennzahlen-Zeile über der Karte.** Sechs Zahlen auf einen Blick: Hosts,
+  OK/Warn/Krit., Kanten und nicht überwachte Nachbarn. Standardmäßig als
+  kompakte Chips (~40 px), im Wallboard-Modus (`?wallboard=1`) als große
+  Kacheln — unter der Zeile liegt kein Scrollbereich, sondern der Graph, und
+  Höhe die oben weggeht fehlt ihm dauerhaft.
+
+  Zwei der Zahlen gab es bisher nirgends: **Kanten** nach Herkunft
+  aufgeschlüsselt (manuell gezogen, aus LLDP/CDP, zu Ghosts) und **Ghosts** —
+  per LLDP gemeldete Nachbarn ohne Host in Zabbix. Alles aus dem Graphen
+  gelesen, kein Backend, keine neue Action.
+
+  Nebenbei entfernt: `updateBadge()` in `render-tech.js` wollte seit v4.18.3
+  Zahlen in ein Element `#nt-badge` schreiben, das **in der gesamten Historie
+  nie erzeugt wurde** — die Funktion stieg bei jedem Aufruf in Zeile 2 aus, die
+  Zahlen hat nie jemand gesehen. Mit ihr fällt die einzige unterdrückte
+  `no-unsanitized`-Stelle der Datei weg.
+
+- **Zwei neue Dashboard-Widgets.** Damit liefert das Paket fünf:
+  - **NT KPI** — dieselben Kennzahlen als Kachel, wahlweise als Ring
+    (Severity-Verteilung mit der Host-Zahl in der Mitte) oder als Raster.
+  - **NT Items** — ein Item-Muster über alle Hosts der gewählten Gruppen
+    gepivotet: Hosts als Zeilen, passende Keys als Spalten. Festes Muster im
+    Formular statt der interaktiven Auswahl des Haupt-Tabs; auf einer Kachel
+    gibt es diese Interaktion nicht.
+
+  Beide bauen mit `createElement`/`textContent` statt `innerHTML` und brauchen
+  deshalb keinen Eintrag in `eslint-suppressions.json`.
+
+- **Aus einem unüberwachten Nachbarn einen Host machen.** Ghost-Knoten haben
+  jetzt ein eigenes Kontextmenü mit Herkunftsangabe (welcher Host sie per
+  LLDP/CDP gemeldet hat) und — für Admins — einem Eintrag, der Zabbix' eigenes
+  Host-Formular **vorbefüllt** öffnet: Name, aktuelle Hostgruppe, Herkunft in
+  der Beschreibung.
+
+  Angelegt wird der Host bewusst nicht von uns: keine schreibende Action, keine
+  eigene Rechteprüfung, keine halb angelegten Hosts. Zabbix validiert, legt an
+  und lehnt ab. Bisher fielen Ghosts in den Host-Zweig des Menüs und bekamen
+  Einträge wie „Latest Data", die für einen nicht existierenden Host
+  zwangsläufig ins Leere führen.
+
+### Changed
+- **Die Widgets folgen jetzt Zabbix' eigenem Update-Zyklus.** Alle liefen mit
+  eigenem `setInterval` (30/30/60 s), während die Basisklasse `CWidget`
+  parallel periodisch die View-Action rief und den Widget-Körper durch frisches
+  View-HTML ersetzte — den „Loading…"-Platzhalter, den der eigene Timer erst
+  bis zu 60 s später überschrieb. Die Widget-Kacheln fielen dadurch regelmäßig
+  auf „Loading…" zurück.
+
+  Sie überschreiben jetzt `promiseUpdate()`. Damit gilt die
+  Refresh-Einstellung des Dashboards statt drei fest verdrahteter Zahlen, und
+  bei inaktiver Seite pausiert der Zyklus von selbst.
+
+- **Einheitliche Namen.** Im Dashboard-Menü heißen die Widgets durchgehend
+  `NT …` (Zabbix sortiert alphabetisch — ohne gemeinsames Präfix standen sie an
+  drei Stellen der Liste). In der Modulliste tragen alle eine englische
+  Beschreibung in gleicher Form; das Graph-Widget hieß dort nur „— Widget" und
+  heißt jetzt „— Topology Widget". Nur Anzeigetexte: die Widget-IDs bleiben,
+  bestehende Kacheln behalten ihren gespeicherten Titel.
+
 ### Fixed
 - **Beide Installer setzen den SELinux-Kontext jetzt selbst.** `nt-install.sh`
   und `deploy.sh` entpacken nach `/tmp` und schieben das Ergebnis per `cp -a`
@@ -59,6 +118,59 @@
   auf Debian/Ubuntu ist der Aufruf ein stiller No-Op und niemals fatal.
   `INSTALL.md` weist in beiden Sprachen darauf hin, dass der Handgriff nur
   noch beim Entpacken von Hand nötig ist.
+
+- **Ein High-Problem zählte als „Warn".** Die Severity-Eimer der Kennzahlen
+  warfen alles zwischen OK und Disaster in einen Topf — ein Host mit **High**
+  erschien unter „Warn", während die Toolbar eine Zeile darüber getrennte
+  Pillen für Warn, Avg und High zeigt und der Knoten im Graphen rot leuchtet.
+  Jetzt: `ok` = Normal, `warn` = Info bis Average, `krit` = High und Disaster.
+
+- **„0 Ghosts" war eine Behauptung, keine Messung.** Ghost-Knoten kommen nur in
+  den Graphen, wenn der Toolbar-Toggle an ist (Standard: aus) — gezählt wurde
+  aber aus dem Graphen. Bei ausgeschaltetem Toggle stand dort null, unabhängig
+  davon wie viele es gab, und das ausgerechnet bei der Kennzahl, die zu etwas
+  auffordern soll. Gezählt wird jetzt aus derselben Quelle, aus der auch
+  injiziert wird; ist der Toggle aus, steht „ausgeblendet" daneben.
+
+- **Deutsche Zeichenketten in einer englischen Oberfläche.** Der Knopf unter der
+  Hostgruppen-Auswahl rief `_('Auswahl leeren')` — die *Ausgangs*-Zeichenkette
+  war deutsch, und Zabbix' gettext übersetzt gegen englische Quelltexte, reicht
+  einen deutschen also unverändert durch. Ebenso trug das Health-Widget als
+  einziges noch deutsche Beschriftungen (Score-Labels, Kopfzeile, Legende), und
+  die Kopfzeile schrieb „1 Gruppen" — Singular und Plural waren nicht
+  unterschieden. Beides behoben; das Paket ist jetzt durchgängig englisch.
+
+- **Prozentspalte im Items-Widget sprang.** Die Rundung schnitt die abschließende
+  Null ab, wodurch „6%" neben „5.9%" stand. Feste Nachkommastelle.
+
+### Performance
+- **Response-Cache für `network.topology.data`.** Die Action ist der teuerste
+  Endpoint des Moduls (Host + Trigger + Problem + Item + gebatchte Lastvalues +
+  LLDP) und war als einzige von sieben cachenden Actions **ohne**
+  Response-Cache — in `NtCache` lag dort nur die Topologie-Baseline. 15 s TTL,
+  deutlich unter jedem Refresh-Intervall.
+
+  Zwei Dinge bleiben bewusst außerhalb des Caches. **`topo_changes`** beruht auf
+  einem Diff gegen die letzte Abfrage; aus dem Cache bedient, liefe der Diff nur
+  noch bei Cache-Misses und dieselbe „neue Verbindung" würde für die Dauer der
+  TTL wiederholt gemeldet. **`requested_count`** hängt am ungekürzten
+  Eingabewert, der nicht im Cache-Schlüssel steckt.
+
+- **Mehrere Widgets auf einem Dashboard holen die Daten nur noch einmal.**
+  Vorher fragte jedes `network.topology.data` einzeln ab — dieselbe Action,
+  dieselben Hostgruppen. Ein geteilter Zugriff mit Request-Coalescing und 15 s
+  TTL bündelt das. Auf einem Dashboard mit vier NT-Widgets sind es damit
+  nachweislich **eine** Datenabfrage pro Runde statt vier.
+
+### Intern
+- **Gate gegen Drift in den beiden bewussten Duplikaten.** Die Widget-Module
+  können den Code des Hauptmoduls nicht importieren — Zabbix' jsLoader kennt
+  keine ES-Module —, deshalb steht zweimal dasselbe da. Bisher stand die Bitte,
+  das synchron zu halten, als Kommentar in den Dateien; `npm run ci:parity`
+  macht daraus eine Prüfung. Bewacht werden die Gewichte und Schwellen der
+  Health-Score-Formel (Hauptmodul gegen Widget) und der geteilte Datenzugriff
+  über vier Widget-Dateien. Findet die Extraktion nichts, ist das ein Fehler
+  und kein Durchlauf.
 
 ## v5.0.0 — 2026-08-08
 
