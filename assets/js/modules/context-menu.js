@@ -101,6 +101,62 @@ function _createMaintenance(hostId, durationSec, durLabel, hostLabel) {
         .catch(function(e) { toast(t('maint.fail', { msg: e.message }), 'warn'); });
 }
 
+// POST an die Portscan-Action. Geschickt wird NUR die hostid — die Adresse
+// loest das Backend selbst ueber die Zabbix-API auf, damit die Rechte des
+// Benutzers auf diesen Host greifen.
+//
+// Der Scan dauert Sekunden (jeder gefilterte Port kostet die volle
+// Zeitueberschreitung), deshalb vorab ein Hinweis-Toast — sonst wirkt die
+// Oberflaeche haengengeblieben.
+function _probePorts(hostId, hostLabel) {
+    const base = window.location.pathname.replace('zabbix.php', '');
+    const cfg  = window.NT_CONFIG || {};
+    const params = new URLSearchParams();
+    params.append('action', 'network.topology.portscan');
+    params.append('hostid', hostId);
+    params.append('nt_csrf', cfg.portscan_csrf || '');
+
+    toast(t('scan.running', { host: hostLabel }), 'info', 4000);
+
+    fetch(base + 'zabbix.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params.toString()
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (!res || !res.ok) {
+                toast(t('scan.fail', { msg: (res && res.error) || '?' }), 'warn');
+                return;
+            }
+
+            // Antwortete das Geraet ueberhaupt? Kam auf KEINEN Port eine
+            // Reaktion — weder offen noch abgelehnt —, sagt das Ergebnis nichts
+            // ueber das Geraet, sondern etwas ueber den Netzweg: das Frontend
+            // steht haeufig nicht im ueberwachten Segment. Das als "alle Ports
+            // zu" darzustellen waere schlicht falsch.
+            if (!res.summary || !res.summary.reachable) {
+                toast(t('scan.unreachable', { host: hostLabel, target: res.target }), 'warn', 9000);
+                return;
+            }
+
+            const open = (res.results || []).filter(function(r) { return r.state === 'open'; });
+
+            if (!open.length) {
+                toast(t('scan.none', { host: hostLabel, target: res.target }), 'info', 7000);
+                return;
+            }
+
+            const list = open.map(function(r) { return r.service + ' (' + r.port + ')'; }).join(', ');
+            toast(t('scan.found', { host: hostLabel, n: open.length, list: list }), 'info', 12000);
+        })
+        .catch(function(e) { toast(t('scan.fail', { msg: e.message }), 'warn'); });
+}
+
 export function showCtx(cx, cy2, d) {
     while (_ctx.firstChild) _ctx.removeChild(_ctx.firstChild);
 
@@ -387,9 +443,23 @@ export function showCtx(cx, cy2, d) {
     // die Action prueft die Rechte serverseitig nochmal). One-Time-Wartung
     // fuer den Host, Alarme werden unterdrueckt. "darf ich rebooten?" → an.
     if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
-        const maintSep = document.createElement('div');
-        maintSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
-        _ctx.appendChild(maintSep);
+        const scanSep = document.createElement('div');
+        scanSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+        _ctx.appendChild(scanSep);
+
+        // Dienste-Probe auf Klick: welche gaengigen Ports antworten. Gedacht
+        // fuer frisch angelegte Hosts, bei denen noch niemand weiss, was das
+        // Geraet ueberhaupt ist — der Fall, in den "Host aus Ghost" muendet.
+        //
+        // Der Aufruf schickt nur die hostid. Die Adresse loest das Backend
+        // selbst ueber die API auf, damit die Rechte des Benutzers auf diesen
+        // Host greifen; eine mitgegebene IP waere ein Portscanner hinter dem
+        // Login.
+        _ctx.appendChild(_ctxRow(t('scan.row'), '#7c3aed', function() {
+            if (!confirm(t('scan.confirm', { host: d.label }))) return;
+            _probePorts(hostId, d.label);
+        }));
+
         [[3600, '1h'], [14400, '4h'], [28800, '8h'], [86400, '24h']].forEach(function(dur) {
             _ctx.appendChild(_ctxRow(t('maint.row', { dur: dur[1] }), '#0d9488', function() {
                 if (!confirm(t('maint.confirm', { host: d.label, dur: dur[1] }))) return;

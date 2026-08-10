@@ -408,6 +408,13 @@ export default {
     'minimap.tip': 'Minimap — klicken zum Navigieren',
 
     // Wartung aus der Map (context-menu.js)
+    'scan.row': '🔎 Dienste prüfen',
+    'scan.confirm': 'Gängige Ports auf „{host}" prüfen? Das erzeugt Verbindungsversuche und taucht in Firewall-/IDS-Protokollen auf.',
+    'scan.running': 'Prüfe Dienste auf {host}…',
+    'scan.found': '{host} ({n} offen): {list}',
+    'scan.none': '{host}: antwortet unter {target}, aber keiner der geprüften Ports ist offen.',
+    'scan.unreachable': '{host}: keine Reaktion unter {target} — von diesem Frontend aus nicht erreichbar. Das sagt nichts über die Ports des Geräts.',
+    'scan.fail': 'Dienste-Prüfung fehlgeschlagen: {msg}',
     'maint.row':     '🔧 Wartung {dur}',
     'maint.confirm': '{host} für {dur} in Wartung setzen? Alarme werden unterdrückt.',
     'maint.ok':      'Wartung für {host} angelegt ({dur}) — aktiv in ~1 min.',

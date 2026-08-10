@@ -225,7 +225,12 @@ window.NT_CONFIG = <?= json_encode([
         'personal' => $data['positions']['personal'] ?? new stdClass()
     ],
     'positions_csrf' => \CCsrfTokenHelper::get('network.topology.positions'),
-    'positions_url'  => 'zabbix.php?action=network.topology.positions'
+    'positions_url'  => 'zabbix.php?action=network.topology.positions',
+    // Port-Probe auf Klick. Nur Admins bekommen den Menue-Eintrag; die
+    // Action prueft es noch einmal und loest die Adresse selbst ueber die API
+    // auf — der Client schickt nie eine IP.
+    'portscan_csrf' => \CCsrfTokenHelper::get('network.topology.portscan'),
+    'portscan_url'  => 'zabbix.php?action=network.topology.portscan'
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert

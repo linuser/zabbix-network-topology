@@ -403,6 +403,13 @@ export default {
     'minimap.tip': 'Minimap — click to navigate',
 
     // Maintenance from the map (context-menu.js)
+    'scan.row': '🔎 Probe services',
+    'scan.confirm': 'Probe common ports on "{host}"? This creates connection attempts and will show up in firewall/IDS logs.',
+    'scan.running': 'Probing services on {host}…',
+    'scan.found': '{host} ({n} open): {list}',
+    'scan.none': '{host}: responds at {target}, but none of the probed ports are open.',
+    'scan.unreachable': '{host}: no response at {target} — not reachable from this frontend. This says nothing about the device\'s ports.',
+    'scan.fail': 'Service probe failed: {msg}',
     'maint.row':     '🔧 Maintenance {dur}',
     'maint.confirm': 'Put {host} into maintenance for {dur}? Alerts will be suppressed.',
     'maint.ok':      'Maintenance created for {host} ({dur}) — active in ~1 min.',

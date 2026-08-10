@@ -71,6 +71,10 @@
         "network.topology.positions": {
             "class": "NetworkTopologyPositions",
             "layout": "layout.json"
+        },
+        "network.topology.portscan": {
+            "class": "NetworkTopologyPortScan",
+            "layout": "layout.json"
         }
     }
 }
