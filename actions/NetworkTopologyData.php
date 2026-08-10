@@ -22,6 +22,25 @@ class NetworkTopologyData extends NetworkTopologyController {
     // gegen einen Browser-Cross-Origin-Trigger mit riesigem Group-Array.
     private const MAX_GROUPS = 100;
 
+    /**
+     * TTL des Response-Caches in Sekunden.
+     *
+     * Diese Action ist der teuerste Endpoint des Moduls (Host + Trigger +
+     * Problem + Item + gebatchte Lastvalues + LLDP) und war als einzige der
+     * sieben cachenden Actions ohne Response-Cache — sie hielt in NtCache nur
+     * die Topologie-Baseline.
+     *
+     * Der Client dedupliziert seit 5.0 bereits innerhalb EINER Seite (mehrere
+     * Widgets auf einem Dashboard teilen sich eine Anfrage). Das hilft aber
+     * nicht ueber Tabs, Nutzer und die Kartenansicht hinweg — genau die Faelle
+     * deckt dieser Cache ab.
+     *
+     * 15 s liegen deutlich unter jedem Refresh-Intervall (Dashboard-Default
+     * 1 min, Karte 30 s). Die Antwort enthaelt Live-Werte wie CPU und Traffic;
+     * laenger zu cachen wuerde bemerkbar veralten, ohne viel mehr zu sparen.
+     */
+    private const CACHE_TTL = 15;
+
     protected function init(): void {
         $this->disableCsrfValidation();
     }
@@ -56,6 +75,26 @@ class NetworkTopologyData extends NetworkTopologyController {
         $requested_groups = count($groupids);
         if ($requested_groups > self::MAX_GROUPS) {
             $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
+        }
+
+        // Response-Cache. Der Schluessel ist user- UND gruppengebunden (das
+        // Scoping macht NtCache); ohne APCu ist der Aufruf ein No-Op und alles
+        // laeuft wie bisher.
+        //
+        // Gecacht wird nur der TEURE Teil. Bewusst NICHT im Cache:
+        //   topo_changes    beruht auf einem Diff gegen die letzte Abfrage. Aus
+        //                   dem Cache bedient, liefe der Diff nur noch bei
+        //                   Cache-Misses — dieselbe "neue Verbindung" wuerde
+        //                   fuer die Dauer der TTL wiederholt gemeldet und
+        //                   dazwischen Aenderungen verschluckt.
+        //   requested_count haengt am UNGEKUERZTEN Eingabewert, der nicht im
+        //                   Schluessel steckt: zwei Anfragen mit 150 und 100
+        //                   Gruppen teilen sich nach dem Kuerzen denselben
+        //                   Eintrag, muessen aber verschieden warnen.
+        $cached = NtCache::get('data_payload', [$groupids]);
+        if (is_array($cached)) {
+            $this->respondData($cached, $groupids, $requested_groups, $_t0, true);
+            return;
         }
 
         // ── 1. HOSTS ──────────────────────────────────────────────────────
@@ -462,17 +501,58 @@ class NetworkTopologyData extends NetworkTopologyController {
         // bedingt verschiedene Subgraphen und wuerden sich sonst gegenseitig
         // die Baseline verrollen. Der Sender-Cron (eigener Monitoring-User)
         // rollt damit unabhaengig von UI-Usern.
-        $topo_changes = ['added' => [], 'removed' => []];
-        $host_label = static function($hid) use ($hosts) {
-            $h = $hosts[$hid] ?? null;
-            if (!$h) return (string) $hid;
-            return ($h['name'] ?? '') !== '' ? $h['name'] : ($h['host'] ?? (string) $hid);
+        $core = [
+            'nodes'          => $nodes,
+            'edges'          => $edges,
+            'lldp_unmatched' => $lldp_unmatched,
+            'lldp_quality'   => $lldp_quality_out,
+            'health'         => $health,
+        ];
+        NtCache::set('data_payload', [$groupids], $core, self::CACHE_TTL);
+
+        $this->respondData($core, $groupids, $requested_groups, $_t0, false);
+    }
+
+    /**
+     * Baut aus dem (frisch berechneten oder gecachten) Kern die Antwort.
+     *
+     * Alles, was hier passiert, muss bei JEDEM Aufruf laufen — sonst waere es
+     * im Cache besser aufgehoben. Das betrifft vor allem den Baseline-Diff:
+     * er vergleicht die aktuellen Kanten mit denen der letzten Abfrage und
+     * ergibt topo_changes. Wuerde er nur bei Cache-Misses laufen, meldete das
+     * Frontend dieselbe neue Verbindung mehrfach und verschluckte die
+     * Aenderungen dazwischen.
+     *
+     * @param array $core             nodes, edges, lldp_*, health
+     * @param array $groupids         gekuerzte Gruppenliste (= Cache-Schluessel)
+     * @param int   $requested_groups Anzahl VOR dem Kuerzen
+     * @param float $t0               Startzeit fuer die Diagnose
+     * @param bool  $cache_hit        kam der Kern aus dem Cache?
+     */
+    private function respondData(array $core, array $groupids, int $requested_groups,
+            float $t0, bool $cache_hit): void {
+
+        $nodes = $core['nodes'] ?? [];
+        $edges = $core['edges'] ?? [];
+
+        // Labels aus den Knoten statt aus dem Host-API-Ergebnis: bei einem
+        // Cache-Treffer gibt es Letzteres nicht, und der Knoten traegt
+        // dieselbe Beschriftung (NodeBuilder: name, sonst host).
+        $labels = [];
+        foreach ($nodes as $n) {
+            $labels[(string) ($n['id'] ?? '')] =
+                ($n['label'] ?? '') !== '' ? $n['label'] : (string) ($n['host'] ?? $n['id'] ?? '');
+        }
+        $host_label = static function($hid) use ($labels) {
+            return $labels[(string) $hid] ?? (string) $hid;
         };
+
         // Baseline der letzten Abfrage (user- + gruppengebunden, 7 Tage). Das ist
         // KEIN Response-Cache, sondern ein "letzter Stand"-Speicher: der Diff
         // dagegen ergibt topo_changes. User-Scoping, Sortierung der groupids und
         // Schema-Version macht NtCache; ohne APCu ist es ein No-Op und
         // topo_changes bleibt schlicht leer.
+        $topo_changes = ['added' => [], 'removed' => []];
         $current = [];   // "idA|idB" → [labelA, labelB]
         foreach ($edges as $e) {
             if (!empty($e['_isInternetEdge'])) continue;
@@ -493,10 +573,10 @@ class NetworkTopologyData extends NetworkTopologyController {
 
         $_payload = $this->encodeJson(
             ['nodes' => $nodes, 'edges' => $edges,
-             'lldp_unmatched' => $lldp_unmatched,
-             'lldp_quality'   => $lldp_quality_out,
+             'lldp_unmatched' => $core['lldp_unmatched'] ?? [],
+             'lldp_quality'   => $core['lldp_quality']   ?? [],
              'topo_changes'   => $topo_changes,
-             'health'         => $health,
+             'health'         => $core['health'] ?? [],
              // Truncation sichtbar machen (statt still abzuschneiden).
              'truncated'       => $requested_groups > self::MAX_GROUPS,
              'requested_count' => $requested_groups,
@@ -509,9 +589,9 @@ class NetworkTopologyData extends NetworkTopologyController {
         );
         NetworkTopologyDiag::record([
             'action'     => 'data',
-            'elapsed_ms' => round((microtime(true) - $_t0) * 1000, 1),
+            'elapsed_ms' => round((microtime(true) - $t0) * 1000, 1),
             'bytes'      => strlen($_payload),
-            'cache_hit'  => false,
+            'cache_hit'  => $cache_hit,
             'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],
         ]);
         $this->jsonResponseRaw($_payload);
