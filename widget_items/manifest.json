@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "network_topology_items_widget",
+    "type": "widget",
+    "name": "Network Topology for Zabbix — Items Widget",
+    "namespace": "NetworkTopologyItemsWidget",
+    "version": "1.0.0",
+    "author": "PlaNet Fox | Alexander Fox",
+    "description": "Dashboard widget: one item pattern pivoted across all hosts of the selected groups — hosts as rows, matching item keys as columns. Requires the main module (network_topology) — uses its network.topology.items action.",
+    "actions": {
+        "widget.network.topology.items.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetNetworkTopologyItems"
+    },
+    "assets": {
+        "js": [
+            "widget.class.js"
+        ],
+        "css": []
+    }
+}
