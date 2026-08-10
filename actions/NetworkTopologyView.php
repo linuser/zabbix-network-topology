@@ -14,6 +14,7 @@ use CController;
 use CControllerResponseData;
 use CControllerResponseFatal;
 use Modules\NetworkTopology\Topology\ManualLinks;
+use Modules\NetworkTopology\Topology\NodePositions;
 use API;
 
 class NetworkTopologyView extends CController {
@@ -115,6 +116,13 @@ class NetworkTopologyView extends CController {
             'manual_links'      => [
                 'shared'   => ManualLinks::loadShared(),
                 'personal' => ManualLinks::loadPersonal()
+            ],
+            // Knotenpositionen ebenso direkt mit: sie werden beim ersten
+            // Rendern gebraucht, ein zweiter Roundtrip liesse die Karte kurz
+            // im Auto-Layout stehen und dann sichtbar umspringen.
+            'positions'         => [
+                'shared'   => NodePositions::loadShared(),
+                'personal' => NodePositions::loadPersonal()
             ]
         ]);
 

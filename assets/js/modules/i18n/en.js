@@ -236,6 +236,7 @@ export default {
     'toolbar.unlink.confirm.shared': 'Delete all shared links? This affects every user.',
     'toolbar.unlink.confirm.personal': 'Delete your personal links?',
     'links.save_failed': 'Could not save the link: {err}',
+    'positions.save_failed': 'Could not save the layout: {err}',
     'toolbar.search': 'Search host...',
     'export.report.meta': '{date} &nbsp;|&nbsp; {hosts} hosts &nbsp;|&nbsp; {links} links',
     'export.audit.noproxy': 'Server (no proxy)',

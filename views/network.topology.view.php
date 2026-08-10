@@ -216,7 +216,16 @@ window.NT_CONFIG = <?= json_encode([
     ],
     // Eigener Token fuer die schreibende Links-Action.
     'links_csrf' => \CCsrfTokenHelper::get('network.topology.links'),
-    'links_url'  => 'zabbix.php?action=network.topology.links'
+    'links_url'  => 'zabbix.php?action=network.topology.links',
+    // Knotenpositionen, serverseitig seit 5.1. Zwei Ebenen wie bei den Links:
+    // shared ist DIE Karte (module.config), personal die eigene Abweichung
+    // davon (CProfile). Beim Lesen gewinnt personal pro Knoten.
+    'positions'      => [
+        'shared'   => $data['positions']['shared']   ?? new stdClass(),
+        'personal' => $data['positions']['personal'] ?? new stdClass()
+    ],
+    'positions_csrf' => \CCsrfTokenHelper::get('network.topology.positions'),
+    'positions_url'  => 'zabbix.php?action=network.topology.positions'
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert

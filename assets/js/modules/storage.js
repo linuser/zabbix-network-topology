@@ -141,32 +141,166 @@ export function saveNote(hostId, text) {
     return notes;
 }
 
-// ── Position helpers ─────────────────────────────────────────────────────────
-export function loadPositions() {
-    try { return JSON.parse(localStorage.getItem(posKey()) || 'null') || {}; }
-    catch (e) { return {}; }
+// Ebenen-Namen. Stehen hier oben, weil BEIDE serverseitigen Bereiche sie
+// nutzen — Positionen und manuelle Links — und die Migrations-IIFE der
+// Positionen schon beim Laden des Moduls laeuft. Weiter unten deklariert
+// waeren sie zu dem Zeitpunkt noch in der temporalen Todeszone.
+const SCOPE_SHARED   = 'shared';
+const SCOPE_PERSONAL = 'personal';
+
+// ── Knotenpositionen ─────────────────────────────────────────────────────────
+//
+// Serverseitig seit 5.1. Vorher lagen sie im localStorage: an einen Browser
+// gebunden, weg beim Cache-Leeren — und jeder ordnete sich seine eigene Karte.
+//
+// Zwei Ebenen (Details in topology/NodePositions.php):
+//   shared    module.config — DIE Karte, die alle sehen. Schreiben nur
+//             Super-Admins; das prueft Zabbix, nicht wir.
+//   personal  CProfile      — die eigene Abweichung davon.
+//
+// Beim Lesen gewinnt personal PRO KNOTEN. Wer drei Geraete verschiebt, behaelt
+// drei eigene Positionen, alles andere folgt weiter der geteilten Karte. Ohne
+// diese Feinheit waere die geteilte Ebene wertlos: eine einzige persoenliche
+// Speicherung wuerde sie komplett verdecken.
+//
+// Struktur beider Ebenen: { "<viewKey>": { "<nodeId>": {x, y} } } — der
+// viewKey ist die sortierte Gruppenauswahl, mit "_grp" fuer die Group-View.
+
+let _posShared   = {};
+let _posPersonal = {};
+
+(function hydratePositions() {
+    const p = _cfg().positions || {};
+    _posShared   = (p.shared   && typeof p.shared   === 'object') ? p.shared   : {};
+    _posPersonal = (p.personal && typeof p.personal === 'object') ? p.personal : {};
+})();
+
+/** Nur der View-Anteil des Schluessels — serverseitig gibt es kein User-Praefix. */
+function posViewKey(groupView) {
+    const gv = (groupView === undefined) ? _groupViewOn() : !!groupView;
+    return selectedGroupIds() + (gv ? '_grp' : '');
 }
+
+export function defaultPositionScope() {
+    return _cfg().is_super_admin ? SCOPE_SHARED : SCOPE_PERSONAL;
+}
+
+export function loadPositions() {
+    const view   = posViewKey();
+    const shared = _posShared[view]   || {};
+    const own    = _posPersonal[view] || {};
+    const out    = {};
+
+    for (const id in shared) {
+        if (Object.prototype.hasOwnProperty.call(shared, id)) out[id] = shared[id];
+    }
+    for (const id in own) {
+        if (Object.prototype.hasOwnProperty.call(own, id)) out[id] = own[id];
+    }
+    return out;
+}
+
+function _persistPositions(scope, views) {
+    const cfg  = _cfg();
+    const url  = cfg.positions_url || 'zabbix.php?action=network.topology.positions';
+    const body = new URLSearchParams();
+    body.set('positions', JSON.stringify(views));
+    body.set('scope', scope);
+    body.set('nt_csrf', cfg.positions_csrf || '');
+
+    return fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest',
+                   'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body: body.toString()
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (!d || d.error) throw new Error((d && d.error) || 'unknown');
+        return d;
+    });
+}
+
 export function savePositions(cyInst) {
     const pos = {};
     let nonZero = 0;
+
     cyInst.nodes('[!isGroup]').forEach(function(n) {
-        // Virtuelle Knoten (Internet-Wolke) NICHT speichern — sie werden
-        // pro Render frisch injiziert und ihre Position ist nicht user-
-        // signifikant. Sonst würden sie für immer in localStorage liegen
-        // selbst wenn der User auf ein Layout ohne Internet-Wolke wechselt.
+        // Virtuelle Knoten (Internet-Wolke) NICHT speichern — sie werden pro
+        // Render frisch injiziert und ihre Position ist nicht user-signifikant.
         const id = String(n.id());
         if (id.indexOf('internet_') === 0) return;
         const p = n.position();
         pos[id] = { x: Math.round(p.x), y: Math.round(p.y) };
         if (Math.abs(p.x) > 1 || Math.abs(p.y) > 1) nonZero++;
     });
-    // Degenerate snapshot (alle bei 0,0) nicht persistieren.
+
+    // Degenerierter Zustand (alles auf 0,0) nicht persistieren — das ist der
+    // Moment vor dem ersten Layout-Durchlauf, keine Anordnung.
     if (nonZero === 0) return;
-    try { localStorage.setItem(posKey(), JSON.stringify(pos)); } catch (e) {}
+
+    const view  = posViewKey();
+    const scope = defaultPositionScope();
+
+    if (scope === SCOPE_SHARED) {
+        // Der Super-Admin pflegt die Karte: seine Anordnung IST sie, komplett.
+        _posShared[view] = pos;
+        _persistPositions(SCOPE_SHARED, _posShared)
+            .catch(function(e) { if (_onPosError) _onPosError(e); });
+        return;
+    }
+
+    // Alle anderen speichern nur die ABWEICHUNG von der geteilten Karte. Wuerde
+    // hier die volle Anordnung landen, verdeckte sie die geteilte Ebene fuer
+    // immer — auch an Knoten, die der Nutzer nie angefasst hat, und selbst wenn
+    // ein Admin die Karte spaeter neu ordnet.
+    const shared = _posShared[view] || {};
+    const delta  = {};
+    for (const id in pos) {
+        if (!Object.prototype.hasOwnProperty.call(pos, id)) continue;
+        const s = shared[id];
+        if (!s || s.x !== pos[id].x || s.y !== pos[id].y) delta[id] = pos[id];
+    }
+
+    if (Object.keys(delta).length) _posPersonal[view] = delta;
+    else delete _posPersonal[view];
+
+    _persistPositions(SCOPE_PERSONAL, _posPersonal)
+        .catch(function(e) { if (_onPosError) _onPosError(e); });
 }
+
+/** Setzt die eigene Ebene fuer die aktuelle Ansicht zurueck. */
 export function clearPositions() {
-    try { localStorage.removeItem(posKey()); } catch (e) {}
+    const view  = posViewKey();
+    const scope = defaultPositionScope();
+    const store = scope === SCOPE_SHARED ? _posShared : _posPersonal;
+
+    delete store[view];
+    _persistPositions(scope, store)
+        .catch(function(e) { if (_onPosError) _onPosError(e); });
 }
+
+// Fehlerkanal wie bei den Links — storage.js soll nichts ueber Toasts wissen.
+let _onPosError = null;
+export function setPositionErrorHandler(fn) { _onPosError = fn; }
+
+// Einmalige Uebernahme der alten localStorage-Anordnung in die eigene Ebene.
+// Laeuft nur, wenn serverseitig fuer diese Ansicht noch nichts liegt — sonst
+// wuerde ein alter Browser-Stand eine gepflegte Karte ueberschreiben.
+(function migrateLegacyPositions() {
+    try {
+        const view = posViewKey();
+        if (_posShared[view] || _posPersonal[view]) return;
+        const raw = localStorage.getItem(posKey());
+        if (!raw) return;
+        const old = JSON.parse(raw);
+        if (!old || typeof old !== 'object' || !Object.keys(old).length) return;
+        _posPersonal[view] = old;
+        _persistPositions(SCOPE_PERSONAL, _posPersonal)
+            .catch(function() { delete _posPersonal[view]; });
+    } catch (e) {}
+})();
 
 // ── Manual Links ─────────────────────────────────────────────────────────────
 //
@@ -184,8 +318,6 @@ export function clearPositions() {
 // laeuft optimistisch: erst der Speicher (die Kante erscheint sofort), dann der
 // POST; scheitert er, wird zurueckgerollt und der Nutzer informiert.
 
-const SCOPE_SHARED   = 'shared';
-const SCOPE_PERSONAL = 'personal';
 
 let _linksShared   = [];
 let _linksPersonal = [];

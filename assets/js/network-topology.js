@@ -14,10 +14,20 @@
 
 import { esc } from './modules/utils.js';
 import { t } from './modules/i18n.js';
-import { toastTruncatedOnce } from './modules/toast.js';
+import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
 import { destroyGroupHulls } from './modules/group-hulls.js';
-import { NT_TAB_KEY, loadLastGroups, saveLastGroups } from './modules/storage.js';
+import { NT_TAB_KEY, loadLastGroups, saveLastGroups,
+         setPositionErrorHandler } from './modules/storage.js';
+
+// Positionen werden optimistisch gespeichert: die Karte reagiert sofort, der
+// POST laeuft hinterher. Scheitert er, muss der Nutzer das erfahren — sonst
+// haelt er eine Anordnung fuer gesichert, die beim naechsten Laden weg ist.
+// Der Umweg ueber einen Handler haelt storage.js frei von Toast- und
+// Uebersetzungswissen (dasselbe Muster wie bei den manuellen Links).
+setPositionErrorHandler(function(err) {
+    toast(t('positions.save_failed', { err: (err && err.message) || '?' }), 'error', 6000);
+});
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
          setGraphToolbarVisible } from './modules/tabs.js';
