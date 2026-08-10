@@ -359,12 +359,26 @@ cat <<EOF
 
 Naechste Schritte in der Zabbix-UI:
   1. Administration → General → Modules → Scan directory
-  2. Betroffene Module aktivieren:
-       Network Topology              (Hauptmodul)
-       Network Topology Widget       (Topology-Widget)
-       NT Health Score Widget           (Health-Widget)
-       NT Table                         (Table-Widget)
-  3. Aufruf via Monitoring → Network Topology
+  2. Module aktivieren (im Widget-Menue heissen sie NT ...):
+       Network Topology for Zabbix                     (Hauptmodul)
+       Network Topology for Zabbix — Topology Widget   NT Topology
+       Network Topology for Zabbix — Health Widget     NT Health Score
+       Network Topology for Zabbix — Table Widget      NT Table
+       Network Topology for Zabbix — KPI Widget        NT KPI
+       Network Topology for Zabbix — Items Widget      NT Items
+  3. Aufruf via Monitoring → Network Topology for Zabbix
+
+Kam der Server von 4.x, hat dieses Skript die alten network_topology_v6*-
+Verzeichnisse bereits entfernt. Die Modul-Registrierung in der Datenbank zeigt
+aber noch auf die alten Namen: die vier Module erscheinen nach "Scan directory"
+als NEU und muessen aktiviert werden, und Dashboard-Kacheln, die die Widgets
+nutzen, verschwinden.
+
+Wer die Kacheln behalten will, findet im CHANGELOG unter "Optional: Dashboards
+per SQL erhalten" ein UPDATE-Skript. Es benennt die Bezeichner direkt in der
+Datenbank um; die Module bleiben dabei aktiviert, und Schritt 2 entfaellt
+fuer die vier bestehenden — nur NT KPI und NT Items sind dann noch zu
+aktivieren.
 
 Optional: Integration-Links via Global-Macros
   Administration → General → Macros

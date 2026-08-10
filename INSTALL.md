@@ -140,7 +140,9 @@ Danach normal installieren (Schritt 1–3) und **Scan directory** ausführen; di
 
 Zwei Dinge musst du danach von Hand nachziehen:
 
-- **Dashboard-Kacheln.** Die Widget-IDs sind Teil des Dashboards; Zabbix kennt den alten Typ nicht mehr und blendet die Kacheln aus. Einmalig neu hinzufügen und konfigurieren — das Dashboard selbst bleibt intakt. Wer das vermeiden will, findet im [CHANGELOG](CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein geprüftes `UPDATE`-Skript, das Modul- und Widget-Bezeichner direkt in der Datenbank umschreibt.
+- **Dashboard-Kacheln.** Die Widget-IDs sind Teil des Dashboards; Zabbix kennt den alten Typ nicht mehr und blendet die Kacheln aus. Einmalig neu hinzufügen und konfigurieren — das Dashboard selbst bleibt intakt.
+
+  Wer das vermeiden will, findet im [CHANGELOG](CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein `UPDATE`-Skript, das die Bezeichner direkt in der Datenbank umschreibt. **Auf diesem Weg entfallen auch Schritt 2 und 3**: die Module bleiben aktiviert, „Scan directory" ist nicht nötig, und die Kacheln bleiben stehen. Nachgefahren auf zwei unabhängigen Installationen, davon eine auf PostgreSQL.
 - **Lesezeichen.** Die Ansicht liegt jetzt unter `zabbix.php?action=network.topology.view`.
 
 Alles Nutzerseitige bleibt erhalten: Knotenpositionen, Pins, Notizen, manuelle Links, Filter-Presets und Toolbar-Einstellungen. Die `localStorage`-Schlüssel waren nie an den Modulnamen gebunden. Host-Tags (`nt:parent`) sind ohnehin unberührt.
@@ -294,7 +296,9 @@ Then install as usual (steps 1–3) and run **Scan directory**; the stale entrie
 
 Two things need a manual follow-up:
 
-- **Dashboard tiles.** The widget IDs are part of the dashboard; Zabbix no longer recognises the old type and hides the tiles. Add and configure them once more — the dashboard itself stays intact. To avoid that, the [CHANGELOG](CHANGELOG.md) section "Optional: Dashboards per SQL erhalten" carries a tested `UPDATE` script that rewrites the module and widget identifiers directly in the database.
+- **Dashboard tiles.** The widget IDs are part of the dashboard; Zabbix no longer recognises the old type and hides the tiles. Add and configure them once more — the dashboard itself stays intact.
+
+  To avoid that, the [CHANGELOG](CHANGELOG.md) section "Optional: Dashboards per SQL erhalten" carries an `UPDATE` script that rewrites the identifiers directly in the database. **That path also removes steps 2 and 3**: the modules stay enabled, "Scan directory" is not required, and the tiles stay in place. Rehearsed on two independent installations, one of them on PostgreSQL.
 - **Bookmarks.** The view now lives at `zabbix.php?action=network.topology.view`.
 
 Everything user-side is preserved: node positions, pins, notes, manual links, filter presets and toolbar settings. The `localStorage` keys were never tied to the module name. Host tags (`nt:parent`) are unaffected anyway.

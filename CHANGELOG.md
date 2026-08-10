@@ -250,8 +250,18 @@ COMMIT;
 `UPDATE` statt `DELETE`+`INSERT` ist Absicht: es erhält die `moduleid`, an der
 `role_rule.value_moduleid` per Fremdschlüssel mit `ON DELETE CASCADE` hängt —
 ein Löschen würde rollenbasierte Modulrechte stillschweigend mit entfernen.
-Danach php-fpm neu laden. Auf der Projekt-Demo ist genau dieser Weg gelaufen;
-Modulstatus und alle drei Kacheln blieben erhalten.
+Danach php-fpm neu laden.
+
+**Auf diesem Weg entfallen die Schritte 2 und 3 oben.** Weil die Zeilen
+umbenannt statt ersetzt werden, bleibt `status` erhalten — die Module sind
+danach weiterhin aktiviert, „Scan directory" und das Neu-Aktivieren sind nicht
+nötig, und die Dashboard-Kacheln stehen an ihrem Platz. Wer neu hinzugekommene
+Widgets nutzen will, braucht „Scan directory" trotzdem einmal: die kennt Zabbix
+noch nicht.
+
+Nachgefahren auf zwei unabhängigen Installationen — der Projekt-Demo und einer
+zweiten Instanz auf PostgreSQL. Beide Male: sieben Zeilen geändert, alle Module
+weiter aktiviert, alle Kacheln erhalten.
 
 **Erhalten bleibt alles Nutzerseitige:** Knotenpositionen, Pins, Notizen,
 manuelle Links, Filter-Presets und sämtliche Toolbar-Einstellungen. Die
