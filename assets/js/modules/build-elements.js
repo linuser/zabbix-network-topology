@@ -101,6 +101,13 @@ export function injectGhostNodes(nodes, edges, lldpQuality) {
                     _isGhost: true,
                     _ghostSrc:    [],   // 'lldp' / 'cdp'
                     _ghostSeenBy: [],   // Labels der meldenden Hosts (fuer Tooltip)
+                    // Zusatzangaben aus der lldpRemTable, sofern das Template sie
+                    // liefert. Ueber ein nicht ueberwachtes Geraet ist sonst nur
+                    // der Name bekannt — damit wird aus "da haengt sw-edge-03"
+                    // ein "da haengt ein Cisco-Switch".
+                    _ghostDesc:    '',  // Hersteller/Modell (lldpRemSysDesc)
+                    _ghostCaps:    [],  // Bridge / Router / WLAN AP / Telephone
+                    _ghostChassis: '',  // Basis-MAC (lldpRemChassisId)
                     groups: [], traffic: { in: 0, out: 0 }
                 };
             }
@@ -109,6 +116,16 @@ export function injectGhostNodes(nodes, edges, lldpQuality) {
             if (g._ghostSrc.indexOf(src) === -1) g._ghostSrc.push(src);
             const rlbl = String((q && q.label) || reporter);
             if (g._ghostSeenBy.indexOf(rlbl) === -1) g._ghostSeenBy.push(rlbl);
+
+            // Erster Melder gewinnt: dasselbe Geraet kann von mehreren Nachbarn
+            // gesehen werden, und die Angaben sollten identisch sein. Sind sie
+            // es nicht, ist die erste so gut wie jede andere — sie zu mischen
+            // waere schlechter als eine zu nehmen.
+            if (!g._ghostDesc && u && u.desc)       g._ghostDesc    = String(u.desc);
+            if (!g._ghostChassis && u && u.chassis) g._ghostChassis = String(u.chassis);
+            if (!g._ghostCaps.length && u && u.caps && u.caps.length) {
+                g._ghostCaps = u.caps.slice();
+            }
 
             const eid = 'eghost_' + reporter + '_' + gid;
             if (edgeSeen[eid]) return;

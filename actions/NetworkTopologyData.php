@@ -253,6 +253,9 @@ class NetworkTopologyData extends NetworkTopologyController {
                 // LLDP-SETUP sie als Hauptmerkmal fuehren und das Template die
                 // Werte einsammelt.
                 'lldpRemSysName', 'lldpRemPort',
+                // Zusatzangaben ueber den Nachbarn — zahlen vor allem auf die
+                // NICHT ueberwachten ein, ueber die sonst nur der Name bekannt ist.
+                'lldpRemSysDesc', 'lldpRemSysCapEnabled', 'lldpRemChassisId',
                 // CDP (Cisco Discovery Protocol, Cisco-spezifisch)
                 //
                 // cdpCacheDevicePort traf 'cdpCacheDeviceId' ebenfalls nicht —
@@ -353,7 +356,8 @@ class NetworkTopologyData extends NetworkTopologyController {
         // §3 Port-zu-Port: Remote-Port + Per-Interface-Traffic mitgeben, damit die
         // Kanten Port-Labels (beide Enden) und Per-Link-Auslastung tragen.
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
-                              $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed']);
+                              $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
+                              $metrics['lldp_meta'] ?? []);
         $edges          = $lldp['edges'];
         $lldp_quality   = $lldp['quality'];
         $lldp_unmatched = $lldp['unmatched'];

@@ -43,7 +43,8 @@ final class MetricExtractor {
      *     lldp_raw: array<int, array{hostid: string, key_: string, lastvalue: mixed, src: string}>,
      *     port_traffic: array<string, array<string, array{in: float, out: float}>>,
      *     port_speed:   array<string, array<string, float>>,
-     *     lldp_ports:   array<string, array<string, array{id?: string, desc?: string}>>
+     *     lldp_ports:   array<string, array<string, array{id?: string, desc?: string}>>,
+     *     lldp_meta:    array<string, array<string, array{desc?: string, caps?: string, chassis?: string}>>
      * }
      */
     public static function extract(array $items_a): array {
@@ -65,6 +66,7 @@ final class MetricExtractor {
         $port_traffic   = [];   // hid => [ifIndex => ['in'=>bps, 'out'=>bps]]
         $port_speed     = [];   // hid => [ifIndex => bps]
         $lldp_ports     = [];   // hid => [snmpindex => ['id'=>?, 'desc'=>?]]
+        $lldp_meta      = [];   // hid => [snmpindex => ['desc'|'caps'|'chassis']]
         $host_cpu       = [];
         $host_mem_used  = [];   // bytes (used)
         $host_mem_total = [];   // bytes (total)
@@ -177,6 +179,16 @@ final class MetricExtractor {
                 $lldp_ports[$hid][HostMetadata::ifaceParam($key)]['id'] = (string) $val;
             } elseif (strpos($key, 'lldpRemPortDesc') !== false) {
                 $lldp_ports[$hid][HostMetadata::ifaceParam($key)]['desc'] = (string) $val;
+            } elseif (strpos($key, 'lldpRemSysDesc') !== false) {
+                // §5 Zusatzangaben ueber den Nachbarn. Gleicher SNMPINDEX wie
+                // lldpRemSysName → LldpEdgeBuilder ordnet sie derselben
+                // Nachbar-Zeile zu. Wichtig sind sie bei NICHT ueberwachten
+                // Nachbarn: dort ist sonst nur der Name bekannt.
+                $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['desc'] = (string) $val;
+            } elseif (strpos($key, 'lldpRemSysCapEnabled') !== false) {
+                $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['caps'] = (string) $val;
+            } elseif (strpos($key, 'lldpRemChassisId') !== false) {
+                $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['chassis'] = (string) $val;
             } elseif (strpos($key, 'cdpCacheDevicePort') !== false) {
                 // CDP-Remote-Port: menschenlesbar → als 'desc'. MUSS vor der
                 // Neighbor-Branch stehen, deren Regex "cdp.*device" diesen Port sonst
@@ -405,6 +417,7 @@ final class MetricExtractor {
             'port_traffic' => $port_traffic,
             'port_speed'   => $port_speed,
             'lldp_ports'   => $lldp_ports,
+            'lldp_meta'    => $lldp_meta,
         ];
     }
 

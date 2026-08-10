@@ -38,11 +38,16 @@ final class LldpEdgeBuilder {
      * @param array $lldp_ports    §3: hostid => [snmpindex => ['id'?, 'desc'?]] (Remote-Port)
      * @param array $port_traffic  §3b: hostid => [ifIndex => ['in'=>bps,'out'=>bps]]
      * @param array $port_speed    §3b: hostid => [ifIndex => bps] (Auslastungs-Divisor)
+     * @param array $lldp_meta     §5: hostid => [snmpindex => ['desc','caps','chassis']]
+     *                             Zusatzangaben ueber den Nachbarn — nur bei NICHT
+     *                             ueberwachten von Belang, dort ist sonst nur der
+     *                             Name bekannt.
      *
      * @return array{edges: array, quality: array, unmatched: array}
      */
     public static function build(array $hosts, array $lldp_raw,
-            array $lldp_ports = [], array $port_traffic = [], array $port_speed = []): array {
+            array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
+            array $lldp_meta = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         $name_map = [];
         $ip_map   = [];
@@ -158,7 +163,29 @@ final class LldpEdgeBuilder {
                             'raw' => $neighbor_raw, 'src' => $src, 'candidates' => $ambiguous_candidates
                         ];
                     } else {
-                        $lldp_quality[$rid]['unmatched'][] = ['raw' => $neighbor_raw, 'src' => $src];
+                        // Zusatzangaben mitgeben, sofern das Template sie
+                        // liefert. Ueber denselben SNMPINDEX wie der SysName —
+                        // dieselbe Nachbar-Zeile in der lldpRemTable.
+                        $entry = ['raw' => $neighbor_raw, 'src' => $src];
+                        $midx  = HostMetadata::ifaceParam($item['key_']);
+                        if ($midx !== '' && isset($lldp_meta[$rid][$midx])) {
+                            $m = $lldp_meta[$rid][$midx];
+                            if (($m['desc'] ?? '') !== '') {
+                                // Auf eine Zeile kuerzen: SysDesc ist bei Cisco &
+                                // Co. ein mehrzeiliger Absatz mit Copyright und
+                                // Compile-Datum. Fuer "was ist das?" reicht der
+                                // Anfang, und der Rest blaeht die Antwort auf.
+                                $entry['desc'] = mb_substr(trim(preg_replace('/\s+/u', ' ', $m['desc'])), 0, 120);
+                            }
+                            if (($m['chassis'] ?? '') !== '') {
+                                $entry['chassis'] = mb_substr(trim($m['chassis']), 0, 64);
+                            }
+                            $caps = self::decodeCaps($m['caps'] ?? '');
+                            if ($caps) {
+                                $entry['caps'] = $caps;
+                            }
+                        }
+                        $lldp_quality[$rid]['unmatched'][] = $entry;
                         $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $rid . ', src=' . $src . ')';
                     }
                     continue;
@@ -276,5 +303,56 @@ final class LldpEdgeBuilder {
     /** Port-Label auf 24 Zeichen kappen (einheitlich fuer lokalen + Remote-Port). */
     private static function capLabel(string $s): string {
         return strlen($s) > 24 ? substr($s, 0, 24) : $s;
+    }
+
+    /**
+     * lldpRemSysCapEnabled in lesbare Namen.
+     *
+     * Der Wert ist laut IEEE 802.1AB ein OCTET STRING mit zwei Bytes, dessen
+     * Bits die Faehigkeiten tragen. Wie Zabbix ihn liefert, haengt am
+     * SNMP-Stack des Geraets und an der Item-Konfiguration: mal als Hex mit
+     * Leerzeichen ("00 28"), mal ohne, mal als Rohbytes. Deshalb wird hier
+     * defensiv geparst und im Zweifel NICHTS zurueckgegeben — eine falsche
+     * Geraeteklasse waere schlechter als gar keine.
+     *
+     * Bit-Reihenfolge nach lldpRemSysCapEnabled, hoechstwertiges Bit zuerst.
+     */
+    private static function decodeCaps(string $raw): array {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return [];
+        }
+
+        $hex = preg_replace('/[^0-9a-fA-F]/', '', $raw);
+
+        if ($hex !== '' && strlen($hex) >= 2 && strlen($hex) <= 4) {
+            $byte = hexdec(substr($hex, 0, 2));
+        }
+        elseif (strlen($raw) >= 1) {
+            // Rohbytes: erstes Zeichen als Bitmaske deuten.
+            $byte = ord($raw[0]);
+        }
+        else {
+            return [];
+        }
+
+        $bits = [
+            0x40 => 'Repeater',
+            0x20 => 'Bridge',
+            0x10 => 'WLAN AP',
+            0x08 => 'Router',
+            0x04 => 'Telephone',
+            0x02 => 'DOCSIS',
+            0x01 => 'Station',
+        ];
+
+        $out = [];
+        foreach ($bits as $mask => $name) {
+            if ($byte & $mask) {
+                $out[] = $name;
+            }
+        }
+
+        return $out;
     }
 }

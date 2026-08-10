@@ -189,6 +189,21 @@ export function showCtx(cx, cy2, d) {
             ? t('ctx.ghost.seen_by', { via: via, hosts: seenBy })
             : t('ctx.ghost.unmonitored');
         gh.appendChild(ghSub);
+
+        // Was LLDP sonst noch ueber das Geraet verraet. Fehlt es, fehlt die
+        // Zeile — lieber nichts zeigen als eine leere Beschriftung. Die Angaben
+        // liefert das Template erst, seit es lldpRemSysDesc / SysCapEnabled /
+        // ChassisId mit einsammelt; aeltere Installationen sehen hier nichts.
+        [[d._ghostCaps && d._ghostCaps.length ? d._ghostCaps.join(', ') : '', 'ctx.ghost.caps'],
+         [d._ghostDesc    || '', 'ctx.ghost.desc'],
+         [d._ghostChassis || '', 'ctx.ghost.chassis']].forEach(function(pair) {
+            if (!pair[0]) return;
+            const row = document.createElement('div');
+            row.style.cssText = 'font-size:10px;font-weight:400;color:#64748b;margin-top:2px';
+            row.textContent = t(pair[1], { v: pair[0] });
+            gh.appendChild(row);
+        });
+
         _ctx.appendChild(gh);
 
         if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
