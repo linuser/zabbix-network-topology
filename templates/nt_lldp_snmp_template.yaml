@@ -38,8 +38,16 @@ zabbix_export:
           description: |
             LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). Der {#SNMPINDEX}
             traegt TimeMark.LocalPort.RemIndex — das Modul liest daraus den lokalen
-            Port. Ueber denselben Index holt es lldpRemPortId (.7) und
-            lldpRemPortDesc (.8) fuer den Remote-Port → Port-zu-Port-Labels.
+            Port. Ueber denselben Index holt es:
+
+              .7  lldpRemPortId       Remote-Port (Fallback)
+              .8  lldpRemPortDesc     Remote-Port, lesbar → Port-zu-Port-Labels
+              .10 lldpRemSysDesc      Hersteller/Modell im Klartext
+              .12 lldpRemSysCapEnabled  Bridge / Router / AP / Telefon
+              .5  lldpRemChassisId    Basis-MAC, stabile Identitaet
+
+            Die letzten drei zahlen vor allem auf NICHT ueberwachte Nachbarn ein:
+            ueber die kennt das Modul sonst nur den Namen.
           item_prototypes:
             - uuid: 71e0268303f9471796f291808b05293b
               name: 'LLDP neighbor [{#SNMPINDEX}]: {#NT_SYSNAME}'
@@ -82,6 +90,61 @@ zabbix_export:
                 Menschenlesbare Remote-Port-Beschreibung (lldpRemPortDesc, OID
                 ...4.1.1.8), z.B. "nic0" oder "GigabitEthernet1/0/8". Bevorzugte
                 Quelle fuers Port-zu-Port-Label am Nachbar-Ende.
+            - uuid: ae103ab500594d00bc368f47749fac2e
+              name: 'LLDP neighbor sys-desc [{#SNMPINDEX}]: {#NT_SYSNAME}'
+              type: SNMP_AGENT
+              key: 'lldpRemSysDesc[{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.10.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                Systembeschreibung des Nachbarn (lldpRemSysDesc, OID ...4.1.1.10) —
+                in der Regel Hersteller, Modell und Firmware im Klartext, z.B.
+                "Cisco IOS Software, C2960X Software ...".
+
+                Fuer UEBERWACHTE Nachbarn ist das Beiwerk. Der Wert zaehlt bei den
+                NICHT ueberwachten: dort kennt das Modul sonst nur den Namen. Mit
+                der Beschreibung wird aus "da haengt sw-edge-03" ein "da haengt ein
+                Cisco-Switch" — und damit ein Hinweis, welches Template passt.
+            - uuid: 36a88ecbea114b5e89f55f7aa684f43d
+              name: 'LLDP neighbor capabilities [{#SNMPINDEX}]: {#NT_SYSNAME}'
+              type: SNMP_AGENT
+              key: 'lldpRemSysCapEnabled[{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.12.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                Aktivierte Faehigkeiten des Nachbarn (lldpRemSysCapEnabled, OID
+                ...4.1.1.12) als Bitmaske: Repeater, Bridge, WLAN-AP, Router,
+                Telefon, DOCSIS, Station.
+
+                Sagt, WAS dort haengt, ohne den Namen deuten zu muessen — ein
+                Access-Point, ein Telefon und ein Switch sehen sonst gleich aus.
+                Das Modul waehlt darueber das Icon fuer nicht ueberwachte Geraete
+                statt des generischen Platzhalters.
+            - uuid: e62a93c7791f47aa8f49bb21e7da9136
+              name: 'LLDP neighbor chassis-id [{#SNMPINDEX}]: {#NT_SYSNAME}'
+              type: SNMP_AGENT
+              key: 'lldpRemChassisId[{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.5.{#SNMPINDEX}'
+              value_type: CHAR
+              delay: '{$NT.LLDP.INTERVAL}'
+              history: 7d
+              trends: '0'
+              description: |
+                Chassis-ID des Nachbarn (lldpRemChassisId, OID ...4.1.1.5), je nach
+                Subtype meist die Basis-MAC des Geraets.
+
+                Das ist die einzige STABILE Kennung, die LLDP ueber einen nicht
+                ueberwachten Nachbarn liefert. Entdoppelt wird heute ueber den
+                Systemnamen: dasselbe Geraet, von drei Switches gemeldet, wird
+                ueber den Namen zusammengefuehrt — benennt es jemand um, erscheint
+                es als neues Geraet. Ueber die Chassis-ID bleibt die Identitaet
+                erhalten.
         - uuid: 8e6fb294701f48d3a41dd38e59d1fbf0
           name: 'CDP neighbor discovery (Cisco)'
           type: SNMP_AGENT
