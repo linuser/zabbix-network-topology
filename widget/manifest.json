@@ -2,11 +2,11 @@
     "manifest_version": 2.0,
     "id": "network_topology_widget",
     "type": "widget",
-    "name": "Network Topology for Zabbix — Widget",
+    "name": "Network Topology for Zabbix — Topology Widget",
     "namespace": "NetworkTopologyWidget",
     "version": "3.0.0",
     "author": "PlaNet Fox | Alexander Fox",
-    "description": "Dashboard-Widget fuer Network Topology. Setzt das Hauptmodul (network_topology) voraus — nutzt dessen network.topology.data Action.",
+    "description": "Dashboard widget: the topology map, reduced to a dashboard tile. Requires the main module (network_topology) — uses its network.topology.data action and loads Cytoscape.js from its directory.",
     "actions": {
         "widget.network.topology.view": {
             "class": "WidgetView"

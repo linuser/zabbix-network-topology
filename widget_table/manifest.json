@@ -6,7 +6,7 @@
     "namespace": "NetworkTopologyTableWidget",
     "version": "2.0.0",
     "author": "PlaNet Fox | Alexander Fox",
-    "description": "Dashboard-Widget: die Tabellen-Ansicht (Nagios-Style Hostliste) von Network Topology — Status, Host, CPU, Mem, Ping, Traffic, Probleme. Setzt das Hauptmodul (network_topology) voraus, nutzt dessen network.topology.data Action.",
+    "description": "Dashboard widget: the table view (Nagios-style host list) — status, host, CPU, memory, ping, traffic, open problems. Requires the main module (network_topology) — uses its network.topology.data action.",
     "actions": {
         "widget.network.topology.table.view": {
             "class": "WidgetView"
