@@ -113,12 +113,23 @@ Dann **Scan directory** → die gewünschten Module auf *Enabled* → im Dashboa
 
 Für echte Zabbix-Events bei Topologie-Änderungen und einen Health-Score-Verlauf:
 
+> **Die drei Dateien für diesen Schritt sind absichtlich nicht im Modul-ZIP.**
+> Das Modulverzeichnis liegt unter dem Web-Root und ist öffentlich abrufbar —
+> dort gehört nur hinein, was zur Laufzeit gebraucht wird. Templates und das
+> Sender-Skript holst du direkt aus dem Repository:
+>
+> ```bash
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_topology_change_template.yaml
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_health_score_template.yaml
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/tools/topo-change-sender.sh
+> ```
+
 1. Templates importieren (Data collection → Templates → Import):
-   - `templates/nt_topology_change_template.yaml`
-   - `templates/nt_health_score_template.yaml`
+   - `nt_topology_change_template.yaml`
+   - `nt_health_score_template.yaml`
    → an einen Trägerhost linken (z. B. „Zabbix server").
 2. **Dedizierten Monitoring-User** anlegen (USER-Rolle, Lesezugriff auf die Hostgruppen). Wichtig: die APCu-Baseline ist user-scoped — ein geteilter User würde sich die Baseline mit UI-Sessions verrollen.
-3. `tools/topo-change-sender.sh` auf den Zabbix-Server, als **Cron** (alle 2 min), konfiguriert per ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). Das Skript pusht Topo-Änderungen **und** den Health-Score per `zabbix_sender`.
+3. `topo-change-sender.sh` auf den Zabbix-Server, als **Cron** (alle 2 min), konfiguriert per ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). Das Skript pusht Topo-Änderungen **und** den Health-Score per `zabbix_sender`.
 
 ### 5. Optional: Aus Source bauen (Entwickler)
 
@@ -277,12 +288,23 @@ Then **Scan directory** → set the modules you want to *Enabled* → available 
 
 For real Zabbix events on topology changes and a health-score trend:
 
+> **The three files for this step are deliberately not in the module ZIP.**
+> The module directory sits under the web root and is publicly readable — only
+> what is needed at runtime belongs there. Fetch the templates and the sender
+> script straight from the repository:
+>
+> ```bash
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_topology_change_template.yaml
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_health_score_template.yaml
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/tools/topo-change-sender.sh
+> ```
+
 1. Import the templates (Data collection → Templates → Import):
-   - `templates/nt_topology_change_template.yaml`
-   - `templates/nt_health_score_template.yaml`
+   - `nt_topology_change_template.yaml`
+   - `nt_health_score_template.yaml`
    → link them to a carrier host (e.g. "Zabbix server").
 2. Create a **dedicated monitoring user** (USER role, read access to the host groups). Important: the APCu baseline is user-scoped — a shared user would roll its baseline against your UI sessions.
-3. Put `tools/topo-change-sender.sh` on the Zabbix server as a **cron** (every 2 min), configured via ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). It pushes topology changes **and** the health score via `zabbix_sender`.
+3. Put `topo-change-sender.sh` on the Zabbix server as a **cron** (every 2 min), configured via ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). It pushes topology changes **and** the health score via `zabbix_sender`.
 
 ### 5. Optional: build from source (developers)
 

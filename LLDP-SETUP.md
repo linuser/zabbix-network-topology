@@ -77,9 +77,16 @@ Liste aller Nachbarn enthalten.
 - **SNMP-LLD** auf dem Switch: die `lldpRemSysName`-Tabelle discovern → Item-Prototyp
   `lldpRemSysName[{#SNMPINDEX}]` (ein Item pro Nachbar). Viele **Vendor-Templates bringen das
   schon mit** — vorher unter *Latest Data* nach `lldpRemSysName`-Items schauen.
-- **Turnkey:** das mitgelieferte Template [`templates/nt_lldp_snmp_template.yaml`](templates/nt_lldp_snmp_template.yaml)
+- **Turnkey:** das Template [`nt_lldp_snmp_template.yaml`](https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_lldp_snmp_template.yaml)
   importieren und an SNMP-Switches linken — bringt LLDP- **und** Cisco-CDP-Discovery fertig mit
   (Macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`).
+
+  Es liegt **nicht** im Modul-ZIP: das Modulverzeichnis ist über den Web-Root
+  öffentlich abrufbar, dort gehört nur Laufzeit-Code hin. Direkt holen:
+
+  ```bash
+  curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_lldp_snmp_template.yaml
+  ```
 - **Namens-Matching ist der Dreh- und Angelpunkt.** Das Modul löst den Nachbar-Namen in dieser
   Reihenfolge auf:
   1. exakter **Host-/Anzeigename** (case-insensitiv)

@@ -220,6 +220,12 @@ fi
 echo "→ Baue Zips lokal"
 if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     STAGE=$(mktemp -d)
+    # 'tools' und 'templates' bleiben absichtlich draussen. Das Zielverzeichnis
+    # liegt unter dem Web-Root und ist oeffentlich abrufbar — siehe die
+    # Source-Map-Notiz oben. Sender-Skript und Template-YAMLs werden zur
+    # Laufzeit nicht gebraucht, also gehoeren sie da nicht hin. INSTALL.md
+    # Schritt 4 verweist dafuer auf das Repository; wer hier einen Ausschluss
+    # loest, muss dort nachziehen.
     rsync -a \
         --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
         --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
