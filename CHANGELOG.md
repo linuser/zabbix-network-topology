@@ -117,6 +117,35 @@
   Einträge wie „Latest Data", die für einen nicht existierenden Host
   zwangsläufig ins Leere führen.
 
+- **Hersteller, Gerätetyp und MAC unüberwachter Nachbarn.** „Aus einem Ghost
+  einen Host machen" scheitert in der Praxis an einer simplen Frage: *was ist
+  das Ding überhaupt?* Ein Name wie `CNQ6KD51WK` beantwortet sie nicht.
+
+  Das LLDP-Template erhebt deshalb drei Felder mehr, die die Switches ohnehin
+  melden — System-Beschreibung (`.10`), Capabilities (`.12`) und Chassis-ID
+  (`.5`). Daraus werden im Ghost-Menü Hersteller, Gerätetyp und MAC. Die
+  Capabilities sind eine OCTET-STRING-Bitmap; sie wird defensiv decodiert und
+  liefert im Zweifel lieber nichts als eine falsche Behauptung.
+
+  Wer das Template schon gelinkt hat, bekommt die Felder mit der nächsten
+  Discovery. Fehlen sie, ändert sich nichts — alle drei sind optional, und viele
+  Geräte melden nur einen Teil.
+
+- **Dienste-Probe auf Klick.** Im Kontextmenü eines Hosts liegt ein Eintrag, der
+  eine feste Liste von 11 Ports prüft (SSH, Telnet, HTTP/S, SNMP, SMB, LPD, RDP,
+  Proxmox, HTTP-alt, JetDirect) und *offen* / *abgewiesen* / *Zeitüberschreitung*
+  unterscheidet — die drei Zustände sind verschiedene Aussagen, „abgewiesen"
+  heißt: da ist ein Gerät, nur nicht dieser Dienst.
+
+  Bewusst eng gehalten: läuft nur auf Klick und nie von selbst, die Portliste
+  steht im Server-Code und ist vom Client nicht wählbar, der Client schickt
+  **nur eine hostid** — die Adresse löst der Server über die Zabbix-API auf,
+  damit die Rechte des Benutzers greifen —, es braucht mindestens
+  Zabbix-Admin, und es ist auf 5 Aufrufe pro Minute und Benutzer gedrosselt.
+  0,4 s je Port, also 4,4 s im schlechtesten Fall.
+
+  Gedacht als „was ist diese Kiste", nicht als Scanner.
+
 ### Changed
 - **Die Widgets folgen jetzt Zabbix' eigenem Update-Zyklus.** Alle liefen mit
   eigenem `setInterval` (30/30/60 s), während die Basisklasse `CWidget`
@@ -137,6 +166,29 @@
   bestehende Kacheln behalten ihren gespeicherten Titel.
 
 ### Fixed
+- **Port-zu-Port-Beschriftungen waren seit jeher tot.** Das README bewirbt, dass
+  jede Kante auf LLDP/SNMP-Switches den lokalen **und** den entfernten Port
+  trägt. Sie tat es nie: die Item-Suche fragte die Port-OIDs überhaupt nicht ab,
+  `lldpRemPortId` und `lldpRemPortDesc` standen nicht in der Schlüsselliste. Die
+  Labels fielen still auf Host-zu-Host zurück — still, weil fehlende Ports
+  aussehen wie „dieses Gerät meldet keine".
+
+  Nachgemessen an einem Switch: von 9 auf 19 geholte Items. Auf zwei
+  SNMP-Switches gegengeprüft, die sich gegenseitig sehen — die Kante zwischen
+  ihnen trägt jetzt an beiden Enden den Port.
+
+  Auch die Weathermap hängt daran: ohne Port-Zuordnung konnte sie nicht nach
+  *gemessener* Auslastung des betroffenen Interfaces färben, sondern nur nach
+  einer Schätzung auf Knotenebene.
+
+- **Der Super-Admin sah seine eigene geteilte Karte nicht.** Beim Umzug der
+  Anordnung auf den Server wanderten vorhandene `localStorage`-Positionen in die
+  **persönliche** Ebene — auch beim Super-Admin. Dessen persönliche Ebene
+  verdeckte danach die geteilte, die er selbst pflegte: er ordnete die Karte für
+  alle, sah aber weiter seinen alten Stand. Die Migration schreibt nun in die
+  Ebene, die zur Rolle passt, und wer geteilt speichert, löscht dabei seinen
+  persönlichen Eintrag für diese Ansicht.
+
 - **Zwei der drei mitgelieferten Templates ließen sich nicht importieren.**
   `nt_health_score_template.yaml` und `nt_topology_change_template.yaml`
   hatten unter `template_groups` kein `uuid`, das Zabbix 7.0 dort verlangt.
@@ -148,12 +200,49 @@
   ```
 
   Beide werden in `INSTALL.md` als Schritt 4 zum Import empfohlen — es hat
-  also jeder gesehen, der der Anleitung gefolgt ist. Beide tragen nun das
-  `uuid` der eingebauten Gruppe `Templates`, dasselbe wie das dritte,
-  funktionierende Template. Der neue CI-Job `templates` prüft, dass jeder
-  Gruppeneintrag ein `uuid` hat **und** dass derselbe Gruppenname überall
-  dasselbe trägt — Zabbix ordnet Gruppen über das `uuid` zu, nicht über den
-  Namen, ein selbst erzeugtes zeigt also ins Leere.
+  also jeder gesehen, der der Anleitung gefolgt ist.
+
+  Dahinter lagen zwei weitere Fehler, die erst der jeweils nächste
+  Import-Versuch zeigte. **Die falsche Gruppe:** die ergänzte `uuid` war aus
+  dem funktionierenden dritten Template abgeschrieben — sie gehört aber zu
+  `Templates/Network devices`, nicht zu `Templates`. Zwei verschiedene
+  Gruppennamen trugen damit dieselbe `uuid`. **Und fünf `uuid`s, die keine
+  waren:** von Hand getippte Muster wie `8a2b3c4d5e6f47081920a1b2c3d4e5f6` —
+  32 Hex-Zeichen, aber kein UUIDv4. Zabbix prüft Version und Variante:
+
+  ```
+  Invalid parameter "/2/uuid": UUIDv4 is expected.
+  ```
+
+  Die richtigen Gruppenwerte stehen in der Tabelle `hstgrp` und sind auf jeder
+  Installation gleich: `Templates` ist
+  `79f31eeab03146229b1e019097fad672`, `Templates/Network devices` ist
+  `7df96b18c230490a9a0a9e2307226338`. Die fünf getippten `uuid`s sind durch
+  erzeugte ersetzt. Das LLDP-Template war nie betroffen — dort ist jede `uuid`
+  echt erzeugt, deshalb ging ausgerechnet das immer durch.
+
+  Der neue CI-Job `templates` prüft vier Regeln: `uuid` vorhanden, Name →
+  `uuid` eindeutig, `uuid` → Name eindeutig, und **jedes** `uuid` der Datei ein
+  echtes UUIDv4. Die letzte Regel gilt nicht nur für Gruppen — die fünf
+  kaputten steckten in Items und Triggern.
+
+  Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
+  LLDP-Template läuft an zwei SNMP-Switches.
+
+- **Schritt 4 der Installation war auf dem dokumentierten Weg nicht
+  ausführbar.** `INSTALL.md` verwies auf `templates/…` und
+  `tools/topo-change-sender.sh`, `LLDP-SETUP.md` nannte das LLDP-Template
+  „mitgeliefert". Keine dieser vier Dateien liegt im Modul-ZIP — `deploy.sh`
+  schließt `tools` und `templates` aus. Wer über das ZIP installierte, hatte
+  relative Pfade ins Leere und keinen Hinweis, woher die Dateien kommen.
+
+  Der Ausschluss bleibt und ist richtig: das Modulverzeichnis liegt unter dem
+  Web-Root und ist öffentlich abrufbar — dort lag schon einmal eine 1 MB große
+  Source-Map. Ein Sender-Skript und Template-YAMLs braucht die Laufzeit nicht.
+  Stattdessen nennen beide Dokumente die Dateien ohne Verzeichnispräfix,
+  erklären in einem Kasten, warum sie nicht im Paket sind, und geben
+  `curl`-Zeilen auf das Repository. Der Ausschluss in `deploy.sh` trägt jetzt
+  einen Kommentar, der auf Schritt 4 verweist.
 
 - **Beide Installer setzen den SELinux-Kontext jetzt selbst.** `nt-install.sh`
   und `deploy.sh` entpacken nach `/tmp` und schieben das Ergebnis per `cp -a`
