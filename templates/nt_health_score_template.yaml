@@ -1,7 +1,7 @@
 zabbix_export:
   version: '7.0'
   template_groups:
-    - uuid: 7df96b18c230490a9a0a9e2307226338
+    - uuid: 79f31eeab03146229b1e019097fad672
       name: Templates
   templates:
     - uuid: b7e4d2c1a09f48e3b6d5c4a3f2e1d0c9
@@ -28,12 +28,12 @@ zabbix_export:
           trends: 365d
           description: 'Durchschnitts-Score ueber alle Hostgroups (0-100). Gefuellt vom Sender-Cron.'
           triggers:
-            - uuid: d9a6f4e3c2b15a0f9e8d7c6b5a4f3e2d
+            - uuid: 6b5dcbbdff304f75b34bb221a3056b07
               expression: 'last(/NT Health Score/nt.health.score)<70'
               name: 'Network health score low: {ITEM.LASTVALUE1}'
               priority: WARNING
               description: 'Topology-Health-Score unter 70 — Details im Health-Tab des Network-Topology-Moduls (offline/stale/critical/unacked pro Gruppe).'
-        - uuid: e0b7a5f4d3c26b1a0f9e8d7c6b5a4f3e
+        - uuid: 7e6952ab23da425f8950443f5b8a7c11
           name: 'NT: Health score (worst group)'
           type: TRAP
           key: nt.health.score.min

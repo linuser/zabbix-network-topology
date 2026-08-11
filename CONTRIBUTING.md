@@ -76,12 +76,25 @@ ohne dass klar ist warum:
    `npm run ci:templates` prüft zwei Dinge:
 
    - Jeder Gruppeneintrag hat ein `uuid`.
-   - Derselbe Gruppenname trägt in **allen** Dateien dasselbe `uuid`. Zabbix
-     ordnet Gruppen über das `uuid` zu, nicht über den Namen. Für die
-     eingebaute Gruppe `Templates` ist das
-     `7df96b18c230490a9a0a9e2307226338` — ein selbst erzeugtes `uuid` zeigt
-     auf eine Gruppe, die es nicht gibt. Neue Templates übernehmen den Wert
-     aus einem bestehenden, statt einen neuen zu würfeln.
+   - Derselbe Gruppenname trägt in **allen** Dateien dasselbe `uuid`.
+   - Dasselbe `uuid` hängt an **genau einem** Gruppennamen.
+
+   Zabbix ordnet Gruppen über das `uuid` zu, nicht über den Namen, und die
+   Werte sind auf jeder Installation gleich. Sie stehen in der Tabelle
+   `hstgrp` — dort nachsehen statt raten oder aus einer anderen Datei
+   abschreiben:
+
+   | Gruppe | `uuid` |
+   |---|---|
+   | `Templates` | `79f31eeab03146229b1e019097fad672` |
+   | `Templates/Network devices` | `7df96b18c230490a9a0a9e2307226338` |
+
+   Die dritte Regel gibt es, weil beim Reparieren der ersten genau das
+   passiert ist: die `uuid` wurde aus dem funktionierenden Template kopiert,
+   in der Annahme, sie gehöre zu `Templates` — sie gehört aber zu
+   `Templates/Network devices`. Die zwei reparierten Dateien wurden daraufhin
+   wieder abgewiesen, und Regel 2 sah es nicht, weil sie nur Name → `uuid`
+   prüft.
 
 Alles zusammen lokal prüfen:
 

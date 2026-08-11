@@ -1,7 +1,7 @@
 zabbix_export:
   version: '7.0'
   template_groups:
-    - uuid: 7df96b18c230490a9a0a9e2307226338
+    - uuid: 79f31eeab03146229b1e019097fad672
       name: Templates
   templates:
     - uuid: 3f1c2a9be4d94b0f8a7c6d5e4f3a2b1c
@@ -21,7 +21,7 @@ zabbix_export:
       groups:
         - name: Templates
       items:
-        - uuid: 8a2b3c4d5e6f47081920a1b2c3d4e5f6
+        - uuid: 5cb6534ac4a54682985e3fbb53335f51
           name: 'NT: Topology changes since last poll'
           type: TRAP
           key: nt.topo.changes
@@ -30,13 +30,13 @@ zabbix_export:
           trends: 365d
           description: 'Anzahl neue + verschwundene Edges seit letztem Sender-Poll.'
           triggers:
-            - uuid: 9b3c4d5e6f708192a0b1c2d3e4f5a6b7
+            - uuid: e28354047fcc4533bfff035e7acfd185
               expression: 'last(/NT Topology Change/nt.topo.changes)>0'
               name: 'Network topology changed: {ITEM.LASTVALUE1} link(s)'
               priority: WARNING
               description: 'LLDP/CDP-Topologie hat sich geaendert — Details im Text-Item nt.topo.changes.text.'
               manual_close: 'YES'
-        - uuid: a4b5c6d7e8f90a1b2c3d4e5f60718293
+        - uuid: c0d63dae79cd4191b632ec81e64886ce
           name: 'NT: Topology change details'
           type: TRAP
           key: nt.topo.changes.text
