@@ -88,3 +88,12 @@ parity:
   image: node:22-alpine
   script:
     - node tools/check-parity.mjs
+
+# Prueft die mitgelieferten Zabbix-Templates auf die Gruppen-UUID. Zwei von drei
+# waren ohne sie unterwegs und wurden beim Import abgewiesen — waehrend
+# INSTALL.md beide empfiehlt. Aufgefallen ist es erst einem Nutzer.
+templates:
+  stage: test
+  image: node:22-alpine
+  script:
+    - node tools/check-templates.mjs

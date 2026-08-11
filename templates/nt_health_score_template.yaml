@@ -1,7 +1,8 @@
 zabbix_export:
   version: '7.0'
   template_groups:
-    - name: Templates
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
   templates:
     - uuid: b7e4d2c1a09f48e3b6d5c4a3f2e1d0c9
       template: 'NT Health Score'

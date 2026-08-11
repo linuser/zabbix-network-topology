@@ -69,10 +69,25 @@ ohne dass klar ist warum:
    Wer eine der Stellen ändert, ändert die andere mit. Das Gate sagt genau,
    welche Datei ausschert.
 
+5. **Die mitgelieferten Templates müssen importierbar bleiben.** Zabbix 7.0
+   verlangt in `template_groups` ein `uuid`; fehlt es, weist der Import die
+   Datei ab. Zwei der drei Templates waren so unterwegs, obwohl INSTALL.md
+   ihren Import als Schritt 4 empfiehlt — gemerkt hat es erst ein Nutzer.
+   `npm run ci:templates` prüft zwei Dinge:
+
+   - Jeder Gruppeneintrag hat ein `uuid`.
+   - Derselbe Gruppenname trägt in **allen** Dateien dasselbe `uuid`. Zabbix
+     ordnet Gruppen über das `uuid` zu, nicht über den Namen. Für die
+     eingebaute Gruppe `Templates` ist das
+     `7df96b18c230490a9a0a9e2307226338` — ein selbst erzeugtes `uuid` zeigt
+     auf eine Gruppe, die es nicht gibt. Neue Templates übernehmen den Wert
+     aus einem bestehenden, statt einen neuen zu würfeln.
+
 Alles zusammen lokal prüfen:
 
 ```bash
-npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity && npm run ci:test
+npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
+  && npm run ci:templates && npm run ci:test
 ```
 
 ## Tests

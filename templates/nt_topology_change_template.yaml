@@ -1,7 +1,8 @@
 zabbix_export:
   version: '7.0'
   template_groups:
-    - name: Templates
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
   templates:
     - uuid: 3f1c2a9be4d94b0f8a7c6d5e4f3a2b1c
       template: 'NT Topology Change'

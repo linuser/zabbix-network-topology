@@ -137,6 +137,24 @@
   bestehende Kacheln behalten ihren gespeicherten Titel.
 
 ### Fixed
+- **Zwei der drei mitgelieferten Templates ließen sich nicht importieren.**
+  `nt_health_score_template.yaml` und `nt_topology_change_template.yaml`
+  hatten unter `template_groups` kein `uuid`, das Zabbix 7.0 dort verlangt.
+  Der Import brach ab mit
+
+  ```
+  Invalid tag "/zabbix_export/template_groups/template_group(1)":
+  the tag "uuid" is missing.
+  ```
+
+  Beide werden in `INSTALL.md` als Schritt 4 zum Import empfohlen — es hat
+  also jeder gesehen, der der Anleitung gefolgt ist. Beide tragen nun das
+  `uuid` der eingebauten Gruppe `Templates`, dasselbe wie das dritte,
+  funktionierende Template. Der neue CI-Job `templates` prüft, dass jeder
+  Gruppeneintrag ein `uuid` hat **und** dass derselbe Gruppenname überall
+  dasselbe trägt — Zabbix ordnet Gruppen über das `uuid` zu, nicht über den
+  Namen, ein selbst erzeugtes zeigt also ins Leere.
+
 - **Beide Installer setzen den SELinux-Kontext jetzt selbst.** `nt-install.sh`
   und `deploy.sh` entpacken nach `/tmp` und schieben das Ergebnis per `cp -a`
   bzw. `mv` an seinen Platz — beide **erhalten** den Kontext. Dateien aus
