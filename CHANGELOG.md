@@ -166,6 +166,23 @@
   bestehende Kacheln behalten ihren gespeicherten Titel.
 
 ### Fixed
+- **Die Kennzahlen zählten Ghosts als Hosts — und meldeten trotzdem „0 Ghosts".**
+  Bei eingeschaltetem Ghost-Toggle bekam die Zählung das bereits angereicherte
+  Knoten-Array. Daraus folgte beides auf einmal: `injectGhostNodes` überspringt
+  jede ID, die es schon kennt, also blieb die Differenz null — ausgerechnet
+  dann, wenn die Ghosts sichtbar auf der Karte lagen. Und ein Ghost hat
+  `severity 0`, lief also durch die Severity-Schleife als **OK** mit. Auf einer
+  Karte mit 11 Geräten und einem Ghost stand „12 Hosts, 4 OK" bei drei grünen
+  Knoten.
+
+  Beide Zahlen korrigierten sich nach 30 Sekunden von selbst, weil der
+  Refresh-Pfad die rohen Backend-Knoten übergibt — die unangenehmste Sorte
+  Fehler: beim Nachsehen ist er weg.
+
+  Die Zählung filtert jetzt einmal `_isGhost`, bevor irgendetwas gezählt wird.
+  Das KPI-**Widget** war nie betroffen; es bekommt die Backend-Daten direkt und
+  leitet die Ghosts eigenständig ab.
+
 - **Port-zu-Port-Beschriftungen waren seit jeher tot.** Das README bewirbt, dass
   jede Kante auf LLDP/SNMP-Switches den lokalen **und** den entfernten Port
   trägt. Sie tat es nie: die Item-Suche fragte die Port-OIDs überhaupt nicht ab,

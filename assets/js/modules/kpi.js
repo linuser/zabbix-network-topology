@@ -160,6 +160,13 @@ function tile(value, label, colour, sub) {
  * Kanten aus der Cytoscape-Instanz.
  */
 function collect(nodes, cy) {
+    // Ghosts raus, BEVOR irgendetwas gezaehlt wird. Bei aktivem Toggle uebergibt
+    // render-tech.js das bereits angereicherte Array, und ein Ghost ist kein
+    // Host: er hat severity 0 und liefe damit als "OK" durch, waehrend er in
+    // Wahrheit ein Geraet ist, ueber das wir gar nichts wissen. Genau das stand
+    // auf der Karte — 12 Hosts bei 11 echten, und ein grünes Kaestchen zu viel.
+    const base = nodes.filter(function(n) { return !n._isGhost; });
+
     // Severity-Stufen sind ['Normal','Info','Warning','Average','High','Disaster'].
     //
     // Die alte, nie ausgefuehrte updateBadge()-Logik warf alles ausser 0 und
@@ -171,7 +178,7 @@ function collect(nodes, cy) {
     //   crit  High, Disaster           (4-5)
     let ok = 0, warn = 0, crit = 0;
 
-    nodes.forEach(function(n) {
+    base.forEach(function(n) {
         const s = n.severity || 0;
         if (s === 0)     ok++;
         else if (s >= 4) crit++;
@@ -196,9 +203,16 @@ function collect(nodes, cy) {
     // wird. injectGhostNodes ist frei von Nebenwirkungen (nodes.concat), laesst
     // sich also gefahrlos zum Zaehlen aufrufen — und weil es dieselbe Funktion
     // ist, koennen Zaehlung und Darstellung nicht auseinanderlaufen.
+    //
+    // Deshalb laeuft es ueber base und nicht ueber nodes: injectGhostNodes
+    // ueberspringt jede ID, die es schon kennt ("if (known[gid]) return"). Mit
+    // dem angereicherten Array waere die Differenz null — also ausgerechnet
+    // dann "0 Ghosts", wenn sie sichtbar auf der Karte liegen. Der Refresh-Pfad
+    // uebergibt data.nodes und zaehlte richtig, wodurch sich die Zahl nach 30 s
+    // von selbst korrigierte: schwer zu melden, schwer zu glauben.
     const lq = (window._ntLastData && window._ntLastData.lldp_quality) || [];
     const ghosts = lq.length
-        ? Math.max(0, injectGhostNodes(nodes, [], lq).nodes.length - nodes.length)
+        ? Math.max(0, injectGhostNodes(base, [], lq).nodes.length - base.length)
         : 0;
 
     // Sind sie zwar gezaehlt, aber im Graphen ausgeblendet? Dann sagt die
