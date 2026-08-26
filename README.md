@@ -124,13 +124,17 @@ Die **Verbindungen (Kanten)** entstehen aus den LLDP/CDP-Nachbar-Tabellen der Ge
 
 ### Dashboard-Widgets (optional)
 
-Drei separate Widget-Module rendern die Daten des Hauptmoduls in Dashboard-Kacheln:
+Fünf separate Widget-Module rendern die Daten des Hauptmoduls in Dashboard-Kacheln. Im Widget-Menü heißen sie **NT …**:
 
-- [`widget/`](widget/) — **Topologie-Graph** (reduzierte Tech-/Mgmt-Sicht)
-- [`widget_health/`](widget_health/) — **Health-Score** pro Hostgruppe
-- [`widget_table/`](widget_table/) — **Tabelle** (Status/CPU/Mem/Ping/Traffic/Probleme)
+| Verzeichnis | Widget | Inhalt |
+|---|---|---|
+| [`widget/`](widget/) | **NT Topology** | Topologie-Graph, reduzierte Tech-/Mgmt-Sicht |
+| [`widget_health/`](widget_health/) | **NT Health Score** | Health-Score pro Hostgruppe |
+| [`widget_table/`](widget_table/) | **NT Table** | Tabelle (Status/CPU/Mem/Ping/Traffic/Probleme) |
+| [`widget_kpi/`](widget_kpi/) | **NT KPI** | Kennzahlen als Ring (Severity-Verteilung mit Host-Zahl in der Mitte) oder als Raster |
+| [`widget_items/`](widget_items/) | **NT Items** | ein Item-Muster über alle Hosts der gewählten Gruppen gepivotet |
 
-Alle nutzen dieselbe `network.topology.data`-Action (kein zweites Backend). **Voraussetzung:** Hauptmodul installiert + aktiviert.
+Alle nutzen dieselbe `network.topology.data`-Action (kein zweites Backend) und teilen sich deren Antwort: liegen mehrere Kacheln auf einem Dashboard, wird die Action **einmal** abgefragt, nicht je Kachel. **Voraussetzung:** Hauptmodul installiert + aktiviert.
 
 > **Die Widgets funktionieren nicht eigenständig** — und zwar aus zwei Gründen: Die Daten-Action `network.topology.data` registriert das **Hauptmodul**, und das Topologie-Widget lädt zusätzlich Cytoscape.js aus dessen Verzeichnis (`modules/network_topology/assets/js/`), damit die ~360 KB große Bibliothek nur einmal im Paket liegt. Fehlt oder deaktivierst du das Hauptmodul, zeigen die Kacheln eine Fehlermeldung („Hauptmodul nicht erreichbar" bzw. „Cytoscape.js not loaded"). Reihenfolge beim Installieren also: **erst Hauptmodul, dann Widgets.**
 
@@ -245,13 +249,17 @@ Then in the Zabbix UI: **Administration → General → Modules → Scan directo
 
 ### Dashboard widgets (optional)
 
-Three separate widget modules render the main module's data as dashboard tiles:
+Five separate widget modules render the main module's data as dashboard tiles. They appear as **NT …** in the widget menu:
 
-- [`widget/`](widget/) — **topology graph** (reduced tech/mgmt view)
-- [`widget_health/`](widget_health/) — **health score** per host group
-- [`widget_table/`](widget_table/) — **table** (status/CPU/mem/ping/traffic/problems)
+| Directory | Widget | What it shows |
+|---|---|---|
+| [`widget/`](widget/) | **NT Topology** | topology graph, reduced tech/mgmt view |
+| [`widget_health/`](widget_health/) | **NT Health Score** | health score per host group |
+| [`widget_table/`](widget_table/) | **NT Table** | table (status/CPU/mem/ping/traffic/problems) |
+| [`widget_kpi/`](widget_kpi/) | **NT KPI** | key figures as a ring (severity distribution with the host count in the middle) or as a grid |
+| [`widget_items/`](widget_items/) | **NT Items** | one item pattern pivoted across all hosts of the selected groups |
 
-All consume the same `network.topology.data` action (no second backend). **Prerequisite:** the main module installed and enabled.
+All consume the same `network.topology.data` action (no second backend) and share its response: with several tiles on one dashboard the action is fetched **once**, not per tile. **Prerequisite:** the main module installed and enabled.
 
 > **The widgets do not work standalone** — for two reasons: the data action `network.topology.data` is registered by the **main module**, and the topology widget additionally loads Cytoscape.js from its directory (`modules/network_topology/assets/js/`), so the ~360 KB library ships only once. Without the main module — or with it disabled — the tiles show an error ("main module unreachable" / "Cytoscape.js not loaded"). So install in this order: **main module first, widgets second.**
 

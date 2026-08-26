@@ -4,7 +4,7 @@
     "type": "widget",
     "name": "Network Topology for Zabbix — Table Widget",
     "namespace": "NetworkTopologyTableWidget",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "author": "PlaNet Fox | Alexander Fox",
     "description": "Dashboard widget: the table view (Nagios-style host list) — status, host, CPU, memory, ping, traffic, open problems. Requires the main module (network_topology) — uses its network.topology.data action.",
     "actions": {

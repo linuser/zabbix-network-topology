@@ -182,6 +182,13 @@
   Refresh-Einstellung des Dashboards statt drei fest verdrahteter Zahlen, und
   bei inaktiver Seite pausiert der Zyklus von selbst.
 
+- **Versionssprung bei den drei bestehenden Widgets** — NT Topology auf 3.1.0,
+  NT Health Score und NT Table auf 2.1.0. Ihr JavaScript wurde um 266 Zeilen
+  umgebaut (Update-Zyklus, geteilter Datenzugriff), die Versionsnummer war
+  dabei stehengeblieben. Wer aktualisiert hätte, sähe in der Modulliste
+  dieselbe Nummer bei anderem Verhalten und könnte installiert nicht von
+  veraltet unterscheiden.
+
 - **Einheitliche Namen.** Im Dashboard-Menü heißen die Widgets durchgehend
   `NT …` (Zabbix sortiert alphabetisch — ohne gemeinsames Präfix standen sie an
   drei Stellen der Liste). In der Modulliste tragen alle eine englische
