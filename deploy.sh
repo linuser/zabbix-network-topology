@@ -220,6 +220,11 @@ fi
 echo "→ Baue Zips lokal"
 if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     STAGE=$(mktemp -d)
+    # 'nt-*.sh' steht als Muster da, nicht namentlich: nt-uninstall.sh kam
+    # spaeter dazu und rutschte prompt ins Paket, weil die Liste nur
+    # nt-install.sh kannte. Ein Shell-Skript unter dem Web-Root gehoert da
+    # nicht hin — gleiche Begruendung wie bei 'tools' unten.
+    #
     # 'tools' und 'templates' bleiben absichtlich draussen. Das Zielverzeichnis
     # liegt unter dem Web-Root und ist oeffentlich abrufbar — siehe die
     # Source-Map-Notiz oben. Sender-Skript und Template-YAMLs werden zur
@@ -234,7 +239,7 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
         --exclude 'tools' --exclude 'templates' \
         --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
         --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
-        --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-install.sh' \
+        --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-*.sh' \
         --exclude 'tests' --exclude '.gitlab-ci.yml' \
         --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
         "$SCRIPT_DIR/" "$STAGE/network_topology/"

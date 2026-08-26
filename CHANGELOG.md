@@ -131,6 +131,30 @@
   Discovery. Fehlen sie, ändert sich nichts — alle drei sind optional, und viele
   Geräte melden nur einen Teil.
 
+- **Ein Deinstallations-Skript, das auch die Reste benennt.** `nt-uninstall.sh`
+  entfernt Hauptmodul und Widgets — und zeigt danach, was serverseitig
+  liegenbleibt. Das war nötig, seit die Karte serverseitig gespeichert wird:
+  die **geteilte** Ebene räumt sich selbst ab, weil `module.config` eine Spalte
+  der `module`-Zeile ist und mit ihr stirbt. Die **persönliche** hängt am
+  Benutzerprofil und überlebt jede Deinstallation, ohne dass es jemand merkt.
+
+  ```bash
+  ./nt-uninstall.sh --dry-run     # zeigt nur, ändert nichts
+  ./nt-uninstall.sh --purge       # räumt zusätzlich das Benutzerprofil
+  ```
+
+  Verzeichnisse werden **verschoben**, nicht gelöscht — nach
+  `/var/backups/nt-uninstall-<datum>/`, mit ausgegebenem Rückhol-Befehl.
+  Angefasst wird nur, wessen `manifest.json` eine `network_topology`-ID trägt;
+  ein fremdes Modul, das zufällig `widget/` heißt, bleibt liegen. Alte
+  `_v6`-Verzeichnisse aus 4.x kommen mit — auch solche, die nach dem
+  Quellordner benannt sind.
+
+  Host-Tags, Templates, Cron und Monitoring-User bleiben **unberührt**. Das sind
+  selbst angelegte Daten; `nt:parent` beschreibt die Infrastruktur des Nutzers,
+  nicht das Modul. Das Skript zählt sie auf und gibt das SQL aus, ausführen muss
+  es jemand selbst.
+
 - **Dienste-Probe auf Klick.** Im Kontextmenü eines Hosts liegt ein Eintrag, der
   eine feste Liste von 11 Ports prüft (SSH, Telnet, HTTP/S, SNMP, SMB, LPD, RDP,
   Proxmox, HTTP-alt, JetDirect) und *offen* / *abgewiesen* / *Zeitüberschreitung*
