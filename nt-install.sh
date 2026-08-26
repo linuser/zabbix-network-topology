@@ -287,6 +287,6 @@ case "${1:-}" in
     update)
         if [[ "${2:-}" == "--rollback" ]]; then cmd_rollback
         else zip=$(find_zip "${2:-}") || exit 1; do_deploy update "$zip"; fi ;;
-    ""|-h|--help|help) sed -n '3,22p' "$0" | sed 's/^#\s\?//' ;;
+    ""|-h|--help|help) sed -n '3,22p' "$0" | sed 's/^#[[:space:]]\{0,1\}//' ;;
     *) die "Unbekanntes Kommando: ${1:-} (install | update | check)";;
 esac

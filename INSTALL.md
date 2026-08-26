@@ -149,11 +149,23 @@ Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm
 
 In 5.0 ist der `_v6`-Suffix aus allen Bezeichnern entfallen — das Verzeichnis heißt jetzt `network_topology` statt `network_topology_v6`. **Das alte Verzeichnis muss weg**, sonst registriert Zabbix beide Module und der Menüeintrag erscheint doppelt:
 
+Am sichersten mit dem Uninstaller — er kennt die alten Namen, verschiebt statt zu löschen und lässt fremde Module in Ruhe:
+
+```bash
+./nt-uninstall.sh --dry-run     # erst ansehen
+./nt-uninstall.sh
+```
+
+Von Hand geht es auch, dann aber **vorher nachsehen, was wirklich dort liegt**:
+
 ```bash
 cd /usr/share/zabbix/ui/modules
+grep -l '"id".*network_topology' */manifest.json     # zeigt ALLE Verzeichnisse des Moduls
 sudo rm -rf network_topology_v6 network_topology_v6_widget \
             network_topology_v6_health_widget network_topology_v6_table_widget
 ```
+
+Der `grep` ist nicht überflüssig: Bei einer Handinstallation wird gern das **Quellverzeichnis** als Name genommen — `widget_health/` statt `network_topology_v6_health_widget/`. Beide deklarieren dann dieselbe Modul-ID, und Zabbix registriert **keines** von beiden. Auf einer realen Instanz genau so vorgefunden; von vier Modulen standen nur zwei in der Datenbank, ohne jede Fehlermeldung.
 
 Danach normal installieren (Schritt 1–3) und **Scan directory** ausführen; die alten Einträge verschwinden dabei von selbst.
 
@@ -168,7 +180,27 @@ Alles Nutzerseitige bleibt erhalten. Kartenanordnung und manuelle Links liegen s
 
 ### Deinstallation
 
-Modul in der UI auf **Disabled**, dann Verzeichnis löschen und php-fpm reloaden.
+```bash
+./nt-uninstall.sh --dry-run     # zeigt nur, was passieren würde
+./nt-uninstall.sh               # entfernt Hauptmodul + alle Widgets
+```
+
+Das Skript **verschiebt** die Verzeichnisse nach `/var/backups/nt-uninstall-<datum>/`, statt sie zu löschen, und nennt am Ende den Befehl zum Zurückholen. Es fasst nur Verzeichnisse an, deren `manifest.json` eine `network_topology`-ID trägt — ein fremdes Modul, das zufällig `widget/` heißt, bleibt liegen. Alte `_v6`-Verzeichnisse aus 4.x nimmt es mit.
+
+Danach in der UI **Administration → General → Modules → Scan directory**. Erst dann verschwinden die Modul-Einträge aus der Datenbank — und mit ihnen die **geteilten** Links und Positionen, die als `module.config` an der Modul-Zeile hängen.
+
+Von Hand geht es genauso: Modul in der UI auf **Disabled**, Verzeichnisse löschen, php-fpm reloaden, *Scan directory*.
+
+**Was liegen bleibt.** Die **persönliche** Ebene hängt nicht an der Modul-Zeile, sondern im Benutzerprofil, und überlebt jede Deinstallation:
+
+```sql
+DELETE FROM profiles WHERE idx = 'web.network_topology.manual_links';
+DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
+```
+
+`./nt-uninstall.sh --purge` erledigt das nach Rückfrage — es zeigt vorher, wie viele Zeilen wie viele Benutzer betrifft.
+
+**Was das Skript bewusst nicht anfasst:** die Host-Tags (`nt:parent`, `nt:icon`, …), die importierten Templates, den Cron für `topo-change-sender.sh` und den dafür angelegten Monitoring-User. Das sind selbst angelegte Daten — `nt:parent` beschreibt deine Infrastruktur, nicht das Modul. Das Skript zählt sie auf und gibt das SQL aus, ausführen musst du es selbst. Pins, Notizen und Filter-Presets liegen im `localStorage` der jeweiligen Browser und lassen sich serverseitig ohnehin nicht entfernen.
 
 ### Troubleshooting
 
@@ -324,11 +356,23 @@ Replace the `network_topology` directory with the new version, `chown`, reload p
 
 5.0 drops the `_v6` suffix from every identifier — the directory is now `network_topology` instead of `network_topology_v6`. **The old directory has to go**, otherwise Zabbix registers both modules and the menu entry shows up twice:
 
+Safest with the uninstaller — it knows the old names, moves instead of deleting, and leaves other people's modules alone:
+
+```bash
+./nt-uninstall.sh --dry-run     # look first
+./nt-uninstall.sh
+```
+
+By hand works too, but **check what is actually there first**:
+
 ```bash
 cd /usr/share/zabbix/ui/modules
+grep -l '"id".*network_topology' */manifest.json     # lists EVERY directory of this module
 sudo rm -rf network_topology_v6 network_topology_v6_widget \
             network_topology_v6_health_widget network_topology_v6_table_widget
 ```
+
+That `grep` is not busywork: a manual install often takes the **source** directory name — `widget_health/` instead of `network_topology_v6_health_widget/`. Both then declare the same module ID, and Zabbix registers **neither**. Found exactly like that on a real instance: of four modules only two were in the database, with no error message anywhere.
 
 Then install as usual (steps 1–3) and run **Scan directory**; the stale entries disappear on their own.
 
@@ -343,7 +387,27 @@ Everything user-side is preserved. The map layout and manual links live server-s
 
 ### Uninstall
 
-Set the module to **Disabled** in the UI, then delete the directory and reload php-fpm.
+```bash
+./nt-uninstall.sh --dry-run     # show what would happen, change nothing
+./nt-uninstall.sh               # remove the main module and all widgets
+```
+
+The script **moves** the directories to `/var/backups/nt-uninstall-<date>/` instead of deleting them, and prints the command to put them back. It only touches directories whose `manifest.json` carries a `network_topology` ID — someone else's module that happens to be called `widget/` is left alone. Old `_v6` directories from 4.x are picked up too.
+
+Afterwards, in the UI: **Administration → General → Modules → Scan directory**. Only then do the module rows leave the database — and with them the **shared** links and positions, which live in `module.config` on the module row.
+
+By hand it is the same: set the module to **Disabled**, delete the directories, reload php-fpm, run *Scan directory*.
+
+**What stays behind.** The **personal** layer does not hang off the module row but off the user profile, and survives any uninstall:
+
+```sql
+DELETE FROM profiles WHERE idx = 'web.network_topology.manual_links';
+DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
+```
+
+`./nt-uninstall.sh --purge` does this after asking — it first shows how many rows across how many users are affected.
+
+**What the script deliberately does not touch:** the host tags (`nt:parent`, `nt:icon`, …), the imported templates, the cron for `topo-change-sender.sh` and the monitoring user created for it. Those are data someone entered themselves — `nt:parent` describes your infrastructure, not the module. The script lists them and prints the SQL; running it is your call. Pins, notes and filter presets live in each browser's `localStorage` and cannot be removed server-side anyway.
 
 ### Troubleshooting
 
