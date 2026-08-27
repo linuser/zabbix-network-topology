@@ -72,6 +72,21 @@ final class LldpEdgeBuilder {
         $edges          = [];
         $seen_edges     = [];
         $lldp_unmatched = [];
+
+        // Capabilities der GETROFFENEN Nachbarn: hostid → ['Bridge','Router',…].
+        //
+        // Bisher wurden die nur fuer Ghosts ausgewertet. Sie sind aber auch fuer
+        // ueberwachte Hosts die beste Antwort auf "was ist das Geraet?" — und
+        // zwar eine herstellerunabhaengige: IEEE 802.1AB, das Geraet sagt es
+        // selbst. Eine Keyword-Liste pro Hersteller waere die Alternative, und
+        // die veraltet schneller als man sie pflegt (allein Cisco hat neun
+        // Templates, davon zwei Server).
+        //
+        // Gemeldet wird immer vom NACHBARN, nie vom Geraet selbst: Switch A
+        // sagt, was B ist. Ein Geraet ohne ueberwachten Nachbarn taucht hier
+        // deshalb nicht auf — dafuer gibt es die schwaechere Stufe "spricht
+        // ueberhaupt LLDP".
+        $host_caps = [];
         // LLDP-Quality-Sammlung: pro Host-Reporter detailliertere Statistik
         // fuer den Quality-Tab. Vereinheitlicht 4 Kategorien:
         //   matched / unmatched / ambiguous / self
@@ -196,6 +211,21 @@ final class LldpEdgeBuilder {
                     continue;
                 }
                 $lldp_quality[$rid]['matched']++;
+
+                // Capabilities des getroffenen Nachbarn merken — gleiche
+                // Zeile der lldpRemTable wie der SysName, also gleicher Index.
+                // Erster Melder gewinnt: sehen zwei Switches dasselbe Geraet,
+                // sind die Angaben identisch; waeren sie es nicht, ist die
+                // erste so gut wie jede andere.
+                if (!isset($host_caps[$rhid])) {
+                    $cidx = HostMetadata::ifaceParam($item['key_']);
+                    if ($cidx !== '' && isset($lldp_meta[$rid][$cidx]['caps'])) {
+                        $c = self::decodeCaps($lldp_meta[$rid][$cidx]['caps']);
+                        if ($c) {
+                            $host_caps[$rhid] = $c;
+                        }
+                    }
+                }
                 // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
                 // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
                 // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
@@ -297,6 +327,7 @@ final class LldpEdgeBuilder {
             'edges'     => $edges,
             'quality'   => $lldp_quality,
             'unmatched' => $lldp_unmatched,
+            'host_caps' => $host_caps,
         ];
     }
 

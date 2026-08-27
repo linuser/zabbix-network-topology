@@ -68,6 +68,10 @@ final class NodeBuilder {
         $items_show         = $context['items_show'];
         $show_item_per_host = $context['show_item_per_host'];
         $primary_ip_cache   = $context['primary_ip_cache'];
+        // Beide optional: aeltere Aufrufer (und die Tests) kennen sie nicht,
+        // und ohne sie faellt die Typerkennung genau auf den alten Stand zurueck.
+        $lldp_host_caps     = $context['lldp_host_caps'] ?? [];
+        $lldp_speakers      = $context['lldp_speakers']  ?? [];
 
         // ── 6. BUILD NODES ────────────────────────────────────────────────
         $nodes = [];
@@ -79,8 +83,38 @@ final class NodeBuilder {
             $acked = $host_ack_acked[$hid] ?? 0;
             $all_acked = $total > 0 && $acked === $total;
 
-            // Auto-Detection des Device-Type, ggf. überschrieben durch nt:icon-Tag
+            // Device-Type in vier Stufen. Die Reihenfolge ist der Punkt:
+            //
+            //   1. nt:icon-Tag           — explizit gesetzt, gewinnt immer
+            //   2. Name/Template-Muster  — unveraendert wie bisher
+            //   3. LLDP-Capabilities     — was der Nachbar ueber ihn meldet
+            //   4. spricht LLDP/CDP      — dann ist es Netzwerkgeraet, kein Server
+            //
+            // 3 und 4 greifen NUR, wenn Stufe 2 im 'server'-Fallback gelandet
+            // ist. Andersherum waere es riskant: ein Host namens "rtr-core-01"
+            // meldet als L3-Switch auch das Bridge-Bit und wuerde vom Protokoll
+            // zum Switch umgestempelt, obwohl der Name die Absicht kennt. So
+            // aendert sich an keinem Host etwas, der heute richtig erkannt wird.
             $detected_type = HostMetadata::deviceType($h['host'], $tpls);
+            if ($detected_type === 'server') {
+                $from_caps = HostMetadata::typeFromCaps($lldp_host_caps[$hid] ?? []);
+                if ($from_caps !== '') {
+                    $detected_type = $from_caps;
+                }
+                elseif (isset($lldp_speakers[$hid])) {
+                    // Kein Capability-Bit bekannt (niemand Ueberwachtes sieht ihn
+                    // als Nachbarn), aber er fuehrt selbst eine Nachbartabelle.
+                    // Server tun das nicht.
+                    //
+                    // Die Stufe greift enger als sie aussieht: sie setzt voraus,
+                    // dass Stufe 2 GAR NICHTS erkannt hat. Ein Linux-Host mit
+                    // lldpd faellt nicht hierher, weil 'Linux by Zabbix agent'
+                    // vorher trifft (siehe tests/DeviceTypeTest.php). Uebrig
+                    // bleibt der namenlose Host mit unbekanntem Template — und
+                    // da ist Switch die bessere Wette als Server.
+                    $detected_type = 'switch';
+                }
+            }
             $effective_type = $host_icon_override[$hid] ?? $detected_type;
 
             // Extra-Items für nt:show-Tags zusammenstellen — in der Reihenfolge

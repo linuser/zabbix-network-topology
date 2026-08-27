@@ -131,6 +131,40 @@
   Discovery. Fehlen sie, ändert sich nichts — alle drei sind optional, und viele
   Geräte melden nur einen Teil.
 
+- **Gerätetyp aus dem Protokoll statt aus einer Herstellerliste.** Gemeldet
+  wurde: Cisco-Switches landen unter „Server / virtualization" statt unter
+  „Switch". Die Ursache war nicht ein fehlender Eintrag, sondern der Ansatz.
+  `deviceType()` rät aus Hostname und Template-Namen, und die Muster waren
+  gegen ausgedachte Namen geschrieben — an einer echten Installation
+  nachgezählt trafen sie **2 von 14** offiziellen Zabbix-Netzwerk-Templates.
+  Auch `mikrotik routeros` ging ins Leere, weil das Template „MikroTik by
+  SNMP" heißt.
+
+  Die Liste zu verlängern wäre die falsche Antwort: allein für Cisco führt
+  Zabbix neun Templates, davon sind zwei (UCS, UCS Manager) Server — ein
+  Muster `cisco` würde die falsch einsortieren. Stattdessen beantwortet das
+  Protokoll die Frage. Die **LLDP-Capabilities** nach IEEE 802.1AB sagen
+  `Bridge`, `Router` oder `WLAN AP`, und zwar herstellerunabhängig; das Modul
+  decodierte sie bereits, aber nur für nicht überwachte Nachbarn.
+
+  Vier Stufen, erste gewinnt:
+
+  | | Signal |
+  |---|---|
+  | 1 | `nt:icon`-Tag |
+  | 2 | Name- und Template-Muster (unverändert) |
+  | 3 | LLDP-Capability, die ein Nachbar meldet |
+  | 4 | führt selbst eine Nachbartabelle → Netzwerkgerät |
+
+  Stufe 3 und 4 greifen **nur**, wenn Stufe 2 im `server`-Fallback gelandet
+  ist. Andersherum wäre es riskant: ein Host namens `rtr-core-01` meldet als
+  L3-Switch auch das Bridge-Bit und würde vom Protokoll zum Switch
+  umgestempelt, obwohl der Name die Absicht kennt. So ändert sich an keinem
+  Host etwas, der heute richtig erkannt wird.
+
+  `tests/DeviceTypeTest.php` hält die Reihenfolge fest, mit echten
+  Template-Namen aus einer 7.4-Installation statt erfundenen.
+
 - **Ein Deinstallations-Skript, das auch die Reste benennt.** `nt-uninstall.sh`
   entfernt Hauptmodul und Widgets — und zeigt danach, was serverseitig
   liegenbleibt. Das war nötig, seit die Karte serverseitig gespeichert wird:

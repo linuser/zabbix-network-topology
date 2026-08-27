@@ -361,6 +361,20 @@ class NetworkTopologyData extends NetworkTopologyController {
         $edges          = $lldp['edges'];
         $lldp_quality   = $lldp['quality'];
         $lldp_unmatched = $lldp['unmatched'];
+        $lldp_host_caps = $lldp['host_caps'] ?? [];
+
+        // Wer selbst eine Nachbartabelle fuehrt, ist ein Netzwerkgeraet — ein
+        // Server tut das nicht. Schwaecher als die Capabilities (die sagen
+        // WAS es ist), aber es greift auch dann, wenn niemand Ueberwachtes das
+        // Geraet als Nachbarn sieht. Als Set gehalten, nicht als Liste: die
+        // Abfrage ist ein isset() pro Host.
+        $lldp_speakers = [];
+        foreach ($lldp_raw as $_r) {
+            if (isset($_r['hostid'])) {
+                $lldp_speakers[$_r['hostid']] = true;
+            }
+        }
+        unset($_r);
         // ── 5a. HOSTING/CONTAINMENT-KANTEN (nt:parent-Tag) ────────────────
         // Ein Host deklariert via Tag  nt:parent = <Hostname>  seinen Traeger
         // (VM → Hypervisor, Container → Node, ...). Ergibt eine GERICHTETE
@@ -457,6 +471,8 @@ class NetworkTopologyData extends NetworkTopologyController {
                 'proxy_names'        => $proxy_names,
                 'pgroup_names'       => $pgroup_names,
                 'lldp_quality'       => $lldp_quality,
+                'lldp_host_caps'     => $lldp_host_caps,
+                'lldp_speakers'      => $lldp_speakers,
                 'items_show'         => $items_show,
                 'show_item_per_host' => $show_item_per_host,
                 'primary_ip_cache'   => $primary_ip_cache,

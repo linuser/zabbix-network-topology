@@ -118,6 +118,37 @@ final class HostMetadata {
     }
 
     /**
+     * Geraetetyp aus den LLDP-Capabilities (IEEE 802.1AB), die ein Nachbar
+     * ueber das Geraet meldet. Leerstring, wenn sich daraus nichts ableiten
+     * laesst — dann entscheidet der Aufrufer weiter.
+     *
+     * Das ist die herstellerunabhaengige Antwort auf "was ist das": das Geraet
+     * kuendigt es selbst an, in einem Bitfeld, das seit 2005 gleich ist. Die
+     * Alternative waere eine Liste von Template-Namen je Hersteller — und die
+     * ist nicht pflegbar. Zabbix liefert allein fuer Cisco neun Templates, von
+     * denen zwei (UCS, UCS Manager) Server sind; ein Muster 'cisco' wuerde die
+     * falsch einsortieren.
+     *
+     * Reihenfolge der Pruefung ist bedeutsam, weil Geraete mehrere Bits
+     * setzen:
+     *   - Ein Access Point ist fast immer AUCH Bridge → WLAN zuerst.
+     *   - Ein Layer-3-Switch meldet Bridge UND Router. Fuer eine Topologie-
+     *     karte ist "Switch" dort die nuetzlichere Aussage, also Bridge vor
+     *     Router. Ein reiner Router meldet nur Router und kommt trotzdem an.
+     *
+     * 'Telephone', 'Repeater', 'Station' und 'DOCSIS' fuehren bewusst zu
+     * nichts: fuer sie gibt es kein Icon, und ein falsches waere schlechter
+     * als der bisherige Fallback.
+     */
+    public static function typeFromCaps(array $caps): string {
+        if (in_array('WLAN AP', $caps, true)) return 'wireless';
+        if (in_array('Bridge',  $caps, true)) return 'switch';
+        if (in_array('Router',  $caps, true)) return 'router';
+
+        return '';
+    }
+
+    /**
      * Geraetetyp aus Hostname + Template-Namen raten (steuert das Icon).
      * Erster Treffer gewinnt — die Reihenfolge der Map ist daher bedeutsam
      * (spezifisch vor generisch), Fallback 'server'.
