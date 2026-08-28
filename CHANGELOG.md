@@ -311,6 +311,40 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **Die Installationsanleitung setzte ein Verzeichnis-Layout voraus, das nicht
+  überall gilt.** Ein Nutzer meldete, bei ihm fehle der Ordner `ui`. Pakete aus
+  dem Zabbix-Repo legen das Frontend nach `/usr/share/zabbix` — **ohne** `ui`;
+  andere Installationen haben `/usr/share/zabbix/ui`. `nt-install.sh` und
+  `deploy.sh` erkennen beides seit jeher, aber wer der Anleitung von Hand
+  folgte, stand vor einem Pfad, den es bei ihm nicht gibt. Beide Layouts sind
+  jetzt genannt, mit einem `find`-Einzeiler zum Nachsehen.
+
+- **Die Anleitung riet nicht vom `git clone` ab — jetzt tut sie es, mit Grund.**
+  Der Weg stand als gleichwertige Variante B daneben. Er legt aber das
+  **gesamte Repository** unter den Web-Root, und Zabbix' nginx-Konfiguration
+  sperrt dort nur `/\.ht`, nicht `.git`. An einer Testinstallation
+  nachgemessen:
+
+  ```
+  /modules/<verzeichnis>/.git/HEAD                    HTTP 200
+  /modules/<verzeichnis>/.git/index                   HTTP 200
+  /modules/<verzeichnis>/tools/topo-change-sender.sh  HTTP 200
+  ```
+
+  Das Repository ist öffentlich, es entweicht zunächst nichts Geheimes. Aber
+  `tools/` enthält das Sender-Skript, das Zugangsdaten aus Umgebungsvariablen
+  liest — trägt sie jemand in die Datei ein, stehen sie im Netz. Genau dafür
+  gibt es die Ausschlussliste im Release-ZIP. Die Variante ist aus der
+  Anleitung entfernt und durch eine Warnung samt Aufräum-Befehl ersetzt.
+
+- **`unzip` steht jetzt bei den Voraussetzungen**, ebenfalls nach einer
+  Nutzermeldung: Minimal-Installationen bringen es nicht mit.
+
+- **Die Anleitung empfahl `www-data` als Eigentümer.** Der Webserver muss die
+  Moduldateien nur **lesen**. Gibt man ihm den Besitz, kann ein kompromittierter
+  PHP-Prozess den Modulcode überschreiben. `root:root` genügt und steht jetzt
+  allein da.
+
 - **Vier Ansichten sprachen Deutsch, egal welche Sprache eingestellt war.**
   Gemeldet von einem Nutzer auf einer englischen Oberfläche: *„Most is in
   English, but some is in German."* Er hatte nichts übersehen — die

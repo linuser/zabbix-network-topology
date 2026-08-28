@@ -14,6 +14,7 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 
 - **Zabbix 7.0 LTS oder 7.4+** (Frontend) — die Dashboard-Widgets (Abschnitt 3) brauchen **7.4**
 - **PHP 8.x** mit php-fpm (bzw. der PHP-Handler deines Webservers)
+- **`unzip`** auf dem Frontend-Host (für Variante A). Minimal-Installationen bringen es nicht immer mit: `sudo apt install unzip` bzw. `sudo dnf install unzip`
 - Schreibzugriff auf das Zabbix-UI-Verzeichnis `modules/` und die Möglichkeit, php-fpm neu zu laden
 - Moderner Browser (ES2019 — Chrome/Firefox/Safari/Edge, aktuelle Versionen)
 - **Keine Build-Tools nötig**: das fertige JS-Bundle (`assets/js/dist/nt-bundle.js`) liegt im Paket. Node/esbuild brauchst du nur, wenn du aus dem Quellcode neu bauen willst (siehe [Aus Source bauen](#5-optional-aus-source-bauen-entwickler)).
@@ -23,20 +24,26 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 
 > Das Verzeichnis **muss** `network_topology` heißen (= die Modul-ID). Ein direkt heruntergeladenes Repo heißt evtl. `zabbix-network-topology-v2-main` o. ä. → **umbenennen**.
 
-```bash
-# In den Modules-Ordner deiner Zabbix-UI wechseln
-# (typisch /usr/share/zabbix/ui/modules — bei anderen Setups
-#  z. B. /var/www/html/zabbix/ui/modules)
-cd /usr/share/zabbix/ui/modules
+**Zuerst: wo liegt `modules/` bei dir?** Das ist nicht überall gleich. Pakete aus dem Zabbix-Repo legen das Frontend nach `/usr/share/zabbix` — **ohne** `ui`. Andere Installationen haben `/usr/share/zabbix/ui`. Statt zu raten:
 
-# Variante A — Release-ZIP entpacken (Download: github.com/linuser/zabbix-network-topology/releases):
+```bash
+# findet das richtige Verzeichnis, egal welches Layout
+sudo find / -maxdepth 6 -type d -path '*zabbix*' -name modules 2>/dev/null
+```
+
+Beide Layouts sind normal. `nt-install.sh` und `deploy.sh` erkennen sie selbst — der Handbetrieb unten nicht, dort musst du den gefundenen Pfad einsetzen.
+
+```bash
+# In den gefundenen Modules-Ordner wechseln — einer von beiden:
+cd /usr/share/zabbix/modules        # Pakete aus dem Zabbix-Repo
+cd /usr/share/zabbix/ui/modules     # andere Installationen
+
+# Release-ZIP entpacken (Download: github.com/linuser/zabbix-network-topology/releases)
 sudo unzip /pfad/zu/network_topology.zip
 
-# Variante B — aus dem Git-Repo:
-sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology
-
-# Rechte setzen (Owner wie der Rest deiner Zabbix-UI — meist root:root
-# oder www-data:www-data)
+# Rechte setzen. root:root genügt — der Webserver muss die Dateien nur LESEN.
+# Ihm den Besitz zu geben (www-data:www-data) heißt: ein kompromittierter
+# PHP-Prozess könnte den Modulcode überschreiben.
 sudo chown -R root:root network_topology
 
 # php-fpm neu laden. ACHTUNG: Der Dienstname haengt von Distribution UND
@@ -51,6 +58,30 @@ sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
 > `sudo systemctl reload apache2` bzw. `httpd`.
 >
 > [`deploy.sh`](deploy.sh) erkennt den Dienst **selbst** und nimmt dir das ab.
+
+> **Nicht per `git clone` installieren.** Der Weg liegt nahe und funktioniert
+> auch — er legt aber das **gesamte Repository** unter deinen Web-Root, und
+> Zabbix' nginx-Konfiguration sperrt dort nur `/\.ht`, nicht `.git`. An einer
+> Testinstallation nachgemessen:
+>
+> ```
+> /modules/<verzeichnis>/.git/HEAD                    HTTP 200   lesbar
+> /modules/<verzeichnis>/.git/index                   HTTP 200   lesbar
+> /modules/<verzeichnis>/tools/topo-change-sender.sh  HTTP 200   lesbar
+> ```
+>
+> Das Repository ist öffentlich, es entweicht also zunächst nichts Geheimes.
+> Aber `tools/` enthält ein Skript, das Zabbix-Zugangsdaten aus
+> Umgebungsvariablen liest — trägt sie jemand stattdessen in die Datei ein,
+> stehen sie im Netz. Genau deshalb schließt das Release-ZIP `tools/`,
+> `templates/`, `tests/` und die Skripte aus.
+>
+> Wer den Clone-Weg trotzdem geht, räumt hinterher auf:
+>
+> ```bash
+> cd <modules>/network_topology
+> sudo rm -rf .git tools templates tests .github deploy.sh nt-*.sh
+> ```
 
 > **Kein Internet auf dem Zabbix-Server?** Der Normalfall bei Monitoring-Systemen —
 > sie stehen oft bewusst ohne ausgehenden Zugang. Dann das ZIP **nicht dort** laden,
@@ -159,7 +190,8 @@ Am sichersten mit dem Uninstaller — er kennt die alten Namen, verschiebt statt
 Von Hand geht es auch, dann aber **vorher nachsehen, was wirklich dort liegt**:
 
 ```bash
-cd /usr/share/zabbix/ui/modules
+# Pfad je nach Layout — siehe Abschnitt 1, "wo liegt modules/ bei dir?"
+cd /usr/share/zabbix/ui/modules      # oder /usr/share/zabbix/modules
 grep -l '"id".*network_topology' */manifest.json     # zeigt ALLE Verzeichnisse des Moduls
 sudo rm -rf network_topology_v6 network_topology_v6_widget \
             network_topology_v6_health_widget network_topology_v6_table_widget
@@ -221,6 +253,7 @@ DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
 
 - **Zabbix 7.0 LTS or 7.4+** (frontend) — the dashboard widgets (section 3) require **7.4**
 - **PHP 8.x** with php-fpm (or your web server's PHP handler)
+- **`unzip`** on the frontend host. Minimal installs don't always ship it: `sudo apt install unzip` or `sudo dnf install unzip`
 - Write access to the Zabbix UI `modules/` directory and the ability to reload php-fpm
 - A modern browser (ES2019 — current Chrome/Firefox/Safari/Edge)
 - **No build tools required**: the prebuilt JS bundle (`assets/js/dist/nt-bundle.js`) ships in the package. You only need Node/esbuild if you want to rebuild from source (see [Build from source](#5-optional-build-from-source-developers)).
@@ -230,20 +263,29 @@ DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
 
 > The directory **must** be named `network_topology` (the module id). A repo downloaded directly may be named `zabbix-network-topology-v2-main` or similar → **rename it**.
 
-```bash
-# Go to your Zabbix UI modules folder
-# (typically /usr/share/zabbix/ui/modules — other setups
-#  e.g. /var/www/html/zabbix/ui/modules)
-cd /usr/share/zabbix/ui/modules
+**First: where is `modules/` on your system?** This differs. Packages from the
+Zabbix repo put the frontend in `/usr/share/zabbix` — **without** `ui`. Other
+installs have `/usr/share/zabbix/ui`. Rather than guessing:
 
-# Option A — unzip the release ZIP (download: github.com/linuser/zabbix-network-topology/releases):
+```bash
+# finds the right directory whichever layout you have
+sudo find / -maxdepth 6 -type d -path '*zabbix*' -name modules 2>/dev/null
+```
+
+Both layouts are normal. `nt-install.sh` and `deploy.sh` detect them by
+themselves — the manual route below does not, so substitute the path you found.
+
+```bash
+# Go to the modules folder you found — one of these two:
+cd /usr/share/zabbix/modules        # packages from the Zabbix repo
+cd /usr/share/zabbix/ui/modules     # other installs
+
+# Unzip the release ZIP (download: github.com/linuser/zabbix-network-topology/releases)
 sudo unzip /path/to/network_topology.zip
 
-# Option B — from the Git repo:
-sudo git clone https://github.com/linuser/zabbix-network-topology.git network_topology
-
-# Set ownership (same as the rest of your Zabbix UI — usually root:root
-# or www-data:www-data)
+# Set ownership. root:root is enough — the web server only needs to READ these
+# files. Giving it ownership (www-data:www-data) means a compromised PHP
+# process could rewrite the module's own code.
 sudo chown -R root:root network_topology
 
 # Reload php-fpm. NOTE: the service name depends on both the distribution AND
@@ -256,6 +298,30 @@ sudo systemctl reload php8.2-fpm       # use the name you found!
 > `php8.3-fpm` / `php8.4-fpm` (newer PHP) · `php-fpm` (RHEL/Rocky/Alma).
 > If `grep -i fpm` finds nothing, PHP runs as a web server module — reload
 > `apache2` or `httpd` instead.
+>
+> **Don't install via `git clone`.** It's the obvious route and it does work —
+> but it places the **entire repository** under your web root, and Zabbix's
+> nginx config only blocks `/\.ht` there, not `.git`. Measured on a test
+> install:
+>
+> ```
+> /modules/<dir>/.git/HEAD                    HTTP 200   readable
+> /modules/<dir>/.git/index                   HTTP 200   readable
+> /modules/<dir>/tools/topo-change-sender.sh  HTTP 200   readable
+> ```
+>
+> The repository is public, so nothing secret leaks at first. But `tools/`
+> holds a script that reads Zabbix credentials from environment variables — if
+> someone puts them in the file instead, they are served over HTTP. That is
+> exactly why the release ZIP excludes `tools/`, `templates/`, `tests/` and the
+> scripts.
+>
+> If you take the clone route anyway, clean up afterwards:
+>
+> ```bash
+> cd <modules>/network_topology
+> sudo rm -rf .git tools templates tests .github deploy.sh nt-*.sh
+> ```
 >
 > [`deploy.sh`](deploy.sh) detects the service **automatically**.
 
@@ -366,7 +432,8 @@ Safest with the uninstaller — it knows the old names, moves instead of deletin
 By hand works too, but **check what is actually there first**:
 
 ```bash
-cd /usr/share/zabbix/ui/modules
+# path depends on your layout — see section 1, "where is modules/?"
+cd /usr/share/zabbix/ui/modules      # or /usr/share/zabbix/modules
 grep -l '"id".*network_topology' */manifest.json     # lists EVERY directory of this module
 sudo rm -rf network_topology_v6 network_topology_v6_widget \
             network_topology_v6_health_widget network_topology_v6_table_widget
