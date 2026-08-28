@@ -53,7 +53,7 @@ Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualis
 
 **Network Topology for Zabbix** ist ein Frontend-Modul für **Zabbix 7.0 LTS und 7.4**, das Hosts, Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es, _wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
 
-Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · Wallboard-Modus · DE/EN.
+Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · **Kennzahlen-Zeile** über der Karte · **Ghost-Knoten** für per LLDP gemeldete Geräte ohne Host in Zabbix · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · **fünf Dashboard-Widgets** · Wallboard-Modus · DE/EN.
 
 ### Features
 
@@ -89,6 +89,29 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - **Item-Pivot** — beliebiges Item-Key-Pattern als Spalten
 - **Manuelle Links** zwischen Hosts und **Kartenanordnung** — serverseitig, in zwei Ebenen: ein Super-Admin pflegt die für alle sichtbare Karte, jeder andere weicht persönlich davon ab. Notizen und Pins liegen weiterhin im `localStorage`
 - **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](LLDP-SETUP.md#port-zu-port--per-link-weathermap))
+
+**Kennzahlen und unüberwachte Geräte**
+
+- **Kennzahlen-Zeile über der Karte** — Hosts, OK/Warn/Krit., Kanten und
+  unüberwachte Nachbarn auf einen Blick. Kompakte Chips, im Wallboard-Modus
+  (`?wallboard=1`) große Kacheln. Dieselben Zahlen gibt es als Dashboard-Kachel
+  (**NT KPI**), wahlweise als Ring oder Raster.
+- **Ghost-Knoten** — Geräte, die ein Switch per LLDP/CDP meldet, für die es
+  aber **keinen Host in Zabbix gibt**. Sie erscheinen gestrichelt, mit
+  Herkunftsangabe (wer sie gemeldet hat) und — sofern das Gerät es liefert —
+  Hersteller, Gerätetyp und MAC aus der LLDP-Tabelle. Für Admins öffnet ein
+  Menüeintrag Zabbix' eigenes Host-Formular **vorbefüllt**; angelegt wird der
+  Host von Zabbix, nicht vom Modul.
+- **Gerätetyp aus dem Protokoll** — welches Symbol ein Knoten bekommt, leitet
+  sich zuerst aus Name und Template ab; greift das nicht, entscheiden die
+  **LLDP-Capabilities** (IEEE 802.1AB: Bridge → Switch, Router, WLAN AP). Das
+  Gerät sagt selbst, was es ist, herstellerunabhängig. `nt:icon` überstimmt
+  beides.
+- **Dienste-Probe auf Klick** — im Kontextmenü eines Hosts prüft ein Eintrag
+  eine feste Liste von 11 Ports und unterscheidet *offen* / *abgewiesen* /
+  *Zeitüberschreitung*. Läuft nur auf Klick, nie von selbst; die Adresse löst
+  der Server über die Zabbix-API auf, damit die Rechte des Benutzers greifen;
+  Zabbix-Admin nötig, auf 5 Aufrufe pro Minute gedrosselt.
 
 **Custom-Tags am Host**
 
@@ -178,7 +201,7 @@ Aktuelle Chrome, Firefox, Safari, Edge. ES6-Module (kein IE11), `fetch`, CSS `in
 
 **Network Topology for Zabbix** is a frontend module for **Zabbix 7.0 LTS and 7.4** that visualises hosts, host groups, problems, traffic, health status and geo data as an **interactive network topology** — instead of seeing hosts as a flat list, you see _how_ they connect (discovered via LLDP/CDP), where it hurts, and what follows from it.
 
-Highlights: live graph with severity rings · **port-to-port weathermap** (measured link utilisation) · what-if failure simulation & root cause · capacity forecast · maintenance straight from the map · health score per host group · geo map · wallboard mode · German/English UI.
+Highlights: live graph with severity rings · **port-to-port weathermap** (measured link utilisation) · **key-figure row** above the map · **ghost nodes** for devices reported via LLDP that have no host in Zabbix · what-if failure simulation & root cause · capacity forecast · maintenance straight from the map · health score per host group · geo map · **five dashboard widgets** · wallboard mode · German/English UI.
 
 ### Features
 
@@ -214,6 +237,27 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - **Item pivot** — any item key pattern as columns
 - **Manual links** between hosts and the **map layout** — stored server-side in two layers: a Super admin curates the map everyone sees, anyone else deviates personally. Notes and pins still live in `localStorage`
 - **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](LLDP-SETUP.md))
+
+**Key figures and unmonitored devices**
+
+- **A key-figure row above the map** — hosts, OK/warn/critical, edges and
+  unmonitored neighbours at a glance. Compact chips, large tiles in wallboard
+  mode (`?wallboard=1`). The same numbers are available as a dashboard tile
+  (**NT KPI**), as a ring or a grid.
+- **Ghost nodes** — devices a switch reports via LLDP/CDP for which **no host
+  exists in Zabbix**. They appear dashed, with their origin (who reported
+  them) and — where the device provides it — vendor, device type and MAC from
+  the LLDP table. For admins, a menu entry opens Zabbix' own host form
+  **pre-filled**; the host is created by Zabbix, not by the module.
+- **Device type from the protocol** — the icon comes from the host name and
+  templates first; where that yields nothing, the **LLDP capabilities** decide
+  (IEEE 802.1AB: Bridge → switch, Router, WLAN AP). The device announces what
+  it is, vendor-independently. `nt:icon` overrides both.
+- **Service probe on click** — a context-menu entry checks a fixed list of 11
+  ports and distinguishes *open* / *refused* / *timeout*. It runs on click
+  only, never on its own; the address is resolved server-side through the
+  Zabbix API so your permissions apply; requires Zabbix Admin and is throttled
+  to 5 calls per minute.
 
 **Custom host tags**
 

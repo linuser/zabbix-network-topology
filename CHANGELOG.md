@@ -311,6 +311,13 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **Das README beschrieb inhaltlich noch 4.x.** Die Versionsnummer im Badge
+  stimmte, der Funktionsumfang darunter nicht: Kennzahlen-Zeile, Ghost-Knoten,
+  Gerätetyp aus dem Protokoll und die Dienste-Probe kamen dort **null Mal** vor
+  — also genau die Dinge, die den Sprung ausmachen. Wer vom Forum oder von
+  zabfox.de kam, las eine Startseite, die den halben Umfang verschwieg.
+  Ergänzt in beiden Sprachen, inklusive der Highlights-Zeile ganz oben.
+
 - **Die LLDP-Capabilities wurden bei der Hälfte der Geräte falsch gelesen.**
   Aufgefallen erst, als nach dem Proxy-Ausfall wieder echte Werte flossen. Das
   Feld kommt in **zwei Formen** an, je nach Template:
