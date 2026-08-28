@@ -15,7 +15,8 @@
     "ci:shellcheck": "shellcheck nt-install.sh nt-uninstall.sh deploy.sh tools/*.sh",
     "ci:bundle-drift": "npm run build && git diff --exit-code -- assets/js/dist/nt-bundle.js",
     "ci:parity": "node tools/check-parity.mjs",
-    "ci:templates": "node tools/check-templates.mjs"
+    "ci:templates": "node tools/check-templates.mjs",
+    "ci:package": "node tools/check-package.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",

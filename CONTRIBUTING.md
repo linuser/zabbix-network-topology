@@ -28,7 +28,7 @@ SSH aus. Für eine Wegwerf-Instanz siehe
 [`tools/clean-install-test/`](tools/clean-install-test/) (Docker, Zabbix 7.4 oder
 7.0 LTS).
 
-## Drei Dinge, die die CI hart erzwingt
+## Was die CI hart erzwingt
 
 Das sind die Stolperfallen — ein erster Patch fällt sonst durch die Pipeline,
 ohne dass klar ist warum:
@@ -96,11 +96,23 @@ ohne dass klar ist warum:
    wieder abgewiesen, und Regel 2 sah es nicht, weil sie nur Name → `uuid`
    prüft.
 
+6. **Nichts darf ins Modul-ZIP rutschen, was nicht hineingehört.** Das
+   Modulverzeichnis liegt unter dem Web-Root und ist öffentlich abrufbar —
+   Shell-Skripte, `tools/`, `templates/`, Source-Maps und das Repository selbst
+   haben dort nichts verloren. `npm run ci:package` simuliert den Paketinhalt
+   und prüft ihn.
+
+   Die Ausschlussmuster liest das Gate **aus `deploy.sh`**, statt sie zu
+   wiederholen: eine zweite Liste wäre eine zweite Stelle, die ausschert, und
+   dann prüft das Gate etwas anderes, als der Installer baut. Genau so ist
+   `nt-uninstall.sh` ins Paket gerutscht — die Liste nannte nur die damals
+   bekannten Skripte beim Namen.
+
 Alles zusammen lokal prüfen:
 
 ```bash
 npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
-  && npm run ci:templates && npm run ci:test
+  && npm run ci:templates && npm run ci:package && npm run ci:test
 ```
 
 ## Tests

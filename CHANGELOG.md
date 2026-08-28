@@ -311,6 +311,20 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **Ein Gate über den Paketinhalt.** `npm run ci:package` simuliert, was im
+  Modul-ZIP landen würde, und weist zurück, was dort nicht hingehört:
+  Shell-Skripte, `tools/`, `templates/`, `tests/`, Source-Maps, das Repository
+  selbst. Umgekehrt prüft es, dass die Pflichtdateien **da** sind — fehlt das
+  Bundle oder Cytoscape, ist das Paket kaputt, und das fällt sonst erst beim
+  Installieren auf.
+
+  Die Ausschlussmuster liest das Gate **aus `deploy.sh`**, statt sie zu
+  wiederholen. Eine zweite Liste wäre eine zweite Stelle, die ausschert — und
+  dann prüft das Gate etwas anderes, als der Installer baut. Genau so ist
+  `nt-uninstall.sh` ins Paket gerutscht: die Liste nannte nur die damals
+  bekannten Skripte beim Namen, und aufgefallen ist es nur, weil jemand
+  nachgesehen hat.
+
 - **Das README beschrieb inhaltlich noch 4.x.** Die Versionsnummer im Badge
   stimmte, der Funktionsumfang darunter nicht: Kennzahlen-Zeile, Ghost-Knoten,
   Gerätetyp aus dem Protokoll und die Dienste-Probe kamen dort **null Mal** vor
