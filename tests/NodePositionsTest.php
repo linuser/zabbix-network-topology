@@ -110,6 +110,21 @@ for ($i = 0; $i < 6000; $i++) {
 }
 check('Knoten-Cap bei 5000',    nodes(['22' => $many]), 5000);
 
+// Die Kuerzung muss ZAEHLBAR sein, nicht nur stattfinden. Vorher brach die
+// Schleife kommentarlos ab: der Nutzer bekam einen Teil gespeichert und erfuhr
+// nichts davon, und beim naechsten Laden fehlten Positionen ohne Grund. Der
+// Zaehler ist der einzige Weg, wie die Meldung ueberhaupt zum Client kommt —
+// bleibt er bei 0, ist die Kuerzung wieder stumm, ohne dass etwas anderes
+// auffaellt.
+check('Kuerzung wird gezaehlt',  NodePositions::lastTruncated(), 1000);
+
+$few = [];
+for ($i = 0; $i < 10; $i++) {
+    $few['n' . $i] = at($i, $i);
+}
+nodes(['22' => $few]);
+check('Zaehler pro Lauf zurueckgesetzt', NodePositions::lastTruncated(), 0);
+
 $manyViews = [];
 for ($i = 0; $i < 60; $i++) {
     $manyViews[(string) $i] = ['1' => at(1, 1)];
