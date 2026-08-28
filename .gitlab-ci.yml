@@ -107,3 +107,13 @@ package:
   image: node:22-alpine
   script:
     - node tools/check-package.mjs
+
+# Prueft, was verschiedene Benutzer auf DERSELBEN Karte sehen: geteilte Ebene,
+# persoenliche Abweichung pro Knoten, und wer in welche Ebene schreibt. Der
+# eine Fehler, der hier schon auftrat (Super-Admin sah seine eigene geteilte
+# Karte nicht), fiel erst im Betrieb auf.
+layers:
+  stage: test
+  image: node:22-alpine
+  script:
+    - node tools/check-layers.mjs

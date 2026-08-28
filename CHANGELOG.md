@@ -311,6 +311,26 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **Ein Gate über die Zwei-Ebenen-Logik.** Was verschiedene Benutzer auf
+  derselben Karte sehen, war bisher nur von Hand nachvollzogen. `npm run
+  ci:layers` prüft es mit gestellten `NT_CONFIG`-Daten:
+
+  - Ein Benutzer ohne eigene Positionen sieht genau die geteilte Karte.
+  - **Persönlich gewinnt pro Knoten**, nicht als Ganzes — der Rest folgt weiter
+    der geteilten Ebene.
+  - Eine Abweichung in einer Ansicht berührt andere Ansichten nicht.
+  - Super-Admins schreiben geteilt, alle anderen persönlich.
+  - Bei den manuellen Links gewinnt **geteilt**, auch bei umgekehrter
+    Richtung — eine Kante ist ungerichtet und darf nicht doppelt erscheinen.
+
+  Jedes Szenario läuft in einem eigenen Prozess: `storage.js` liest die
+  Konfiguration in IIFEs beim Import, ein zweiter Import mit anderen Daten
+  bekäme den alten Stand. Das ist zugleich die ehrlichste Nachstellung von
+  „ein anderer Benutzer lädt die Seite".
+
+  **Nicht abgedeckt** bleibt der Weg Server → Datenbank → Rechteprüfung; dafür
+  braucht es zwei angemeldete Benutzer in einem Browser.
+
 - **Ein Gate über den Paketinhalt.** `npm run ci:package` simuliert, was im
   Modul-ZIP landen würde, und weist zurück, was dort nicht hingehört:
   Shell-Skripte, `tools/`, `templates/`, `tests/`, Source-Maps, das Repository

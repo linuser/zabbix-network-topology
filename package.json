@@ -16,7 +16,8 @@
     "ci:bundle-drift": "npm run build && git diff --exit-code -- assets/js/dist/nt-bundle.js",
     "ci:parity": "node tools/check-parity.mjs",
     "ci:templates": "node tools/check-templates.mjs",
-    "ci:package": "node tools/check-package.mjs"
+    "ci:package": "node tools/check-package.mjs",
+    "ci:layers": "node tools/check-layers.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",

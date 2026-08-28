@@ -73,7 +73,7 @@ ohne dass klar ist warum:
    verlangt in `template_groups` ein `uuid`; fehlt es, weist der Import die
    Datei ab. Zwei der drei Templates waren so unterwegs, obwohl INSTALL.md
    ihren Import als Schritt 4 empfiehlt — gemerkt hat es erst ein Nutzer.
-   `npm run ci:templates` prüft zwei Dinge:
+   `npm run ci:templates` prüft:
 
    - Jeder Gruppeneintrag hat ein `uuid`.
    - Derselbe Gruppenname trägt in **allen** Dateien dasselbe `uuid`.
@@ -108,11 +108,28 @@ ohne dass klar ist warum:
    `nt-uninstall.sh` ins Paket gerutscht — die Liste nannte nur die damals
    bekannten Skripte beim Namen.
 
+7. **Die Zwei-Ebenen-Logik entscheidet, was verschiedene Benutzer sehen.**
+   Positionen und manuelle Links liegen geteilt (`module.config`, nur
+   Super-Admins schreiben) und persönlich (`CProfile`, jeder für sich). Beim
+   Lesen gewinnt **persönlich pro Knoten** — nicht als Ganzes, sonst verdeckte
+   eine einzige eigene Speicherung die geteilte Karte für immer. Bei den Links
+   gewinnt **geteilt**, damit dieselbe Kante nicht doppelt erscheint.
+
+   `npm run ci:layers` prüft das mit gestellten `NT_CONFIG`-Daten, jedes
+   Szenario in einem eigenen Prozess (`storage.js` liest die Konfiguration beim
+   Import, ein zweiter Import bekäme den alten Stand). Der eine Fehler, der hier
+   schon auftrat, ist die Sorte, die man beim Lesen übersieht: ein Super-Admin
+   sah nach der Migration seine **eigene** geteilte Karte nicht, weil sein
+   alter `localStorage`-Stand als persönliche Ebene darüberlag.
+
+   **Was das Gate nicht abdeckt:** den Weg Server → Datenbank → Rechteprüfung.
+   Dafür braucht es zwei angemeldete Benutzer in einem Browser.
+
 Alles zusammen lokal prüfen:
 
 ```bash
 npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
-  && npm run ci:templates && npm run ci:package && npm run ci:test
+  && npm run ci:templates && npm run ci:package && npm run ci:layers && npm run ci:test
 ```
 
 ## Tests
