@@ -1,4 +1,8 @@
 zabbix_export:
+  # Bewusst 7.0 und nicht 8.0: Zabbix bringt Import-Validatoren fuer aeltere
+  # Exportversionen mit (in 8.0 von C10 bis C80), neuere kennt eine aeltere
+  # Installation dagegen nicht. Mit 7.0 laeuft dieselbe Datei auf 7.0 LTS, 7.4
+  # und 8.0 — mit 8.0 nur noch auf 8.0.
   version: '7.0'
   dashboards:
     - uuid: a7c9e1b2f8d34a5c91e2f7c4a8b3d5e1
@@ -9,16 +13,23 @@ zabbix_export:
         - name: 'Overview'
           display_period: '0'
           widgets:
+            # Raster ist 72 Spalten breit. Links die Karte, rechts die beiden
+            # Kennzahlen-Kacheln uebereinander, unten Tabelle und Items.
+            #
+            # KEINE Hostgruppe vorbelegt: sonst importiert das Dashboard auf
+            # jeder anderen Installation eine Gruppe, die es dort nicht gibt.
+            # Die Widgets zeigen ohne Auswahl einen Hinweis, und ein Klick auf
+            # "Edit" setzt sie.
             - type: network_topology_widget
               name: 'Topology'
               'y': '0'
               x: '0'
               width: '48'
-              height: '8'
+              height: '10'
               fields:
                 - type: INTEGER
                   name: view_mode
-                  value: '0'
+                  value: '0'          # 0 = Technical, 1 = Management
                 - type: INTEGER
                   name: show_lldp
                   value: '1'
@@ -26,10 +37,21 @@ zabbix_export:
                   name: hide_offline
                   value: '0'
 
+            - type: network_topology_kpi_widget
+              name: 'KPI'
+              'y': '0'
+              x: '48'
+              width: '24'
+              height: '5'
+              fields:
+                - type: INTEGER
+                  name: display
+                  value: '0'          # 0 = Ring, 1 = Tiles
+
             - type: network_topology_health_widget
               name: 'Health Score'
-              'y': '8'
-              x: '0'
+              'y': '5'
+              x: '48'
               width: '24'
               height: '5'
               fields:
@@ -38,24 +60,45 @@ zabbix_export:
                   value: '1'
                 - type: INTEGER
                   name: max_groups
-                  value: '0'
+                  value: '10'
                 - type: INTEGER
                   name: show_legend
                   value: '1'
 
-            - type: problems
-              name: 'Active Problems'
-              'y': '8'
-              x: '24'
-              width: '24'
-              height: '5'
+            - type: network_topology_table_widget
+              name: 'Table'
+              'y': '10'
+              x: '0'
+              width: '40'
+              height: '8'
               fields:
                 - type: INTEGER
-                  name: show
-                  value: '3'
+                  name: hide_offline
+                  value: '0'
                 - type: INTEGER
-                  name: show_lines
+                  name: problems_only
+                  value: '0'
+                - type: INTEGER
+                  name: max_rows
+                  value: '50'
+
+            - type: network_topology_items_widget
+              name: 'Items'
+              'y': '10'
+              x: '40'
+              width: '32'
+              height: '8'
+              fields:
+                # Ein Muster, das die Standard-Linux-Templates liefern. Passt
+                # es nicht, zeigt das Widget "keine Items" — kein Fehler,
+                # sondern eine andere Template-Welt (SNMP-Switches und Windows
+                # haben andere Keys, siehe README).
+                - type: STRING
+                  name: pattern
+                  value: 'system.cpu.util'
+                - type: INTEGER
+                  name: hide_empty
+                  value: '1'
+                - type: INTEGER
+                  name: max_rows
                   value: '25'
-                - type: INTEGER
-                  name: sort_triggers
-                  value: '16'
