@@ -23,7 +23,12 @@ set -uo pipefail   # NICHT -e: check() erwartet fehlschlagende Tests; kritische
 export PATH="/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
 
 readonly MODULE="network_topology"
-readonly MIN_MAJOR=7 MIN_MINOR=4
+# Dieses Skript installiert das HAUPTMODUL, und das laeuft auf 7.0 LTS genauso
+# wie auf 7.4. Nur die Dashboard-Widgets brauchen 7.4 — sie werden hier nicht
+# installiert. Vorher stand hier 7.4, und der Check meldete auf einer 7.0-LTS
+# "Modul braucht 7.4+", also eine Warnung vor einer Kombination, die die
+# Dokumentation ausdruecklich empfiehlt.
+readonly MIN_MAJOR=7 MIN_MINOR=0
 readonly MAX_UNPACKED=$((100 * 1024 * 1024))   # 100 MiB — Cap gegen Zip-Bomben
 readonly REQUIRED_FILES=(
     "manifest.json"
@@ -94,10 +99,37 @@ detect_ui() {
     done
     die "Zabbix-UI-Pfad nicht gefunden. Setze ZBX_UI_PATH=/pfad/zu/zabbix/ui."
 }
-detect_fpm() {   # FPM leer, wenn kein Service gefunden — Aufrufer prüft.
-    FPM=$(systemctl list-units --type=service --all 2>/dev/null \
-          | awk '/php[0-9.]+-fpm\.service/ {print $1; exit}' | sed 's/\.service$//') || true
-    if [[ -z "$FPM" ]] && systemctl list-units --type=service --all 2>/dev/null | grep -q 'php-fpm\.service'; then
+# FPM leer, wenn kein Service gefunden — Aufrufer prüft.
+#
+# Die Unit-Liste wird EINMAL in eine Variable geholt und danach ohne Pipe
+# ausgewertet. Vorher stand hier
+#
+#     ... | grep -q 'php-fpm\.service'
+#
+# und das war auf der gesamten RHEL-Familie kaputt: "grep -q" beendet sich beim
+# ersten Treffer und schliesst die Pipe, systemctl bekommt SIGPIPE und endet mit
+# 141 — und weil oben "set -o pipefail" steht, gilt die ganze Pipeline als
+# fehlgeschlagen, OBWOHL der Treffer da war. Nachgemessen auf Rocky 9:
+# ohne pipefail exit 0, mit pipefail exit 141.
+#
+# Auf Debian/Ubuntu fiel das nie auf, weil dort der erste Zweig greift
+# (php8.2-fpm.service). Auf RHEL heisst die Unit "php-fpm.service" ohne
+# Version, also kann NUR der zweite Zweig treffen — und der war der kaputte.
+# Der Installer brach dort mit "kein php-fpm-Service gefunden" ab, auf einer
+# Maschine, auf der php-fpm laeuft.
+#
+# Das Feld wird ueber alle Spalten gesucht statt ueber $1: bei einer Unit im
+# Fehlerzustand stellt systemd ein "●" voran, dann waere $1 der Punkt.
+detect_fpm() {
+    local units
+    units=$(systemctl list-units --type=service --all 2>/dev/null) || units=""
+
+    # Debian/Ubuntu: versionierter Name
+    FPM=$(awk '{for (i = 1; i <= NF; i++) if ($i ~ /^php[0-9.]+-fpm\.service$/) {
+                    sub(/\.service$/, "", $i); print $i; exit }}' <<<"$units")
+
+    # RHEL-Familie: unversioniert. Reiner Bash-Vergleich, keine Pipe.
+    if [[ -z "$FPM" && "$units" == *"php-fpm.service"* ]]; then
         FPM="php-fpm"
     fi
 }
@@ -177,7 +209,19 @@ do_deploy() {
     _CLEAN="$stage"
     # Zip-Slip-Schutz: keine absoluten (/…) oder ../-Pfade im Archiv — unabhaengig
     # von der unzip-Implementierung geprueft (busybox-unzip filtert nicht immer).
-    if unzip -Z1 "$zip" 2>/dev/null | grep -qE '^/|(^|/)\.\.(/|$)'; then
+    #
+    # Die Liste wird ERST vollstaendig eingelesen und DANN geprueft. Vorher stand
+    # hier "unzip -Z1 … | grep -qE …" direkt im if, und das konnte FAIL-OPEN
+    # gehen: grep -q beendet sich beim ersten Treffer, unzip bekommt SIGPIPE und
+    # endet mit 141, und weil oben "set -o pipefail" steht, gilt die Pipeline als
+    # fehlgeschlagen — die Bedingung wird falsch, das die() faellt aus, und
+    # ausgerechnet das Archiv MIT unsicheren Pfaden waere durchgerutscht.
+    # Ob es passiert, haengt davon ab, ob unzip beim Beenden von grep noch
+    # schreibt: bei kleinen Archiven meist nicht, bei grossen schon. Ein Fehler,
+    # der mal auftritt und mal nicht, in einer Sicherheitspruefung.
+    local zip_entries
+    zip_entries=$(unzip -Z1 "$zip" 2>/dev/null) || zip_entries=""
+    if grep -qE '^/|(^|/)\.\.(/|$)' <<<"$zip_entries"; then
         die "ZIP enthaelt unsichere Pfade (absolut oder ../) — abgebrochen."
     fi
     # Zip-Bomben-Schutz: entpackte Gesamtgroesse VOR dem Extrahieren pruefen

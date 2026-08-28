@@ -311,6 +311,51 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **`nt-install.sh` brach auf der gesamten RHEL-Familie ab.** Die Erkennung des
+  php-fpm-Dienstes lief in eine SIGPIPE-Falle:
+
+  ```bash
+  systemctl list-units … | grep -q 'php-fpm\.service'
+  ```
+
+  `grep -q` beendet sich beim ersten Treffer und schließt die Pipe, `systemctl`
+  endet daraufhin mit 141 — und weil im Skript `set -o pipefail` steht, gilt die
+  ganze Pipeline als fehlgeschlagen, **obwohl der Treffer da war**. Auf Rocky 9
+  nachgemessen: ohne `pipefail` Exit 0, mit `pipefail` Exit 141.
+
+  Auf Debian fiel das nie auf, weil dort der erste Zweig greift
+  (`php8.2-fpm.service`). Auf RHEL heißt die Unit schlicht `php-fpm.service`,
+  also kann **nur** der zweite Zweig treffen — und der war der kaputte. Der
+  Installer meldete „kein php-fpm-Service gefunden" auf einer Maschine, auf der
+  php-fpm lief, und brach ab, bevor er überhaupt zum `restorecon` kam.
+
+  Die Unit-Liste wird jetzt einmal in eine Variable geholt und ohne Pipe
+  ausgewertet.
+
+- **Dieselbe Falle in der Zip-Slip-Prüfung — dort mit Fail-open.** Der Schutz
+  gegen absolute und `../`-Pfade im Archiv lautete
+  `unzip -Z1 … | grep -qE …` direkt in der Bedingung. Findet `grep` einen
+  unsicheren Pfad, beendet es sich sofort, `unzip` läuft in SIGPIPE, `pipefail`
+  macht die Bedingung **falsch** — und ausgerechnet das Archiv *mit* den
+  unsicheren Pfaden wäre durchgerutscht. Ob es passiert, hängt daran, ob `unzip`
+  beim Beenden von `grep` noch schreibt: bei kleinen Archiven meist nicht, bei
+  großen schon. Eine Sicherheitsprüfung, die mal greift und mal nicht.
+
+- **Der Installer verlangte Zabbix 7.4, obwohl er das Hauptmodul installiert.**
+  Das läuft auf 7.0 LTS; nur die Widgets brauchen 7.4, und die installiert
+  `nt-install.sh` gar nicht. Auf einer 7.0-LTS warnte der Check vor genau der
+  Kombination, die die Dokumentation empfiehlt.
+
+  **Nachgefahren auf einer echten Rocky 9.8 mit SELinux im Enforcing-Modus**
+  (Proxmox-VM, nicht Container — im Container gibt es kein SELinux, und der
+  Installer würde `restorecon` überspringen und scheinbar grün durchlaufen).
+  Der Vorher-Nachher-Beweis aus dem echten php-fpm-Prozess heraus:
+
+  ```
+  user_tmp_t  →  Failed to open stream: Permission denied
+  usr_t       →  gelesen, 2704 Byte
+  ```
+
 - **Schritt 4 der Installation war auf dem dokumentierten Weg nicht
   ausführbar.** `INSTALL.md` verwies auf `templates/…` und
   `tools/topo-change-sender.sh`, `LLDP-SETUP.md` nannte das LLDP-Template

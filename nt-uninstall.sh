@@ -103,10 +103,19 @@ detect_ui() {
     done
     die "Zabbix-UI-Pfad nicht gefunden. Setze ZBX_UI_PATH=/pfad/zu/zabbix/ui."
 }
+# Unit-Liste einmal holen, dann ohne Pipe auswerten — siehe die ausfuehrliche
+# Begruendung in nt-install.sh: "| grep -q" laesst systemctl in SIGPIPE laufen,
+# und mit "set -o pipefail" gilt die Pipeline dann als fehlgeschlagen, obwohl
+# der Treffer da war. Auf der RHEL-Familie ist das der einzige Zweig, der
+# greifen kann, weil die Unit dort schlicht "php-fpm.service" heisst.
 detect_fpm() {
-    FPM=$(systemctl list-units --type=service --all 2>/dev/null \
-          | awk '/php[0-9.]+-fpm\.service/ {print $1; exit}' | sed 's/\.service$//') || true
-    if [[ -z "$FPM" ]] && systemctl list-units --type=service --all 2>/dev/null | grep -q 'php-fpm\.service'; then
+    local units
+    units=$(systemctl list-units --type=service --all 2>/dev/null) || units=""
+
+    FPM=$(awk '{for (i = 1; i <= NF; i++) if ($i ~ /^php[0-9.]+-fpm\.service$/) {
+                    sub(/\.service$/, "", $i); print $i; exit }}' <<<"$units")
+
+    if [[ -z "$FPM" && "$units" == *"php-fpm.service"* ]]; then
         FPM="php-fpm"
     fi
 }
