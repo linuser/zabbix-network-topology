@@ -345,6 +345,34 @@
   bekannten Skripte beim Namen, und aufgefallen ist es nur, weil jemand
   nachgesehen hat.
 
+- **Das mitgelieferte Dashboard war auf keiner unterstützten Version
+  importierbar.** `dashboards/nt-overview.yaml` trug `version: '7.0'`, und
+  `dashboards/README.md` beschrieb einen Weg „Dashboards → Import". Beides ging
+  nicht: **eigenständige Dashboards kennt der Zabbix-Import erst ab 8.0.** Gegen
+  die Validatoren von 7.0, 7.2 und 7.4 nachgemessen, alle drei antworten
+
+  ```
+  Invalid tag "/": unexpected tag "dashboards".
+  ```
+
+  und in der UI dieser Versionen gibt es für Dashboards weder Import- noch
+  Export-Knopf. Aufgefallen beim Testen gegen Zabbix 8, wo der Import
+  tatsächlich funktioniert — dort störte dann noch das `uuid`, das Zabbix auf
+  Dashboard-Ebene nicht kennt.
+
+  Die Datei ist jetzt eine gültige 8.0-Fassung, mit **allen fünf Widgets**
+  statt der bisherigen drei (KPI und Items fehlten seit ihrer Einführung), und
+  ohne vorbelegte Hostgruppe — sonst verwiese sie nach dem Import auf
+  Gruppen-IDs, die es auf der Zielinstallation nicht gibt. Von Zabbix' eigenem
+  Import-Validator angenommen. `README.md` daneben sagt jetzt, dass 7.0 und 7.4
+  das Dashboard von Hand nachbauen müssen, und liefert die Geometrie dafür.
+
+- **Das Gate `ci:templates` schlug auf Kommentare an.** Eine Zeile wie
+  `# Kein uuid: der Validator weist es ab` las es als ungültige `uuid` —
+  gefunden, als genau dieser Satz in die Dashboard-Datei kam. Kommentare werden
+  jetzt vor der Prüfung entfernt. Ein Gate, das an Prosa scheitert, gewöhnt
+  einem das Hinsehen ab.
+
 - **Das README nannte weiterhin nur einen Modulpfad.** Genau der Fehler, den
   ein Nutzer gemeldet hatte — behoben war er nur in `INSTALL.md`, die
   Kurzfassung im README blieb bei `/usr/share/zabbix/ui/modules`. Wer die

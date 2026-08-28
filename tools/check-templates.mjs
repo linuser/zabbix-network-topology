@@ -175,7 +175,13 @@ function checkUuidFormat(file, text) {
     const problems = [];
 
     for (let i = 0; i < lines.length; i++) {
-        const m = lines[i].match(/\buuid:\s*(\S+)/);
+        // Kommentare raus, BEVOR nach uuid gesucht wird. Sonst schlaegt eine
+        // Zeile wie "# Kein uuid: der Validator weist es ab" als angeblich
+        // ungueltige uuid an — genau das passierte beim Dokumentieren der
+        // Dashboard-Datei. Ein Gate, das an Prosa scheitert, gewoehnt einem
+        // das Hinsehen ab.
+        const code = lines[i].replace(/#.*$/, '');
+        const m = code.match(/\buuid:\s*(\S+)/);
         if (!m) continue;
 
         const u = m[1];

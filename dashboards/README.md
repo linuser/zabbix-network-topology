@@ -1,52 +1,73 @@
-# Sample-Dashboards
+# Sample-Dashboard
 
-Vorgefertigte Zabbix-Dashboards die das Hauptmodul + die Widgets nutzen.
+Ein vorgefertigtes Dashboard, das das Hauptmodul und alle fünf Widgets nutzt.
 
-## Voraussetzungen
+## Zuerst das Wichtigste: der Import geht erst ab Zabbix 8
 
-Beide Module müssen installiert + enabled sein:
-- `network_topology` (Hauptmodul)
-- `network_topology_widget` (Topology-Widget)
-- `network_topology_health_widget` (Health-Score-Widget)
+**Eigenständige Dashboards kennt der Zabbix-Import erst ab 8.0.** Auf 7.0 LTS
+und 7.4 gibt es weder einen Import- noch einen Export-Knopf für Dashboards, und
+der Import-Validator lehnt das Wurzel-Tag ab. Gegen die Validatoren von 7.0,
+7.2 und 7.4 nachgemessen — alle drei antworten:
 
-Wenn ein Widget-Modul fehlt, schlägt der Import mit "unknown widget type" fehl.
+```
+Invalid tag "/": unexpected tag "dashboards".
+```
 
-## Import
+Wer 7.0 LTS oder 7.4 fährt, baut das Dashboard **von Hand** nach. Das ist kein
+Rückschritt: bei einem einzelnen Setup ist es ohnehin schneller, und die
+Anordnung unten ist die Vorlage dafür.
 
-In der Zabbix-UI:
+Ältere Fassungen dieser Datei trugen `version: '7.0'` und eine Anleitung
+„Dashboards → Import". Beides ging nicht; der Weg existierte in keiner der
+unterstützten Versionen.
+
+## Voraussetzung
+
+Alle sechs Module müssen installiert **und aktiviert** sein:
+
+| Modul | Widget im Menü |
+|---|---|
+| `network_topology` | — (Hauptmodul) |
+| `network_topology_widget` | NT Topology |
+| `network_topology_health_widget` | NT Health Score |
+| `network_topology_table_widget` | NT Table |
+| `network_topology_kpi_widget` | NT KPI |
+| `network_topology_items_widget` | NT Items |
+
+Fehlt eines, scheitert der Import mit „unknown widget type".
+
+## Import (nur Zabbix 8+)
+
 1. *Dashboards → Alle Dashboards*
-2. Oben rechts *Import*
-3. Datei wählen (z.B. `nt-overview.yaml`)
-4. *Import*
+2. *Import*, Datei `nt-overview.yaml` wählen
+3. Danach in **jedem** Widget die **Host groups** setzen — die Datei bringt
+   bewusst keine mit, sonst verwiese sie auf Gruppen-IDs, die es auf deiner
+   Installation nicht gibt.
 
-Nach dem Import musst du noch:
-- Im Topology-Widget die **Host groups** wählen (Dashboard kennt deine Gruppen-IDs nicht)
-- Im Health-Score-Widget die **Host groups** wählen (gleicher Grund)
+## Von Hand nachbauen (7.0 LTS und 7.4)
 
-## Verfügbare Dashboards
+Das Raster ist 72 Spalten breit. Diese Anordnung entspricht der Datei:
 
-### `nt-overview.yaml`
-NOC-Übersicht mit drei Widgets:
-- **Oben (volle Breite)**: Topology-Widget — interaktive Karte mit LLDP-Edges
-- **Unten links**: Health-Score-Widget — per-Hostgroup-Bewertung
-- **Unten rechts**: Zabbix-Native Problems-Widget — aktuelle Probleme
+| Widget | Position | Größe |
+|---|---|---|
+| NT Topology | 0, 0 | 48 × 10 |
+| NT KPI | 48, 0 | 24 × 5 |
+| NT Health Score | 48, 5 | 24 × 5 |
+| NT Table | 0, 10 | 40 × 8 |
+| NT Items | 40, 10 | 32 × 8 |
 
-Geeignet als Standard-Dashboard für Operator-Sicht.
+Vorgeschlagene Einstellungen: Topology auf *Technical* mit LLDP-Kanten, KPI als
+*Ring*, Health Score mit „worst first", Items mit dem Muster
+`system.cpu.util`.
 
-## Eigenes Dashboard bauen
+> Findest du kein passendes Item-Muster, zeigt NT Items „keine Items". Das ist
+> kein Fehler, sondern eine andere Template-Welt — SNMP-Switches und Windows
+> liefern andere Keys als die Linux-Standardtemplates. Das Dropdown im Widget
+> listet unter „Discovered" die tatsächlich vorhandenen.
 
-Manuell ist einfacher als YAML-Import wenn du nur ein Setup pflegst:
+## Eigene Vorlage erzeugen
 
-1. *Dashboards → Create dashboard*
-2. *Add widget → Type "Topology"* (= `network_topology_widget`) → Hostgroups wählen
-3. *Add widget → Type "NT Health Score"* (= `network_topology_health_widget`)
-4. Optional: native Zabbix-Widgets ergänzen (*Problems*, *Top hosts*, *Trigger overview*, *Geomap*)
-5. *Save dashboard*
-
-## Hinweis YAML-Format
-
-Das YAML-Format ist Zabbix-Version-abhängig (export-version `7.0`). Bei Zabbix 8+
-musst du eventuell die `version`-Zeile anpassen oder das Dashboard manuell
-nachbauen. Sicherste Methode: bestehendes Dashboard in deiner Zabbix-Version
-einmal manuell anlegen, dann via *Export* die für deine Version passende YAML
-generieren — die nutzt du als Vorlage für weitere Setups.
+Die zuverlässigste Methode für eigene Dashboards: eines in **deiner**
+Zabbix-Version von Hand anlegen und, sofern deine Version das kann, exportieren.
+Die so erzeugte YAML passt garantiert zu deinem Schema — anders als eine Datei,
+die für eine andere Version geschrieben wurde.

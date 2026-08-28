@@ -1,12 +1,21 @@
 zabbix_export:
-  # Bewusst 7.0 und nicht 8.0: Zabbix bringt Import-Validatoren fuer aeltere
-  # Exportversionen mit (in 8.0 von C10 bis C80), neuere kennt eine aeltere
-  # Installation dagegen nicht. Mit 7.0 laeuft dieselbe Datei auf 7.0 LTS, 7.4
-  # und 8.0 — mit 8.0 nur noch auf 8.0.
-  version: '7.0'
+  # ACHTUNG: Diese Datei laesst sich NUR mit Zabbix 8.0 oder neuer importieren.
+  #
+  # Eigenstaendige Dashboards kennt der Zabbix-Import erst ab 8.0. Gegen die
+  # Validatoren von 7.0, 7.2 und 7.4 nachgemessen — alle drei antworten:
+  #
+  #   Invalid tag "/": unexpected tag "dashboards".
+  #
+  # Und in der UI dieser Versionen gibt es weder einen Import- noch einen
+  # Export-Knopf fuer Dashboards. Wer 7.0 LTS oder 7.4 faehrt, baut das
+  # Dashboard von Hand nach; die Anordnung unten ist die Vorlage dafuer.
+  # Details in README.md daneben.
+  #
+  # Kein uuid: der Zabbix-8-Validator weist es auf Dashboard-Ebene ab
+  # ("unexpected tag uuid"). Templates brauchen eines, Dashboards nicht.
+  version: '8.0'
   dashboards:
-    - uuid: a7c9e1b2f8d34a5c91e2f7c4a8b3d5e1
-      name: 'Network Topology — Overview'
+    - name: 'Network Topology — Overview'
       display_period: '30'
       auto_start: 'YES'
       pages:
@@ -16,9 +25,9 @@ zabbix_export:
             # Raster ist 72 Spalten breit. Links die Karte, rechts die beiden
             # Kennzahlen-Kacheln uebereinander, unten Tabelle und Items.
             #
-            # KEINE Hostgruppe vorbelegt: sonst importiert das Dashboard auf
-            # jeder anderen Installation eine Gruppe, die es dort nicht gibt.
-            # Die Widgets zeigen ohne Auswahl einen Hinweis, und ein Klick auf
+            # KEINE Hostgruppe vorbelegt: sonst verwiese das Dashboard nach dem
+            # Import auf eine Gruppe, die es auf der Zielinstallation nicht
+            # gibt. Die Widgets zeigen ohne Auswahl einen Hinweis, ein Klick auf
             # "Edit" setzt sie.
             - type: network_topology_widget
               name: 'Topology'
@@ -89,10 +98,10 @@ zabbix_export:
               width: '32'
               height: '8'
               fields:
-                # Ein Muster, das die Standard-Linux-Templates liefern. Passt
-                # es nicht, zeigt das Widget "keine Items" — kein Fehler,
-                # sondern eine andere Template-Welt (SNMP-Switches und Windows
-                # haben andere Keys, siehe README).
+                # Ein Muster, das die Standard-Linux-Templates liefern. Passt es
+                # nicht, zeigt das Widget "keine Items" — kein Fehler, sondern
+                # eine andere Template-Welt (SNMP-Switches und Windows haben
+                # andere Keys, siehe README des Moduls).
                 - type: STRING
                   name: pattern
                   value: 'system.cpu.util'
