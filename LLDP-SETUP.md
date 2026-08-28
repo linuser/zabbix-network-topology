@@ -121,7 +121,21 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 | **Ubiquiti EdgeSwitch / EdgeMax** | ✓ meist | **funktioniert** | EdgeOS, ordentliches SNMP |
 | **Ubiquiti UniFi** (USW/UDM) | ✗ oft **gar kein** SNMP | **funktioniert via API** | LLDP lebt im Controller → offizielles *UniFi Network API*-Template liefert `uplink.id`, das Modul liest es direkt |
 | **Cisco** (IOS/NX-OS) | ✓ | **funktioniert** | CDP default an, LLDP opt-in (`lldp run`) |
-| **MikroTik** (RouterOS) | ✓ | **funktioniert** | via SNMP oder `discovery.neighbor`-Item |
+| **MikroTik** (RouterOS) | ? | **ungeprüft** | Der Modulcode hat einen Haken für `discovery.neighbor`, aber **kein RouterOS-Gerät hat das je bestätigt** — siehe unten |
+
+> **MikroTik: was hier Behauptung ist und was Messung.** Die Zeile stand lange
+> als „funktioniert" in dieser Tabelle. Belegt ist davon nur die eine Hälfte:
+> Das Modul **sucht** nach Items mit `discovery.neighbor` im Schlüssel und
+> verarbeitet sie, wenn sie kommen. Ob RouterOS die LLDP-Nachbartabelle über
+> normales SNMP herausgibt oder ob man dafür ein eigenes Item bauen muss, ist
+> **an keinem Gerät geprüft worden** — es gibt weder Test noch Fixture dafür.
+>
+> Wer RouterOS betreibt, kann das in fünf Minuten klären und uns damit weiter
+> bringen als jede Vermutung: Liefert `snmpwalk` auf
+> `1.0.8802.1.1.2.1.4.1.1.9` (`lldpRemSysName`) Werte? Wenn ja, funktioniert
+> der Standardweg wie bei Cisco und HP. Wenn nein, braucht es ein Item, dessen
+> Schlüssel `discovery.neighbor` enthält — und dann ist die Frage, was
+> darinsteht. Beides ist eine nützliche Antwort.
 
 > **UniFi im Detail:** UniFi baut LLDP für den *eigenen* Controller, nicht fürs externe
 > SNMP-Polling. In der Praxis ist es sogar deutlicher: Auf einer **UDM Pro Max** mit aktiviertem

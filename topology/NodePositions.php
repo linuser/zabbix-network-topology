@@ -81,6 +81,17 @@ final class NodePositions {
     /** View-Key: sortierte Group-IDs mit "_" verbunden, optional "_grp". */
     private const VIEW_PATTERN = '/^[0-9_]{0,200}$/';
 
+    /**
+     * Wie viele Knoten der letzte sanitize()-Lauf wegen MAX_NODES verworfen hat.
+     * Die Action liest den Wert aus und gibt ihn an den Client zurueck, damit
+     * dort eine Meldung erscheinen kann statt lautlosem Teilverlust.
+     */
+    private static int $truncated = 0;
+
+    public static function lastTruncated(): int {
+        return self::$truncated;
+    }
+
     /** Koordinaten jenseits davon sind kein Bedienfall, sondern Muell. */
     private const COORD_MAX = 1000000;
 
@@ -171,6 +182,7 @@ final class NodePositions {
     public static function sanitize(array $raw): array {
         $out   = [];
         $views = 0;
+        self::$truncated = 0;
 
         foreach ($raw as $view => $nodes) {
             $view = (string) $view;
@@ -203,6 +215,13 @@ final class NodePositions {
                 $clean[$id] = ['x' => $x, 'y' => $y];
 
                 if (count($clean) >= self::MAX_NODES) {
+                    // Der Rest faellt weg — aber nicht mehr stillschweigend.
+                    // Vorher stand hier nur das break, und wer eine Karte mit
+                    // mehr als MAX_NODES Knoten anordnete, bekam einen Teil
+                    // gespeichert und keinerlei Hinweis darauf. Beim naechsten
+                    // Laden fehlten Positionen, ohne erkennbaren Grund — das
+                    // sieht aus wie Datenverlust, nicht wie eine Grenze.
+                    self::$truncated += max(0, count($nodes) - count($clean));
                     break;
                 }
             }

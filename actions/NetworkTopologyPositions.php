@@ -126,10 +126,15 @@ class NetworkTopologyPositions extends NetworkTopologyController {
 
         // Nur die Anzahl zurueck, nicht die Daten: der Client kennt sie schon,
         // und eine volle Karte waere eine unnoetig grosse Antwort.
+        //
+        // truncated sagt, wie viele Knoten die Obergrenze verworfen hat. Ist
+        // der Wert > 0, wurde nur ein Teil gespeichert — das muss der Nutzer
+        // erfahren, sonst fehlen beim naechsten Laden Positionen ohne Grund.
         $this->jsonResponse([
-            'ok'    => true,
-            'scope' => $scope,
-            'views' => count($saved)
+            'ok'        => true,
+            'scope'     => $scope,
+            'views'     => count($saved),
+            'truncated' => NodePositions::lastTruncated()
         ]);
     }
 }

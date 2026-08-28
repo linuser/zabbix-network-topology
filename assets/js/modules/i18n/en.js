@@ -478,4 +478,5 @@ export default {
     'lldpq.more_unmatched': '\u2026 and {n} more unmatched',
     'lldpq.more_distinct': '\u2026 and {n} more distinct',
     'lldpq.intro': 'How reliably can Zabbix map LLDP/CDP neighbours onto known hosts? A match rate &lt; 90% usually means: the neighbours exist in the real world but not in Zabbix, or the naming conventions differ.',
+    'positions.truncated': 'Too many nodes: {n} positions were not saved. The server stores up to 5000 nodes per view \u2014 narrow down the host groups.',
 };

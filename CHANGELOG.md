@@ -3,7 +3,7 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
-## Unreleased
+## v5.1.0 — 2026-08-28
 
 ### Added
 - **Manuelle Verbindungen liegen jetzt auf dem Server, nicht mehr im
@@ -310,6 +310,21 @@
 
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
+
+- **Die 5000-Knoten-Grenze bei den Positionen kürzte stillschweigend.** Wer eine
+  Karte mit mehr Knoten anordnete, bekam einen Teil gespeichert und keinen
+  Hinweis darauf — beim nächsten Laden fehlten Positionen ohne erkennbaren
+  Grund. Das sieht nach Datenverlust aus, nicht nach einer Grenze. Die Action
+  gibt jetzt zurück, wie viele Knoten sie verworfen hat, und die Karte meldet
+  es. Aufgefallen bei der Vorbereitung eines Lasttests: eine stille Kürzung
+  hätte dort Messwerte erzeugt, die niemand hätte deuten können.
+
+- **Die Vendor-Matrix führte MikroTik als „funktioniert" — ohne Beleg.**
+  Belegt war nur, dass das Modul nach `discovery.neighbor`-Items sucht und sie
+  verarbeitet. Ob RouterOS die Nachbartabelle über normales SNMP herausgibt,
+  hat nie jemand an einem Gerät geprüft; es gibt weder Test noch Fixture. Die
+  Zeile steht jetzt als **ungeprüft** da, mit einem konkreten `snmpwalk`, mit
+  dem jeder RouterOS-Betreiber die Frage in fünf Minuten klären kann.
 
 - **Die Installationsanleitung setzte ein Verzeichnis-Layout voraus, das nicht
   überall gilt.** Ein Nutzer meldete, bei ihm fehle der Ordner `ui`. Pakete aus

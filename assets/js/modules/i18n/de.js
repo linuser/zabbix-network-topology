@@ -483,4 +483,5 @@ export default {
     'lldpq.more_unmatched': '\u2026 und {n} weitere unmatched',
     'lldpq.more_distinct': '\u2026 und {n} weitere distinct',
     'lldpq.intro': 'Wie zuverl\u00e4ssig kann Zabbix die LLDP-/CDP-Nachbarn auf bekannte Hosts mappen? Match-Quote &lt; 90\u202f% bedeutet meist: Nachbarn existieren in der echten Welt, aber nicht in Zabbix, oder die Naming-Konventionen weichen ab.',
+    'positions.truncated': 'Zu viele Knoten: {n} Positionen wurden nicht gespeichert. Serverseitig sind 5000 Knoten je Ansicht m\u00f6glich \u2014 grenze die Hostgruppen enger ein.',
 };

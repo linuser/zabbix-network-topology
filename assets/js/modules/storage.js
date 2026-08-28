@@ -218,6 +218,13 @@ function _persistPositions(scope, views) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
         if (!d || d.error) throw new Error((d && d.error) || 'unknown');
+        // Der Server hat die Obergrenze angewendet und einen Teil verworfen.
+        // Kein Fehler — gespeichert wurde etwas — aber es darf nicht
+        // stillschweigend passieren: beim naechsten Laden fehlten sonst
+        // Positionen, und das sieht nach Datenverlust aus statt nach Grenze.
+        if (d.truncated > 0 && typeof _onPosTruncated === 'function') {
+            _onPosTruncated(d.truncated);
+        }
         return d;
     });
 }
@@ -295,6 +302,11 @@ export function clearPositions() {
 // Fehlerkanal wie bei den Links — storage.js soll nichts ueber Toasts wissen.
 let _onPosError = null;
 export function setPositionErrorHandler(fn) { _onPosError = fn; }
+
+// Zweiter Kanal neben _onPosError, aus demselben Grund: storage.js soll nichts
+// ueber Toasts und Uebersetzungen wissen. network-topology.js haengt sich ein.
+let _onPosTruncated = null;
+export function setPositionTruncatedHandler(fn) { _onPosTruncated = fn; }
 
 // Einmalige Uebernahme der alten localStorage-Anordnung in die eigene Ebene.
 // Laeuft nur, wenn serverseitig fuer diese Ansicht noch nichts liegt — sonst

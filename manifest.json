@@ -2,7 +2,7 @@
     "manifest_version": 2.0,
     "id": "network_topology",
     "name": "Network Topology for Zabbix",
-    "version": "5.0.0",
+    "version": "5.1.0",
     "author": "PlaNet Fox | Alexander Fox",
     "description": "Interactive network topology map with Cytoscape.js, clustering and severity filter",
     "namespace": "NetworkTopology",

@@ -18,7 +18,7 @@ import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
 import { destroyGroupHulls } from './modules/group-hulls.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups,
-         setPositionErrorHandler } from './modules/storage.js';
+         setPositionErrorHandler, setPositionTruncatedHandler } from './modules/storage.js';
 
 // Positionen werden optimistisch gespeichert: die Karte reagiert sofort, der
 // POST laeuft hinterher. Scheitert er, muss der Nutzer das erfahren — sonst
@@ -27,6 +27,14 @@ import { NT_TAB_KEY, loadLastGroups, saveLastGroups,
 // Uebersetzungswissen (dasselbe Muster wie bei den manuellen Links).
 setPositionErrorHandler(function(err) {
     toast(t('positions.save_failed', { err: (err && err.message) || '?' }), 'error', 6000);
+});
+
+// Die Karte hat mehr Knoten, als serverseitig pro Ansicht gespeichert werden.
+// Ein Teil ist gesichert, der Rest nicht — das muss sichtbar sein, sonst
+// fehlen beim naechsten Laden Positionen ohne erkennbaren Grund und es sieht
+// nach Datenverlust aus statt nach einer Grenze.
+setPositionTruncatedHandler(function(n) {
+    toast(t('positions.truncated', { n: n }), 'warn', 8000);
 });
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
