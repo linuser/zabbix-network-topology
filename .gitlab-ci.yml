@@ -4,7 +4,7 @@
 #
 #   php-lint       — Syntaxfehler in Actions/Views/Widgets/Module.php
 #   xss-tripwire   — tools/check-xss.sh --strict (innerHTML-Sinks ohne esc())
-#   shellcheck     — nt-install.sh, deploy.sh, tools/*.sh
+#   shellcheck     — nt-install.sh, nt-uninstall.sh, deploy.sh, tools/*.sh
 #   npm-audit      — verwundbare Dev-Dependencies (z.B. der alte esbuild-Fund)
 #   bundle-drift   — DER wichtige: assets/js/dist/nt-bundle.js ist eingecheckt und
 #                    kann von den Quellmodulen abweichen, wenn jemand den Build
@@ -59,7 +59,7 @@ shellcheck:
   stage: lint
   image: koalaman/shellcheck-alpine:stable
   script:
-    - shellcheck nt-install.sh deploy.sh tools/*.sh
+    - shellcheck nt-install.sh nt-uninstall.sh deploy.sh tools/*.sh
 
 npm-audit:
   stage: lint

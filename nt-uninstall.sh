@@ -306,7 +306,10 @@ if [[ -n "$DBTYPE" && -n "$DBNAME" ]]; then
     tags=$(db_query "SELECT tag || ' (' || count(*) || ')' FROM host_tag WHERE tag LIKE 'nt:%' GROUP BY tag ORDER BY tag;")
     if [[ -n "$tags" ]]; then
         echo "    Host-Tags:"
-        echo "$tags" | sed 's/^/      /'
+        # Einrueckung per Parameter-Expansion statt "| sed": spart einen
+        # Prozess und macht shellcheck (SC2001) zufrieden. Der erste Zeilen-
+        # anfang bekommt sie direkt, jeder weitere ueber den Zeilenumbruch.
+        echo "      ${tags//$'\n'/$'\n'      }"
         echo "      ${C_DIM}Entfernen — nur wenn du sicher bist:${C_RST}"
         echo "        DELETE FROM host_tag WHERE tag LIKE 'nt:%';"
     else

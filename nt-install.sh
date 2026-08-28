@@ -165,7 +165,8 @@ cmd_check() {
         ok "Modulverzeichnis: $mod (Name korrekt)"
         local rf
         for rf in "${REQUIRED_FILES[@]}"; do
-            [[ -r "$mod/$rf" ]] && ok "Datei: $rf" || { bad "fehlt/nicht lesbar: $rf"; rc=1; }
+            if [[ -r "$mod/$rf" ]]; then ok "Datei: $rf"
+            else bad "fehlt/nicht lesbar: $rf"; rc=1; fi
         done
     else
         bad "Modulverzeichnis fehlt: $mod"; rc=1
@@ -177,12 +178,14 @@ cmd_check() {
 
     if command -v php >/dev/null 2>&1; then
         local pv; pv=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null) || true
-        [[ "${pv%%.*}" == "8" ]] && ok "PHP: $pv" || warn "PHP ${pv:-?} — empfohlen 8.x"
+        if [[ "${pv%%.*}" == "8" ]]; then ok "PHP: $pv"
+        else warn "PHP ${pv:-?} — empfohlen 8.x"; fi
     else warn "php-CLI nicht gefunden (php-fpm kann trotzdem laufen)"; fi
 
     detect_fpm
     if [[ -n "$FPM" ]]; then
-        systemctl is-active --quiet "$FPM" 2>/dev/null && ok "php-fpm: $FPM (aktiv)" || warn "php-fpm: $FPM (nicht aktiv?)"
+        if systemctl is-active --quiet "$FPM" 2>/dev/null; then ok "php-fpm: $FPM (aktiv)"
+        else warn "php-fpm: $FPM (nicht aktiv?)"; fi
     else bad "kein php-fpm-Service gefunden"; rc=1; fi
 
     ver=$(zbx_version "$UI")
@@ -274,8 +277,11 @@ do_deploy() {
     if [[ -n "$prev" ]]; then
         if [[ "$mode" == "update" ]]; then
             $SUDO rm -rf "$mod.bak"
-            $SUDO mv "$prev" "$mod.bak" && echo "→ Backup: $mod.bak" \
-                || warn "Backup-Umbenennung fehlgeschlagen — alte Version liegt unter: $prev"
+            if $SUDO mv "$prev" "$mod.bak"; then
+                echo "→ Backup: $mod.bak"
+            else
+                warn "Backup-Umbenennung fehlgeschlagen — alte Version liegt unter: $prev"
+            fi
         else $SUDO rm -rf "$prev"; fi
     fi
 
@@ -285,9 +291,11 @@ do_deploy() {
     local moddir legacy
     moddir=$(dirname "$mod")
     if [[ -d "$moddir/network_topology_v6" ]]; then
-        $SUDO rm -rf "$moddir/network_topology_v6" \
-            && echo "→ entfernt: network_topology_v6 (Altbestand vor 5.0, sonst doppelter Menüeintrag)" \
-            || warn "konnte $moddir/network_topology_v6 nicht entfernen — bitte von Hand löschen."
+        if $SUDO rm -rf "$moddir/network_topology_v6"; then
+            echo "→ entfernt: network_topology_v6 (Altbestand vor 5.0, sonst doppelter Menüeintrag)"
+        else
+            warn "konnte $moddir/network_topology_v6 nicht entfernen — bitte von Hand löschen."
+        fi
     fi
     # Alte Widgets werden nur gemeldet, nicht gelöscht: sie rufen die entfallenen
     # network.topology.v6.*-Actions und zeigen deshalb ab 5.0 einen Fehler.

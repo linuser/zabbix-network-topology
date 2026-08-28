@@ -311,6 +311,18 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **Der CI-Job `shellcheck` war seit Langem rot — unbemerkt.** Er scheitert
+  auch an *Info*-Meldungen, und fünf Stellen in `nt-install.sh` trugen das
+  Muster `A && B || C` (SC2015). Das steckt schon in v4.38.3, jede Pipeline
+  seitdem war rot, und weil das lokale `npm run ci:shellcheck` ohne
+  installiertes `shellcheck` schlicht nichts sagt, fiel es nie auf. Die fünf
+  Stellen sind jetzt echte `if`-Konstrukte — nicht nur der Meldung wegen: bei
+  `A && B || C` läuft `C` auch dann, wenn `A` wahr war und `B` fehlschlug.
+
+  `nt-uninstall.sh` stand gar nicht im Gate; es ist ergänzt, in `package.json`
+  und in `.gitlab-ci.yml`. Alle vier Skripte laufen jetzt mit Exit 0 durch,
+  verifiziert mit shellcheck 0.10.0.
+
 - **Die 5000-Knoten-Grenze bei den Positionen kürzte stillschweigend.** Wer eine
   Karte mit mehr Knoten anordnete, bekam einen Teil gespeichert und keinen
   Hinweis darauf — beim nächsten Laden fehlten Positionen ohne erkennbaren
