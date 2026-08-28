@@ -21,19 +21,20 @@
 // von einem Check betroffen sind.
 
 import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
+import { t } from './i18n.js';
 
 // Check-Definitionen (exportiert — der Audit-Report in export.js rendert
 // dieselbe Tabelle und importiert sie von hier statt eigener Kopie).
 export const COMPLIANCE_CHECKS = [
     { key: 'snmp_v2',         lbl: 'SNMP v1/v2c',     short: 'SNMP v2',  level: 'bad'  },
     { key: 'snmp_v3',         lbl: 'SNMP v3',          short: 'SNMP v3', level: 'good' },
-    { key: 'no_tls',          lbl: 'Agent ohne TLS',   short: 'no TLS',  level: 'bad'  },
-    { key: 'no_proxy',        lbl: 'Kein Proxy',       short: 'no Proxy',level: 'info' },
-    { key: 'no_inventory',    lbl: 'Inventory aus',    short: 'no Inv',  level: 'info' },
-    { key: 'no_location',     lbl: 'Kein Standort',    short: 'no Loc',  level: 'info' },
-    { key: 'no_template',     lbl: 'Kein Template',    short: 'no Tpl',  level: 'bad'  },
-    { key: 'stale_problem',   lbl: 'Stale Krit-Problem', short: 'stale', level: 'bad'  },
-    { key: 'mtnc_no_comment', lbl: 'Wartung ohne Kommentar', short: 'mtnc?', level: 'info' },
+    { key: 'no_tls',          lbl: t('compliance.check.no_tls'),   short: 'no TLS',  level: 'bad'  },
+    { key: 'no_proxy',        lbl: t('compliance.check.no_proxy'),       short: 'no Proxy',level: 'info' },
+    { key: 'no_inventory',    lbl: t('compliance.check.no_inventory'),    short: 'no Inv',  level: 'info' },
+    { key: 'no_location',     lbl: t('compliance.check.no_location'),    short: 'no Loc',  level: 'info' },
+    { key: 'no_template',     lbl: t('compliance.check.no_template'),    short: 'no Tpl',  level: 'bad'  },
+    { key: 'stale_problem',   lbl: t('compliance.check.stale_problem'), short: 'stale', level: 'bad'  },
+    { key: 'mtnc_no_comment', lbl: t('compliance.check.mtnc_no_comment'), short: 'mtnc?', level: 'info' },
 ];
 const CHECKS = COMPLIANCE_CHECKS;
 
@@ -108,7 +109,7 @@ function _aggregateCards(agg, total, theme, onlyIssues) {
 function _hostTable(hosts, theme) {
     if (!hosts.length) {
         return '<div style="color:' + theme.subSoft + ';padding:20px 0">'
-            + 'Keine Hosts entsprechen dem Filter.</div>';
+            + esc(t('compliance.no_match')) + '</div>';
     }
     let html = '<table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
@@ -152,9 +153,7 @@ export function renderCompliance(wrap) {
     const head = document.createElement('div');
     head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">Compliance</h2>'
         + '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:16px">'
-        + 'Security- und Konfigurations-Checks pro Host. Schlechte (✗) Findings sind'
-        + ' echte Issues; Info (i) sind Hinweise die kontextabhaengig sein koennen;'
-        + ' Gut (✓) ist positiv markiert.</div>';
+        + esc(t('compliance.intro')) + '</div>';
     root.appendChild(head);
 
     const aggBox  = document.createElement('div');
@@ -179,7 +178,7 @@ export function renderCompliance(wrap) {
         .then(function(data) {
             if (!data) {
                 aggBox.innerHTML = '<div style="color:' + COL_BAD + '">'
-                    + 'Compliance-Daten nicht verfuegbar (Berechtigung oder Backend-Fehler).</div>';
+                    + esc(t('compliance.unavailable')) + '</div>';
                 return;
             }
             const allHosts = data.hosts || [];
@@ -217,6 +216,7 @@ export function renderCompliance(wrap) {
             rerender();
         })
         .catch(function(e) {
-            aggBox.innerHTML = '<div style="color:' + COL_BAD + '">Fehler: ' + esc(e.message) + '</div>';
+            aggBox.innerHTML = '<div style="color:' + COL_BAD + '">'
+                    + esc(t('compliance.error', { msg: e.message })) + '</div>';
         });
 }

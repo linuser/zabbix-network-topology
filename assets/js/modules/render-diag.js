@@ -8,6 +8,7 @@
 // aber wir blenden den Tab im Frontend gleich aus.
 
 import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
+import { t } from './i18n.js';
 
 function _bytes(n) {
     if (n < 1024) return n + ' B';
@@ -38,7 +39,7 @@ function _aggStats(entries) {
 
 function _buildSummary(byAction, theme) {
     const actions = Object.keys(byAction).sort();
-    if (actions.length === 0) return '<div style="color:' + theme.subSoft + '">Keine Eintraege.</div>';
+    if (actions.length === 0) return '<div style="color:' + theme.subSoft + '">' + esc(t('diag.no_entries')) + '</div>';
     let html = '<table style="border-collapse:collapse;font-size:12px;width:auto">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
         + ['Action', 'Count', 'Avg ms', 'Max ms', 'Avg Size', 'Cache Hit'].map(function(h) {
@@ -64,8 +65,8 @@ function _buildSummary(byAction, theme) {
 
 function _buildLog(entries, theme) {
     if (!entries.length) {
-        return '<div style="color:' + theme.subSoft + ';padding:20px 0">Noch keine Aufrufe protokolliert. '
-            + 'Wechsel auf einen anderen Tab und zurueck — dann tauchen Eintraege auf.</div>';
+        return '<div style="color:' + theme.subSoft + ';padding:20px 0">'
+            + esc(t('diag.no_calls')) + '</div>';
     }
     const rows = entries.slice().reverse().map(function(e) {
         const slowCol = (e.elapsed_ms || 0) > 1000 ? '#dc2626'
@@ -151,8 +152,7 @@ export function renderDiag(wrap) {
                 return;
             }
             if (!data.apcu) {
-                summaryBody.innerHTML = '<div style="color:#f59e0b">APCu ist auf dem Server nicht aktiv — '
-                    + 'Diagnose-Daten koennen nicht gespeichert werden.</div>';
+                summaryBody.innerHTML = '<div style="color:#f59e0b">' + esc(t('diag.no_apcu')) + '</div>';
                 logBody.innerHTML = '';
                 return;
             }
@@ -161,7 +161,7 @@ export function renderDiag(wrap) {
             logBody.innerHTML     = _buildLog(entries, theme);
         })
         .catch(function(e) {
-            summaryBody.innerHTML = '<div style="color:#dc2626">Fehler: ' + esc(e.message) + '</div>';
+            summaryBody.innerHTML = '<div style="color:#dc2626">' + esc(t('diag.error', { msg: e.message })) + '</div>';
             logBody.innerHTML = '';
         });
 }

@@ -21,6 +21,7 @@ import { fmt } from './utils.js';
 import { SEV_COL, SEV_LBL } from './severity.js';
 import { loadGeoProvider, saveGeoProvider } from './storage.js';
 import { GEO_PROVIDERS, getProvider } from './geo-providers.js';
+import { t } from './i18n.js';
 
 let _map         = null;   // Leaflet-Map-Instance
 let _markerLayer = null;   // LayerGroup für Host-Marker
@@ -245,7 +246,7 @@ function ensureLeaflet() {
         const s = document.createElement('script');
         s.src = BASE + 'leaflet.js';
         s.onload = function() { resolve(); };
-        s.onerror = function() { _leafletPromise = null; reject(new Error('leaflet.js konnte nicht geladen werden')); };
+        s.onerror = function() { _leafletPromise = null; reject(new Error(t('geo.leaflet_failed'))); };
         document.head.appendChild(s);
     });
     return _leafletPromise;
@@ -282,12 +283,18 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
             + 'justify-content:center;height:100%;color:#64748b;text-align:center;padding:40px';
         empty.innerHTML = '<div style="font-size:48px;margin-bottom:16px">\u{1F5FA}\uFE0F</div>'
             + '<div style="font-size:16px;font-weight:600;color:#334155;margin-bottom:8px">'
-            + 'Keine Hosts mit Geo-Koordinaten</div>'
+            + esc(t('geo.empty.title')) + '</div>'
             + '<div style="font-size:13px;max-width:480px;line-height:1.5">'
-            + 'Setze in <b>Configuration \u2192 Hosts \u2192 Inventory</b> die Felder '
-            + '<code>Location latitude</code> und <code>Location longitude</code> '
-            + '(als Dezimalwerte, z.\u202FB. <code>49.4521, 7.0064</code>).'
-            + '<br><br>Geomap zeigt nur Hosts mit beiden Werten.'
+            // Markup bleibt im Code, nur die Textteile kommen aus der
+            // Uebersetzung — sonst muesste die i18n-Datei HTML tragen, und der
+            // Satzbau unterscheidet sich zwischen den Sprachen ohnehin.
+            + esc(t('geo.empty.hint', {
+                path:    'Configuration \u2192 Hosts \u2192 Inventory',
+                lat:     'Location latitude',
+                lon:     'Location longitude',
+                example: '49.4521, 7.0064'
+            }))
+            + '<br><br>' + esc(t('geo.empty.note'))
             + '</div>';
         wrap.appendChild(empty);
         return;
@@ -306,7 +313,7 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
             + 'z-index:1000;background:#fef3c7;color:#92400e;padding:6px 14px;border-radius:6px;'
             + 'font-size:12px;font-weight:500;box-shadow:0 2px 6px rgba(0,0,0,0.15);'
             + 'border:1px solid #f59e0b';
-        banner.textContent = '\u26A0 ' + missing + ' von ' + totalHosts + ' Hosts haben keine Geo-Koordinaten';
+        banner.textContent = '\u26A0 ' + t('geo.missing_coords', { missing: missing, total: totalHosts });
         container.appendChild(banner);
     }
 
@@ -395,7 +402,7 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
     }
     }).catch(function(err) {
         // Leaflet-Load fehlgeschlagen — sichtbare Meldung statt leerer Karte.
-        if (mapDiv) mapDiv.textContent = 'Leaflet konnte nicht geladen werden: '
-            + String((err && err.message) || err);
+        if (mapDiv) mapDiv.textContent =
+            t('geo.leaflet_error', { err: String((err && err.message) || err) });
     });
 }

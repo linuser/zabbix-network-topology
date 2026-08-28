@@ -17,6 +17,7 @@
 // Diese Bewertung machen wir hier im Modul aus dem rohen Item-Value.
 
 import { esc, mkTabTheme } from './utils.js';
+import { t } from './i18n.js';
 
 const COL_GOOD = '#16a34a';
 const COL_WARN = '#f59e0b';
@@ -71,7 +72,7 @@ function _aggregateBlock(perHost, theme) {
 function _perHostTable(perHost, theme) {
     if (!perHost.length) {
         return '<div style="color:' + theme.subSoft + ';padding:20px 0;font-style:italic">'
-            + 'Keine Hosts melden LLDP/CDP-Nachbarn in der aktuellen Auswahl.</div>';
+            + esc(t('lldpq.no_hosts')) + '</div>';
     }
     // Sortierung: meiste Issues (unmatched+ambiguous) zuerst, dann nach matched desc
     const sorted = perHost.slice().sort(function(a, b) {
@@ -96,7 +97,7 @@ function _perHostTable(perHost, theme) {
                 + '<code style="font-size:11px">' + esc(x.raw) + '</code></div>');
         });
         if (u > 5) detailItems.push('<div style="color:' + theme.subSoft + ';font-size:10px">'
-            + '… und ' + (u - 5) + ' weitere unmatched</div>');
+            + esc(t('lldpq.more_unmatched', { n: u - 5 })) + '</div>');
         (h.ambiguous || []).slice(0, 3).forEach(function(x) {
             detailItems.push('<div style="display:flex;gap:6px;align-items:center">'
                 + _srcBadge(x.src) + '<span style="color:' + COL_WARN + '">?</span> '
@@ -153,7 +154,8 @@ function _topUnmatchedTable(perHost, theme) {
     });
     if (list.length > 50) {
         html += '<tr><td colspan="4" style="padding:6px 10px;color:' + theme.subSoft
-            + ';font-style:italic">… und ' + (list.length - 50) + ' weitere distinct</td></tr>';
+            + ';font-style:italic">' + esc(t('lldpq.more_distinct', { n: list.length - 50 }))
+            + '</td></tr>';
     }
     html += '</tbody></table>';
     return html;
@@ -178,9 +180,7 @@ export function renderLldpQuality(wrap) {
     const head = document.createElement('div');
     head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">LLDP / CDP Quality</h2>'
         + '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:16px">'
-        + 'Wie zuverlaessig kann Zabbix die LLDP-/CDP-Nachbarn auf bekannte Hosts mappen?'
-        + ' Match-Quote &lt; 90% bedeutet meist: Nachbarn existieren in der echten Welt'
-        + ' aber nicht in Zabbix, oder die Naming-Konventionen weichen ab.'
+        + t('lldpq.intro')
         + '</div>';
     root.appendChild(head);
 

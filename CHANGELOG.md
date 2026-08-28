@@ -311,6 +311,24 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **Vier Ansichten sprachen Deutsch, egal welche Sprache eingestellt war.**
+  Gemeldet von einem Nutzer auf einer englischen Oberfläche: *„Most is in
+  English, but some is in German."* Er hatte nichts übersehen — die
+  Übersetzung war unvollständig, und `i18n.js` sagt das im eigenen
+  Kopfkommentar: nicht migrierte Module behalten fest verdrahtetes Deutsch.
+
+  Betroffen waren die Tabs **Compliance, Diag, Geo und LLDP-Q** mit zusammen
+  23 Zeichenketten, darunter die komplette Beschriftung der
+  Compliance-Prüfungen (`Agent ohne TLS`, `Inventory aus`, `Stale
+  Krit-Problem`, `Wartung ohne Kommentar` …), die auch im Audit-Report aus
+  `export.js` erscheint. Alle laufen jetzt über `t()`, 25 neue Schlüssel in
+  `de.js` und `en.js`.
+
+  Beim Geo-Hinweis steht das Markup weiterhin im Code und nur die Textteile
+  kommen aus der Übersetzung — eine i18n-Datei, die HTML trägt, wäre der
+  falsche Weg, und der Satzbau unterscheidet sich zwischen den Sprachen
+  ohnehin.
+
 - **`nt-install.sh` brach auf der gesamten RHEL-Familie ab.** Die Erkennung des
   php-fpm-Dienstes lief in eine SIGPIPE-Falle:
 
