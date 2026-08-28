@@ -133,13 +133,21 @@ Detail-Panel je Host (Severity, Metriken, Interface, Proxy, Action-Buttons) · D
 Kurzfassung (das Verzeichnis **muss** `network_topology` heißen):
 
 ```bash
-cd /usr/share/zabbix/ui/modules
+# Wo modules/ liegt, ist nicht ueberall gleich — Pakete aus dem Zabbix-Repo
+# nutzen /usr/share/zabbix/modules OHNE "ui". Im Zweifel suchen:
+#   sudo find / -maxdepth 6 -type d -path '*zabbix*' -name modules
+cd /usr/share/zabbix/ui/modules       # oder /usr/share/zabbix/modules
+
 sudo unzip ~/Downloads/network_topology.zip
 sudo chown -R root:root network_topology
 sudo systemctl reload php8.2-fpm      # Dienstname je nach Distro/PHP-Version
 ```
 
 Dann in der Zabbix-UI: **Administration → General → Modules → Scan directory** → „Network Topology for Zabbix" aktivieren. Aufruf über **Monitoring → Network Topology for Zabbix**.
+
+Es geht auch geführt: [`nt-install.sh`](nt-install.sh) erkennt Modulpfad und php-fpm-Dienst selbst, prüft die Umgebung vorher (`check`) und setzt auf RHEL/Rocky/Alma den SELinux-Kontext — ohne den erscheint das Modul dort schlicht nicht. [`nt-uninstall.sh`](nt-uninstall.sh) räumt wieder ab und nennt dabei, was serverseitig zurückbleibt.
+
+> **Nicht per `git clone` installieren.** Der Weg legt das gesamte Repository unter den Web-Root, und Zabbix' nginx-Konfiguration sperrt dort nur `/\.ht`, nicht `.git` — siehe [INSTALL.md](INSTALL.md).
 
 ### Kanten / Topologie (LLDP)
 
@@ -279,13 +287,21 @@ Per-host detail panel (severity, metrics, interface, proxy, action buttons) · d
 Short version (the directory **must** be named `network_topology`):
 
 ```bash
-cd /usr/share/zabbix/ui/modules
+# Where modules/ lives differs — packages from the Zabbix repo use
+# /usr/share/zabbix/modules WITHOUT "ui". When unsure, look it up:
+#   sudo find / -maxdepth 6 -type d -path '*zabbix*' -name modules
+cd /usr/share/zabbix/ui/modules       # or /usr/share/zabbix/modules
+
 sudo unzip ~/Downloads/network_topology.zip
 sudo chown -R root:root network_topology
-sudo systemctl reload php8.2-fpm      # Dienstname je nach Distro/PHP-Version
+sudo systemctl reload php8.2-fpm      # service name depends on distro/PHP version
 ```
 
 Then in the Zabbix UI: **Administration → General → Modules → Scan directory** → enable "Network Topology for Zabbix". Open it via **Monitoring → Network Topology for Zabbix**.
+
+There is a guided path too: [`nt-install.sh`](nt-install.sh) detects the module path and php-fpm service itself, checks the environment first (`check`), and restores the SELinux context on RHEL/Rocky/Alma — without it the module simply does not show up there. [`nt-uninstall.sh`](nt-uninstall.sh) removes it again and names what stays behind on the server.
+
+> **Don't install via `git clone`.** It places the entire repository under your web root, and Zabbix' nginx config only blocks `/\.ht` there, not `.git` — see [INSTALL.md](INSTALL.md).
 
 ### Edges / topology (LLDP)
 

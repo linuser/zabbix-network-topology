@@ -345,6 +345,19 @@
   bekannten Skripte beim Namen, und aufgefallen ist es nur, weil jemand
   nachgesehen hat.
 
+- **Das README nannte weiterhin nur einen Modulpfad.** Genau der Fehler, den
+  ein Nutzer gemeldet hatte — behoben war er nur in `INSTALL.md`, die
+  Kurzfassung im README blieb bei `/usr/share/zabbix/ui/modules`. Wer die
+  Startseite liest statt die Anleitung, landete wieder vor einem Pfad, den es
+  bei ihm nicht gibt. Beide Layouts stehen jetzt auch dort, mit dem
+  `find`-Einzeiler.
+
+  Dazu fehlten `nt-install.sh` und `nt-uninstall.sh` im README komplett, obwohl
+  der Installer den Pfad selbst erkennt und auf RHEL den SELinux-Kontext setzt
+  — also genau die zwei Fallen, an denen die Handinstallation scheitert. Und
+  die Warnung vor `git clone` steht jetzt ebenfalls auf der Startseite, nicht
+  nur in der Anleitung.
+
 - **Das README beschrieb inhaltlich noch 4.x.** Die Versionsnummer im Badge
   stimmte, der Funktionsumfang darunter nicht: Kennzahlen-Zeile, Ghost-Knoten,
   Gerätetyp aus dem Protokoll und die Dienste-Probe kamen dort **null Mal** vor
