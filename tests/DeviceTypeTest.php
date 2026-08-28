@@ -43,6 +43,7 @@ spl_autoload_register(static function (string $class): void {
 });
 
 use Modules\NetworkTopology\Topology\HostMetadata;
+use Modules\NetworkTopology\Topology\LldpEdgeBuilder;
 
 $failures = 0;
 
@@ -76,6 +77,40 @@ check('AP (Bridge+WLAN AP) -> wireless',
 check('Telephone -> nichts',         HostMetadata::typeFromCaps(['Telephone']),         '');
 check('Station -> nichts',           HostMetadata::typeFromCaps(['Station']),           '');
 check('leer -> nichts',              HostMetadata::typeFromCaps([]),                    '');
+
+echo "\n== decodeCaps: beide Formate, die echte Geraete liefern ==\n";
+
+/**
+ * lldpRemSysCapEnabled kommt in ZWEI Formen an, je nach Template — an zwei
+ * realen Switches nachgesehen:
+ *
+ *   HP Instant On   "20 00", "28 00"              rohe Hex-Bytes
+ *   TP-Link         "Bridge", "WLAN Access Point" von einer Value-Map aufgeloest
+ *
+ * Die Textform als Hex zu lesen ist kein Randfall, sondern ein stiller
+ * Fehler mit Ansage: aus "Bridge" bleiben die Hex-Ziffern B, d, e, daraus
+ * 0xBD, daraus fuenf Faehigkeiten, die nie gemeldet wurden — und ein Switch
+ * bekommt ein WLAN-Symbol. Genau so war es, bis echte Daten vorlagen.
+ */
+// decodeCaps ist private — der Reflection-Umweg ist Absicht: die Methode ist
+// kein oeffentlicher Vertrag, aber ihr Verhalten entscheidet ueber das Icon.
+$dc = new ReflectionMethod(LldpEdgeBuilder::class, 'decodeCaps');
+$dc->setAccessible(true);
+$caps = static fn(string $in): array => $dc->invoke(null, $in);
+
+check('Hex "20 00" -> Bridge',        $caps('20 00'),             ['Bridge']);
+check('Hex "28 00" -> Bridge+Router', $caps('28 00'),             ['Bridge', 'Router']);
+check('Hex "10 00" -> WLAN AP',       $caps('10 00'),             ['WLAN AP']);
+check('Text "Bridge"',                $caps('Bridge'),            ['Bridge']);
+check('Text "WLAN Access Point"',     $caps('WLAN Access Point'), ['WLAN AP']);
+check('Text "Bridge, Router"',        $caps('Bridge, Router'),    ['Bridge', 'Router']);
+check('Text kleingeschrieben',        $caps('bridge'),            ['Bridge']);
+check('leer -> nichts',               $caps(''),                  []);
+
+// Und was am Ende zaehlt: der Typ, den die Karte daraus macht.
+check('TP-Link-Switch wird switch',   HostMetadata::typeFromCaps($caps('Bridge')),   'switch');
+check('HP-Switch wird switch',        HostMetadata::typeFromCaps($caps('20 00')),    'switch');
+check('AP wird wireless',             HostMetadata::typeFromCaps($caps('WLAN Access Point')), 'wireless');
 
 echo "\n== deviceType: echte Template-Namen aus einer Zabbix-Installation ==\n";
 

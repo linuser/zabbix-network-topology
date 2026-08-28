@@ -340,11 +340,21 @@ final class LldpEdgeBuilder {
      * lldpRemSysCapEnabled in lesbare Namen.
      *
      * Der Wert ist laut IEEE 802.1AB ein OCTET STRING mit zwei Bytes, dessen
-     * Bits die Faehigkeiten tragen. Wie Zabbix ihn liefert, haengt am
-     * SNMP-Stack des Geraets und an der Item-Konfiguration: mal als Hex mit
-     * Leerzeichen ("00 28"), mal ohne, mal als Rohbytes. Deshalb wird hier
-     * defensiv geparst und im Zweifel NICHTS zurueckgegeben — eine falsche
-     * Geraeteklasse waere schlechter als gar keine.
+     * Bits die Faehigkeiten tragen. Was davon in Zabbix ankommt, haengt am
+     * Geraet UND am Template. An zwei echten Switches nachgesehen:
+     *
+     *   HP Instant On   "20 00", "28 00"          → rohe Hex-Bytes
+     *   TP-Link         "Bridge", "WLAN Access Point" → schon aufgeloest
+     *
+     * Die zweite Form entsteht, wenn das Template eine Value-Map auf das Item
+     * legt. Sie MUSS getrennt behandelt werden: als Hex gelesen ergibt
+     * "Bridge" die Zeichen B, d, e, daraus 0xBD, daraus fuenf Faehigkeiten,
+     * die nie gemeldet wurden — und aus einem Switch wird ein Access Point.
+     * Das ist nicht nur falsch, es ist selbstbewusst falsch.
+     *
+     * Unterschieden wird an den Zeichen: reine Hex-Ziffern plus Leerraum → Hex,
+     * alles andere → Text. Kein Faehigkeitsname besteht nur aus Hex-Ziffern,
+     * die Unterscheidung ist also eindeutig.
      *
      * Bit-Reihenfolge nach lldpRemSysCapEnabled, hoechstwertiges Bit zuerst.
      */
@@ -354,13 +364,42 @@ final class LldpEdgeBuilder {
             return [];
         }
 
+        // ── Textform (Value-Map im Template) ────────────────────────────────
+        if (!preg_match('/^[0-9a-fA-F\s]+$/', $raw)) {
+            $hay   = strtolower($raw);
+            $found = [];
+            // Reihenfolge wie die Bits, damit die Ausgabe unabhaengig von der
+            // Schreibweise des Geraets immer gleich sortiert ist.
+            foreach ([
+                'Repeater'  => ['repeater'],
+                'Bridge'    => ['bridge'],
+                'WLAN AP'   => ['wlan', 'access point'],
+                'Router'    => ['router'],
+                'Telephone' => ['telephone', 'phone'],
+                'DOCSIS'    => ['docsis'],
+                'Station'   => ['station'],
+            ] as $name => $needles) {
+                foreach ($needles as $n) {
+                    if (strpos($hay, $n) !== false) {
+                        $found[] = $name;
+                        break;
+                    }
+                }
+            }
+
+            return $found;
+        }
+
+        // ── Hexform ─────────────────────────────────────────────────────────
         $hex = preg_replace('/[^0-9a-fA-F]/', '', $raw);
 
         if ($hex !== '' && strlen($hex) >= 2 && strlen($hex) <= 4) {
             $byte = hexdec(substr($hex, 0, 2));
         }
         elseif (strlen($raw) >= 1) {
-            // Rohbytes: erstes Zeichen als Bitmaske deuten.
+            // Rohbytes: erstes Zeichen als Bitmaske deuten. Erreichbar nur
+            // noch fuer Werte aus reinen Hex-Ziffern, deren Laenge nicht
+            // passt — Text ist oben schon abgebogen.
             $byte = ord($raw[0]);
         }
         else {

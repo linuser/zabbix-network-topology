@@ -311,6 +311,27 @@
   Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
   LLDP-Template läuft an zwei SNMP-Switches.
 
+- **Die LLDP-Capabilities wurden bei der Hälfte der Geräte falsch gelesen.**
+  Aufgefallen erst, als nach dem Proxy-Ausfall wieder echte Werte flossen. Das
+  Feld kommt in **zwei Formen** an, je nach Template:
+
+  ```
+  HP Instant On   "20 00", "28 00"                rohe Hex-Bytes
+  TP-Link         "Bridge", "WLAN Access Point"   von einer Value-Map aufgelöst
+  ```
+
+  Der Decoder kannte nur Hex. Aus `Bridge` blieben nach dem Filtern die
+  Hex-Ziffern `B`, `d`, `e`, daraus `0xBD`, daraus **fünf Fähigkeiten, die nie
+  gemeldet wurden** — und aus einem Switch wurde ein Access Point. Der
+  Kommentar versprach „im Zweifel lieber nichts"; das stimmte nicht, das
+  Ergebnis war selbstbewusst falsch. Betroffen war auch die Ghost-Anzeige, die
+  diese Liste seit `bc5da3f` einblendet.
+
+  Unterschieden wird jetzt an den Zeichen: nur Hex-Ziffern und Leerraum → Hex,
+  sonst Text. Kein Fähigkeitsname besteht ausschließlich aus Hex-Ziffern, die
+  Trennung ist also eindeutig. `tests/DeviceTypeTest.php` prüft beide Formen
+  mit den echten Werten beider Switches.
+
 - **Der CI-Job `shellcheck` war seit Langem rot — unbemerkt.** Er scheitert
   auch an *Info*-Meldungen, und fünf Stellen in `nt-install.sh` trugen das
   Muster `A && B || C` (SC2015). Das steckt schon in v4.38.3, jede Pipeline
