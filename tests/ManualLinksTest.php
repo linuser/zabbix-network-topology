@@ -101,6 +101,26 @@ for ($i = 0; $i < 2500; $i++) {
 }
 check('Cap bei 2000',            surviving($many), 2000);
 
+// ── Meldung der Kappung ─────────────────────────────────────────────────────
+// NodePositions meldet sein Kappen seit 5.1 an den Client; ManualLinks tat es
+// nicht — 500 verworfene Kanten sahen aus wie ein erfolgreiches Speichern.
+// Der Zaehler ist bewusst eine OBERGRENZE: was hinter dem Abbruch liegt, wurde
+// nicht mehr auf Duplikate geprueft. Getestet wird deshalb "meldet ueberhaupt"
+// und "meldet nichts, wenn nichts wegfiel" — nicht eine exakte Zahl, die die
+// Implementierung gar nicht verspricht.
+ManualLinks::sanitize($many);
+check('Kappung wird gemeldet',   ManualLinks::lastTruncated() > 0, true);
+check('Kappung: plausible Zahl', ManualLinks::lastTruncated() <= 2500 - 2000, true);
+
+ManualLinks::sanitize([pair('a', 'b'), pair('c', 'd')]);
+check('ohne Kappung: 0',         ManualLinks::lastTruncated(), 0);
+
+// Der Zaehler darf nicht aus einem frueheren Lauf stehenbleiben — sonst
+// meldete ein harmloses Speichern die Kappung des vorigen.
+ManualLinks::sanitize($many);
+ManualLinks::sanitize([pair('e', 'f')]);
+check('Zaehler wird zurueckgesetzt', ManualLinks::lastTruncated(), 0);
+
 echo $failures === 0
     ? "\n  ManualLinksTest: alle Pruefungen bestanden\n"
     : "\n  ManualLinksTest: {$failures} Fehler\n";

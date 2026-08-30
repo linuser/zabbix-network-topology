@@ -18,7 +18,8 @@ import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
 import { destroyGroupHulls } from './modules/group-hulls.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups,
-         setPositionErrorHandler, setPositionTruncatedHandler } from './modules/storage.js';
+         setPositionErrorHandler, setPositionTruncatedHandler,
+         setLinkTruncatedHandler } from './modules/storage.js';
 
 // Positionen werden optimistisch gespeichert: die Karte reagiert sofort, der
 // POST laeuft hinterher. Scheitert er, muss der Nutzer das erfahren — sonst
@@ -33,6 +34,9 @@ setPositionErrorHandler(function(err) {
 // Ein Teil ist gesichert, der Rest nicht — das muss sichtbar sein, sonst
 // fehlen beim naechsten Laden Positionen ohne erkennbaren Grund und es sieht
 // nach Datenverlust aus statt nach einer Grenze.
+setLinkTruncatedHandler(function(n) {
+    toast(t('links.truncated', { n: n }), 'warn', 8000);
+});
 setPositionTruncatedHandler(function(n) {
     toast(t('positions.truncated', { n: n }), 'warn', 8000);
 });

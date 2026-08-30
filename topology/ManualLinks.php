@@ -74,6 +74,21 @@ final class ManualLinks {
      */
     private const MAX_LINKS = 2000;
 
+    /**
+     * Wie viele Kanten der letzte sanitize()-Lauf verworfen hat.
+     *
+     * NodePositions meldet sein Kappen seit 5.1 an den Client; hier fiel es
+     * stillschweigend unter den Tisch. Wer 2100 Kanten speichert und 2000
+     * zurueckbekommt, soll das erfahren — sonst sieht es aus, als haette das
+     * Speichern funktioniert, und die fehlenden 100 fallen erst viel spaeter
+     * auf.
+     */
+    private static int $truncated = 0;
+
+    public static function lastTruncated(): int {
+        return self::$truncated;
+    }
+
     /** Node-IDs sind Hostids ("10084") oder Ghost-Slugs ("ghost_sw01_lan"). */
     private const ID_PATTERN = '/^[A-Za-z0-9_.:-]{1,128}$/';
 
@@ -183,6 +198,7 @@ final class ManualLinks {
     public static function sanitize(array $raw): array {
         $out  = [];
         $seen = [];
+        self::$truncated = 0;
 
         foreach ($raw as $item) {
             if (!is_array($item)) {
@@ -214,6 +230,13 @@ final class ManualLinks {
             $out[]      = ['s' => $s, 't' => $t];
 
             if (count($out) >= self::MAX_LINKS) {
+                // Alles ab hier faellt weg. Die Zahl ist eine OBERGRENZE fuer
+                // den Rest, keine exakte Bilanz: der ungelesene Teil wurde
+                // weder auf Duplikate noch auf Gueltigkeit geprueft, koennte
+                // also weniger echte Kanten enthalten. Fuer die Aussage "es
+                // wurde gekappt, und zwar spuerbar" reicht das — mehr soll sie
+                // nicht behaupten.
+                self::$truncated = max(0, count($raw) - count($out));
                 break;
             }
         }

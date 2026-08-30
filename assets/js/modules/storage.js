@@ -407,6 +407,14 @@ function _persist(scope, links) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
         if (!d || d.error) throw new Error((d && d.error) || 'unknown');
+        // Gleiche Ueberlegung wie bei den Positionen: der Server hat die
+        // Obergrenze angewendet und einen Teil verworfen. Kein Fehler —
+        // gespeichert wurde etwas — aber stillschweigend darf es nicht
+        // passieren, sonst fehlen beim naechsten Laden Kanten und es sieht
+        // nach Datenverlust aus statt nach Grenze.
+        if (d.truncated > 0 && typeof _onLinkTruncated === 'function') {
+            _onLinkTruncated(d.truncated);
+        }
         return d;
     });
 }
@@ -421,6 +429,11 @@ function _rollback(scope, snapshot, err) {
 // ueber Toasts oder Uebersetzungen wissen muss.
 let _onLinkError = null;
 export function setLinkErrorHandler(fn) { _onLinkError = fn; }
+
+// Zweiter Kanal, parallel zu setPositionTruncatedHandler: das Kappen bei
+// MAX_LINKS war bisher nur serverseitig sichtbar.
+let _onLinkTruncated = null;
+export function setLinkTruncatedHandler(fn) { _onLinkTruncated = fn; }
 
 export function addLink(s, t, scope) {
     const sc   = scope || defaultLinkScope();

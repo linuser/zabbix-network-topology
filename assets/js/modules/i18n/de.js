@@ -241,6 +241,7 @@ export default {
     'toolbar.unlink.confirm.shared': 'Alle geteilten Verbindungen löschen? Das betrifft alle Benutzer.',
     'toolbar.unlink.confirm.personal': 'Deine persönlichen Verbindungen löschen?',
     'links.save_failed': 'Verbindung konnte nicht gespeichert werden: {err}',
+    'links.truncated':  'Zu viele Verbindungen: {n} wurden nicht gespeichert. Serverseitig sind 2000 handgezogene Kanten m\u00f6glich.',
     'positions.save_failed': 'Anordnung konnte nicht gespeichert werden: {err}',
     'toolbar.search': 'Host suchen...',
     'export.report.meta': '{date} &nbsp;|&nbsp; {hosts} Hosts &nbsp;|&nbsp; {links} Links',
