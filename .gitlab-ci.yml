@@ -69,7 +69,7 @@ shellcheck:
   stage: lint
   image: koalaman/shellcheck-alpine:stable
   script:
-    - shellcheck nt-install.sh nt-uninstall.sh deploy.sh tools/*.sh
+    - shellcheck nt-install.sh nt-uninstall.sh deploy.sh tools/*.sh tools/clean-install-test/*.sh
 
 npm-audit:
   stage: lint
@@ -127,3 +127,37 @@ layers:
   image: node:22-alpine
   script:
     - node tools/check-layers.mjs
+
+# Der automatisierbare Teil des Clean-Install-Tests: Modul paketieren, ein
+# echtes Zabbix 7.4 hochfahren, das Modul hineinmounten und pruefen, ob das
+# Frontend ueberhaupt noch antwortet, ob der Code unter der PHP-Version des
+# Zabbix-Images sauber ist, ob die Assets ueber den Web-Root kommen und ob im
+# Log etwas steht.
+#
+# MANUELL, mit Absicht:
+#   - Der Job braucht Docker-in-Docker. Ob der Runner das kann, weiss die
+#     Pipeline nicht — ein Job, der daran scheitert, faerbt jede Pipeline rot
+#     und niemand schaut mehr hin. Genau so verliert man ein Gate.
+#   - Er faehrt zwei Container hoch und dauert Minuten, waehrend die uebrigen
+#     zehn Jobs in Sekunden durch sind.
+#
+# Aufruf: in der Pipeline auf "Play". Lokal geht er ohne alles:
+#   tools/clean-install-test/smoke.sh
+#
+# Was er NICHT abdeckt (Aktivieren des Moduls, Rendern, Rechte, CSRF, 7.0),
+# steht in tools/clean-install-test/README.md und in der Ausgabe des Skripts.
+clean-install-smoke:
+  stage: test
+  image: docker:27-cli
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache bash curl nodejs npm rsync
+  script:
+    - bash tools/clean-install-test/smoke.sh
+  rules:
+    - when: manual
+  allow_failure: true

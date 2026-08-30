@@ -277,6 +277,23 @@ class NetworkTopologyData extends NetworkTopologyController {
         ]);
 
         // ── 3b. LASTVALUE via batched UNION-ALL Queries (Chunk=20 Items/Query)
+        //
+        // SETZT SQL-HISTORY VORAUS. Zabbix kann History auch nach Elasticsearch
+        // schreiben (HistoryStorageURL in zabbix.conf.php); dann bleiben diese
+        // Tabellen leer und die Karte zeigt Knoten ohne Metriken — kein Fehler,
+        // aber auch keine Zahlen. Vier andere Actions (Spark, ItemHistory,
+        // HealthHistory) gehen ueber API::History() und waeren davon nicht
+        // betroffen.
+        //
+        // Warum hier trotzdem direkt: history.get kennt kein "letzter Wert je
+        // Item" und wuerde pro Item eine eigene Abfrage mit Zeitfenster
+        // brauchen. Fuer die Karte sind das mehrere hundert Items bei jedem
+        // 30-Sekunden-Refresh — die UNION-ALL-Variante macht daraus ~25
+        // Abfragen. Der Unterschied ist der zwischen brauchbar und unbenutzbar.
+        //
+        // Die Itemids stammen aus einer rechtegefilterten API::Item()-Abfrage
+        // und werden vor der Interpolation nach int gecastet; sie kommen nie
+        // ungeprueft aus einer Benutzereingabe.
         // Statt N separaten DB-Roundtrips machen wir eine Query pro 20 Items
         // mit UNION ALL von Subqueries. Jedes Subquery nutzt den Index (itemid, clock)
         // über ORDER BY clock DESC LIMIT 1 effizient.
