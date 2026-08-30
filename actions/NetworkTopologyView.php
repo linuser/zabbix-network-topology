@@ -15,6 +15,8 @@ use CControllerResponseData;
 use CControllerResponseFatal;
 use Modules\NetworkTopology\Topology\ManualLinks;
 use Modules\NetworkTopology\Topology\NodePositions;
+use Modules\NetworkTopology\Topology\SharedLayerFilter;
+use Modules\NetworkTopology\Topology\Revision;
 use API;
 
 class NetworkTopologyView extends CController {
@@ -100,6 +102,25 @@ class NetworkTopologyView extends CController {
         // Group-IDs" bereits ab — ein zweiter, identischer HostGroup.get-Filter
         // stand hier frueher redundant; entfernt.)
 
+        // Was der Benutzer ueberhaupt sehen darf. Beide Abfragen sind
+        // API-seitig rechtegefiltert; 'output' bleibt minimal, damit die
+        // Kosten auch bei mehreren tausend Hosts eine reine ID-Liste sind.
+        $visible_hostids = API::Host()->get([
+            'output'       => [],
+            'preservekeys' => true
+        ]);
+        $visible_groupids = API::HostGroup()->get([
+            'output'       => [],
+            'preservekeys' => true
+        ]);
+
+        // Revisionen der UNGEFILTERTEN Staende: der Client schickt sie beim
+        // Speichern zurueck, und der Server vergleicht dort ebenfalls gegen
+        // den ungefilterten Stand. Wuerde hier die gefilterte Fassung
+        // gehasht, meldete jeder Nicht-Super-Admin sofort einen Konflikt.
+        $links_current     = ManualLinks::loadShared();
+        $positions_current = NodePositions::loadShared();
+
         $response = new CControllerResponseData([
             'hostgroups'        => $hostgroups,
             'selected_groupids' => $selected_groupids,
@@ -114,15 +135,37 @@ class NetworkTopologyView extends CController {
             // werden beim ersten Rendern gebraucht, und ein eigener Roundtrip
             // wuerde die Karte kurz ohne die Links zeigen.
             'manual_links'      => [
-                'shared'   => ManualLinks::loadShared(),
+                // Die geteilte Ebene liegt in module.config und kennt keine
+                // Rechte — anders als die Topologie, die aus der API kommt.
+                // Ungefiltert enthielt das ausgelieferte JSON Host-IDs,
+                // Gruppen-IDs und per LLDP annoncierte Geraetenamen aus
+                // Netzteilen ohne Zugriff. Sichtbar wurde davon nichts (das
+                // Frontend zeichnet nur Kanten zwischen vorhandenen Knoten),
+                // aber das Sicherheitsmodell soll an einer Stelle gelten.
+                'shared'   => SharedLayerFilter::links(
+                    $links_current, $visible_hostids
+                ),
                 'personal' => ManualLinks::loadPersonal()
             ],
             // Knotenpositionen ebenso direkt mit: sie werden beim ersten
             // Rendern gebraucht, ein zweiter Roundtrip liesse die Karte kurz
             // im Auto-Layout stehen und dann sichtbar umspringen.
             'positions'         => [
-                'shared'   => NodePositions::loadShared(),
+                // Wie oben. Bei den Positionen kommt hinzu, dass der
+                // View-Schluessel AUS Gruppen-IDs besteht — eine fremde
+                // Gruppe darin verraet ihre Existenz, auch ohne einen
+                // einzigen Knoten.
+                'shared'   => SharedLayerFilter::positions(
+                    $positions_current, $visible_hostids, $visible_groupids
+                ),
                 'personal' => NodePositions::loadPersonal()
+            ],
+            // Basis fuer die Konflikterkennung beim Speichern.
+            'revisions'         => [
+                'links_shared'       => Revision::of($links_current),
+                'links_personal'     => Revision::of(ManualLinks::loadPersonal()),
+                'positions_shared'   => Revision::of($positions_current),
+                'positions_personal' => Revision::of(NodePositions::loadPersonal())
             ]
         ]);
 
