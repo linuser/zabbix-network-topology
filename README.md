@@ -206,7 +206,7 @@ Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inse
 ### Feedback & contributing
 
 - **Found a bug?** → [open an issue](https://github.com/linuser/zabbix-network-topology/issues). Please include your Zabbix version, PHP version, and for missing edges the SNMP vendor.
-- **Want to send a patch?** → [CONTRIBUTING.md](CONTRIBUTING.md) — it lists the three things CI enforces strictly.
+- **Want to send a patch?** → [CONTRIBUTING.md](CONTRIBUTING.md) — it lists the eight rules CI enforces strictly.
 - **Security issue?** → [SECURITY.md](SECURITY.md), confidentially by mail.
 
 ---
@@ -372,7 +372,7 @@ Aktuelle Chrome, Firefox, Safari, Edge. ES6-Module (kein IE11), `fetch`, CSS `in
 ### Feedback & Mitmachen
 
 - **Bug gefunden?** → [Issue anlegen](https://github.com/linuser/zabbix-network-topology/issues). Bitte Zabbix-Version, PHP-Version und bei fehlenden Kanten den SNMP-Vendor angeben.
-- **Patch beisteuern?** → [CONTRIBUTING.md](CONTRIBUTING.md) — dort stehen die drei Dinge, die die CI hart erzwingt.
+- **Patch beisteuern?** → [CONTRIBUTING.md](CONTRIBUTING.md) — dort stehen die acht Regeln, die die CI hart erzwingt.
 - **Sicherheitslücke?** → [SECURITY.md](SECURITY.md), vertraulich per Mail.
 
 ---
@@ -381,11 +381,11 @@ Aktuelle Chrome, Firefox, Safari, Edge. ES6-Module (kein IE11), `fetch`, CSS `in
 
 ```
 network_topology/
-├── manifest.json              module manifest, 14 actions / Modul-Manifest
+├── manifest.json              module manifest, 17 actions / Modul-Manifest
 ├── Module.php                 menu registration / Menü-Eintrag
 ├── views/
 │   └── network.topology.view.php   HTML container + JS loader
-├── actions/                        14 actions (JSON via layout.json)
+├── actions/                        17 actions (JSON via layout.json)
 │   ├── NetworkTopologyView.php               renders the page (layout.htmlpage)
 │   ├── NetworkTopologyData.php               nodes + edges + traffic + LLDP/CDP + health
 │   ├── NetworkTopologyHistory.php            trigger events for a time window
@@ -400,8 +400,8 @@ network_topology/
 │   ├── NetworkTopologyResourceForecast.php   CPU/memory forecast (trends)
 │   ├── NetworkTopologyHealthHistory.php      health score history (trapper items)
 │   └── NetworkTopologyMaintenance.php        one-time maintenance (WRITE, admin)
-├── topology/                       HostMetadata · HostTagParser · LldpEdgeBuilder
-│                                   MetricExtractor · NodeBuilder · ProblemLoader
+├── topology/                       HostMetadata · HostTagParser · LldpEdgeBuilder · ManualLinks
+│                                   MetricExtractor · NodeBuilder · NodePositions · ProblemLoader
 └── assets/
     ├── css/network-topology.css
     └── js/

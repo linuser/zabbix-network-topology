@@ -129,8 +129,16 @@ Alles zusammen lokal prüfen:
 
 ```bash
 npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
-  && npm run ci:templates && npm run ci:package && npm run ci:layers && npm run ci:test
+  && npm run ci:templates && npm run ci:package && npm run ci:layers \
+  && npm run ci:pipeline && npm run ci:test
 ```
+
+> **`ci:pipeline` ist das einzige Gate ohne CI-Job — mit Absicht.** Es prüft die
+> `.gitlab-ci.yml` selbst, und eine ungültige CI-Datei lässt gar keinen Job mehr
+> laufen; ein Job, der genau dann prüfen soll, kommt zu spät. Deshalb gehört es
+> **vor den Push** und in diese Kette. Wie teuer das Vergessen ist, steht in der
+> Datei: eine nicht deklarierte Stage hat die Pipeline 32 Commits lang
+> stillgelegt, ohne dass irgendwo etwas rot wurde.
 
 ## Tests
 

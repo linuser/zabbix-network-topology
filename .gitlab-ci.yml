@@ -1,6 +1,8 @@
 # CI fuer "Network Topology for Zabbix"  (Code-Review §14 + §11-Danach-Liste)
 #
-# Fuenf Gates, die genau die Regressionen abfangen, die uns real passiert sind:
+# Elf Jobs ueber drei Stages, die genau die Regressionen abfangen, die uns real
+# passiert sind. Wer hier einen Job ergaenzt, prueft die stages-Liste mit —
+# 'npm run ci:pipeline' tut das lokal und faengt genau diesen Fehler:
 #
 #   php-lint       — Syntaxfehler in Actions/Views/Widgets/Module.php
 #   xss-tripwire   — tools/check-xss.sh --strict (innerHTML-Sinks ohne esc())
