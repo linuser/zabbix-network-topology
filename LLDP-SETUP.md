@@ -1,161 +1,215 @@
-# LLDP/CDP Topology-Setup — Network Topology for Zabbix
+# LLDP/CDP topology setup — Network Topology for Zabbix
 
-Wie das Modul aus LLDP/CDP-Daten die **Verbindungen (Kanten)** zeichnet, und was du auf
-Switches, Clients und in Zabbix tun musst.
+How the module turns LLDP/CDP data into **edges**, and what you have to configure
+on switches, on clients and in Zabbix.
 
-> **Du siehst Knoten, aber keine Kanten?** Die Antwort steht fast immer hier — meist
-> ist es fehlendes LLDP, fehlendes SNMP oder ein Namens-Mismatch. Der **LLDP-Q-Tab**
-> im Modul zeigt pro Host, woran es hakt (siehe [Troubleshooting](#warum-fehlen-kanten-troubleshooting)).
+**🇬🇧 English · 🇩🇪 [Deutsch](LLDP-SETUP.de.md)**
 
----
-
-## Wie Kanten entstehen (das mentale Modell)
-
-Das Modul liest pro Zabbix-Host ein Item, dessen **Wert der/die Nachbar-System-Name(n)**
-ist — die LLDP/CDP-Nachbar-Tabelle des Geräts. Für jeden gemeldeten Nachbarn versucht es,
-den Namen auf einen **anderen Zabbix-Host** aufzulösen. Klappt das, entsteht eine Kante.
-
-> **Kante A–B = „Die Nachbar-Tabelle von A nennt B — und B ist ein überwachter Host mit
-> passendem Namen."**
-
-Zwei Konsequenzen, die man kennen muss:
-
-- **Beide Endpunkte müssen überwachte Zabbix-Hosts sein.** Ein Nachbar, der nicht in Zabbix
-  ist, erzeugt keine Kante.
-- **Der Reporter braucht eine abfragbare Nachbar-Tabelle.** Ein Gerät, das LLDP nur *sendet*,
-  aber die Nachbar-Tabelle nicht führt/nicht per SNMP herausgibt, meldet **selbst keine
-  Nachbarn** → keine Kanten von ihm aus. Es erscheint nur, wenn seine Nachbarn *es* melden.
+> **Seeing nodes but no edges?** The answer is almost always in here — usually
+> missing LLDP, missing SNMP, or a name mismatch. The **LLDP-Q tab** in the module
+> reports per host where it breaks (see [Troubleshooting](#why-are-edges-missing-troubleshooting)).
 
 ---
 
-## Welche Items das Modul liest
+## How edges come to exist (the mental model)
 
-Erkannt wird ein Item, dessen **Key** eines davon enthält (Wert = Nachbar-SysName, auch
-Komma-/Zeilen-/Pipe-Liste mehrerer Nachbarn):
+For each Zabbix host, the module reads an item whose **value is the neighbour system
+name(s)** — the device's LLDP/CDP neighbour table. For every neighbour reported, it
+tries to resolve that name to **another Zabbix host**. When that succeeds, an edge
+is drawn.
 
-| Key enthält | Quelle |
+> **Edge A–B = "A's neighbour table names B — and B is a monitored host with a
+> matching name."**
+
+Two consequences worth knowing:
+
+- **Both endpoints must be monitored Zabbix hosts.** A neighbour that isn't in
+  Zabbix produces no edge.
+- **The reporter needs a queryable neighbour table.** A device that only *sends*
+  LLDP but doesn't keep the neighbour table, or doesn't expose it over SNMP,
+  **reports no neighbours itself** → no edges originate from it. It only appears
+  when its neighbours report *it*.
+
+---
+
+## Which items the module reads
+
+An item is recognised when its **key** contains one of these (value = neighbour
+SysName; a comma-, newline- or pipe-separated list of several neighbours is fine):
+
+| Key contains | Source |
 |---|---|
-| `lldpRemSysName` | **LLDP** (IEEE 802.1AB) — SNMP-Standard, OID `1.0.8802.1.1.2.1.4.1.1.9` |
+| `lldpRemSysName` | **LLDP** (IEEE 802.1AB) — SNMP standard, OID `1.0.8802.1.1.2.1.4.1.1.9` |
 | `cdpCacheDeviceId` | **CDP** (Cisco Discovery Protocol) — SNMP |
-| `neighbor.sysName` | Generisch / Ubiquiti UniFi (z. B. via Controller-API) |
-| `discovery.neighbor` | MikroTik & andere / custom |
-| `uplink.id` (exakter Key) | **UniFi Network API** — Controller-Sicht, siehe unten |
+| `neighbor.sysName` | Generic / Ubiquiti UniFi (e.g. via controller API) |
+| `discovery.neighbor` | MikroTik and others / custom |
+| `uplink.id` (exact key) | **UniFi Network API** — controller's view, see below |
 
-Der Wert wird an `,`, Zeilenumbruch und `|` gesplittet — ein einzelnes Item darf also eine
-Liste aller Nachbarn enthalten.
+The value is split on `,`, newline and `|` — so a single item may carry the whole
+list of neighbours.
 
-> **Sonderfall UniFi (`uplink.id`):** Ubiquiti gibt die LLDP-Nachbartabelle per SNMP in der
-> Regel **nicht** heraus — die Topologie kennt nur der Controller. Das offizielle
-> *UniFi Network API*-Template holt sie per JSONPath `$.uplinkDeviceId` aus `details.json`
-> in ein Item `uplink.id` („an welchem Gerät hänge ich"). Dessen Wert ist die **Geräte-UUID**
-> des Uplinks — und weil dasselbe Template seine Hosts technisch nach eben dieser UUID
-> benennt, löst das normale Namens-Matching sie direkt auf den richtigen Host auf. Quelle
-> erscheint im LLDP-Q-Tab als `unifi`.
+> **Special case UniFi (`uplink.id`):** Ubiquiti generally does **not** expose the
+> LLDP neighbour table over SNMP — only the controller knows the topology. The
+> official *UniFi Network API* template pulls it via JSONPath `$.uplinkDeviceId`
+> from `details.json` into an item `uplink.id` ("which device am I attached to").
+> Its value is the **device UUID** of the uplink — and because the same template
+> names its hosts after exactly that UUID, ordinary name matching resolves it to
+> the right host. The source shows up in the LLDP-Q tab as `unifi`.
 >
-> Zwei Einschränkungen, die man kennen muss: Es ist die **Controller-Sicht**, kein
-> Geräte-Protokoll (fällt der Controller aus, veraltet die Topologie). Und es funktioniert
-> nur, solange die Hosts **nach der UUID benannt** sind — benennt deine Discovery sie anders,
-> trifft das Matching nicht. `uplink.rx`/`uplink.tx` (Per-Link-Traffic) wertet das Modul
-> derzeit **nicht** aus.
+> Two limitations to know: it is the **controller's view**, not a device protocol
+> (if the controller goes down, the topology goes stale). And it only works while
+> hosts are **named after the UUID** — if your discovery names them differently,
+> matching won't hit. `uplink.rx` / `uplink.tx` (per-link traffic) are currently
+> **not** evaluated by the module.
 
 ---
 
-## Was du tun musst
+## What you have to do
 
-### 1. Auf Switches / Routern / Firewalls
-- **LLDP einschalten** (`lldp run` global + ggf. pro Interface). Cisco: **CDP ist default an**.
-- **SNMP aktivieren** (v2c/v3), damit Zabbix die LLDP-MIB (`lldpRemSysName`) bzw. CDP-MIB lesen kann.
+### 1. On switches / routers / firewalls
+- **Enable LLDP** (`lldp run` globally, plus per interface where needed). Cisco:
+  **CDP is on by default**.
+- **Enable SNMP** (v2c/v3) so Zabbix can read the LLDP-MIB (`lldpRemSysName`) or
+  the CDP-MIB.
 
-### 2. Auf Clients / Servern
-- **`lldpd` installieren** (`apt install lldpd` / `pkg install lldpd`). Damit annonciert sich
-  der Server selbst → der Switch listet ihn **mit Namen** (statt nur MAC), und die Kante
-  Switch↔Server entsteht.
-- **Hostname = Zabbix-Hostname.** Der annoncierte SysName muss zum Zabbix-Host passen (siehe unten).
-- **Windows** sendet LLDP meist nicht von sich aus → dort trägt v. a. die Switch-Seite + Namens-/IP-Matching.
+### 2. On clients / servers
+- **Install `lldpd`** (`apt install lldpd` / `pkg install lldpd`). The server then
+  announces itself → the switch lists it **by name** instead of just a MAC, and the
+  switch↔server edge appears.
+- **Hostname = Zabbix host name.** The announced SysName has to match the Zabbix
+  host (see below).
+- **Windows** usually doesn't send LLDP on its own → there the switch side plus
+  name/IP matching does the work.
 
 ### 3. In Zabbix
-- **SNMP-LLD** auf dem Switch: die `lldpRemSysName`-Tabelle discovern → Item-Prototyp
-  `lldpRemSysName[{#SNMPINDEX}]` (ein Item pro Nachbar). Viele **Vendor-Templates bringen das
-  schon mit** — vorher unter *Latest Data* nach `lldpRemSysName`-Items schauen.
-- **Turnkey:** das Template [`nt_lldp_snmp_template.yaml`](https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_lldp_snmp_template.yaml)
-  importieren und an SNMP-Switches linken — bringt LLDP- **und** Cisco-CDP-Discovery fertig mit
-  (Macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`).
+- **SNMP LLD** on the switch: discover the `lldpRemSysName` table → item prototype
+  `lldpRemSysName[{#SNMPINDEX}]` (one item per neighbour). Many **vendor templates
+  already ship this** — check *Latest data* for `lldpRemSysName` items first.
+- **Turnkey:** import [`nt_lldp_snmp_template.yaml`](https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_lldp_snmp_template.yaml)
+  and link it to SNMP switches — it brings LLDP **and** Cisco CDP discovery ready to
+  go (macros `{$NT.LLDP.INTERVAL}` / `{$NT.LLDP.DISCOVERY.INTERVAL}`).
 
-  Es liegt **nicht** im Modul-ZIP: das Modulverzeichnis ist über den Web-Root
-  öffentlich abrufbar, dort gehört nur Laufzeit-Code hin. Direkt holen:
+  It is **not** in the module ZIP: the module directory is publicly reachable
+  through the web root, and only runtime code belongs there. Fetch it directly:
 
   ```bash
   curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_lldp_snmp_template.yaml
   ```
-- **Namens-Matching ist der Dreh- und Angelpunkt.** Das Modul löst den Nachbar-Namen in dieser
-  Reihenfolge auf:
-  1. exakter **Host-/Anzeigename** (case-insensitiv)
-  2. **IP-Adresse**
-  3. bereinigter Name (Vendor-Suffixe wie `(Serial)` entfernt)
-  4. reverse-DNS-Muster `ip-10-0-0-5` → extrahierte IP
-  5. **eindeutiger** Short-Name (erster Teil vor dem `.`)
+- **After linking, don't look at the map — look at the discovery.** This is by far
+  the most common reason for "LLDP doesn't work":
 
-  → Best Practice: **Zabbix-Hosts so benennen wie die Geräte-Hostnames** (oder SNMP-Interface-IP
-  passend setzen). Mehrdeutige Short-Names (mehrere Hosts gleicher Kurzname) erzeugen **keine**
-  Kante — sie landen im LLDP-Q-Tab als *ambiguous*.
-- **Port-Labels an beiden Enden** (optional, seit v4.35): der *lokale* Port kommt aus dem
-  Item-Key-Bracket (`lldpRemSysName[0.24.1]` → mittlere Zahl = lokaler Port; `lldp.rem.sysname[eth0]`
-  → `eth0`), der *Remote*-Port aus `lldpRemPortId`/`lldpRemPortDesc` mit demselben SNMPINDEX
-  (PortDesc bevorzugt — PortId kann eine MAC sein). Mehr unter
-  [Port-zu-Port](#port-zu-port--per-link-weathermap).
+  | Macro | Default | Means |
+  |---|---|---|
+  | `{$NT.LLDP.DISCOVERY.INTERVAL}` | **3h** | how long it may take until neighbours are *found* |
+  | `{$NT.LLDP.INTERVAL}` | **1h** | how long until their values are *current* |
+
+  Link the template, reload the map, see nothing, and conclude it doesn't work:
+  understandable, but premature. Zabbix simply hasn't asked yet. Force it:
+
+  > *Data collection → Hosts → \<switch\> → **Discovery rules** → **LLDP neighbor
+  > discovery** → **Execute now***
+
+  Then filter *Latest data* for `lldpRemSysName`. **Only once there are values there
+  can the module draw edges** — before that the map is necessarily empty, and no
+  amount of reloading the module changes it.
+
+  With many switches: the rule can be selected across multiple hosts in the host
+  list and executed in one go.
+- **Name matching is the crux.** The module resolves a neighbour name in this order:
+  1. exact **host / visible name** (case-insensitive)
+  2. **IP address**
+  3. cleaned name (vendor suffixes such as `(Serial)` stripped)
+  4. reverse-DNS pattern `ip-10-0-0-5` → extracted IP
+  5. **unique** short name (first part before the `.`)
+
+  → Best practice: **name Zabbix hosts the way the devices are named** (or set the
+  SNMP interface IP to match). Ambiguous short names (several hosts sharing one
+  short name) produce **no** edge — they land in the LLDP-Q tab as *ambiguous*.
+- **Port labels at both ends** (optional, since v4.35): the *local* port comes from
+  the item key bracket (`lldpRemSysName[0.24.1]` → middle number = local port;
+  `lldp.rem.sysname[eth0]` → `eth0`), the *remote* port from
+  `lldpRemPortId` / `lldpRemPortDesc` carrying the same SNMPINDEX (PortDesc
+  preferred — PortId may be a MAC). More under
+  [port-to-port](#port-to-port--per-link-weathermap).
 
 ---
 
-## Vendor-Matrix — was liefert Kanten?
+## Vendor matrix — what produces edges?
 
-Nicht jedes Gerät gibt seine Nachbar-Tabelle per SNMP heraus. Grobe Einordnung (im Zweifel
-mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
+Not every device hands out its neighbour table over SNMP. Rough guidance (when in
+doubt, verify with the [test below](#the-test-that-settles-it)):
 
-| Vendor / Linie | SNMP + LLDP-Neighbor-Tabelle? | Fürs Modul | Hinweis |
+| Vendor / line | SNMP + LLDP neighbour table? | For the module | Note |
 |---|---|---|---|
-| **HP Aruba** (AOS-Switch / AOS-CX) | ✓ voll | **funktioniert** | Standard-LLDP-MIB |
-| **HP ProCurve** (alt, z. B. 2500) | ⚠ teils nur Senden | eingeschränkt | Alt-Serien senden LLDP, führen aber teils **keine** abfragbare Nachbar-Tabelle |
-| **TP-Link Omada / JetStream** (*managed*) | ✓ | **funktioniert** | volles NOS mit SNMP + LLDP-MIB |
-| **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ kein SNMP | **keine Kanten** | „dumb switch"-Fall → manuell |
-| **TP-Link unmanaged** | ✗ | unsichtbar | Geräte erscheinen direkt verbunden, Switch fehlt |
-| **Ubiquiti EdgeSwitch / EdgeMax** | ✓ meist | **funktioniert** | EdgeOS, ordentliches SNMP |
-| **Ubiquiti UniFi** (USW/UDM) | ✗ oft **gar kein** SNMP | **funktioniert via API** | LLDP lebt im Controller → offizielles *UniFi Network API*-Template liefert `uplink.id`, das Modul liest es direkt |
-| **Cisco** (IOS/NX-OS) | ✓ | **funktioniert** | CDP default an, LLDP opt-in (`lldp run`) |
-| **MikroTik** (RouterOS) | ? | **ungeprüft** | Der Modulcode hat einen Haken für `discovery.neighbor`, aber **kein RouterOS-Gerät hat das je bestätigt** — siehe unten |
+| **HP Aruba** (AOS-Switch / AOS-CX) | ✓ full | **works** | standard LLDP-MIB |
+| **HP ProCurve** (older, e.g. 2500) | ⚠ partly send-only | limited | older series send LLDP but partly keep **no** queryable neighbour table |
+| **TP-Link Omada / JetStream** (*managed*) | ✓ | **works** | full NOS with SNMP + LLDP-MIB |
+| **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ no SNMP | **no edges** | the "dumb switch" case → add manually |
+| **TP-Link unmanaged** | ✗ | invisible | devices appear directly connected, the switch is missing |
+| **Ubiquiti EdgeSwitch / EdgeMax** | ✓ mostly | **works** | EdgeOS, decent SNMP |
+| **Ubiquiti UniFi** (USW/UDM) | ✗ often **no** SNMP at all | **works via API** | LLDP lives in the controller → the official *UniFi Network API* template provides `uplink.id`, which the module reads directly |
+| **Cisco** (IOS/NX-OS) | ✓ | **works** | CDP on by default, LLDP opt-in (`lldp run`) |
+| **Huawei** (VRP, e.g. S5700) | ? | **unverified** | standard LLDP-MIB expected, confirmed on no device. The official *Huawei VRP by SNMP* template does **not** collect the neighbour table — see below |
+| **MikroTik** (RouterOS) | ? | **unverified** | the module has a hook for `discovery.neighbor`, but **no RouterOS device has ever confirmed it** — see below |
 
-> **MikroTik: was hier Behauptung ist und was Messung.** Die Zeile stand lange
-> als „funktioniert" in dieser Tabelle. Belegt ist davon nur die eine Hälfte:
-> Das Modul **sucht** nach Items mit `discovery.neighbor` im Schlüssel und
-> verarbeitet sie, wenn sie kommen. Ob RouterOS die LLDP-Nachbartabelle über
-> normales SNMP herausgibt oder ob man dafür ein eigenes Item bauen muss, ist
-> **an keinem Gerät geprüft worden** — es gibt weder Test noch Fixture dafür.
+> **Huawei: the case that shows the most common misunderstanding.** Reported from a
+> production network with S5700 switches: LLDP enabled on the devices, names
+> matching, and still a circle without a single edge. Not a module bug — the chain
+> has three links, and the middle one was missing:
 >
-> Wer RouterOS betreibt, kann das in fünf Minuten klären und uns damit weiter
-> bringen als jede Vermutung: Liefert `snmpwalk` auf
-> `1.0.8802.1.1.2.1.4.1.1.9` (`lldpRemSysName`) Werte? Wenn ja, funktioniert
-> der Standardweg wie bei Cisco und HP. Wenn nein, braucht es ein Item, dessen
-> Schlüssel `discovery.neighbor` enthält — und dann ist die Frage, was
-> darinsteht. Beides ist eine nützliche Antwort.
+> ```
+> switch (LLDP on)  →  Zabbix items  →  this module
+> ```
+>
+> The module speaks **no SNMP**. It reads items. The official *Huawei VRP by SNMP*
+> template creates none for the LLDP neighbour table, so Zabbix never asks the
+> switch for it. The same holds for the stock Cisco and HP templates: enabling LLDP
+> on the device is only half the job — without `nt_lldp_snmp_template.yaml` (or your
+> own items) the map stays empty.
+>
+> What is **not** verified about Huawei: whether VRP exposes the LLDP-MIB over plain
+> SNMP at all. Our template queries the IEEE standard OIDs, so VRP *should* answer —
+> but that isn't established. Nor is there a public SNMP recording of an S5700 with
+> LLDP data to simulate against (the six Huawei walks in the LibreNMS corpus are
+> microwave radio, UPS and power supply units; not one contains an LLDP line).
+> Anyone running VRP can settle this in a minute with the
+> [test below](#the-test-that-settles-it) — and turn this row into a measurement.
+>
+> Source: [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2).
 
-> **UniFi im Detail:** UniFi baut LLDP für den *eigenen* Controller, nicht fürs externe
-> SNMP-Polling. In der Praxis ist es sogar deutlicher: Auf einer **UDM Pro Max** mit aktiviertem
-> SNMP kam auf `sysDescr` (v1 *und* v2c, Community `public`) **gar keine Antwort** — obwohl das
-> Gerät pingbar war. Der SNMP-Schalter in der Network-App aktiviert SNMP auf den *adoptierten
-> Geräten*, nicht auf der Konsole selbst; und Ubiquiti baut SNMP seit Jahren zurück. Auf einen
-> LLDP-Walk gegen UniFi sollte man also nicht bauen.
+> **MikroTik: what here is claim and what is measurement.** This row long read
+> "works". Only half of that is established: the module **looks** for items with
+> `discovery.neighbor` in the key and processes them when they arrive. Whether
+> RouterOS exposes the LLDP neighbour table over plain SNMP, or whether you have to
+> build your own item for it, has **never been checked on a device** — there is
+> neither a test nor a fixture for it.
 >
-> **Der Weg, der trägt:** das offizielle **UniFi Network API**-Template. Es legt pro Gerät/Client
-> ein Item **`uplink.id`** an (JSONPath `$.uplinkDeviceId` aus `details.json`) — die Geräte-UUID
-> des Uplinks. Da dasselbe Template seine Hosts nach der UUID benennt, löst das Modul die Kante
-> ohne Zusatzarbeit auf: **Template dranhängen genügt**, keine eigenen Items bauen. Quelle im
-> LLDP-Q-Tab: `unifi`. (Die Community ist bei UniFi übrigens fest `public` und nicht einstellbar
-> — deshalb fehlt das Feld in der UI.)
+> Anyone running RouterOS can clear this up in five minutes and get us further than
+> any guess: does `snmpwalk` on `1.0.8802.1.1.2.1.4.1.1.9` (`lldpRemSysName`) return
+> values? If yes, the standard path works exactly as it does for Cisco and HP. If
+> no, an item whose key contains `discovery.neighbor` is needed — and then the
+> question is what's in it. Either answer is useful.
+
+> **UniFi in detail:** UniFi builds LLDP for its *own* controller, not for external
+> SNMP polling. In practice it's even starker: on a **UDM Pro Max** with SNMP
+> enabled, `sysDescr` returned **nothing at all** (v1 *and* v2c, community `public`)
+> — although the device answered pings. The SNMP switch in the Network app enables
+> SNMP on the *adopted devices*, not on the console itself; and Ubiquiti has been
+> winding SNMP down for years. So don't build on an LLDP walk against UniFi.
+>
+> **The path that holds:** the official **UniFi Network API** template. It creates
+> an item **`uplink.id`** per device/client (JSONPath `$.uplinkDeviceId` from
+> `details.json`) — the device UUID of the uplink. Since the same template names its
+> hosts after that UUID, the module resolves the edge with no extra work:
+> **linking the template is enough**, no custom items. Source in the LLDP-Q tab:
+> `unifi`. (Incidentally, the community on UniFi is fixed to `public` and not
+> configurable — which is why the field is absent from the UI.)
 
 ---
 
-## Der Test, der alles entscheidet
+## The test that settles it
 
-Nicht raten — **snmpwalk die LLDP-Nachbar-Tabelle** und schau, ob Namen zurückkommen:
+Don't guess — **snmpwalk the LLDP neighbour table** and see whether names come back:
 
 ```bash
 snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.9
@@ -163,132 +217,157 @@ snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.9
 
 (`…4.1.1.9` = `lldpRemSysName`.)
 
-- **Namen kommen zurück** → das Modul zieht daraus Kanten. ✓
-- **leer / „No Such Object"** → dieser Switch liefert **keine** Kanten via SNMP
-  (Easy Smart, UniFi-ohne-API, sende-nur-Geräte) → [manuell ergänzen](#lücken-schließen-manuell).
+- **Names come back** → the module will draw edges from them. ✓
+- **Empty / "No Such Object"** → this switch provides **no** edges via SNMP
+  (Easy Smart, UniFi without the API, send-only devices) →
+  [add them manually](#filling-the-gaps-manually).
 
-CDP-Äquivalent (Cisco): `1.3.6.1.4.1.9.9.23.1.2.1.1.6` (`cdpCacheDeviceId`).
+CDP equivalent (Cisco): `1.3.6.1.4.1.9.9.23.1.2.1.1.6` (`cdpCacheDeviceId`).
 
 ---
 
-## Port-zu-Port & Per-Link-Weathermap
+## Port-to-port & per-link weathermap
 
-Ab **v4.35** trägt jede LLDP-Kante nicht nur den *lokalen* Port des meldenden Switches,
-sondern auch den **Remote-Port** am Nachbar-Ende — und, wo die Datenlage passt, die
-**gemessene** Auslastung des physischen Links (Weathermap-Modus) statt einer Schätzung aus
-den Host-Traffic-Summen.
+Since **v4.35** every LLDP edge carries not only the *local* port of the reporting
+switch but also the **remote port** at the neighbour's end — and, where the data
+supports it, the **measured** utilisation of the physical link (weathermap mode)
+instead of an estimate derived from host traffic totals.
 
-**Was das Modul dafür liest** (bringt das mitgelieferte Template automatisch mit):
+**What the module reads for this** (the bundled template brings it automatically):
 
-| Item-Key | OID | Wozu |
+| Item key | OID | Purpose |
 |---|---|---|
-| `lldpRemPortId[{#SNMPINDEX}]` | `1.0.8802.1.1.2.1.4.1.1.7` | Remote-Port (kann je PortIdSubtype eine MAC sein) |
-| `lldpRemPortDesc[{#SNMPINDEX}]` | `1.0.8802.1.1.2.1.4.1.1.8` | Remote-Port-Klartext — **bevorzugt** fürs Label |
-| `cdpCacheDevicePort[{#SNMPINDEX}]` | `1.3.6.1.4.1.9.9.23.1.2.1.1.7` | Remote-Port bei CDP |
-| `net.if.in[ifHCInOctets.<ifIndex>]` / `…out` | Interface-MIB | Per-Link-Traffic (Standard-SNMP-Interface-Monitoring) |
+| `lldpRemPortId[{#SNMPINDEX}]` | `1.0.8802.1.1.2.1.4.1.1.7` | remote port (may be a MAC, depending on PortIdSubtype) |
+| `lldpRemPortDesc[{#SNMPINDEX}]` | `1.0.8802.1.1.2.1.4.1.1.8` | remote port in plain text — **preferred** for the label |
+| `cdpCacheDevicePort[{#SNMPINDEX}]` | `1.3.6.1.4.1.9.9.23.1.2.1.1.7` | remote port under CDP |
+| `net.if.in[ifHCInOctets.<ifIndex>]` / `…out` | Interface-MIB | per-link traffic (standard SNMP interface monitoring) |
 
-Der Remote-Port korreliert über **denselben `{#SNMPINDEX}`** wie der Nachbar-SysName; der
-lokale Port ist die mittlere Zahl des LLDP-Index (`…[TimeMark.LokalPort.RemIndex]`).
+The remote port correlates through **the same `{#SNMPINDEX}`** as the neighbour
+SysName; the local port is the middle number of the LLDP index
+(`…[TimeMark.LocalPort.RemIndex]`).
 
-**Voraussetzung für die *gemessene* Weathermap** (nicht nur die Labels): der lokale
-LLDP-Port muss dem **ifIndex** entsprechen, unter dem der Switch seinen Interface-Traffic
-zählt. Auf Aruba/ProCurve ist das 1:1. Passt es nicht, bleiben die Port-**Labels** trotzdem —
-nur die Kante fällt auf die Node-Summen-**Schätzung** zurück (kein Fehler). Verifizieren:
+**Prerequisite for the *measured* weathermap** (not just the labels): the local LLDP
+port has to correspond to the **ifIndex** under which the switch counts its interface
+traffic. On Aruba/ProCurve that's 1:1. Where it doesn't line up, the port **labels**
+remain — only the edge falls back to the node-total **estimate** (not an error).
+To verify:
 
 ```bash
 snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.7   # lldpRemPortId
 snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.8   # lldpRemPortDesc
 ```
 
-Kommen Werte zurück → Port-zu-Port geht. Ob der Index-`<LokalPort>` als
-`net.if.in[ifHCInOctets.<LokalPort>]` existiert, entscheidet über die *gemessene* Auslastung.
+Values coming back → port-to-port works. Whether the index `<LocalPort>` exists as
+`net.if.in[ifHCInOctets.<LocalPort>]` decides whether utilisation is *measured*.
 
-> **CDP:** Der CDP-`{#SNMPINDEX}` ist zweiteilig (`cdpCacheIfIndex.devIndex`). Das Modul liest
-> den lokalen Port aus dem *ersten* Teil (= ifIndex) — Remote-Port-Labels **und** gemessene
-> Per-Link-Auslastung funktionieren damit auch bei reinem CDP.
+> **CDP:** the CDP `{#SNMPINDEX}` has two parts (`cdpCacheIfIndex.devIndex`). The
+> module takes the local port from the *first* part (= ifIndex) — so remote port
+> labels **and** measured per-link utilisation work with pure CDP as well.
 
-> **Default- vs. %-Weathermap:** Der Weathermap-**%-Modus** normiert jede Kante auf ihre
-> Kapazität und ist die konsistente Vergleichssicht. Der Default-**Absolut**-View färbt nach
-> Roh-Traffic — Port-zu-Port-Kanten mit *gemessener* Per-Link-Zahl stehen dort neben Kanten
-> mit *geschätzter* Node-Summe; für den direkten Farbvergleich zwischen Kanten also den
-> %-Modus nutzen.
+> **Absolute vs. % weathermap:** the weathermap's **% mode** normalises every edge
+> against its capacity and is the consistent comparison view. The default
+> **absolute** view colours by raw traffic — there, port-to-port edges with a
+> *measured* per-link figure sit next to edges with an *estimated* node total. For
+> comparing colours between edges, use % mode.
 
 ---
 
-## Warum fehlen Kanten? (Troubleshooting)
+## Why are edges missing? (Troubleshooting)
 
-Öffne den **LLDP-Q-Tab** im Modul — er zeigt pro Host:
+### First: the question that halves the search
 
-- **matched** — Nachbar sauber einem Host zugeordnet ✓
-- **unmatched** — Nachbar-Name löst auf **keinen** Host auf
-- **ambiguous** — Short-Name passt auf **mehrere** Hosts → keine Kante (sonst Zufallszuordnung)
+Before you go looking inside the module — **do LLDP items exist at all?**
+*Monitoring → Latest data*, filter `lldpRemSysName`:
 
-Häufigste Ursachen:
+- **No results** → the problem is **upstream** of the module, in Zabbix or on the
+  device. Continue at ["What you have to do", step 3](#3-in-zabbix) — usually the
+  template is missing or discovery hasn't run yet (default **3h**, force it with
+  *Execute now*).
+- **Results, but the map stays empty** → the problem is **name matching**. Continue
+  with the LLDP-Q tab below.
 
-| Symptom | Ursache | Fix |
+That one minute saves the bulk of the troubleshooting. "No item" and "item matches
+no host" look identical in the module — a circle without edges — but have nothing to
+do with each other.
+
+### Then: the LLDP-Q tab
+
+Open the **LLDP-Q tab** in the module — it reports per host:
+
+- **matched** — neighbour cleanly resolved to a host ✓
+- **unmatched** — the neighbour name resolves to **no** host
+- **ambiguous** — the short name fits **several** hosts → no edge (guessing would be
+  worse)
+
+Most common causes:
+
+| Symptom | Cause | Fix |
 |---|---|---|
-| Host hat `matched: 0` | Switch führt keine Nachbar-Tabelle (Easy Smart, sende-nur, kein SNMP) | snmpwalk-Test; ggf. manuell |
-| Nachbar *unmatched* | annoncierter SysName ≠ Zabbix-Hostname | Hosts umbenennen / SNMP-IP passend |
-| Server taucht nicht als Nachbar auf | kein `lldpd` auf dem Server | `lldpd` installieren |
-| Nachbar *ambiguous* | mehrere Hosts mit gleichem Kurznamen | eindeutige (FQDN-)Namen |
-| gar keine LLDP-Items | keine SNMP-LLD / Template ohne LLDP | LLD-Regel für `lldpRemSysName` anlegen |
+| host shows `matched: 0` | switch keeps no neighbour table (Easy Smart, send-only, no SNMP) | snmpwalk test; add manually if needed |
+| neighbour *unmatched* | announced SysName ≠ Zabbix host name | rename hosts / set the SNMP IP to match |
+| server never appears as a neighbour | no `lldpd` on the server | install `lldpd` |
+| neighbour *ambiguous* | several hosts share one short name | use unique (FQDN) names |
+| no LLDP items at all | no SNMP LLD / template without LLDP | create an LLD rule for `lldpRemSysName` |
+| template linked, still no items | **discovery hasn't run yet** — the default is 3h | *Discovery rules → LLDP neighbor discovery → **Execute now*** |
+| vendor template linked, no LLDP items | the official templates (Huawei VRP, Cisco IOS, HP) do **not** collect the neighbour table | link `nt_lldp_snmp_template.yaml` in addition |
 
 ---
 
-## Lücken schließen (manuell)
+## Filling the gaps (manually)
 
-Für alles, was LLDP/SNMP nicht hergibt (Easy-Smart-Switches, unmanaged, UniFi-ohne-API,
-sende-nur-Geräte) bleibt die **Deklaration von Hand**. Bewährt hat sich
-**LLDP-Backbone + gezielte manuelle Ergänzung** — so bekommst du die Selbst-Aktualität von
-LLDP *und* die Vollständigkeit der Handarbeit.
+For everything LLDP/SNMP won't give you (Easy Smart switches, unmanaged gear, UniFi
+without the API, send-only devices), **declaring it by hand** remains. What works
+well is an **LLDP backbone plus targeted manual additions** — you get LLDP's
+self-updating nature *and* the completeness of hand work.
 
-### Was passiert mit Geräten, die gar nichts melden?
+### What happens to devices that report nothing at all?
 
-Zwei Fälle, die sich unterschiedlich auswirken:
+Two cases, with different effects:
 
-**Ein unmanaged Switch ist meist unsichtbar.** Er spricht kein LLDP, reicht die Frames aber
-durch, weil er sie nicht verarbeitet. Die gemanagten Geräte links und rechts sehen dadurch
-*sich gegenseitig* und erscheinen direkt verbunden. Topologisch falsch — die Aussage „diese
-beiden hängen zusammen" stimmt aber trotzdem.
+**An unmanaged switch is usually invisible.** It speaks no LLDP but passes the frames
+through, because it doesn't process them. The managed devices to its left and right
+therefore see *each other* and appear directly connected. Topologically wrong — but
+the statement "these two are connected" still holds.
 
-**Eine Firewall ohne LLDP ist der unangenehmere Fall.** Sie wird überwacht, erscheint also als
-Knoten — aber ohne Kanten. Sie liegt als **Insel** auf der Karte, obwohl der halbe Verkehr
-durch sie läuft.
+**A firewall without LLDP is the more awkward case.** It is monitored, so it appears
+as a node — but without edges. It sits on the map as an **island**, even though half
+the traffic runs through it.
 
-### Die drei Werkzeuge
+### The three tools
 
-**1. Host-Tag `nt:parent=<hostname>`** — der empfohlene Weg. Am Host ein Tag mit dem Namen des
-Geräts setzen, an dem er hängt:
+**1. Host tag `nt:parent=<hostname>`** — the recommended route. Set a tag on the host
+naming the device it hangs off:
 
 ```
 nt:parent = fw-core
 ```
 
-Ein normales Zabbix-Host-Tag, also **serverseitig** gespeichert und für alle Benutzer sichtbar.
-Gedacht für Träger-Beziehungen (VM→Hypervisor, Container→Node), funktioniert aber genauso für
-„dieser Host hängt hinter dieser Firewall". Die Ausfallsimulation behandelt es als **harte
-Abhängigkeit**: Fällt der Parent, fällt der Child — unabhängig vom Netzpfad.
+An ordinary Zabbix host tag, therefore stored **server-side** and visible to every
+user. Intended for carrier relationships (VM→hypervisor, container→node), but it
+works just as well for "this host sits behind this firewall". The failure simulation
+treats it as a **hard dependency**: if the parent goes, the child goes — regardless
+of the network path.
 
-**2. Manuelle Links** im Star-Mode direkt in der Karte ziehen. Seit 5.0 **serverseitig**, in zwei
-Ebenen: Zeichnet ein **Super-Admin**, gilt die Kante für alle. Zeichnet jemand anderes, ist sie
-seine persönliche Notiz — folgt ihm aber über Browser und Rechner hinweg. In der Karte sind beide
-unterscheidbar, die geteilte kräftiger gestrichelt.
-> Damit taugen manuelle Links auch für eine *gemeinsame* Topologie. Wo ein `nt:parent`-Tag besser
-> passt: es ist eine **harte Abhängigkeit** in der Ausfallsimulation, ein manueller Link nur eine
-> Kante auf der Karte. Für „hängt hinter dieser Firewall" nimm das Tag, für „hier liegt ein Kabel,
-> das keiner meldet" den Link.
+**2. Manual links** drawn straight on the map in star mode. Since 5.0 **server-side**,
+in two layers: when a **Super admin** draws, the edge applies to everyone. When
+anyone else draws, it's their personal note — but it follows them across browsers and
+machines. Both are distinguishable on the map; the shared one is more strongly dashed.
+> That makes manual links usable for a *shared* topology too. Where an `nt:parent` tag
+> fits better: it is a **hard dependency** in the failure simulation, whereas a manual
+> link is only an edge on the map. For "sits behind this firewall" use the tag; for
+> "there's a cable here that nobody reports" use the link.
 
-**3. Ghost-Knoten** decken den umgekehrten Fall ab: Meldet ein Nachbar ein Gerät, das in Zabbix
-gar nicht überwacht wird, erscheint es als gestrichelter Platzhalter (Toggle in der Toolbar,
-Default aus). So wird die Lücke **sichtbar**, statt zu verschwinden.
+**3. Ghost nodes** cover the opposite case: when a neighbour reports a device that
+isn't monitored in Zabbix at all, it appears as a dashed placeholder (toggle in the
+toolbar, off by default). That makes the gap **visible** instead of letting it vanish.
 
-### Wichtig für die Ausfallsimulation
+### Important for the failure simulation
 
-Die Simulation kennt **nur die Kanten, die sie bekommen hat**. Daraus folgen zwei Dinge:
+The simulation knows **only the edges it was given**. Two things follow:
 
-- Ein Gerät, das nicht im Graphen steht, kann nicht als Ausfallpunkt simuliert werden.
-- Eine handgezeichnete Kante, die nicht der Realität entspricht, macht die Simulation
-  **zuverlässig falsch** — sie meldet dann Hosts als „sicher", die es physisch nicht sind.
+- A device that isn't in the graph cannot be simulated as a point of failure.
+- A hand-drawn edge that doesn't match reality makes the simulation **reliably
+  wrong** — it will then report hosts as "safe" that physically are not.
 
-Für die Pfade, auf die es wirklich ankommt, lohnt sich deshalb ein Gegencheck: Sind die Kanten
-**gemessen** oder **angenommen**?
+So for the paths that genuinely matter, a cross-check pays off: are those edges
+**measured** or **assumed**?
