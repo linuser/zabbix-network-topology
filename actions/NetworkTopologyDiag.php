@@ -44,13 +44,30 @@ class NetworkTopologyDiag extends NetworkTopologyController {
         $uid = (int) (\CWebUser::$data['userid'] ?? 0);
         $entries = [];
         $apcu = function_exists('apcu_fetch');
+
         if ($apcu && $uid > 0) {
-            $ok = false;
-            $arr = apcu_fetch(self::KEY_PREFIX . $uid, $ok);
-            if ($ok && is_array($arr)) {
-                $entries = $arr;
+            // Alle Slots einsammeln. Abgelaufene fehlen einfach — die TTL
+            // raeumt sie weg, ohne dass hier etwas aufzuraeumen waere.
+            $keys = [];
+            for ($i = 0; $i < self::MAX_ENTRIES; $i++) {
+                $keys[] = self::KEY_PREFIX . $uid . '_' . $i;
             }
+            $found = apcu_fetch($keys);
+            if (is_array($found)) {
+                foreach ($found as $e) {
+                    if (is_array($e)) {
+                        $entries[] = $e;
+                    }
+                }
+            }
+            // Nach der laufenden Nummer sortieren: die Slot-Reihenfolge ist
+            // seq modulo MAX_ENTRIES und damit gegenueber der Zeit gedreht,
+            // sobald der Ring einmal herum ist.
+            usort($entries, static function (array $a, array $b): int {
+                return ($a['seq'] ?? 0) <=> ($b['seq'] ?? 0);
+            });
         }
+
         $this->jsonResponse([
             'entries' => array_values(array_slice($entries, -self::MAX_ENTRIES)),
             'apcu'    => $apcu,
@@ -64,18 +81,36 @@ class NetworkTopologyDiag extends NetworkTopologyController {
      * Erfordert apcu — degradiert silent zu no-op wenn nicht verfuegbar.
      */
     public static function record(array $entry): void {
-        if (!function_exists('apcu_fetch')) return;
+        if (!function_exists('apcu_inc') || !function_exists('apcu_store')) return;
         $uid = (int) (\CWebUser::$data['userid'] ?? 0);
         if ($uid === 0) return;
-        $key = self::KEY_PREFIX . $uid;
-        $ok  = false;
-        $arr = apcu_fetch($key, $ok);
-        if (!$ok || !is_array($arr)) $arr = [];
-        $entry['ts'] = time();
-        $arr[] = $entry;
-        if (count($arr) > self::MAX_ENTRIES) {
-            $arr = array_slice($arr, -self::MAX_ENTRIES);
-        }
-        apcu_store($key, $arr, self::TTL);
+
+        // Echter Ringpuffer statt fetch -> append -> store.
+        //
+        // Die alte Fassung las das ganze Array, haengte an und schrieb es
+        // zurueck. Zwei gleichzeitige Requests lasen dabei denselben Stand und
+        // der zweite ueberschrieb den Eintrag des ersten — bei einem Modul,
+        // dessen Karte alle 30 s parallel mehrere Actions ruft, ist das kein
+        // theoretischer Fall. Fuer Diagnosedaten war der Verlust verschmerzbar,
+        // aber ein Puffer, der ausgerechnet unter Last Eintraege verliert, ist
+        // dort am unzuverlaessigsten, wo man ihn braucht.
+        //
+        // Jetzt: apcu_inc vergibt atomar eine laufende Nummer, jeder Eintrag
+        // bekommt seinen eigenen Slot. Zwei Requests schreiben nie in
+        // denselben Schluessel, es gibt nichts zu ueberschreiben.
+        // Signatur: apcu_inc(key, step, &$success, ttl). Ein fehlender
+        // Schluessel wird dabei angelegt und auf $step gesetzt.
+        $success = false;
+        $seq = apcu_inc(self::KEY_PREFIX . 'seq_' . $uid, 1, $success, self::TTL);
+        if ($seq === false || !$success) return;
+
+        $entry['ts']  = time();
+        $entry['seq'] = $seq;
+
+        apcu_store(
+            self::KEY_PREFIX . $uid . '_' . ($seq % self::MAX_ENTRIES),
+            $entry,
+            self::TTL
+        );
     }
 }
