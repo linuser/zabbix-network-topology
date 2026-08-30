@@ -122,17 +122,29 @@ class NetworkTopologyLinks extends NetworkTopologyController {
                 ? ManualLinks::saveShared($decoded)
                 : ManualLinks::savePersonal($decoded);
         }
-        catch (Exception $e) {
-            // Typisch: API::Module()->update() lehnt ab. Die Meldung stammt aus
-            // Zabbix und ist fuer den Nutzer brauchbar.
-            $this->jsonResponse(['error' => $e->getMessage()]);
+        catch (\Throwable $e) {
+            // Nur saubere Zabbix-API-Meldungen durchreichen. Andere Throwables
+            // (DB, Schema, TypeError) koennen interne Details enthalten —
+            // Pfade, Klassennamen, Spaltennamen. Der Empfaenger ist zwar
+            // angemeldet, die Meldung soll trotzdem nichts verraten, was er
+            // nicht ohnehin sehen darf. Gleiches Muster wie in
+            // NetworkTopologyMaintenance; vorher fing dieser Block nur
+            // Exception und reichte jede Meldung ungeprueft durch.
+            error_log('network.topology.links: ' . $e);
+            $this->jsonResponse(['error' => $e instanceof \APIException
+                ? $e->getMessage()
+                : 'Verbindungen konnten nicht gespeichert werden (interner Fehler).']);
             return;
         }
 
         $this->jsonResponse([
             'ok'    => true,
             'scope' => $scope,
-            'links' => $links
+            'links' => $links,
+            // Wie bei den Positionen: wurde ueber MAX_LINKS hinaus gespeichert,
+            // soll der Client es erfahren. Sonst sieht ein Speichern, bei dem
+            // Kanten verlorengingen, genauso aus wie eines ohne Verlust.
+            'truncated' => ManualLinks::lastTruncated()
         ]);
     }
 }

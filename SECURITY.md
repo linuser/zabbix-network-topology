@@ -37,7 +37,7 @@ Fixes gibt es nur für die **jeweils neueste Version** (siehe
 ### Was in den Geltungsbereich fällt
 
 **Ja:** dieses Modul — die PHP-Actions unter `actions/`, die Topologie-Logik unter
-`topology/`, das Frontend unter `assets/js/`, die drei Widget-Module unter
+`topology/`, das Frontend unter `assets/js/`, die fünf Widget-Module unter
 `widget*/` sowie die mitgelieferten Skripte `deploy.sh`, `nt-install.sh` und
 `tools/`.
 
@@ -96,7 +96,7 @@ Backports to older versions are not planned.
 ### Scope
 
 **In scope:** this module — the PHP actions in `actions/`, topology logic in
-`topology/`, the frontend in `assets/js/`, the three widget modules in `widget*/`,
+`topology/`, the frontend in `assets/js/`, the five widget modules in `widget*/`,
 and the shipped scripts `deploy.sh`, `nt-install.sh`, `tools/`.
 
 **Out of scope:** Zabbix itself (→ [Zabbix Security](https://www.zabbix.com/security))

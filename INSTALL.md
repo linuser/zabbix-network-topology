@@ -106,7 +106,7 @@ sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
 
 > **RHEL / RedHat / Rocky / Alma** — drei Extra-Punkte:
 > - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`. **Wer `nt-install.sh` oder `deploy.sh` nutzt, braucht das nicht** — beide rufen `restorecon` seit 5.0 selbst auf. Nötig ist es nur beim Entpacken von Hand.
-> - **Owner/Service**: Web-User ist `apache` (nicht www-data), der Dienst heißt `php-fpm` → `sudo chown -R apache:apache network_topology` und `sudo systemctl reload php-fpm`
+> - **Owner/Service**: der Dienst heißt `php-fpm` (nicht php8.x-fpm) → `sudo systemctl reload php-fpm`. **Der Eigentümer bleibt `root:root`** — auch hier. php-fpm braucht nur Leserechte; gäbe man dem Web-User den Modulcode zu eigen, könnte ein kompromittierter PHP-Prozess ihn umschreiben. Was auf RHEL wirklich fehlt, ist der SELinux-Kontext (Punkt darüber), nicht der Eigentümer.
 > - **APCu** (optional, empfohlen für Cache + Rate-Limit): `sudo dnf install php-pecl-apcu` und für die **FPM**-SAPI aktivieren. Ohne APCu läuft das Modul trotzdem — nur ohne Cache/Drosselung (fail-open).
 
 ### 2. Modul aktivieren
@@ -348,7 +348,7 @@ sudo systemctl reload php8.2-fpm       # use the name you found!
 
 > **RHEL / RedHat / Rocky / Alma** — three extra points:
 > - **SELinux** (the usual reason for "module not shown"): restore the httpd read context after copying, otherwise php-fpm can't read the files → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`. **Not needed when using `nt-install.sh` or `deploy.sh`** — both call `restorecon` themselves as of 5.0. It only applies to unpacking by hand.
-> - **Owner/service**: the web user is `apache` (not www-data), the service is `php-fpm` → `sudo chown -R apache:apache network_topology` and `sudo systemctl reload php-fpm`
+> - **Owner/service**: the service is called `php-fpm` (not php8.x-fpm) → `sudo systemctl reload php-fpm`. **Ownership stays `root:root`** here too. php-fpm only needs read access; handing the module code to the web user would let a compromised PHP process rewrite it. What RHEL actually needs is the SELinux context (the point above), not a different owner.
 > - **APCu** (optional, recommended for cache + rate-limit): `sudo dnf install php-pecl-apcu` and enable it for the **FPM** SAPI. Without APCu the module still works — just without cache/throttling (fail-open).
 
 ### 2. Enable the module

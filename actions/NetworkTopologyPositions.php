@@ -117,10 +117,14 @@ class NetworkTopologyPositions extends NetworkTopologyController {
                 ? NodePositions::saveShared($decoded)
                 : NodePositions::savePersonal($decoded);
         }
-        catch (Exception $e) {
-            // Typisch: API::Module()->update() lehnt ab. Die Meldung stammt aus
-            // Zabbix und ist fuer den Nutzer brauchbar.
-            $this->jsonResponse(['error' => $e->getMessage()]);
+        catch (\Throwable $e) {
+            // Siehe NetworkTopologyLinks: nur APIException-Meldungen gehen an
+            // den Client, alles andere koennte interne Details tragen. Der
+            // volle Fehler landet im Serverlog, wo er hingehoert.
+            error_log('network.topology.positions: ' . $e);
+            $this->jsonResponse(['error' => $e instanceof \APIException
+                ? $e->getMessage()
+                : 'Positionen konnten nicht gespeichert werden (interner Fehler).']);
             return;
         }
 

@@ -64,7 +64,12 @@ class NetworkTopologyPortScan extends NetworkTopologyController {
         22   => 'SSH',
         23   => 'Telnet',
         80   => 'HTTP',
-        161  => 'SNMP',        // UDP — siehe Hinweis unten
+        // Label traegt das /TCP bewusst: SNMP laeuft real fast immer ueber
+        // UDP, und ein TCP-Timeout hier heisst NICHT, dass SNMP am Geraet
+        // nicht funktioniert. Stand hier frueher nur 'SNMP', las sich das
+        // Ergebnis wie eine Aussage ueber SNMP — der Code wusste es besser
+        // (Hinweis unten), der Nutzer sah es nicht. Details siehe unten.
+        161  => 'SNMP/TCP',
         443  => 'HTTPS',
         445  => 'SMB',
         515  => 'LPD',
