@@ -14,8 +14,16 @@
 # Hinweis: "npm run build" erzeugt bewusst KEINE Source-Map (Release-Build), damit
 # der Drift-Vergleich stabil bleibt und keine ~1 MB .map ausgeliefert wird.
 
+# Eine explizite stages-Liste ERSETZT GitLabs Defaults (.pre/build/test/deploy/
+# .post). Wer hier eine Stage vergisst, die ein Job benutzt, bekommt keinen
+# uebersprungenen Job, sondern eine ungueltige Pipeline — GitLab weist sie
+# komplett ab. Genau das ist ab 6347808 passiert: der parity-Job kam mit
+# "stage: test" dazu, test stand aber nicht in dieser Liste. Ergebnis: 32
+# Commits ohne eine einzige Pipeline, ohne dass irgendwo etwas rot geworden
+# waere. Wer hier einen Job ergaenzt, prueft die Liste mit.
 stages:
   - lint
+  - test
   - build
 
 default:
