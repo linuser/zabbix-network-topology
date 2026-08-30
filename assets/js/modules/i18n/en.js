@@ -237,6 +237,8 @@ export default {
     'toolbar.unlink.confirm.personal': 'Delete your personal links?',
     'links.save_failed': 'Could not save the link: {err}',
     'links.truncated':  'Too many links: {n} were not saved. The server stores at most 2000 manual edges.',
+    'conflict.links':     'The links were changed elsewhere in the meantime. Your change was NOT saved \u2014 please reload the page.',
+    'conflict.positions': 'The layout was changed elsewhere in the meantime. Your change was NOT saved \u2014 please reload the page.',
     'positions.save_failed': 'Could not save the layout: {err}',
     'toolbar.search': 'Search host...',
     'export.report.meta': '{date} &nbsp;|&nbsp; {hosts} hosts &nbsp;|&nbsp; {links} links',

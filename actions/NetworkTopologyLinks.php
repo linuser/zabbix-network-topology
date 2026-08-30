@@ -7,6 +7,7 @@ namespace Modules\NetworkTopology\Actions;
 
 use CCsrfTokenHelper;
 use Modules\NetworkTopology\Topology\ManualLinks;
+use Modules\NetworkTopology\Topology\Revision;
 use Exception;
 
 /**
@@ -65,6 +66,9 @@ class NetworkTopologyLinks extends NetworkTopologyController {
 
         $ret = $this->validateInput([
             'links'   => 'required|string',
+            // Revision, auf der die Aenderung beruht. Optional: ein
+            // Client ohne sie verhaelt sich wie bisher.
+            'base'    => 'string',
             'scope'   => 'required|in shared,personal',
             'nt_csrf' => 'string',
         ]);
@@ -117,6 +121,27 @@ class NetworkTopologyLinks extends NetworkTopologyController {
             return;
         }
 
+        // Hat zwischen Laden und Speichern jemand anderes geschrieben?
+        // Beide Ebenen speichern den VOLLSTAENDIGEN Zustand, nicht ein Delta —
+        // ohne diese Pruefung gewinnt schlicht der letzte Schreiber und die
+        // Aenderung des anderen ist weg, ohne Fehlermeldung. Betrifft zwei
+        // Tabs desselben Benutzers genauso wie zwei Super-Admins.
+        $current = $scope === ManualLinks::SCOPE_SHARED
+            ? ManualLinks::loadShared()
+            : ManualLinks::loadPersonal();
+
+        if (!Revision::matches((string) $this->getInput('base', ''), $current)) {
+            $this->jsonResponse([
+                'error'    => _('The links were changed elsewhere in the meantime.'),
+                'conflict' => true,
+                // Den aktuellen Stand gleich mitschicken: der Client kann
+                // damit neu aufsetzen, statt eine weitere Runde zu drehen.
+                'links'    => $current,
+                'revision' => Revision::of($current)
+            ]);
+            return;
+        }
+
         try {
             $links = $scope === ManualLinks::SCOPE_SHARED
                 ? ManualLinks::saveShared($decoded)
@@ -144,7 +169,8 @@ class NetworkTopologyLinks extends NetworkTopologyController {
             // Wie bei den Positionen: wurde ueber MAX_LINKS hinaus gespeichert,
             // soll der Client es erfahren. Sonst sieht ein Speichern, bei dem
             // Kanten verlorengingen, genauso aus wie eines ohne Verlust.
-            'truncated' => ManualLinks::lastTruncated()
+            'truncated' => ManualLinks::lastTruncated(),
+            'revision'  => Revision::of($links)
         ]);
     }
 }

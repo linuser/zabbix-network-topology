@@ -7,6 +7,7 @@ namespace Modules\NetworkTopology\Actions;
 
 use CCsrfTokenHelper;
 use Modules\NetworkTopology\Topology\NodePositions;
+use Modules\NetworkTopology\Topology\Revision;
 use Exception;
 
 /**
@@ -60,6 +61,8 @@ class NetworkTopologyPositions extends NetworkTopologyController {
 
         $ret = $this->validateInput([
             'positions' => 'required|string',
+            // Revision, auf der die Aenderung beruht. Optional.
+            'base'      => 'string',
             'scope'     => 'required|in shared,personal',
             'nt_csrf'   => 'string',
         ]);
@@ -112,6 +115,23 @@ class NetworkTopologyPositions extends NetworkTopologyController {
             return;
         }
 
+        // Siehe NetworkTopologyLinks: beide Ebenen speichern den
+        // VOLLSTAENDIGEN Zustand. Ohne diese Pruefung ueberschreibt der letzte
+        // Schreiber die Arbeit des vorigen, ohne dass jemand etwas merkt.
+        $current = $scope === NodePositions::SCOPE_SHARED
+            ? NodePositions::loadShared()
+            : NodePositions::loadPersonal();
+
+        if (!Revision::matches((string) $this->getInput('base', ''), $current)) {
+            $this->jsonResponse([
+                'error'     => _('The layout was changed elsewhere in the meantime.'),
+                'conflict'  => true,
+                'positions' => $current,
+                'revision'  => Revision::of($current)
+            ]);
+            return;
+        }
+
         try {
             $saved = $scope === NodePositions::SCOPE_SHARED
                 ? NodePositions::saveShared($decoded)
@@ -138,7 +158,11 @@ class NetworkTopologyPositions extends NetworkTopologyController {
             'ok'        => true,
             'scope'     => $scope,
             'views'     => count($saved),
-            'truncated' => NodePositions::lastTruncated()
+            'truncated'       => NodePositions::lastTruncated(),
+            // Getrennt gemeldet: Knoten und Ansichten sind verschiedene Dinge,
+            // und eine Summe waere in beiden Bedeutungen falsch.
+            'truncated_views' => NodePositions::lastTruncatedViews(),
+            'revision'        => Revision::of($saved)
         ]);
     }
 }

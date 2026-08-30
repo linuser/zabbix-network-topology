@@ -88,6 +88,13 @@ final class NodePositions {
      */
     private static int $truncated = 0;
 
+    /** Verworfene ANSICHTEN des letzten sanitize()-Laufs (MAX_VIEWS). */
+    private static int $truncated_views = 0;
+
+    public static function lastTruncatedViews(): int {
+        return self::$truncated_views;
+    }
+
     public static function lastTruncated(): int {
         return self::$truncated;
     }
@@ -183,6 +190,7 @@ final class NodePositions {
         $out   = [];
         $views = 0;
         self::$truncated = 0;
+        self::$truncated_views = 0;
 
         foreach ($raw as $view => $nodes) {
             $view = (string) $view;
@@ -234,6 +242,14 @@ final class NodePositions {
             $views++;
 
             if ($views >= self::MAX_VIEWS) {
+                // Eigener Zaehler, NICHT $truncated. Der zaehlt verworfene
+                // Knoten; Ansichten sind etwas anderes, und eine Zahl, die
+                // beides addiert, ist in beiden Bedeutungen falsch. Bisher
+                // wurde das Kappen von Ansichten gar nicht gemeldet: wer mehr
+                // als MAX_VIEWS gespeichert hatte, verlor ganze Ansichten und
+                // bekam "0 gekappt" — schlimmer als keine Meldung, weil sie
+                // das Gegenteil behauptete.
+                self::$truncated_views = max(0, count($raw) - $views);
                 break;
             }
         }

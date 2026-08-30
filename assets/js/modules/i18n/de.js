@@ -242,6 +242,8 @@ export default {
     'toolbar.unlink.confirm.personal': 'Deine persönlichen Verbindungen löschen?',
     'links.save_failed': 'Verbindung konnte nicht gespeichert werden: {err}',
     'links.truncated':  'Zu viele Verbindungen: {n} wurden nicht gespeichert. Serverseitig sind 2000 handgezogene Kanten m\u00f6glich.',
+    'conflict.links':     'Die Verbindungen wurden zwischenzeitlich anderswo ge\u00e4ndert. Deine \u00c4nderung wurde NICHT gespeichert \u2014 bitte die Seite neu laden.',
+    'conflict.positions': 'Die Kartenanordnung wurde zwischenzeitlich anderswo ge\u00e4ndert. Deine \u00c4nderung wurde NICHT gespeichert \u2014 bitte die Seite neu laden.',
     'positions.save_failed': 'Anordnung konnte nicht gespeichert werden: {err}',
     'toolbar.search': 'Host suchen...',
     'export.report.meta': '{date} &nbsp;|&nbsp; {hosts} Hosts &nbsp;|&nbsp; {links} Links',

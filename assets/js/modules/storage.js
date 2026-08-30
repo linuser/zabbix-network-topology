@@ -207,6 +207,7 @@ function _persistPositions(scope, views) {
     body.set('positions', JSON.stringify(views));
     body.set('scope', scope);
     body.set('nt_csrf', cfg.positions_csrf || '');
+    body.set('base', _rev[_revKey('positions', scope)] || '');
 
     return fetch(url, {
         method: 'POST',
@@ -217,7 +218,16 @@ function _persistPositions(scope, views) {
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
+        // Siehe _persist: zwischenzeitlich hat jemand anderes geschrieben.
+        if (d && d.conflict) {
+            _rev[_revKey('positions', scope)] = d.revision || '';
+            if (typeof _onConflict === 'function') _onConflict('positions', d);
+            throw new Error(d.error || 'conflict');
+        }
         if (!d || d.error) throw new Error((d && d.error) || 'unknown');
+        if (typeof d.revision === 'string') {
+            _rev[_revKey('positions', scope)] = d.revision;
+        }
         // Der Server hat die Obergrenze angewendet und einen Teil verworfen.
         // Kein Fehler — gespeichert wurde etwas — aber es darf nicht
         // stillschweigend passieren: beim naechsten Laden fehlten sonst
@@ -354,6 +364,37 @@ let _linksPersonal = [];
 
 function _cfg() { return window.NT_CONFIG || {}; }
 
+// ── Konflikterkennung ───────────────────────────────────────────────────────
+// Beide Ebenen speichern den VOLLSTAENDIGEN Zustand, nicht ein Delta. Ohne
+// Basis-Revision gewinnt der letzte Schreiber, und die Aenderung des anderen
+// ist weg — ohne Fehlermeldung, sichtbar erst beim naechsten Laden. Betrifft
+// zwei Tabs desselben Benutzers genauso wie zwei Super-Admins auf der
+// geteilten Ebene.
+//
+// Der Server liefert die Revision beim Seitenaufbau (NT_CONFIG.revisions) und
+// nach jedem erfolgreichen Schreiben. Wir schicken sie als "base" mit; passt
+// sie nicht mehr, lehnt der Server ab statt zu ueberschreiben.
+const _rev = {
+    links_shared:       '',
+    links_personal:     '',
+    positions_shared:   '',
+    positions_personal: ''
+};
+(function initRevisions() {
+    const r = _cfg().revisions || {};
+    for (const k in _rev) {
+        if (typeof r[k] === 'string') _rev[k] = r[k];
+    }
+})();
+
+function _revKey(kind, scope) { return kind + '_' + scope; }
+
+// Konfliktkanal: das Entry-File haengt sich hier ein, damit storage.js nichts
+// ueber Toasts oder Uebersetzungen wissen muss.
+let _onConflict = null;
+export function setConflictHandler(fn) { _onConflict = fn; }
+
+
 (function hydrateLinks() {
     const ml = _cfg().manual_links || {};
     _linksShared   = Array.isArray(ml.shared)   ? ml.shared.slice()   : [];
@@ -396,6 +437,7 @@ function _persist(scope, links) {
     body.set('links', JSON.stringify(links.map(function(l) { return { s: l.s, t: l.t }; })));
     body.set('scope', scope);
     body.set('nt_csrf', cfg.links_csrf || '');
+    body.set('base', _rev[_revKey('links', scope)] || '');
 
     return fetch(url, {
         method: 'POST',
@@ -406,7 +448,18 @@ function _persist(scope, links) {
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
+        // Jemand anderes war schneller. Der Server hat NICHT geschrieben und
+        // schickt den aktuellen Stand mit — damit setzt der Client neu auf,
+        // statt eine weitere Runde zu drehen.
+        if (d && d.conflict) {
+            _rev[_revKey('links', scope)] = d.revision || '';
+            if (typeof _onConflict === 'function') _onConflict('links', d);
+            throw new Error(d.error || 'conflict');
+        }
         if (!d || d.error) throw new Error((d && d.error) || 'unknown');
+        if (typeof d.revision === 'string') {
+            _rev[_revKey('links', scope)] = d.revision;
+        }
         // Gleiche Ueberlegung wie bei den Positionen: der Server hat die
         // Obergrenze angewendet und einen Teil verworfen. Kein Fehler —
         // gespeichert wurde etwas — aber stillschweigend darf es nicht
