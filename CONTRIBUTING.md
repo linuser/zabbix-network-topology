@@ -133,6 +133,20 @@ npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
   && npm run ci:pipeline && npm run ci:test
 ```
 
+> Drei Gates fehlen in dieser Kette, weil sie Werkzeuge brauchen, die nicht
+> jeder lokal hat: **`ci:lint-php`** und **`ci:test`** brauchen `php`,
+> **`ci:shellcheck`** braucht `shellcheck`. Sie laufen in der Pipeline
+> ohnehin — wer sie lokal hat, haengt sie an:
+>
+> ```bash
+> npm run ci:lint-php && npm run ci:shellcheck
+> ```
+>
+> **`ci:bundle-drift`** ist die Ausnahme in die andere Richtung: es baut neu
+> und vergleicht gegen den eingecheckten Stand, schlaegt also fehl, solange das
+> Bundle nicht committet ist. Nach `npm run build` gehoert
+> `assets/js/dist/nt-bundle.js` mit in den Commit.
+
 > **`ci:pipeline` ist das einzige Gate ohne CI-Job — mit Absicht.** Es prüft die
 > `.gitlab-ci.yml` selbst, und eine ungültige CI-Datei lässt gar keinen Job mehr
 > laufen; ein Job, der genau dann prüfen soll, kommt zu spät. Deshalb gehört es

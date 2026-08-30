@@ -87,7 +87,7 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - **Live refresh** every 30 s (can be turned off)
 - **History mode** with slider — trigger state at the selected time (1 h/24 h/7 d)
 - **Item pivot** — any item key pattern as columns
-- **Manual links** between hosts and the **map layout** — stored server-side in two layers: a Super admin curates the map everyone sees, anyone else deviates personally. Notes and pins still live in `localStorage`
+- **Manual links** between hosts and the **map layout** — stored server-side in two layers: a Super admin curates the map everyone sees, anyone else deviates personally. Notes and pins still live in `localStorage`. Both layers store the *complete* state, so a save that would overwrite someone else's concurrent change is **rejected instead of applied** — you get a notice and reload rather than silently losing the other person's work
 - **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](LLDP-SETUP.md))
 
 **Key figures and unmonitored devices**
@@ -181,10 +181,11 @@ All consume the same `network.topology.data` action (no second backend) and shar
 
 ### Security
 
-- **CSRF:** read actions require `requireAjax()` (`X-Requested-With` header) — same-origin sessions can set it, cross-origin cannot (CORS preflight). The single writing action (maintenance windows) additionally verifies a real Zabbix CSRF token and is gated on `USER_TYPE_ZABBIX_ADMIN` **plus** host write permission.
-- **Permissions:** every action checks the user type; client-supplied IDs are intersected against `API::…->get()` rather than trusted.
+- **CSRF:** read actions require `requireAjax()` (`X-Requested-With` header) — same-origin sessions can set it, cross-origin cannot (CORS preflight). **Four actions have outward effects** and additionally verify a real Zabbix CSRF token: maintenance windows (admin **plus** host write permission), manual links and map layout (the shared layer is Super admin only), and the port probe — the only one acting outside Zabbix, with a fixed port list and a target resolved server-side from the host ID, never supplied by the client. Details in [SECURITY.md](SECURITY.md).
+- **Permissions:** every action checks the user type; client-supplied IDs are intersected against `API::…->get()` rather than trusted. The **shared layer** (manual links, map layout) lives in `module.config` and knows no permissions of its own, so it is filtered against the caller's visible hosts and groups before it is embedded in the page — otherwise the delivered JSON would enumerate host IDs, group IDs and LLDP-announced device names from parts of the network the user may not monitor.
 - **XSS / escaping convention** (binding): every value from Zabbix or from the network — host/group/proxy/item names, item **values**, notes, IPs and especially **LLDP/CDP neighbour names** (announced by _foreign_ devices via SNMP; a rogue device can announce `<script>`) — must pass through `esc()` or be set via `textContent`. Two CI gates enforce this: [`tools/check-xss.sh`](tools/check-xss.sh) and ESLint `no-unsanitized` — both cover the widget modules as well.
-- **SQL injection:** `(int)` casts / `dbConditionInt()`; exactly one raw query in the whole codebase.
+- **SQL injection:** `(int)` casts / `dbConditionInt()`; exactly one raw query in the whole codebase (the last-value lookup, which **requires SQL history tables** — with Elasticsearch history storage the map shows nodes without metrics).
+- **Throttling:** APCu when present, otherwise a weaker per-session fallback. Relevant mainly for the port probe, which works synchronously — APCu is therefore recommended, not merely optional.
 - **Limits:** item pattern min. 3 non-wildcard chars / max. 5000 items · history max. 50,000 events and 7 days · spark max. 50 host ids · `nt:link` URL max. 2048 chars, http/https only.
 
 Found a vulnerability? → [SECURITY.md](SECURITY.md) (please **not** as a public issue).
@@ -251,7 +252,7 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - **Live-Refresh** alle 30 s (abschaltbar)
 - **History-Mode** mit Slider — Trigger-Status zur ausgewählten Zeit (1 h/24 h/7 d)
 - **Item-Pivot** — beliebiges Item-Key-Pattern als Spalten
-- **Manuelle Links** zwischen Hosts und **Kartenanordnung** — serverseitig, in zwei Ebenen: ein Super-Admin pflegt die für alle sichtbare Karte, jeder andere weicht persönlich davon ab. Notizen und Pins liegen weiterhin im `localStorage`
+- **Manuelle Links** zwischen Hosts und **Kartenanordnung** — serverseitig, in zwei Ebenen: ein Super-Admin pflegt die für alle sichtbare Karte, jeder andere weicht persönlich davon ab. Notizen und Pins liegen weiterhin im `localStorage`. Beide Ebenen speichern den *vollständigen* Zustand; ein Speichern, das die gleichzeitige Änderung eines anderen überschreiben würde, wird deshalb **abgelehnt statt ausgeführt** — mit Hinweis und Neuladen, statt die Arbeit des anderen stillschweigend zu verlieren
 - **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](LLDP-SETUP.md#port-to-port--per-link-weathermap))
 
 **Kennzahlen und unüberwachte Geräte**
@@ -347,10 +348,11 @@ Alle nutzen dieselbe `network.topology.data`-Action (kein zweites Backend) und t
 
 ### Sicherheit
 
-- **CSRF:** Lesende Actions prüfen `requireAjax()` (Header `X-Requested-With`) — same-origin-Sessions können ihn setzen, cross-origin nicht (CORS-Preflight). Die einzige schreibende Action (Wartungsfenster) prüft zusätzlich einen echten Zabbix-CSRF-Token und ist auf `USER_TYPE_ZABBIX_ADMIN` **plus** Host-Schreibrecht gegated.
-- **Permissions:** Alle Actions prüfen den User-Typ; IDs vom Client werden gegen `API::…->get()` geschnitten statt ihnen zu vertrauen.
+- **CSRF:** Lesende Actions prüfen `requireAjax()` (Header `X-Requested-With`) — same-origin-Sessions können ihn setzen, cross-origin nicht (CORS-Preflight). **Vier Actions wirken nach außen** und prüfen zusätzlich einen echten Zabbix-CSRF-Token: Wartungsfenster (Admin **plus** Host-Schreibrecht), manuelle Kanten und Kartenanordnung (geteilte Ebene nur Super-Admin) sowie der Portscan — der einzige mit Wirkung außerhalb von Zabbix, mit fester Portliste und einem Ziel, das serverseitig aus der Host-ID aufgelöst wird, nie vom Client kommt. Details in [SECURITY.md](SECURITY.md).
+- **Permissions:** Alle Actions prüfen den User-Typ; IDs vom Client werden gegen `API::…->get()` geschnitten statt ihnen zu vertrauen. Die **geteilte Ebene** (manuelle Kanten, Kartenanordnung) liegt in `module.config` und kennt selbst keine Rechte — sie wird deshalb vor dem Einbetten gegen die für den Aufrufer sichtbaren Hosts und Gruppen gefiltert. Ohne das würde das ausgelieferte JSON Host-IDs, Gruppen-IDs und per LLDP annoncierte Gerätenamen aus Netzteilen ohne Zugriff aufzählen.
 - **XSS / Escaping-Konvention** (verbindlich): Jeder Wert aus Zabbix oder dem Netz — Host-/Gruppen-/Proxy-/Item-Name, Item-**Werte**, Notizen, IP und v. a. **LLDP/CDP-Nachbarnamen** (kommen per SNMP von _fremden_ Geräten; ein Rogue-Device kann `<script>` announcen) — muss durch `esc()` laufen oder über `textContent` gesetzt werden. Zwei CI-Gates wachen darüber: [`tools/check-xss.sh`](tools/check-xss.sh) und ESLint `no-unsanitized` — beide decken auch die Widget-Module ab.
-- **SQL-Injection:** `(int)`-Cast bzw. `dbConditionInt()`; genau eine Rohquery im gesamten Code.
+- **SQL-Injection:** `(int)`-Cast bzw. `dbConditionInt()`; genau eine Rohquery im gesamten Code (die Lastvalue-Abfrage — sie **setzt SQL-History voraus**: mit Elasticsearch als History-Speicher zeigt die Karte Knoten ohne Metriken).
+- **Drosselung:** APCu, wo vorhanden, sonst ein schwächerer Fallback pro Sitzung. Wichtig vor allem für den Portscan, der synchron arbeitet — APCu ist deshalb empfohlen, nicht bloß optional.
 - **Grenzen:** Item-Pattern min. 3 Nicht-Wildcard-Zeichen / max. 5000 Items · History max. 50 000 Events und 7 Tage · Spark max. 50 hostids · `nt:link`-URL max. 2048 Zeichen, nur http/https.
 
 Sicherheitslücke gefunden? → [SECURITY.md](SECURITY.md) (bitte **nicht** als öffentliches Issue).

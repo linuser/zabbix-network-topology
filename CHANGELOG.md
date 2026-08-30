@@ -3,9 +3,42 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
-## v5.1.0 — 2026-08-28
+## v5.1.0 — 2026-08-30
 
 ### Added
+
+- **Gleichzeitiges Bearbeiten überschreibt nichts mehr.** Beide Ebenen —
+  manuelle Kanten und Kartenanordnung — speichern den *vollständigen* Zustand,
+  nicht ein Delta. Zwei Tabs desselben Benutzers oder zwei Super-Admins:
+
+      A lädt, B lädt, A verschiebt einen Knoten und speichert,
+      B verschiebt einen anderen und speichert — A's Änderung ist weg.
+
+  Niemand bekam einen Fehler; der Verlust fiel erst beim nächsten Laden auf und
+  sah dann nach einem Modulfehler aus. Der Client schickt jetzt die Revision
+  mit, auf der seine Änderung beruht, und der Server lehnt ab statt zu
+  überschreiben — mit einem Hinweis und dem aktuellen Stand in der Antwort.
+
+  Die Kennung ergibt sich aus dem Inhalt, es gibt also kein neues gespeichertes
+  Feld und nichts zu migrieren. Vor dem Hashen wird rekursiv sortiert: die
+  *Menge* zählt, nicht die Schreibreihenfolge — sonst meldeten zwei Clients
+  einen Konflikt, die inhaltlich dasselbe gespeichert haben.
+
+- **Gekappte Verbindungen werden gemeldet.** `ManualLinks` begrenzt auf 2000
+  Kanten und brach bisher stillschweigend ab: Wer 2500 speicherte, bekam „ok"
+  und merkte beim nächsten Laden, dass 500 fehlen. Die Positionen melden ihr
+  Kappen seit 5.1; die Kanten tun es jetzt auch. Ebenso gemeldet wird die
+  Grenze von 50 **Ansichten** bei den Positionen — bisher zählte der Wert nur
+  verworfene Knoten und meldete „0 gekappt", während ganze Ansichten wegfielen.
+
+- **Automatisierter Teil des Clean-Install-Tests** (`tools/clean-install-test/smoke.sh`):
+  Modul paketieren, echtes Zabbix 7.4 hochfahren, Modul hineinmounten und
+  prüfen, ob das Frontend antwortet, ob der Code unter der PHP-Version des
+  Zabbix-Images sauber ist und ob die Assets über den Web-Root kommen. Als
+  CI-Job **manuell** ausgelöst, weil er Docker-in-Docker braucht. Das Aktivieren
+  des Moduls und das Rendern bleiben manuell — Zabbix hat keine API für
+  „Scan directory".
+
 - **Manuelle Verbindungen liegen jetzt auf dem Server, nicht mehr im
   `localStorage`.** Bisher waren die handgezogenen Kanten an einen Browser
   gebunden: weg beim Cache-Leeren, unsichtbar für Kollegen, weg auf dem
@@ -231,6 +264,51 @@
   bestehende Kacheln behalten ihren gespeicherten Titel.
 
 ### Fixed
+
+- **Die geteilte Ebene ging ungefiltert an jeden Benutzer.** Die Topologie
+  kommt aus der Zabbix-API und ist rechtegefiltert; die geteilte Karte liegt in
+  `module.config` und kannte keine Rechte. Sichtbar wurde davon nichts — das
+  Frontend zeichnet eine Kante nur zwischen vorhandenen Knoten — aber im
+  ausgelieferten JSON standen Host-IDs aus fremden Gruppen, Gruppen-IDs in den
+  Ansichts-Schlüsseln und per LLDP annoncierte Gerätenamen aus Netzteilen ohne
+  Zugriff. Wird jetzt gegen die sichtbaren Hosts und Gruppen gefiltert.
+
+- **Ohne APCu wurde überhaupt nicht gedrosselt.** Das Rate-Limit begann mit
+  „kein APCu → durchlassen". Für die lesenden Actions vertretbar, für den
+  Portscan nicht: er arbeitet synchron, elf Ports mal Timeout blockieren einen
+  PHP-Worker mehrere Sekunden, und das Limit von 5 pro 60 s existierte ohne
+  APCu schlicht nicht — während INSTALL.md APCu ausdrücklich als optional
+  führt. Fällt jetzt auf ein gleitendes Fenster in der Session zurück.
+
+- **Fehlermeldungen gingen ungeprüft an den Client.** Die Actions für Kanten
+  und Positionen reichten jede Exception-Meldung durch; DB-, Schema- und
+  TypeError-Texte können Pfade, Klassen- und Spaltennamen enthalten. Jetzt wie
+  bei den Wartungsfenstern: nur Zabbix-API-Meldungen gehen raus, der Rest ins
+  Serverlog. Dabei auch `catch (Throwable)` statt `catch (Exception)` — ein
+  TypeError wurde vorher gar nicht gefangen.
+
+- **Der Diagnose-Ringpuffer verlor Einträge unter Last.** Lesen, anhängen,
+  zurückschreiben ist nicht atomar; zwei gleichzeitige Requests überschrieben
+  sich. Jetzt ein echter Ringpuffer über atomar vergebene laufende Nummern.
+
+- **Die CI lief 32 Commits lang gar nicht.** Eine explizite `stages`-Liste
+  ersetzt GitLabs Defaults — der `parity`-Job kam mit `stage: test` dazu, `test`
+  stand aber nicht in der Liste. GitLab überspringt so einen Job nicht, es weist
+  die *gesamte* Pipeline ab. Nichts wurde rot, deshalb fiel es niemandem auf.
+  Ein neues Gate (`npm run ci:pipeline`) fängt das künftig **lokal** ab — in der
+  Pipeline wäre es zu spät, weil eine ungültige CI-Datei keinen Job mehr starten
+  lässt.
+
+- **Sicherheitsdokumentation beschrieb ein überholtes Modell.** `SECURITY.md`
+  sprach von „der einzigen schreibenden Action" — es sind vier (Wartung, Kanten,
+  Positionen, Portscan) — und von drei Widget-Modulen, es sind fünf.
+  `INSTALL.md` empfahl für RHEL `chown -R apache:apache`, während dieselbe Datei
+  drei Absätze vorher `root:root` vorgibt, damit ein kompromittierter
+  PHP-Prozess den Modulcode nicht umschreiben kann.
+
+- **Port 161 hieß in der Portliste „SNMP".** SNMP läuft real über UDP; ein
+  TCP-Timeout dort sagt nichts über SNMP aus. Der Code wusste das seit jeher,
+  der Nutzer sah nur „SNMP: timeout". Heißt jetzt „SNMP/TCP".
 - **Die Kennzahlen zählten Ghosts als Hosts — und meldeten trotzdem „0 Ghosts".**
   Bei eingeschaltetem Ghost-Toggle bekam die Zählung das bereits angereicherte
   Knoten-Array. Daraus folgte beides auf einmal: `injectGhostNodes` überspringt
@@ -608,6 +686,28 @@
   nachweislich **eine** Datenabfrage pro Runde statt vier.
 
 ### Intern
+
+- **Dokumentation englisch zuerst.** Zwei Rückmeldungen nannten den hohen
+  Deutsch-Anteil. `LLDP-SETUP.md` — die Datei, auf die Nutzer mit fehlenden
+  Kanten verwiesen werden — gab es nur auf Deutsch; sie ist jetzt englisch, das
+  Original steht als `LLDP-SETUP.de.md` daneben. Im README steht der englische
+  Abschnitt vor dem deutschen.
+
+- **„Execute now" stand in keiner Doku-Datei**, und die Default-Intervalle
+  nirgends — nur die Makro-Namen. Wer das LLDP-Template linkt und die Karte neu
+  lädt, wartet unwissentlich bis zu drei Stunden auf etwas, das aussieht wie ein
+  kaputtes Feature. Das war eine Doku-Lücke mit Bug-Wirkung und der gemeinsame
+  Nenner zweier Fehlermeldungen.
+
+- **Huawei** als *ungeprüft* in der Vendor-Matrix, mit dem `snmpwalk` daneben
+  und der Erklärung, warum das offizielle VRP-Template nicht reicht: das Modul
+  spricht kein SNMP, es liest Items.
+
+- **Der direkte Zugriff auf die History-Tabellen ist dokumentiert.** Die
+  Lastvalue-Abfrage setzt SQL-History voraus; mit Elasticsearch als
+  History-Speicher zeigt die Karte Knoten ohne Metriken.
+
+- `npm audit fix` — `brace-expansion` (high) über eslint → minimatch.
 - **Gate gegen Drift in den beiden bewussten Duplikaten.** Die Widget-Module
   können den Code des Hauptmoduls nicht importieren — Zabbix' jsLoader kennt
   keine ES-Module —, deshalb steht zweimal dasselbe da. Bisher stand die Bitte,

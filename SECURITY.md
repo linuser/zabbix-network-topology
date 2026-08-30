@@ -50,9 +50,24 @@ upstream melden).
 Das Modul dokumentiert seine Annahmen offen im
 [README, Abschnitt „Sicherheit"](README.md#sicherheit) — insbesondere:
 
-- **CSRF:** lesende Actions verlangen `X-Requested-With` (`requireAjax()`); die
-  einzige schreibende Action (Wartungsfenster) prüft zusätzlich einen echten
-  Zabbix-CSRF-Token und ist auf Admin **plus** Host-Schreibrecht gegated.
+- **CSRF:** lesende Actions verlangen `X-Requested-With` (`requireAjax()`).
+  **Vier Actions wirken nach außen** und prüfen zusätzlich einen echten
+  Zabbix-CSRF-Token:
+
+  | Action | Wirkung | Gate |
+  |---|---|---|
+  | `network.topology.maintenance` | legt ein Wartungsfenster an | Admin **plus** Host-Schreibrecht |
+  | `network.topology.links` | schreibt manuelle Kanten | geteilte Ebene nur Super-Admin |
+  | `network.topology.positions` | schreibt die Kartenanordnung | geteilte Ebene nur Super-Admin |
+  | `network.topology.portscan` | **Netzwerk-Seiteneffekt**: TCP-Verbindungsversuche | Admin, feste Portliste, Ziel wird serverseitig über die API aufgelöst, gedrosselt |
+
+  Der Portscan ist der einzige mit einer Wirkung außerhalb von Zabbix. Er nimmt
+  **keine** Adresse vom Client entgegen — sie wird aus der Host-ID über die API
+  aufgelöst, womit die Rechte des Benutzers gelten und SSRF ausscheidet.
+
+  Frühere Fassungen dieser Datei sprachen von „der einzigen schreibenden
+  Action". Das stimmte zuletzt in 4.x; Links, Positionen und Portscan kamen
+  danach dazu.
 - **XSS:** alles, was aus Zabbix oder vom Netz kommt — inklusive **LLDP/CDP-Nachbarnamen,
   die von fremden Geräten stammen** — muss vor dem Einfügen ins DOM durch `esc()`
   laufen oder über `textContent` gesetzt werden. Zwei CI-Gates wachen darüber
@@ -108,9 +123,23 @@ upstream).
 The module states its assumptions openly in the
 [README, "Sicherheit" section](README.md#sicherheit):
 
-- **CSRF:** read actions require `X-Requested-With` (`requireAjax()`); the single
-  writing action (maintenance windows) additionally verifies a real Zabbix CSRF
-  token and is gated on admin **plus** host write permission.
+- **CSRF:** read actions require `X-Requested-With` (`requireAjax()`).
+  **Four actions have outward effects** and additionally verify a real Zabbix
+  CSRF token:
+
+  | Action | Effect | Gate |
+  |---|---|---|
+  | `network.topology.maintenance` | creates a maintenance window | admin **plus** host write permission |
+  | `network.topology.links` | writes manual edges | shared layer is Super admin only |
+  | `network.topology.positions` | writes the map layout | shared layer is Super admin only |
+  | `network.topology.portscan` | **network side effect**: TCP connect attempts | admin, fixed port list, target resolved server-side via the API, throttled |
+
+  The port probe is the only one with an effect outside Zabbix. It accepts **no**
+  address from the client — the target is resolved from the host ID through the
+  API, so the user's permissions apply and SSRF is ruled out.
+
+  Earlier revisions of this file spoke of "the single writing action". That was
+  last true in 4.x; links, positions and the port probe came afterwards.
 - **XSS:** anything coming from Zabbix or from the network — including **LLDP/CDP
   neighbour names announced by foreign devices** — must pass through `esc()` or be
   set via `textContent` before reaching the DOM. Two CI gates enforce this
