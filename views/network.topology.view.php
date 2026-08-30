@@ -166,7 +166,16 @@ if ($_nt_v === '0' || $_nt_v === '') $_nt_v = (string) time();
 ?>
 <link rel="stylesheet" type="text/css"
       href="modules/network_topology/assets/css/network-topology.css?v=<?= $_nt_v ?>">
+<?php // Zabbix 8 macht Array.prototype.xor nicht beschreibbar (js/common.js:114).
+      // Cytoscape setzt beim Start sein eigenes xor auf einen Prototyp, der von
+      // Array.prototype erbt — das wirft, und die Bibliothek laedt gar nicht
+      // erst. Der Guard laesst Object.assign fuer die Dauer des Ladens auf
+      // defineProperty ausweichen und stellt es danach wieder her. Details in
+      // der Datei selbst. ?>
+<script src="modules/network_topology/assets/js/nt-assign-guard.js?v=<?= $_nt_v ?>"></script>
+<script>window.NT_ASSIGN_GUARD && window.NT_ASSIGN_GUARD.on();</script>
 <script src="modules/network_topology/assets/js/cytoscape.min.js"></script>
+<script>window.NT_ASSIGN_GUARD && window.NT_ASSIGN_GUARD.off();</script>
 <?php // Leaflet (CSS+JS, ~144 KB) wird NICHT upfront geladen — nur im Geo-Tab
       // gebraucht; render-geo.js injiziert es per ensureLeaflet() lazy.
       // cola-Layout wurde entfernt (kein LAYOUT_OPTIONS-Eintrag nutzte es). ?>

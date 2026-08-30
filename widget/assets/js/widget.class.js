@@ -208,27 +208,37 @@ class WidgetNetworkTopology extends CWidget {
             callback();
             return;
         }
-        var self    = this;
-        var base    = 'modules/network_topology/assets/js/';
-        var scripts = [base + 'cytoscape.min.js'];
-        var loaded  = 0;
-        scripts.forEach(function (src) {
-            if (document.querySelector('script[src="' + src + '"]')) {
-                loaded++;
-                if (loaded === scripts.length) { self._libsOk = true; callback(); }
-                return;
-            }
+        var self = this;
+        var base = 'modules/network_topology/assets/js/';
+
+        // Reihenfolge ist hier tragend, deshalb sequenziell statt forEach:
+        // Der Guard MUSS vor Cytoscape stehen. Auf Zabbix 8 ist
+        // Array.prototype.xor nicht beschreibbar (js/common.js:114) und
+        // Cytoscape bricht beim Laden ab — window.cytoscape bleibt undefined
+        // und das Widget zeigt eine leere Flaeche ohne jeden Fehler im
+        // eigenen Code. Siehe nt-assign-guard.js.
+        function loadScript(src, done) {
+            var existing = document.querySelector('script[src^="' + src + '"]');
+            if (existing) { done(true); return; }
             var s = document.createElement('script');
-            s.src = src;
-            s.onload  = function () {
-                loaded++;
-                if (loaded === scripts.length) { self._libsOk = true; callback(); }
-            };
-            s.onerror = function () {
-                loaded++;
-                if (loaded === scripts.length) { callback(); }
-            };
+            s.src     = src;
+            s.onload  = function () { done(true); };
+            s.onerror = function () { done(false); };
             document.head.appendChild(s);
+        }
+
+        loadScript(base + 'nt-assign-guard.js', function () {
+            // Faellt der Guard aus, wird Cytoscape trotzdem versucht — auf
+            // Zabbix 7.0/7.4 gibt es die Kollision nicht, dort laeuft es auch
+            // ohne ihn. Fail-open ist hier richtig: kein Guard ist schlechter
+            // als ein Guard, aber besser als gar kein Versuch.
+            if (window.NT_ASSIGN_GUARD) window.NT_ASSIGN_GUARD.on();
+
+            loadScript(base + 'cytoscape.min.js', function (ok) {
+                if (window.NT_ASSIGN_GUARD) window.NT_ASSIGN_GUARD.off();
+                if (ok) self._libsOk = true;
+                callback();
+            });
         });
     }
 
