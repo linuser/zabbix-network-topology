@@ -41,7 +41,12 @@ note() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 ok()   { printf '  [ ok ] %s\n' "$1"; }
 bad()  { printf '  [FAIL] %s\n' "$1"; fails=$((fails + 1)); }
 
-# shellcheck disable=SC2329  # wird ueber 'trap cleanup EXIT' aufgerufen
+# Zwei Codes fuer denselben Sachverhalt, je nach shellcheck-Version: 0.11
+# meldet SC2329 ("function never invoked"), aeltere Fassungen SC2317
+# ("command appears to be unreachable") an den Zeilen im Rumpf. Beide sehen
+# den Aufruf ueber 'trap cleanup EXIT' nicht. Lokal faellt nur der eine auf —
+# der andere kam vom GitHub-Runner, der eine aeltere Version mitbringt.
+# shellcheck disable=SC2329,SC2317
 cleanup() {
     note "Aufraeumen"
     docker compose down -v >/dev/null 2>&1 || true
