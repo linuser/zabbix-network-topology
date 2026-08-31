@@ -31,6 +31,24 @@ function _srcBadge(src) {
         + esc(src) + '</span>';
 }
 
+/**
+ * Ersetzt die Kennzahlen, wenn kein einziger Host Nachbarn meldet.
+ *
+ * Vorher stand hier eine Zeile aus Nullen mit "0 %" in Rot. Das las sich wie
+ * ein Befund ("die Zuordnung scheitert"), war aber nur die Abwesenheit von
+ * Daten. Der Unterschied ist fuer den Leser entscheidend: im einen Fall
+ * stimmen die Namen nicht, im anderen fragt Zabbix das Geraet gar nicht erst.
+ */
+function _noDataBlock(theme) {
+    return '<div style="background:' + theme.surface + ';border:1px solid ' + theme.border
+        + ';border-radius:6px;padding:18px 20px;margin-bottom:18px">'
+        + '<div style="font-size:15px;font-weight:600;color:' + theme.text + ';margin-bottom:6px">'
+        +   esc(t('lldpq.nodata.title')) + '</div>'
+        + '<div style="font-size:13px;color:' + theme.sub + ';line-height:1.6;max-width:70ch">'
+        +   t('lldpq.nodata.body')
+        + '</div></div>';
+}
+
 function _aggregateBlock(perHost, theme) {
     let totalMatched = 0, totalUnmatched = 0, totalAmbiguous = 0, totalSelf = 0;
     perHost.forEach(function(h) {
@@ -40,9 +58,22 @@ function _aggregateBlock(perHost, theme) {
         totalSelf      += h.self || 0;
     });
     const total = totalMatched + totalUnmatched + totalAmbiguous;
-    const matchPct = total > 0 ? Math.round(100 * totalMatched / total) : 0;
-    const pctCol = matchPct >= 90 ? COL_GOOD : matchPct >= 70 ? COL_WARN : COL_BAD;
     const reporters = perHost.length;
+
+    // Ohne einen einzigen gemeldeten Nachbarn gibt es keine Quote — und "0 %"
+    // in Rot ist dann die falscheste aller Anzeigen: sie behauptet ein
+    // Scheitern, wo schlicht nichts zu bewerten war.
+    //
+    // Genau dieser Tab ist die Stelle, auf die wir Nutzer mit fehlenden Kanten
+    // verweisen (LLDP-SETUP.md, Issue #2). Wer hier ein rotes 0 % sieht, haelt
+    // das Modul fuer kaputt, statt zu erkennen, dass gar keine LLDP-Items
+    // existieren — was die eigentliche Ursache ist und woanders behoben wird.
+    const hasData = total > 0;
+    const matchPct = hasData ? Math.round(100 * totalMatched / total) : 0;
+    const pctCol = !hasData ? theme.subSoft
+                 : matchPct >= 90 ? COL_GOOD
+                 : matchPct >= 70 ? COL_WARN : COL_BAD;
+    const pctText = hasData ? matchPct + '%' : '&mdash;';
 
     return '<div style="background:' + theme.surface + ';border:1px solid ' + theme.border
         + ';border-radius:6px;padding:14px 18px;margin-bottom:18px;display:flex;'
@@ -50,7 +81,7 @@ function _aggregateBlock(perHost, theme) {
         + '<div><div style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase;'
         +   'letter-spacing:0.05em">Match-Quote</div>'
         +   '<div style="font-size:28px;font-weight:700;color:' + pctCol + ';font-family:monospace;'
-        +     'line-height:1">' + matchPct + '%</div></div>'
+        +     'line-height:1">' + pctText + '</div></div>'
         + '<div><div style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase">Reporter</div>'
         +   '<div style="font-size:20px;font-weight:700;color:' + theme.text + ';font-family:monospace">'
         +     reporters + '</div></div>'
@@ -81,7 +112,7 @@ function _perHostTable(perHost, theme) {
         return ib - ia || b.matched - a.matched;
     });
     let html = '<h3 style="margin:18px 0 8px;font-size:13px;color:' + theme.sub
-        + ';text-transform:uppercase;letter-spacing:0.04em">Pro Reporter</h3>'
+        + ';text-transform:uppercase;letter-spacing:0.04em">' + esc(t('lldpq.per_reporter')) + '</h3>'
         + '<table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
         + ['Reporter', 'Matched', 'Unmatched', 'Ambiguous', 'Self', 'Details'].map(function(h) {
@@ -186,6 +217,18 @@ export function renderLldpQuality(wrap) {
 
     const data = window._ntLastData || {};
     const perHost = data.lldp_quality || [];
+
+    // Gar keine Meldungen: dann sind Kennzahlen sinnlos, und eine Zeile aus
+    // Nullen ist schlimmer als nichts — sie sieht aus wie ein Messergebnis.
+    // Stattdessen der Hinweis, der die tatsaechliche Ursache benennt: es gibt
+    // keine LLDP-Items, und das wird nicht hier behoben, sondern in Zabbix.
+    // Das ist der haeufigste Fall ueberhaupt (siehe LLDP-SETUP.md) und der
+    // Grund, warum Nutzer dieses Modul fuer kaputt halten.
+    if (!perHost.length) {
+        root.appendChild(_makeDiv(_noDataBlock(theme)));
+        wrap.appendChild(root);
+        return;
+    }
 
     root.appendChild(_makeDiv(_aggregateBlock(perHost, theme)));
     root.appendChild(_makeDiv(_perHostTable(perHost, theme)));

@@ -95,11 +95,11 @@ function _aggregateCards(agg, total, theme, onlyIssues) {
     const filterToggle = '<label style="display:inline-flex;align-items:center;gap:6px;'
         + 'font-size:12px;color:' + theme.sub + ';cursor:pointer;margin-left:auto">'
         + '<input type="checkbox" id="nt-compl-only-issues"' + (onlyIssues ? ' checked' : '') + '> '
-        + 'Nur Hosts mit Issues (bad-Level)</label>';
+        + esc(t('compl.only_issues')) + '</label>';
 
     return '<div style="display:flex;align-items:center;margin-bottom:8px">'
         + '<h3 style="margin:0;font-size:13px;color:' + theme.sub + ';text-transform:uppercase;'
-        +   'letter-spacing:0.04em">Aggregat (' + total + ' Hosts)</h3>'
+        +   'letter-spacing:0.04em">' + esc(t('compl.aggregate', { n: total })) + '</h3>'
         + filterToggle
         + '</div>'
         + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));'
