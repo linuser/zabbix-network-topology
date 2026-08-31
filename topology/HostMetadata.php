@@ -158,11 +158,22 @@ final class HostMetadata {
         $map = [
             // Network security
             'firewall'       => ['fw-','firewall','fortigate','pfsense','opnsense','-asa-','srx',
-                                 'opnsense by snmp'],
+                                 'opnsense by snmp',
+                                 // UniFi-Gateways: UDM (Dream Machine), USG (Security
+                                 // Gateway), UXG. Das sind Firewall/Router, keine
+                                 // Access Points — siehe Hinweis unter der Map.
+                                 'udm','usg-','uxg'],
             'router'         => ['rtr-','router','-gw-','gateway','mikrotik routeros','vyos'],
             'switch'         => ['sw-','switch','-core-','-acc-','catalyst','procurve','nexus',
-                                 'hp enterprise switch','tp-link by snmp'],
-            'wireless'       => ['-ap-','wlan','wifi','wireless','unifi','omada'],
+                                 'hp enterprise switch','tp-link by snmp','usw-'],
+            // NUR echte Access Points. 'unifi' und 'omada' standen hier frueher
+            // und waren der Grund, warum eine UDM Pro (Firewall) und ein NVR
+            // (Videorecorder) beide als WAP angezeigt wurden: das sind
+            // PRODUKTLINIEN, keine Geraeteklassen. UniFi umfasst Gateways,
+            // Switches, Kameras, Recorder und APs; Omada bei TP-Link genauso.
+            // Ein Herstellername sagt nichts darueber, WAS ein Geraet ist.
+            'wireless'       => ['-ap-','wlan','wifi','wireless','uap-','unifi ap',
+                                 'unifi access point'],
             // Storage & backup
             'storage'        => ['nas-','synology','qnap','netapp','storage','truenas',
                                  'truenas core by snmp','synology active backup'],

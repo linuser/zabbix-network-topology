@@ -200,6 +200,33 @@ check('namenloser Host, nur LLDP -> switch',
 check('namenloser Host ohne LLDP -> server',
       resolveType('host99', ['Some Vendor Template'], [], false), 'server');
 
+// ── Produktlinie ist keine Geraeteklasse ────────────────────────────────────
+// Anlass: eine UDM Pro (Firewall/Router) und ein NVR (Videorecorder) wurden
+// beide als WAP angezeigt. Grund war 'unifi' in der wireless-Liste — ein
+// Herstellername, der Gateways, Switches, Kameras, Recorder UND Access Points
+// umfasst. Dazu stand wireless VOR camera, weshalb das breite 'unifi' sogar
+// das spezifische 'nvr' schlug.
+//
+// Gematcht wird gegen Hostname PLUS Template-Namen; beide Geraete haengen am
+// UniFi-Template und trugen den Herstellernamen damit implizit mit sich.
+echo "\n  Produktlinie vs. Geraeteklasse\n\n";
+
+check('UDM Pro (UniFi-Gateway) -> firewall',
+      HostMetadata::deviceType('UDM Pro', ['UniFi Network API']), 'firewall');
+check('NVR am UniFi-Template -> camera',
+      HostMetadata::deviceType('nvr-01', ['UniFi Network API']), 'camera');
+check('echter Access Point -> wireless',
+      HostMetadata::deviceType('UAP-AC-Pro', ['UniFi Network API']), 'wireless');
+check('UniFi-Switch -> switch',
+      HostMetadata::deviceType('USW-24-PoE', ['UniFi Network API']), 'switch');
+
+// Der Herstellername allein darf nichts mehr entscheiden: ein Host, dessen
+// einziger Hinweis "UniFi" ist, faellt auf den Server-Default zurueck. Das ist
+// ehrlicher als eine geratene Geraeteklasse — und wem das nicht passt, der
+// setzt nt:icon.
+check('nur Herstellername -> kein wireless',
+      HostMetadata::deviceType('geraet-42', ['UniFi Network API']), 'server');
+
 echo "\n";
 if ($failures > 0) {
     echo "  === {$failures} FEHLER ===\n\n";
