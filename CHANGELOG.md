@@ -3,6 +3,32 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
+## v5.1.1 — unveröffentlicht
+
+### Fixed
+
+- **Die Huawei-Zeile der Vendor-Matrix ist jetzt eine Messung.** Sie stand auf
+  „ungeprüft", weil kein S5700 zum Gegenchecken da war und es auch keine
+  öffentliche SNMP-Aufzeichnung eines solchen Geräts mit LLDP-Daten gibt — die
+  sechs Huawei-Walks im LibreNMS-Bestand sind Richtfunk, USV und
+  Stromversorgung. Der Melder aus [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2)
+  hat es am Gerät entschieden: Template gelinkt, Discovery angestoßen, Kanten
+  da. VRP beantwortet die IEEE-Standard-LLDP-MIB.
+
+- **Die SNMP-View war die zweite Hürde — und sie stand in keiner Zeile Doku.**
+  Auf einigen seiner Switches lieferte `snmpwalk` nichts, obwohl LLDP
+  nachweislich lief: die LLDP-OIDs lagen gar nicht in der View des Geräts. Was
+  nicht in der View steht, existiert für SNMP nicht. Auf VRP:
+
+      snmp-agent mib-view include iso-view iso
+      snmp-agent community read <community> mib-view iso-view
+
+  Steht jetzt im Huawei-Kasten und als eigene Zeile in beiden
+  Troubleshooting-Tabellen. Huawei-spezifisch ist daran nichts — jedes Gerät
+  mit eingeschränkter SNMP-View verhält sich so. Es ist dieselbe Fehlerklasse
+  wie das 3-Stunden-Discovery-Intervall aus 5.1.0: eine Ursache, die niemand
+  sieht, weil sie wie ein kaputtes Feature aussieht.
+
 ## v5.1.0 — 2026-08-30
 
 ### Update von 5.0 — „Scan directory" ist Pflicht

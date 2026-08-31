@@ -149,7 +149,7 @@ doubt, verify with the [test below](#the-test-that-settles-it)):
 | **Ubiquiti EdgeSwitch / EdgeMax** | ✓ mostly | **works** | EdgeOS, decent SNMP |
 | **Ubiquiti UniFi** (USW/UDM) | ✗ often **no** SNMP at all | **works via API** | LLDP lives in the controller → the official *UniFi Network API* template provides `uplink.id`, which the module reads directly |
 | **Cisco** (IOS/NX-OS) | ✓ | **works** | CDP on by default, LLDP opt-in (`lldp run`) |
-| **Huawei** (VRP, e.g. S5700) | ? | **unverified** | standard LLDP-MIB expected, confirmed on no device. The official *Huawei VRP by SNMP* template does **not** collect the neighbour table — see below |
+| **Huawei** (VRP, e.g. S5700) | ✓ | **works** | confirmed on an S5700 in a production network. VRP answers the standard LLDP-MIB — but the default SNMP view may hide it, see below. The official *Huawei VRP by SNMP* template does **not** collect the neighbour table |
 | **MikroTik** (RouterOS) | ? | **unverified** | the module has a hook for `discovery.neighbor`, but **no RouterOS device has ever confirmed it** — see below |
 
 > **Huawei: the case that shows the most common misunderstanding.** Reported from a
@@ -167,15 +167,26 @@ doubt, verify with the [test below](#the-test-that-settles-it)):
 > on the device is only half the job — without `nt_lldp_snmp_template.yaml` (or your
 > own items) the map stays empty.
 >
-> What is **not** verified about Huawei: whether VRP exposes the LLDP-MIB over plain
-> SNMP at all. Our template queries the IEEE standard OIDs, so VRP *should* answer —
-> but that isn't established. Nor is there a public SNMP recording of an S5700 with
-> LLDP data to simulate against (the six Huawei walks in the LibreNMS corpus are
-> microwave radio, UPS and power supply units; not one contains an LLDP line).
-> Anyone running VRP can settle this in a minute with the
-> [test below](#the-test-that-settles-it) — and turn this row into a measurement.
+> **Settled, on a device.** The reporter linked `nt_lldp_snmp_template.yaml`, ran
+> the discovery — and the edges appeared. VRP does answer the IEEE standard
+> LLDP-MIB; the row above is a measurement now, not an expectation.
 >
-> Source: [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2).
+> **But one step more was needed, and it is easy to miss.** On his switches the
+> LLDP OIDs were not in the SNMP view at all: `snmpwalk` returned nothing while
+> LLDP was demonstrably running. VRP ships a restricted default view, and what is
+> not in the view does not exist as far as SNMP is concerned. Two commands fix it:
+>
+> ```
+> snmp-agent mib-view include iso-view iso
+> snmp-agent community read <SNMP_COMMUNITY> mib-view iso-view
+> ```
+>
+> This is not Huawei-specific in principle — any device with a restricted SNMP
+> view behaves the same way. It looks exactly like "the switch doesn't do LLDP",
+> which is why it belongs in the first test, not in the fine print.
+>
+> Source: [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2),
+> confirmed by the reporter on 2026-08-31.
 
 > **MikroTik: what here is claim and what is measurement.** This row long read
 > "works". Only half of that is established: the module **looks** for items with
@@ -310,6 +321,7 @@ Most common causes:
 | no LLDP items at all | no SNMP LLD / template without LLDP | create an LLD rule for `lldpRemSysName` |
 | template linked, still no items | **discovery hasn't run yet** — the default is 3h | *Discovery rules → LLDP neighbor discovery → **Execute now*** |
 | vendor template linked, no LLDP items | the official templates (Huawei VRP, Cisco IOS, HP) do **not** collect the neighbour table | link `nt_lldp_snmp_template.yaml` in addition |
+| `snmpwalk` returns nothing although LLDP is running | the OIDs are not in the device's **SNMP view** | Huawei VRP: `snmp-agent mib-view include iso-view iso` plus `snmp-agent community read <community> mib-view iso-view`. Other vendors: widen the view accordingly |
 
 ---
 

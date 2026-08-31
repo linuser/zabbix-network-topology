@@ -148,7 +148,7 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 | **Ubiquiti EdgeSwitch / EdgeMax** | ✓ meist | **funktioniert** | EdgeOS, ordentliches SNMP |
 | **Ubiquiti UniFi** (USW/UDM) | ✗ oft **gar kein** SNMP | **funktioniert via API** | LLDP lebt im Controller → offizielles *UniFi Network API*-Template liefert `uplink.id`, das Modul liest es direkt |
 | **Cisco** (IOS/NX-OS) | ✓ | **funktioniert** | CDP default an, LLDP opt-in (`lldp run`) |
-| **Huawei** (VRP, z. B. S5700) | ? | **ungeprüft** | Standard-LLDP-MIB erwartet, an keinem Gerät bestätigt. Das offizielle *Huawei VRP by SNMP*-Template sammelt die Nachbar-Tabelle **nicht** — siehe unten |
+| **Huawei** (VRP, z. B. S5700) | ✓ | **funktioniert** | an einer S5700 im Produktivnetz bestätigt. VRP beantwortet die Standard-LLDP-MIB — die Default-SNMP-View kann sie aber verdecken, siehe unten. Das offizielle *Huawei VRP by SNMP*-Template sammelt die Nachbar-Tabelle **nicht** |
 | **MikroTik** (RouterOS) | ? | **ungeprüft** | Der Modulcode hat einen Haken für `discovery.neighbor`, aber **kein RouterOS-Gerät hat das je bestätigt** — siehe unten |
 
 > **Huawei: der Fall, der den häufigsten Irrtum zeigt.** Gemeldet aus einem
@@ -166,16 +166,27 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 > HP: LLDP am Gerät einschalten ist nur die halbe Miete, ohne
 > `nt_lldp_snmp_template.yaml` (oder eigene Items) bleibt die Karte leer.
 >
-> Was an Huawei **nicht** geprüft ist: ob VRP die LLDP-MIB über normales SNMP
-> überhaupt herausgibt. Unser Template fragt die IEEE-Standard-OIDs ab, VRP
-> *sollte* also antworten — belegt ist es nicht. Es existiert auch keine
-> öffentliche SNMP-Aufzeichnung eines S5700 mit LLDP-Daten, gegen die sich das
-> simulieren ließe (die sechs Huawei-Walks im LibreNMS-Bestand sind Richtfunk,
-> USV und Stromversorgung, keiner enthält eine LLDP-Zeile). Wer VRP betreibt,
-> beantwortet das mit dem [Test unten](#der-test-der-alles-entscheidet) in einer
-> Minute — und macht aus dieser Zeile eine Messung.
+> **Am Gerät entschieden.** Der Melder hat `nt_lldp_snmp_template.yaml` gelinkt,
+> die Discovery angestoßen — und die Kanten waren da. VRP beantwortet die
+> IEEE-Standard-LLDP-MIB; die Zeile oben ist jetzt eine Messung, keine Erwartung.
 >
-> Quelle: [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2).
+> **Ein Schritt mehr war aber nötig, und er ist leicht zu übersehen.** Auf seinen
+> Switches lagen die LLDP-OIDs gar nicht in der SNMP-View: `snmpwalk` lieferte
+> nichts, während LLDP nachweislich lief. VRP bringt eine eingeschränkte
+> Default-View mit, und was nicht in der View steht, existiert für SNMP nicht.
+> Zwei Kommandos beheben das:
+>
+> ```
+> snmp-agent mib-view include iso-view iso
+> snmp-agent community read <SNMP_COMMUNITY> mib-view iso-view
+> ```
+>
+> Das ist im Prinzip nichts Huawei-Spezifisches — jedes Gerät mit eingeschränkter
+> SNMP-View verhält sich so. Es sieht exakt aus wie „der Switch kann kein LLDP",
+> und deshalb gehört es in den ersten Test und nicht ins Kleingedruckte.
+>
+> Quelle: [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2),
+> vom Melder am 31.08.2026 bestätigt.
 
 > **MikroTik: was hier Behauptung ist und was Messung.** Die Zeile stand lange
 > als „funktioniert" in dieser Tabelle. Belegt ist davon nur die eine Hälfte:
@@ -306,6 +317,7 @@ Häufigste Ursachen:
 | gar keine LLDP-Items | keine SNMP-LLD / Template ohne LLDP | LLD-Regel für `lldpRemSysName` anlegen |
 | Template gelinkt, trotzdem keine Items | **Discovery lief noch nicht** — Default sind 3h | *Discovery rules → LLDP neighbor discovery → **Execute now*** |
 | Vendor-Template gelinkt, keine LLDP-Items | die offiziellen Templates (Huawei VRP, Cisco IOS, HP) sammeln die Nachbar-Tabelle **nicht** | zusätzlich `nt_lldp_snmp_template.yaml` linken |
+| `snmpwalk` liefert nichts, obwohl LLDP läuft | die OIDs liegen nicht in der **SNMP-View** des Geräts | Huawei VRP: `snmp-agent mib-view include iso-view iso` und `snmp-agent community read <community> mib-view iso-view`. Andere Hersteller: View entsprechend erweitern |
 
 ---
 
