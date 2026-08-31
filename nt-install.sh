@@ -145,6 +145,13 @@ manifest_version() {
         | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true
 }
 
+# Action-Namen aus einem Manifest. Bewusst ohne JSON-Parser: die Namen sind
+# als "network.topology.x" eindeutig, und ein Parser waere eine Abhaengigkeit
+# mehr auf einem Frontend-Host, auf dem nur bash sicher vorhanden ist.
+manifest_actions() {
+    grep -oE '"network\.topology[^"]*"' "$1" 2>/dev/null | tr -d '"' | sort -u || true
+}
+
 find_zip() {   # echot Pfad; die() hier ok, weil Aufrufer mit  || exit 1  abfängt
     local z="${1:-}"
     if [[ -n "$z" ]]; then [[ -f "$z" ]] || die "ZIP nicht gefunden: $z"; echo "$z"; return; fi
@@ -163,6 +170,11 @@ cmd_check() {
 
     if [[ -d "$mod" ]]; then
         ok "Modulverzeichnis: $mod (Name korrekt)"
+        # Die erste Frage bei jeder Meldung lautet "welche Version laeuft bei
+        # dir?" — und bisher beantwortete dieser Check sie nicht.
+        local iv; iv=$(manifest_version "$mod/manifest.json")
+        if [[ -n "$iv" ]]; then ok "Version: $iv"
+        else bad "Version nicht lesbar — manifest.json fehlt oder ist beschaedigt"; rc=1; fi
         local rf
         for rf in "${REQUIRED_FILES[@]}"; do
             if [[ -r "$mod/$rf" ]]; then ok "Datei: $rf"
@@ -174,6 +186,23 @@ cmd_check() {
         wrong=$(find "$UI/modules" -maxdepth 1 -type d -iname '*network*topolog*' 2>/dev/null \
                 | grep -v "/$MODULE$" | head -1) || true
         [[ -n "$wrong" ]] && warn "unter falschem Namen gefunden: $wrong  → mv nach $MODULE"
+    fi
+
+    # Die Widgets sind eigene Module mit EIGENEN Versionsnummern und werden von
+    # diesem Skript nicht mitinstalliert. Beim Aktualisieren bleiben sie deshalb
+    # leicht liegen — hier wenigstens sichtbar machen, was tatsaechlich liegt.
+    local w wdir wv found_w=0
+    for w in network_topology_widget network_topology_health_widget \
+             network_topology_table_widget network_topology_kpi_widget \
+             network_topology_items_widget; do
+        wdir="$UI/modules/$w"
+        [[ -d "$wdir" ]] || continue
+        found_w=1
+        wv=$(manifest_version "$wdir/manifest.json")
+        ok "Widget: $w (v${wv:-?})"
+    done
+    if [[ $found_w -eq 0 ]]; then
+        echo "  ${C_DIM}i${C_RST} keine Dashboard-Widgets installiert (optional, brauchen Zabbix 7.4)"
     fi
 
     if command -v php >/dev/null 2>&1; then
@@ -207,6 +236,12 @@ do_deploy() {
     [[ -n "$FPM" ]] || die "kein php-fpm-Service gefunden."
     command -v unzip >/dev/null 2>&1 || die "unzip fehlt — bitte installieren."
     mod="$UI/modules/$MODULE"
+
+    # Actions der INSTALLIERTEN Version festhalten, solange sie noch liegt.
+    # Kommen mit dem Update neue dazu, ist "Scan directory" Pflicht — sonst
+    # kennt Zabbix sie nicht, und der Browser bekommt "Unknown action".
+    local old_actions=""
+    [[ -f "$mod/manifest.json" ]] && old_actions=$(manifest_actions "$mod/manifest.json")
 
     stage=$(mktemp -d) || die "mktemp fehlgeschlagen — kein beschreibbares TMP?"
     _CLEAN="$stage"
@@ -314,6 +349,21 @@ do_deploy() {
     if [[ "$mode" == "install" ]]; then
         echo "  Nächster Schritt in der UI: Administration → General → Modules → Scan directory → aktivieren."
     else
+        # Der haeufigste Grund fuer "das Update hat etwas kaputt gemacht": neue
+        # Actions ohne "Scan directory". Die Karte laedt dann noch, aber alles,
+        # was auf eine neue Action zeigt, meldet "Unknown action" — beim Sprung
+        # von 5.0 auf 5.1 sind das die manuellen Verbindungen und die
+        # gespeicherte Knotenanordnung. Die alte Version lief, die neue nicht,
+        # und niemand verbindet das mit einem vergessenen Menuepunkt.
+        local new_actions added
+        new_actions=$(manifest_actions "$mod/manifest.json")
+        added=$(comm -13 <(printf '%s\n' "$old_actions") <(printf '%s\n' "$new_actions") | tr '\n' ' ')
+        if [[ -n "${added// /}" ]]; then
+            echo
+            warn "Neue Actions in dieser Version: ${added% }"
+            echo "     ${C_WARN}Administration → General → Modules → \"Scan directory\" ist damit PFLICHT.${C_RST}"
+            echo "     Ohne sie bleiben genau diese Funktionen mit \"Unknown action\" stehen."
+        fi
         echo "  Browser: Strg+F5.  Rollback bei Problemen:  $0 update --rollback"
     fi
 }

@@ -176,6 +176,8 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
 
+> **Von 5.0 auf 5.1:** Es sind drei Actions dazugekommen (`links`, `positions`, `portscan`). Ohne „Scan directory" lädt die Karte zwar, aber manuelle Verbindungen und die gespeicherte Knotenanordnung bleiben mit „Unknown action" stehen. `nt-install.sh update` sagt es beim Update dazu, sobald es neue Actions findet; `nt-install.sh check` zeigt die installierte Version und die vorhandenen Widgets.
+
 #### Umstieg von 4.x auf 5.0
 
 In 5.0 ist der `_v6`-Suffix aus allen Bezeichnern entfallen — das Verzeichnis heißt jetzt `network_topology` statt `network_topology_v6`. **Das alte Verzeichnis muss weg**, sonst registriert Zabbix beide Module und der Menüeintrag erscheint doppelt:
@@ -417,6 +419,8 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 ### Update
 
 Replace the `network_topology` directory with the new version, `chown`, reload php-fpm, **Scan directory**. The map layout and manual links are stored server-side and survive regardless; pins, notes and presets live in the browser `localStorage`. After an update that adds new actions, "Scan directory" is **mandatory**.
+
+> **From 5.0 to 5.1:** three actions were added (`links`, `positions`, `portscan`). Without "Scan directory" the map still loads, but manual links and the saved node layout stop with "Unknown action". `nt-install.sh update` points this out whenever it finds new actions; `nt-install.sh check` reports the installed version and the widgets present.
 
 #### Upgrading from 4.x to 5.0
 

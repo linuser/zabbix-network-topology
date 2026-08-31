@@ -5,6 +5,32 @@
 
 ## v5.1.0 — 2026-08-30
 
+### Update von 5.0 — „Scan directory" ist Pflicht
+
+5.1 bringt drei neue Actions mit: `network.topology.links`,
+`network.topology.positions` und `network.topology.portscan`. Zabbix
+registriert Actions beim **Scannen** des Modulverzeichnisses, nicht beim
+Kopieren der Dateien. Wer die Dateien austauscht und *Administration → General
+→ Modules → Scan directory* auslässt, bekommt eine Karte, die lädt — und
+manuelle Verbindungen sowie die gespeicherte Knotenanordnung, die mit „Unknown
+action" stehenbleiben. Die alte Version lief, die neue nicht, und niemand
+verbindet das mit einem vergessenen Menüpunkt.
+
+`nt-install.sh update` vergleicht deshalb die Action-Listen von alter und neuer
+Version und sagt es dazu, wenn welche hinzugekommen sind; bisher wies nur der
+Erstinstallations-Pfad auf „Scan directory" hin. `nt-install.sh check` nennt
+außerdem die installierte Version und die vorhandenen Widgets mit ihren eigenen
+Versionsnummern — die Widgets werden von diesem Skript nicht mitinstalliert und
+bleiben beim Aktualisieren sonst unbemerkt liegen.
+
+Gespeichertes bleibt: Kartenanordnung und manuelle Kanten liegen serverseitig,
+Pins, Notizen und Presets im `localStorage` des Browsers. Es gibt nichts zu
+migrieren — auch das Revisionsfeld gegen konkurrierendes Speichern ergibt sich
+aus dem Inhalt und wird nirgends abgelegt.
+
+Wer von **4.x** kommt, findet die Umbenennung des Verzeichnisses unter v5.0.0
+weiter unten; `nt-install.sh update` räumt den Altbestand selbst weg.
+
 ### Added
 
 - **Gleichzeitiges Bearbeiten überschreibt nichts mehr.** Beide Ebenen —
