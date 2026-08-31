@@ -434,7 +434,11 @@ export function setupExportMenu(bar, isFirstRun) {
     expBtn.textContent = '⬇ Export';
 
     const expMenu = document.createElement('div');
-    expMenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
+    // Rechtsbuendig statt linksbuendig: der Export-Knopf steht am rechten Ende
+    // der Werkzeugleiste. Mit 'left:0' wuchs das Menue nach rechts aus dem
+    // Fenster heraus — im Browser nachgemessen, "PDF (pri…", "Save HT…" und
+    // "Audit rep…" waren abgeschnitten und nicht anklickbar.
+    expMenu.style.cssText = 'display:none;position:absolute;top:100%;right:0;z-index:9999;'
         + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:150px;overflow:hidden;margin-top:2px';
 
@@ -553,7 +557,22 @@ export function setupExportMenu(bar, isFirstRun) {
 
     expBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        expMenu.style.display = expMenu.style.display === 'none' ? 'block' : 'none';
+        const open = expMenu.style.display === 'none';
+        expMenu.style.display = open ? 'block' : 'none';
+
+        // Rechtsbuendig loest den Regelfall. Sollte die Leiste einmal anders
+        // angeordnet sein und das Menue nach LINKS hinauslaufen, hier
+        // zurueckklappen — statt sich darauf zu verlassen, dass der Knopf
+        // immer aussen rechts sitzt.
+        if (open) {
+            expMenu.style.left = '';
+            expMenu.style.right = '0';
+            const r = expMenu.getBoundingClientRect();
+            if (r.left < 0) {
+                expMenu.style.right = '';
+                expMenu.style.left = '0';
+            }
+        }
     });
     if (_expDocClose) document.removeEventListener('click', _expDocClose);
     _expDocClose = function() { expMenu.style.display = 'none'; };

@@ -427,7 +427,6 @@ export function render(wrap, nodes, edges, dataUrl) {
     setupLegend(groupNames, nodes);
     // Farbcode-Erklaerung unten im Canvas (einklappbar, was bedeuten die Farben)
     setupBottomLegend(wrap, dark);
-    updateKpi(nodes, cy);
 
     // Group-Hulls: nur wenn Cluster-Layout aktiv ist (sonst überlappen sich
     // die Hüllen bei verstreuten Knoten und sehen kaputt aus). Im Group-View
@@ -454,6 +453,17 @@ export function render(wrap, nodes, edges, dataUrl) {
     setupMinimap(cy, wrap);
     applyManualLinks(cy);
     showMinimap();
+
+    // NACH applyManualLinks, nicht davor.
+    //
+    // Die Kennzahlen zaehlen ueber cy.edges(). Der Aufruf stand frueher weiter
+    // oben, noch vor dem Einfuegen der gespeicherten Kanten — beim ersten Laden
+    // stand deshalb "0 Edges", obwohl welche gezeichnet waren. Erst der
+    // naechste Refresh (bis zu 30 s) oder ein Re-Render brachte die richtige
+    // Zahl. Im Browser nachgemessen: nach dem Beenden einer Simulation sprang
+    // der Zaehler von 0 auf "3 Edges, 3 manual", ohne dass sich am Graphen
+    // etwas geaendert hatte.
+    updateKpi(nodes, cy);
 
     // ── Pin/Note aus localStorage wiederherstellen ─────────────────────────
     (function() {
