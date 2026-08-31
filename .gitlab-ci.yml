@@ -30,6 +30,19 @@ stages:
 
 default:
   interruptible: true
+  # Der Runner, der dieses Projekt bedient, ist tag-beschraenkt: er nimmt nur
+  # Jobs mit hugo, deploy oder nt. Untagged Jobs bleiben bei ihm liegen, bis
+  # GitLab sie mit "stuck in pending state with no matching runners" abraeumt —
+  # genau das ist in Pipeline #422 passiert, sechsmal, ohne ein einziges
+  # Job-Log.
+  #
+  # 'nt' wurde dem Runner eigens hinzugefuegt, statt bei ihm "Run untagged
+  # jobs" einzuschalten: er bedient 14 weitere Projekte, und ein global
+  # geoeffneter Runner haette dort untagged Jobs angezogen, die bisher liegen
+  # bleiben. Ein zusaetzlicher Tag ist additiv und aendert fuer die anderen
+  # nichts.
+  tags:
+    - nt
 
 php-lint:
   stage: lint
