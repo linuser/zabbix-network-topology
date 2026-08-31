@@ -232,6 +232,28 @@ function collect(nodes, cy) {
  * Schreibt die Zeile neu. Wird bei jedem render und bei jedem Auto-Refresh
  * gerufen.
  */
+/**
+ * Zeile aus dem aktuellen Stand neu schreiben, ohne dass der Aufrufer die
+ * Knotenliste kennen muss.
+ *
+ * ANLASS
+ * ------
+ * updateKpi lief nur an zwei Stellen: beim Render und beim 30-Sekunden-
+ * Refresh. Wer im Star-Mode eine Kante zog oder alle Links loeschte, sah die
+ * Aenderung sofort im Graphen — der Zaehler daneben blieb bis zu 30 Sekunden
+ * auf dem alten Wert stehen. Aufgefallen ist es auf einem Screenshot: drei
+ * sichtbare Kanten, daneben "0 Edges". Wer das sieht, haelt die Zahl fuer
+ * kaputt, nicht fuer veraltet — und hat damit nicht ganz unrecht.
+ *
+ * Die Knotenliste steht in window._ntLastData; sie wird nach jedem Fetch dort
+ * abgelegt. Deshalb braucht diese Funktion keine Argumente und passt an jede
+ * Stelle, die den Graphen veraendert.
+ */
+export function refreshKpi() {
+    const d = window._ntLastData || {};
+    updateKpi(d.nodes || [], window._ntCy || null);
+}
+
 export function updateKpi(nodes, cy) {
     const row = ensureKpiRow();
     if (!row) return;

@@ -19,6 +19,7 @@ import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY
          clearPositions, savePositions, savePinned, clearLinks, defaultLinkScope,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
+import { refreshKpi } from './kpi.js';
 import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isSimActive, clearSimulation } from './whatif.js';
@@ -562,6 +563,9 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 if (e.data('mlScope') === gone) e.remove();
             });
         }
+        // Gleiche Ueberlegung wie beim Zeichnen: der Graph ist sofort leer,
+        // die Kennzahl daneben waere es erst nach dem naechsten Refresh.
+        refreshKpi();
     };
 
     // History-Button (Toggle für History-Slider)

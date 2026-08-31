@@ -40,7 +40,7 @@ import {
     isLinkModeActive, getLinkFirst, setLinkFirst, exitLinkMode
 } from './manual-links.js';
 import { ensureBaseToolbar } from './tabs.js';
-import { updateKpi } from './kpi.js';
+import { updateKpi, refreshKpi } from './kpi.js';
 import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
 import { buildLayoutConfig } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
@@ -339,6 +339,9 @@ export function render(wrap, nodes, edges, dataUrl) {
                     node.style('underlay-opacity', 0.3);
                     node.style('underlay-padding', 6);
                     setTimeout(function() { node.style('underlay-opacity', 0); }, 600);
+                    // Zaehler mitziehen: die Kante ist im Graphen, die Zeile
+                    // haette sie sonst erst beim naechsten Refresh gesehen.
+                    refreshKpi();
                 }
             }
             return;
