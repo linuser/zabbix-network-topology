@@ -27,14 +27,66 @@ zabbix_export:
           description: 'Polling-Intervall der LLDP/CDP-Nachbar-Items.'
         - macro: '{$NT.LLDP.DISCOVERY.INTERVAL}'
           value: 3h
-          description: 'Discovery-Intervall der Nachbar-Tabellen (aendert sich selten).'
+          description: 'DEPRECATED seit dem walk[]-Umbau: Die LLDP-Discovery haengt jetzt als Dependent-Rule am Walk-Item und folgt {$NT.LLDP.INTERVAL}. Nur noch fuer die (Cisco-)CDP-Discovery in Gebrauch.'
+      items:
+        - uuid: 084b4a88188c4714abbd5055588aa4ac
+          name: 'LLDP: remote systems table (SNMP walk)'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.0.8802.1.1.2.1.4.1.1.5,1.0.8802.1.1.2.1.4.1.1.7,1.0.8802.1.1.2.1.4.1.1.8,1.0.8802.1.1.2.1.4.1.1.9,1.0.8802.1.1.2.1.4.1.1.10,1.0.8802.1.1.2.1.4.1.1.12]'
+          key: nt.lldp.walk
+          delay: '{$NT.LLDP.INTERVAL}'
+          history: '0'
+          value_type: TEXT
+          description: |
+            Ein Bulk-Walk ueber die sechs benoetigten Spalten der lldpRemTable
+            (LLDP-MIB, 1.0.8802.1.1.2.1.4.1.1): ChassisId (.5), PortId (.7),
+            PortDesc (.8), SysName (.9), SysDesc (.10), SysCapEnabled (.12).
+
+            WARUM EIN WALK STATT EINZELNER GETs: Der SNMP-Index der lldpRemTable
+            ist lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex. TimeMark ist
+            ein RMON-2-TimeFilter — bei etlichen Implementierungen (FortiGate:
+            neuer Wert bei jedem empfangenen PDU; MikroTik RouterOS: exakte GETs
+            liefern noSuchObject, nur Walks funktionieren) sind instanzgenaue
+            GETs auf diese Tabelle unzuverlaessig. Ein Walk umgeht beides:
+            Discovery und Item-Prototypen haengen als DEPENDENT an diesem Item
+            und parsen den Walk-Text — kein einziger instanzgenauer GET mehr.
       discovery_rules:
         - uuid: f388b88ad77144c7b94dfd9c1913713a
           name: 'LLDP neighbor discovery'
-          type: SNMP_AGENT
+          type: DEPENDENT
           key: nt.lldp.rem.discovery
-          snmp_oid: 'discovery[{#NT_SYSNAME},1.0.8802.1.1.2.1.4.1.1.9]'
-          delay: '{$NT.LLDP.DISCOVERY.INTERVAL}'
+          delay: '0'
+          master_item:
+            key: nt.lldp.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#NT_SYSNAME}'
+                - 1.0.8802.1.1.2.1.4.1.1.9
+                - '0'
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // Der SNMP-Index der lldpRemTable ist
+                  // TimeMark.LocalPort.RemIndex. TimeMark ist volatil
+                  // (FortiGate erhoeht ihn bei jedem empfangenen PDU) und
+                  // fliegt hier raus: {#SNMPINDEX} wird auf 0.Port.RemIndex
+                  // normiert, damit die Item-Keys stabil bleiben. Port und
+                  // RemIndex wandern zusaetzlich in eigene Makros — die
+                  // Prototypen greifen damit per Regex timemark-agnostisch
+                  // auf den Walk-Text zu.
+                  var rows = JSON.parse(value), out = [];
+                  for (var i = 0; i < rows.length; i++) {
+                      var r = rows[i];
+                      var m = /^(\d+)\.(\d+)\.(\d+)$/.exec(r['{#SNMPINDEX}'] || '');
+                      if (!m) continue;
+                      r['{#SNMPINDEX}'] = '0.' + m[2] + '.' + m[3];
+                      r['{#NT_PORT}'] = m[2];
+                      r['{#NT_REMIDX}'] = m[3];
+                      out.push(r);
+                  }
+                  return JSON.stringify(out);
           description: |
             LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). Der {#SNMPINDEX}
             traegt TimeMark.LocalPort.RemIndex — das Modul liest daraus den lokalen
@@ -51,11 +103,18 @@ zabbix_export:
           item_prototypes:
             - uuid: 71e0268303f9471796f291808b05293b
               name: 'LLDP neighbor [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemSysName[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.9.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.9\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
@@ -64,11 +123,18 @@ zabbix_export:
                 ueberwachten Zabbix-Host aufloest.
             - uuid: 33e111c96b2e4ab4a5e0047ba739d05f
               name: 'LLDP neighbor port-id [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemPortId[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.7.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.7\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
@@ -79,11 +145,18 @@ zabbix_export:
                 Nachbar-Zeile (darueber korreliert das Modul).
             - uuid: 296934a9b576433095c087dbdeb383e6
               name: 'LLDP neighbor port-desc [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemPortDesc[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.8.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.8\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
@@ -92,11 +165,18 @@ zabbix_export:
                 Quelle fuers Port-zu-Port-Label am Nachbar-Ende.
             - uuid: ae103ab500594d00bc368f47749fac2e
               name: 'LLDP neighbor sys-desc [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemSysDesc[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.10.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.10\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
@@ -110,11 +190,18 @@ zabbix_export:
                 Cisco-Switch" — und damit ein Hinweis, welches Template passt.
             - uuid: 36a88ecbea114b5e89f55f7aa684f43d
               name: 'LLDP neighbor capabilities [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemSysCapEnabled[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.12.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.12\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
@@ -128,11 +215,18 @@ zabbix_export:
                 statt des generischen Platzhalters.
             - uuid: e62a93c7791f47aa8f49bb21e7da9136
               name: 'LLDP neighbor chassis-id [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemChassisId[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.5.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.5\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
