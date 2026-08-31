@@ -19,29 +19,37 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 
 ## Screenshots
 
-**Technical topology** — force-directed graph with severity rings, CPU/memory/ping/traffic pie charts and per-link weathermap.
-*Technische Topologie — Force-Directed Graph mit Severity-Ringen, Pie-Charts und Per-Link-Weathermap.*
+**Technical topology** — force-directed graph with severity rings, CPU/memory/ping/traffic pie charts, per-link weathermap and the key-figure row above the map.
+*Technische Topologie — Force-Directed Graph mit Severity-Ringen, Pie-Charts, Per-Link-Weathermap und Kennzahlen-Zeile über der Karte.*
 
-![Technical topology / technische Topologie](screenshots/01-technical-graph.png)
+![Technical topology / technische Topologie](screenshots/visual.jpg)
 
-**What-if failure simulation** — right-click a host → "Simulate failure": the module marks every host that loses its path to the network uplink.
-*What-if-Ausfallsimulation — Rechtsklick auf einen Host: das Modul markiert, welche Hosts dadurch ihre Verbindung zum Netz-Uplink verlieren.*
+**What-if failure simulation** — right-click a host → "Simulate failure". The failed host greys out, every host that loses its path is marked red, and the banner counts them.
+*What-if-Ausfallsimulation — Rechtsklick auf einen Host: der ausgefallene wird ausgegraut, jeder Host ohne Pfad rot markiert, das Banner zählt sie.*
 
-![What-if simulation / What-if-Simulation](screenshots/02-whatif-simulation.gif)
+![What-if simulation / What-if-Simulation](screenshots/simulation.jpg)
 
 **Item pivot with heatmap** — any item key pattern (e.g. `vfs.fs.size[*,pused]`) as columns across all hosts, colour-coded, with percentiles (P50/P95/P99) and CSV export.
 *Item-Pivot mit Heatmap — beliebiges Item-Key-Pattern als Spalten über alle Hosts, farbcodiert, mit Perzentilen und CSV-Export.*
 
-![Item pivot / Item-Pivot](screenshots/07-table-items.png)
+![Item pivot / Item-Pivot](screenshots/items-table.jpg)
 
 <table>
 <tr>
-<td width="50%"><img src="screenshots/03-management.png" alt="Management"><br><sub><b>Management</b> — hosts grouped by device type, with problem badges and CPU/RAM per tile.<br><i>Hosts nach Gerätetyp gruppiert, mit Problem-Badges und CPU/RAM je Kachel.</i></sub></td>
-<td width="50%"><img src="screenshots/06-health.png" alt="Health"><br><sub><b>Health</b> — health score per host group with a 14-day trend.<br><i>Health-Score pro Hostgruppe mit 14-Tage-Verlauf.</i></sub></td>
+<td width="50%"><img src="screenshots/management.jpg" alt="Management"><br><sub><b>Management</b> — hosts grouped by device type, with problem badges and CPU/RAM per tile.<br><i>Hosts nach Gerätetyp gruppiert, mit Problem-Badges und CPU/RAM je Kachel.</i></sub></td>
+<td width="50%"><img src="screenshots/health.jpg" alt="Health"><br><sub><b>Health</b> — health score per host group with a 14-day trend.<br><i>Health-Score pro Hostgruppe mit 14-Tage-Verlauf.</i></sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="screenshots/04-table.png" alt="Table / Tabelle"><br><sub><b>Table / Tabelle</b> — Nagios-style host list with status, type, IP, metrics and open problems.<br><i>Nagios-Style Hostliste mit Status, Typ, IP, CPU/Memory/Ping, Traffic, Problemen.</i></sub></td>
-<td width="50%"><img src="screenshots/05-geo.jpg" alt="Geo"><br><sub><b>Geo</b> — Leaflet map with host locations from the host inventory.<br><i>Leaflet-Karte mit Host-Standorten aus dem Host-Inventory.</i></sub></td>
+<td width="50%"><img src="screenshots/table.jpg" alt="Table / Tabelle"><br><sub><b>Table / Tabelle</b> — Nagios-style host list with status, type, IP, metrics and open problems.<br><i>Nagios-Style Hostliste mit Status, Typ, IP, Metriken und offenen Problemen.</i></sub></td>
+<td width="50%"><img src="screenshots/geo.jpg" alt="Geo"><br><sub><b>Geo</b> — Leaflet map with host locations from the host inventory.<br><i>Leaflet-Karte mit Host-Standorten aus dem Host-Inventory.</i></sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/stats.jpg" alt="Stats"><br><sub><b>Stats</b> — distribution by severity, device type and host group.<br><i>Verteilung nach Severity, Gerätetyp und Hostgruppe.</i></sub></td>
+<td width="50%"><img src="screenshots/compliance.jpg" alt="Compliance"><br><sub><b>Compliance</b> — per-host checks (admin only): templates, interfaces, inventory, tags.<br><i>Prüfungen je Host (nur Admin): Templates, Interfaces, Inventory, Tags.</i></sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/diagnose.jpg" alt="Diag"><br><sub><b>Diag</b> — backend telemetry (super admin only): cache hit rate, latencies, counts.<br><i>Backend-Telemetrie (nur Super-Admin): Cache-Trefferquote, Latenzen, Zählwerte.</i></sub></td>
+<td width="50%"><img src="screenshots/widget.jpg" alt="Dashboard widgets / Dashboard-Widgets"><br><sub><b>Dashboard widgets</b> — all five tiles on one Zabbix dashboard.<br><i>Alle fünf Kacheln auf einem Zabbix-Dashboard.</i></sub></td>
 </tr>
 </table>
 
