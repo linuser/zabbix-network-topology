@@ -23,6 +23,7 @@ import { loadLinks } from './storage.js';
 import { statsByGroup, scoreColor, scoreLabel } from './render-health.js';
 import { COMPLIANCE_CHECKS, fetchComplianceData } from './render-compliance.js';
 import { t } from './i18n.js';
+import { toast } from './toast.js';
 
 const SEV_LBL = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
 const SEV_COLORS = {
@@ -459,19 +460,52 @@ export function setupExportMenu(bar, isFirstRun) {
     });
 
     mItem('&#128196;', t('export.menu.pdf'), function() {
-        const h = buildReportHtml({ includeMap: true });
-        if (!h) return;
+        // Fenster SYNCHRON im Click oeffnen — dieselbe Regel wie beim
+        // Audit-Report darunter, hier stand sie bisher NICHT.
+        //
+        // buildReportHtml rendert die ganze Karte per cy.png(full, scale 2).
+        // Das dauert bei einer groesseren Topologie hunderte Millisekunden,
+        // und danach ist das Zeitfenster der Benutzeraktion zu: window.open()
+        // liefert null, der Popup-Blocker hat zugeschlagen. Das alte
+        // "if (w) { ... }" verschluckte genau das — Klick, nichts passiert,
+        // keine Meldung. Deshalb erst das Fenster, dann der teure Teil.
         const w = window.open();
-        if (w) {
-            w.document.write(h);
-            w.document.close();
-            setTimeout(function() { w.print(); }, 800);
+        if (!w) {
+            toast(t('export.popup_blocked'), 'warn', 8000);
+            return;
         }
+        // Bewusst KEIN Platzhalter-Write: das waere ein zusaetzlicher
+        // document.write-Sink, und die ESLint-Baseline zaehlt sie. Ein neuer
+        // Sink soll das Gate ausloesen, auch wenn der Inhalt hier konstant
+        // ist — die Regel ist mehr wert als die halbe Sekunde leeres Fenster.
+        const h = buildReportHtml({ includeMap: true });
+        if (!h) {
+            w.close();
+            toast(t('export.no_map'), 'warn', 6000);
+            return;
+        }
+
+        w.document.write(h);
+        w.document.close();
+
+        // Drucken erst, wenn der eingebettete Map-Screenshot geladen ist —
+        // ein fester Timeout riet nur, und bei einer grossen Karte druckte
+        // er ein leeres Bild. Der Timeout bleibt als Notnagel, falls onload
+        // nie kommt.
+        let printed = false;
+        const go = function() { if (!printed) { printed = true; w.print(); } };
+        try {
+            const img = w.document.querySelector('img');
+            if (img && !img.complete) { img.onload = go; img.onerror = go; }
+            else { setTimeout(go, 200); }
+        }
+        catch (e) { /* Cross-Origin sollte hier nicht auftreten, aber egal */ }
+        setTimeout(go, 3000);
     });
 
     mItem('&#128190;', t('export.menu.html'), function() {
         const h = buildReportHtml({ includeMap: true });
-        if (!h) return;
+        if (!h) { toast(t('export.no_map'), 'warn', 6000); return; }
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
         a.download = 'network-topology-' + new Date().toISOString().slice(0, 10) + '.html';
@@ -492,7 +526,7 @@ export function setupExportMenu(bar, isFirstRun) {
         // im .then() nach dem Fetch wuerde der Popup-Blocker schlucken
         // (v.a. Firefox bei langsamem Backend). Inhalt kommt async nach.
         const w = window.open();
-        if (!w) return;
+        if (!w) { toast(t('export.popup_blocked'), 'warn', 8000); return; }
         w.document.write('<p style="font-family:sans-serif;color:#64748b">' + t('export.generating') + '</p>');
         _fetchCompliance().then(function(compl) {
             const h = buildAuditHtml(compl);

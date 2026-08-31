@@ -272,6 +272,8 @@ export default {
     'export.menu.html': 'Save HTML',
     'export.menu.audit_pdf': 'Audit report (print)',
     'export.generating': 'Generating report…',
+    'export.popup_blocked': 'The browser blocked the print window. Allow pop-ups for this page and try again.',
+    'export.no_map': 'No report possible: the map has not loaded yet.',
     'export.menu.audit_html': 'Audit report (HTML)',
     'stats.range_days': '{n} days',
     'stats.unnamed': '(unnamed)',

@@ -277,6 +277,8 @@ export default {
     'export.menu.html': 'HTML speichern',
     'export.menu.audit_pdf': 'Audit-Report (Drucken)',
     'export.generating': 'Report wird erstellt…',
+    'export.popup_blocked': 'Der Browser hat das Druckfenster blockiert. Popups f\u00fcr diese Seite erlauben und erneut versuchen.',
+    'export.no_map': 'Kein Report m\u00f6glich: die Karte ist noch nicht geladen.',
     'export.menu.audit_html': 'Audit-Report (HTML)',
     'stats.range_days': '{n} Tage',
     'stats.unnamed': '(unbenannt)',
