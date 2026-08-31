@@ -110,6 +110,36 @@ zur Zuweisung. Der Guard tauscht `Object.assign` nur für die Dauer des
 Cytoscape-Ladens gegen eine Variante, die bei einem Fehlschlag darauf
 ausweicht, und stellt das Original unmittelbar danach wieder her.
 
+### Warum 7.0 und 7.4 nichts davon merken
+
+Der Guard prüft vor dem Eingriff den **Deskriptor** und tut sonst gar nichts:
+
+```js
+var d = Object.getOwnPropertyDescriptor(Array.prototype, 'xor');
+return !!d && d.writable === false && d.configurable === false;
+```
+
+Gemessen im offiziellen Image `zabbix/zabbix-web-nginx-pgsql:alpine-7.0`:
+7.0 legt den Helfer in derselben Zeile `common.js:114` per **schlichter
+Zuweisung** an — `Array.prototype.xor = function(arr) {…}`. Eine Zuweisung
+erzeugt `writable: true, configurable: true`, Cytoscape überschattet sie
+problemlos. Erst 8.0 stellt auf `Object.defineProperty` ohne diese beiden
+Attribute um; die Umstellung war vermutlich als „nicht aufzählbar" gemeint,
+damit `for…in` über Arrays den Helfer nicht mitnimmt.
+
+Der Nutzen der Prüfung ist nicht Sparsamkeit, sondern eine Zusicherung: Auf
+jeder Version, deren Deskriptor anders aussieht, wird `Object.assign`
+**überhaupt nicht angefasst** — der Code läuft identisch zu dem ohne Guard.
+Wir müssen also nicht wissen, was 7.4 oder ein künftiges 8.x tun; geprüft wird
+die eine Bedingung, die den Fehler ausmacht.
+
+Nachgestellt in sechs Fällen: 7.0-Form → kein Eingriff · kein `xor` → kein
+Eingriff · 8.0-Form → Eingriff, Cytoscape lädt, der Zabbix-Helfer bleibt
+funktionsfähig · zwei Widgets nacheinander → Zähler hält den Patch bis zum
+letzten `off()` · `off()` ohne `on()` → wirkungslos · `safeAssign` gegen die
+Spezifikation (Symbole, null-Quellen, String-Quellen, Getter, null-Ziel wirft,
+Rückgabe ist das Ziel).
+
 Verdrahtet an zwei Stellen:
 
 - `views/network.topology.view.php` — Guard, `on()`, Cytoscape, `off()` als

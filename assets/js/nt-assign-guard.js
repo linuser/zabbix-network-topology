@@ -60,6 +60,31 @@
     'use strict';
 
     var original = null;
+    var depth = 0;
+
+    /**
+     * Liegt der kaputte Deskriptor ueberhaupt vor?
+     *
+     * Das ist die Zusicherung fuer alle anderen Versionen: Zabbix 7.0 legt den
+     * Helfer per schlichter Zuweisung an (common.js:114,
+     * "Array.prototype.xor = function..."), und eine Zuweisung erzeugt
+     * writable/configurable = true. Cytoscape ueberschattet die Eigenschaft
+     * dort ohne Weiteres — nachgemessen im offiziellen 7.0-Image.
+     *
+     * Erst Zabbix 8 nutzt Object.defineProperty ohne diese beiden Attribute.
+     * Nur dann fasst dieser Guard Object.assign an. Auf jeder Version, deren
+     * Deskriptor anders aussieht — 7.0, 7.4, und auch ein kuenftiges 8.x, das
+     * es repariert —, laeuft der Code identisch zu dem ohne Guard, weil gar
+     * nichts ersetzt wird. Wir muessen also nicht wissen, was andere Versionen
+     * tun; wir pruefen die eine Bedingung, die den Fehler ausmacht.
+     */
+    function needed() {
+        if (typeof Object.getOwnPropertyDescriptor !== 'function') return false;
+        var d;
+        try { d = Object.getOwnPropertyDescriptor(Array.prototype, 'xor'); }
+        catch (e) { return false; }
+        return !!d && d.writable === false && d.configurable === false;
+    }
 
     function safeAssign(target) {
         if (target === null || target === undefined) {
@@ -109,18 +134,32 @@
     }
 
     global.NT_ASSIGN_GUARD = {
-        /** Patch aktivieren. Mehrfachaufrufe sind wirkungslos. */
+        /**
+         * Patch aktivieren — aber nur, wenn needed() den kaputten Deskriptor
+         * findet. Verschachtelte Aufrufe zaehlen mit: zwei Widgets auf einem
+         * Dashboard laden nacheinander, und ohne Zaehler haette das erste
+         * off() den Patch mitten im zweiten Ladevorgang entfernt.
+         */
         on: function () {
-            if (original || typeof Object.assign !== 'function') return;
+            if (typeof Object.assign !== 'function') return;
+            if (!original && !needed()) return;
+            depth++;
+            if (original) return;
             original = Object.assign;
             Object.assign = safeAssign;
         },
 
-        /** Original wiederherstellen. Ohne vorheriges on() wirkungslos. */
+        /** Original wiederherstellen, sobald der letzte Aufrufer fertig ist. */
         off: function () {
             if (!original) return;
+            depth--;
+            if (depth > 0) return;
+            depth = 0;
             Object.assign = original;
             original = null;
-        }
+        },
+
+        /** Nur fuer Diagnose/Test: greift der Guard auf dieser Zabbix-Version? */
+        applies: needed
     };
 })(typeof window !== 'undefined' ? window : this);
