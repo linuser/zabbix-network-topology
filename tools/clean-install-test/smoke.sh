@@ -41,6 +41,7 @@ note() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 ok()   { printf '  [ ok ] %s\n' "$1"; }
 bad()  { printf '  [FAIL] %s\n' "$1"; fails=$((fails + 1)); }
 
+# shellcheck disable=SC2329  # wird ueber 'trap cleanup EXIT' aufgerufen
 cleanup() {
     note "Aufraeumen"
     docker compose down -v >/dev/null 2>&1 || true
@@ -120,4 +121,7 @@ cat <<'LIMITS'
     - Zabbix 7.0 (dieses Compose faehrt 7.4; docker-compose.7.0.yml daneben)
 LIMITS
 
-exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)
+if [ "$fails" -eq 0 ]; then
+    exit 0
+fi
+exit 1

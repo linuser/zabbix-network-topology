@@ -27,7 +27,12 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 **What-if failure simulation** — right-click a host → "Simulate failure". The failed host greys out, every host that loses its path is marked red, and the banner counts them.
 *What-if-Ausfallsimulation — Rechtsklick auf einen Host: der ausgefallene wird ausgegraut, jeder Host ohne Pfad rot markiert, das Banner zählt sie.*
 
-![What-if simulation / What-if-Simulation](screenshots/simulation.jpg)
+![What-if simulation / What-if-Simulation](screenshots/simulation.gif)
+
+**Drawing a link by hand** — Tools → *Draw link*, then click two hosts. The map dims everything else so the two ends stay obvious. The edge is stored **server-side** right away: a Super admin draws for everyone, anyone else for themselves.
+*Verbindung von Hand ziehen — Tools → „Draw link", dann zwei Hosts anklicken. Die Karte dimmt alles andere, damit die beiden Enden sichtbar bleiben. Die Kante liegt sofort auf dem Server: ein Super-Admin zeichnet für alle, jeder andere für sich.*
+
+![Drawing a manual link / Verbindung ziehen](screenshots/draw-link.gif)
 
 **Item pivot with heatmap** — any item key pattern (e.g. `vfs.fs.size[*,pused]`) as columns across all hosts, colour-coded, with percentiles (P50/P95/P99) and CSV export.
 *Item-Pivot mit Heatmap — beliebiges Item-Key-Pattern als Spalten über alle Hosts, farbcodiert, mit Perzentilen und CSV-Export.*
