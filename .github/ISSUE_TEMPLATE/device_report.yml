@@ -1,0 +1,155 @@
+name: Device report (vendor matrix)
+description: Report how a switch or router behaves — fills a row in the vendor matrix
+labels: ["device-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This is not a bug report.** It is a measurement: does *this* device hand
+        out its LLDP/CDP neighbour table over SNMP, and what did it take to get
+        there? Half the rows in the
+        [vendor matrix](../blob/main/LLDP-SETUP.md) are still guesses, and the
+        only way to fix that is people running one command on hardware I don't
+        have.
+
+        **A negative result is as valuable as a positive one.** A row saying
+        "✗ no queryable neighbour table" saves the next person the afternoon you
+        just spent.
+
+        The quickest way to fill this in — it runs three queries, read-only, and
+        prints a ready-made block:
+
+        ```bash
+        curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/tools/nt-lldp-probe.sh
+        chmod +x nt-lldp-probe.sh
+        NT_COMMUNITY=<community> ./nt-lldp-probe.sh <switch-ip>
+        ```
+
+        It sends nothing anywhere, and its output holds counts — never neighbour
+        names, never the community string. **Please don't paste anything that
+        identifies your network**: model and firmware are all that's needed.
+
+  - type: input
+    id: device
+    attributes:
+      label: Vendor, model, firmware
+      description: The three fields that make the row citable.
+      placeholder: "Aruba 2930F (JL256A), WC.16.10.0021"
+    validations:
+      required: true
+
+  - type: textarea
+    id: probe
+    attributes:
+      label: Output of nt-lldp-probe.sh
+      description: |
+        The block between the two rules. If you ran the plain snmpwalk instead,
+        paste that result and say which of the three cases it was — device
+        silent, MIB hidden, or table empty.
+      render: markdown
+    validations:
+      required: false
+
+  - type: dropdown
+    id: snmp
+    attributes:
+      label: Does the device hand out the LLDP neighbour table over SNMP?
+      options:
+        - "Yes — names come back"
+        - "MIB visible, but the table is empty"
+        - "No — the SNMP view hides the MIB"
+        - "No SNMP on this device at all"
+        - "Not tested / unclear"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: items
+    attributes:
+      label: Which template produced the Zabbix items?
+      description: >
+        This decides whether the row reads "works" or "works, but not with the
+        official template" — a different sentence for whoever reads it next.
+      options:
+        - "nt_lldp_snmp_template.yaml (the one shipped here)"
+        - "The official vendor template — it collected the neighbour table"
+        - "My own items"
+        - "No items yet"
+    validations:
+      required: true
+
+  - type: textarea
+    id: device-side
+    attributes:
+      label: What did the device need beyond "lldp enable"?
+      description: >
+        This is the field no documentation has until someone hits it. SNMP view
+        widened, a separate community, CDP instead of LLDP, a reboot, nothing at
+        all — all of it counts. The Huawei SNMP-view note in LLDP-SETUP.md exists
+        because one reporter wrote it down here.
+      placeholder: |
+        snmp-agent mib-view include iso-view iso
+        snmp-agent community read <community> mib-view iso-view
+    validations:
+      required: false
+
+  - type: input
+    id: lldpq
+    attributes:
+      label: LLDP-Q numbers for one host
+      description: >
+        From the LLDP-Q tab in the module. They separate "no data" from "data,
+        but the names don't line up" — two failures that look identical on the map.
+      placeholder: "matched 6 / unmatched 2 / ambiguous 0"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: edges
+    attributes:
+      label: Edges on the map?
+      options:
+        - "Yes"
+        - "No"
+        - "Some — see notes"
+    validations:
+      required: true
+
+  - type: input
+    id: zabbix-version
+    attributes:
+      label: Zabbix version
+      description: >
+        Not a formality: how SNMP items are collected changed between releases,
+        and the LLDP-Q tab only exists from module 5.1.0 on. A row in the matrix
+        without a version behind it ages badly.
+      placeholder: "7.4.2"
+    validations:
+      required: true
+
+  - type: input
+    id: module-version
+    attributes:
+      label: Module version
+      description: Shown in the footer of the module page.
+      placeholder: "5.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else worth a footnote in the matrix?
+      description: >
+        Series-specific quirks, a model of the same line that behaves
+        differently, send-only devices — the notes column exists for exactly this.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: No community strings, hostnames or IP addresses from my network in the text above
+          required: true

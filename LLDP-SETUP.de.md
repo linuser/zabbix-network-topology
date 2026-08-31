@@ -151,6 +151,14 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 | **Huawei** (VRP, z. B. S5700) | ✓ | **funktioniert** | an einer S5700 im Produktivnetz bestätigt. VRP beantwortet die Standard-LLDP-MIB — die Default-SNMP-View kann sie aber verdecken, siehe unten. Das offizielle *Huawei VRP by SNMP*-Template sammelt die Nachbar-Tabelle **nicht** |
 | **MikroTik** (RouterOS) | ? | **ungeprüft** | Der Modulcode hat einen Haken für `discovery.neighbor`, aber **kein RouterOS-Gerät hat das je bestätigt** — siehe unten |
 
+**Hersteller fehlt, oder eine Zeile sagt „ungeprüft"?** Beides sind Lücken,
+keine Entscheidungen. Ein Kommando am Gerät entscheidet eine Zeile —
+[das Skript](#oder-ein-skript-hält-sie-auseinander) druckt einen fertigen
+Bericht, und es gibt ein Formular dafür:
+[Gerät melden](https://github.com/linuser/zabbix-network-topology/issues/new?template=device_report.yml). Ein **negatives** Ergebnis zählt genauso:
+„✗ keine abfragbare Nachbartabelle" erspart dem Nächsten den Nachmittag, den
+du gerade investiert hast.
+
 > **Huawei: der Fall, der den häufigsten Irrtum zeigt.** Gemeldet aus einem
 > Produktivnetz mit S5700-Switches: LLDP auf den Geräten aktiv, Namen passend,
 > trotzdem ein Kreis ohne eine einzige Kante. Kein Modulfehler — die Kette hat
@@ -231,6 +239,30 @@ snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.9
 - **Namen kommen zurück** → das Modul zieht daraus Kanten. ✓
 - **leer / „No Such Object"** → dieser Switch liefert **keine** Kanten via SNMP
   (Easy Smart, UniFi-ohne-API, sende-nur-Geräte) → [manuell ergänzen](#lücken-schließen-manuell).
+
+> **Vorsicht bei „leer" — das heisst dreierlei.** Das Geraet kann unerreichbar
+> oder die Community falsch sein (mit LLDP hat das nichts zu tun); es kann
+> antworten und die LLDP-MIB hinter einer eingeschraenkten **SNMP-View**
+> verstecken; oder die MIB ist sichtbar und die Tabelle schlicht noch leer. Diese
+> drei auseinanderzuhalten ist das, was Nachmittage kostet.
+
+### Oder ein Skript hält sie auseinander
+
+`tools/nt-lldp-probe.sh` macht alle drei Abfragen, benennt, in welchem der drei
+Fälle man steckt, und druckt einen Bericht zum Einfügen in ein Issue. Es ist
+**nicht im Modul-ZIP** — `tools/` gehört nicht unter den Web-Root — und wird
+deshalb direkt aus dem Repository geholt:
+
+```bash
+curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/tools/nt-lldp-probe.sh
+chmod +x nt-lldp-probe.sh
+NT_COMMUNITY=<community> ./nt-lldp-probe.sh <switch-ip>
+```
+
+Braucht `snmpwalk` (net-snmp). Es liest nur, schreibt nie und **sendet nichts
+irgendwohin** — die einzige Verbindung geht an die IP, die du übergibst. Der
+Bericht enthält Anzahlen, keine Nachbarnamen, und nie die Community; es gibt also
+nichts zu schwärzen.
 
 CDP-Äquivalent (Cisco): `1.3.6.1.4.1.9.9.23.1.2.1.1.6` (`cdpCacheDeviceId`).
 

@@ -29,6 +29,40 @@
   wie das 3-Stunden-Discovery-Intervall aus 5.1.0: eine Ursache, die niemand
   sieht, weil sie wie ein kaputtes Feature aussieht.
 
+### Added
+
+- **`tools/nt-lldp-probe.sh` — ein Kommando statt drei Vermutungen.** Der nackte
+  `snmpwalk` steht seit jeher in der Anleitung und ist eine Zeile lang. Das
+  Problem war nie der Aufruf, sondern die **leere Antwort**: sie kann heißen,
+  dass das Gerät nicht erreichbar ist, dass die SNMP-View die LLDP-MIB verdeckt,
+  oder dass die Tabelle schlicht noch leer ist. Drei völlig verschiedene
+  Ursachen, ein identisches Bild — und die Verwechslung kostet Nachmittage,
+  siehe oben.
+
+  Das Skript macht deshalb drei Abfragen statt einer, benennt den Fall und
+  druckt einen fertigen Bericht. Es **liest nur** und **sendet nichts
+  irgendwohin**; die einzige Verbindung geht an die IP, die der Aufrufer
+  übergibt. Die Community wird per Umgebungsvariable oder verdeckter Eingabe
+  entgegengenommen, nie als Argument — Argumente stehen in der History und sind
+  für jeden sichtbar, der `ps` aufrufen kann. Der Bericht enthält **Anzahlen,
+  keine Nachbarnamen** und nie die Community: es gibt also nichts zu schwärzen.
+  Nachgemessen mit einer `snmpwalk`-Attrappe über alle vier Fälle.
+
+  Liegt in `tools/` und ist damit **nicht im Modul-ZIP** — ein Shell-Skript
+  gehört nicht unter den Web-Root. Geholt wird es per `curl`, wie
+  `topo-change-sender.sh` und die Template-YAMLs auch.
+
+- **Eine zweite Issue-Vorlage: „Device report".** Bisher gab es nur „Bug
+  melden", und eine Geräte-Rückmeldung ist kein Fehler — wer bloß bestätigt,
+  dass sein Aruba funktioniert, öffnet dafür ungern ein Bug-Ticket. Die Vorlage
+  fragt genau die Felder ab, die eine Matrix-Zeile brauchen, darunter **Zabbix-
+  und Modulversion getrennt** (die Item-Erfassung hat sich zwischen Releases
+  geändert, und den LLDP-Q-Tab gibt es erst ab 5.1.0). Sie lädt **negative**
+  Ergebnisse ausdrücklich ein: ein „✗ keine abfragbare Nachbartabelle" erspart
+  dem Nächsten denselben Nachmittag. Und sie verlangt vor dem Absenden die
+  Bestätigung, dass keine Community, keine Hostnamen und keine IPs im Text
+  stehen.
+
 ## v5.1.0 — 2026-08-30
 
 ### Update von 5.0 — „Scan directory" ist Pflicht

@@ -152,6 +152,13 @@ doubt, verify with the [test below](#the-test-that-settles-it)):
 | **Huawei** (VRP, e.g. S5700) | ✓ | **works** | confirmed on an S5700 in a production network. VRP answers the standard LLDP-MIB — but the default SNMP view may hide it, see below. The official *Huawei VRP by SNMP* template does **not** collect the neighbour table |
 | **MikroTik** (RouterOS) | ? | **unverified** | the module has a hook for `discovery.neighbor`, but **no RouterOS device has ever confirmed it** — see below |
 
+**Vendor missing, or a row that says "unverified"?** Both are gaps, not
+decisions. One command on your device settles a row —
+[the script](#or-let-a-script-tell-them-apart) prints a ready-made report, and
+there is a form for it: [report a device](https://github.com/linuser/zabbix-network-topology/issues/new?template=device_report.yml). A **negative**
+result counts just as much: "✗ no queryable neighbour table" saves the next
+person the afternoon you just spent.
+
 > **Huawei: the case that shows the most common misunderstanding.** Reported from a
 > production network with S5700 switches: LLDP enabled on the devices, names
 > matching, and still a circle without a single edge. Not a module bug — the chain
@@ -232,6 +239,30 @@ snmpwalk -v2c -c <community> <switch-ip> 1.0.8802.1.1.2.1.4.1.1.9
 - **Empty / "No Such Object"** → this switch provides **no** edges via SNMP
   (Easy Smart, UniFi without the API, send-only devices) →
   [add them manually](#filling-the-gaps-manually).
+
+> **Careful with "empty" — it means three different things.** The device may be
+> unreachable or the community wrong (nothing to do with LLDP); the device may
+> answer but hide the LLDP MIB behind a restricted **SNMP view**; or the MIB may
+> be visible with no neighbour in the table yet. Telling these apart is what
+> costs afternoons.
+
+### Or let a script tell them apart
+
+`tools/nt-lldp-probe.sh` runs all three queries, names which of the three cases
+you are in, and prints a report block you can paste into an issue. It is **not
+in the module ZIP** — `tools/` never goes under the web root — so fetch it from
+the repository:
+
+```bash
+curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/tools/nt-lldp-probe.sh
+chmod +x nt-lldp-probe.sh
+NT_COMMUNITY=<community> ./nt-lldp-probe.sh <switch-ip>
+```
+
+Needs `snmpwalk` (net-snmp). It reads only, never writes, and **sends nothing
+anywhere** — the single connection goes to the IP you passed. The report holds
+counts, not neighbour names, and never the community string, so there is nothing
+to redact before posting it.
 
 CDP equivalent (Cisco): `1.3.6.1.4.1.9.9.23.1.2.1.1.6` (`cdpCacheDeviceId`).
 
