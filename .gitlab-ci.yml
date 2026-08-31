@@ -1,6 +1,6 @@
 # CI fuer "Network Topology for Zabbix"  (Code-Review §14 + §11-Danach-Liste)
 #
-# Elf Jobs ueber drei Stages, die genau die Regressionen abfangen, die uns real
+# Zwoelf Jobs ueber drei Stages, die genau die Regressionen abfangen, die uns real
 # passiert sind. Wer hier einen Job ergaenzt, prueft die stages-Liste mit —
 # 'npm run ci:pipeline' tut das lokal und faengt genau diesen Fehler:
 #
@@ -152,7 +152,7 @@ layers:
 #     Pipeline nicht — ein Job, der daran scheitert, faerbt jede Pipeline rot
 #     und niemand schaut mehr hin. Genau so verliert man ein Gate.
 #   - Er faehrt zwei Container hoch und dauert Minuten, waehrend die uebrigen
-#     zehn Jobs in Sekunden durch sind.
+#     elf Jobs in Sekunden durch sind.
 #
 # Aufruf: in der Pipeline auf "Play". Lokal geht er ohne alles:
 #   tools/clean-install-test/smoke.sh

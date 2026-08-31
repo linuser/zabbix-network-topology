@@ -456,8 +456,54 @@ export function setupExportMenu(bar, isFirstRun) {
         expMenu.appendChild(row);
     }
 
+    /**
+     * Druckt das Fenster, sobald sein Inhalt steht.
+     *
+     * Der eingebettete Karten-Screenshot ist ein data:-URI von etlichen
+     * Megabyte. Ein fester Timeout riet nur, wie lange das Dekodieren dauert,
+     * und bei einer grossen Karte druckte er ein leeres Bild.
+     *
+     * Der w.closed-Test ist kein Feinschliff: der Notnagel feuert drei
+     * Sekunden spaeter, und wer das Fenster vorher schliesst, bekaeme sonst
+     * einen TypeError aus einem Timer, den niemand faengt.
+     *
+     * Steht hier einmal fuer BEIDE Berichte. Vorher hatte jeder seine eigene
+     * Fassung, und der Fix landete nur in einer — der Audit-Report druckte
+     * weiter auf Verdacht nach 800 ms.
+     */
+    function printWhenReady(w) {
+        let printed = false;
+        let backstop = 0;
+        const go = function() {
+            if (printed) return;
+            printed = true;
+            clearTimeout(backstop);
+            if (!w.closed) w.print();
+        };
+        backstop = setTimeout(go, 3000);
+        if (w.closed) return;
+        const img = w.document.querySelector('img');
+        if (img && !img.complete) { img.onload = go; img.onerror = go; }
+        else { setTimeout(go, 200); }
+    }
+
+    /** Blob-Download. Die URL wird freigegeben, sonst haelt sie den Report
+     *  (inklusive Karten-PNG) bis zum Verlassen der Seite im Speicher. */
+    function downloadBlob(html, name) {
+        const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    }
+
     mItem('&#128444;', 'PNG', function() {
-        if (!window._ntCy) return;
+        // Nicht stumm aussteigen: auf den Datentabs ist die Karte abgeraeumt,
+        // und ein Klick ohne jede Reaktion sieht aus wie ein kaputter Knopf.
+        if (!window._ntCy) { toast(t('export.no_map'), 'warn', 6000); return; }
         ntShowExportOverlay(window._ntCy.png({
             full: true, scale: 2, bg: currentBg()
         }), false);
@@ -482,7 +528,18 @@ export function setupExportMenu(bar, isFirstRun) {
         // document.write-Sink, und die ESLint-Baseline zaehlt sie. Ein neuer
         // Sink soll das Gate ausloesen, auch wenn der Inhalt hier konstant
         // ist — die Regel ist mehr wert als die halbe Sekunde leeres Fenster.
-        const h = buildReportHtml({ includeMap: true });
+        //
+        // Der Fang ist die Kehrseite des vorgezogenen window.open(): cy.png()
+        // kann an der Canvas-Obergrenze des Browsers scheitern, und ohne ihn
+        // bliebe ein leeres Fenster stehen, das nie beschrieben und nie
+        // geschlossen wird.
+        let h = null;
+        try { h = buildReportHtml({ includeMap: true }); }
+        catch (e) {
+            w.close();
+            toast(t('export.failed', { err: (e && e.message) || '?' }), 'error', 8000);
+            return;
+        }
         if (!h) {
             w.close();
             toast(t('export.no_map'), 'warn', 6000);
@@ -491,31 +548,15 @@ export function setupExportMenu(bar, isFirstRun) {
 
         w.document.write(h);
         w.document.close();
-
-        // Drucken erst, wenn der eingebettete Map-Screenshot geladen ist —
-        // ein fester Timeout riet nur, und bei einer grossen Karte druckte
-        // er ein leeres Bild. Der Timeout bleibt als Notnagel, falls onload
-        // nie kommt.
-        let printed = false;
-        const go = function() { if (!printed) { printed = true; w.print(); } };
-        try {
-            const img = w.document.querySelector('img');
-            if (img && !img.complete) { img.onload = go; img.onerror = go; }
-            else { setTimeout(go, 200); }
-        }
-        catch (e) { /* Cross-Origin sollte hier nicht auftreten, aber egal */ }
-        setTimeout(go, 3000);
+        printWhenReady(w);
     });
 
     mItem('&#128190;', t('export.menu.html'), function() {
-        const h = buildReportHtml({ includeMap: true });
+        let h = null;
+        try { h = buildReportHtml({ includeMap: true }); }
+        catch (e) { toast(t('export.failed', { err: (e && e.message) || '?' }), 'error', 8000); return; }
         if (!h) { toast(t('export.no_map'), 'warn', 6000); return; }
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
-        a.download = 'network-topology-' + new Date().toISOString().slice(0, 10) + '.html';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        downloadBlob(h, 'network-topology-' + new Date().toISOString().slice(0, 10) + '.html');
     });
 
     // Audit-Report: strukturierter Bericht (Hostgroups + Kritische + Offline/Stale
@@ -534,45 +575,34 @@ export function setupExportMenu(bar, isFirstRun) {
         w.document.write('<p style="font-family:sans-serif;color:#64748b">' + t('export.generating') + '</p>');
         _fetchCompliance().then(function(compl) {
             const h = buildAuditHtml(compl);
-            if (!h) { w.close(); return; }
+            // Vorher: stilles w.close(). Ein Fenster, das aufgeht und wieder
+            // zugeht, ohne dass irgendwo etwas steht, ist keine Rueckmeldung.
+            if (!h) { w.close(); toast(t('export.no_map'), 'warn', 6000); return; }
             w.document.open();
             w.document.write(h);
             w.document.close();
-            setTimeout(function() { w.print(); }, 800);
+            printWhenReady(w);
+        })
+        .catch(function(e) {
+            w.close();
+            toast(t('export.failed', { err: (e && e.message) || '?' }), 'error', 8000);
         });
     });
 
     mItem('&#128221;', t('export.menu.audit_html'), function() {
         _fetchCompliance().then(function(compl) {
             const h = buildAuditHtml(compl);
-            if (!h) return;
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
-            a.download = 'nt-audit-' + new Date().toISOString().slice(0, 10) + '.html';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            if (!h) { toast(t('export.no_map'), 'warn', 6000); return; }
+            downloadBlob(h, 'nt-audit-' + new Date().toISOString().slice(0, 10) + '.html');
+        })
+        .catch(function(e) {
+            toast(t('export.failed', { err: (e && e.message) || '?' }), 'error', 8000);
         });
     });
 
     expBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        const open = expMenu.style.display === 'none';
-        expMenu.style.display = open ? 'block' : 'none';
-
-        // Rechtsbuendig loest den Regelfall. Sollte die Leiste einmal anders
-        // angeordnet sein und das Menue nach LINKS hinauslaufen, hier
-        // zurueckklappen — statt sich darauf zu verlassen, dass der Knopf
-        // immer aussen rechts sitzt.
-        if (open) {
-            expMenu.style.left = '';
-            expMenu.style.right = '0';
-            const r = expMenu.getBoundingClientRect();
-            if (r.left < 0) {
-                expMenu.style.right = '';
-                expMenu.style.left = '0';
-            }
-        }
+        expMenu.style.display = expMenu.style.display === 'none' ? 'block' : 'none';
     });
     if (_expDocClose) document.removeEventListener('click', _expDocClose);
     _expDocClose = function() { expMenu.style.display = 'none'; };

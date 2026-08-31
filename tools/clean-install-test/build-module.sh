@@ -13,20 +13,34 @@ DEST="$HERE/module/network_topology"
 echo "→ Bundle bauen (esbuild)"
 ( cd "$REPO" && npm run build >/dev/null )
 
-echo "→ Modul stagen (Release-ZIP-Excludes)"
+echo "→ Modul stagen (Ausschluesse aus deploy.sh)"
 rm -rf "$HERE/module"
 mkdir -p "$DEST"
-rsync -a \
-    --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
-    --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
-    --exclude '.github' --exclude 'screenshots' --exclude 'dashboards' \
-    --exclude 'tools' --exclude 'templates' \
-    --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
-    --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
-    --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-install.sh' \
-    --exclude 'tests' --exclude '.gitlab-ci.yml' \
-    --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
-    "$REPO/" "$DEST/"
+
+# Die Liste wird GELESEN, nicht wiederholt — dieselbe Ueberlegung wie in
+# tools/check-package.mjs: eine zweite Liste ist eine zweite Stelle, die
+# auseinanderlaeuft. Und genau das war passiert. Hier fehlten 'widget_kpi'
+# und 'widget_items', und 'nt-install.sh' stand namentlich da, wo deploy.sh
+# laengst das Muster 'nt-*.sh' hat. Dieses Skript baut also ein Paket, das
+# "byte-genau wie das Release-ZIP" heisst und drei Dinge mehr enthielt —
+# ausgerechnet der Test, der den Auslieferungsstand pruefen soll.
+excl_args=()
+n_pat=0
+while IFS= read -r pat; do
+    excl_args+=(--exclude "$pat")
+    n_pat=$((n_pat + 1))
+done < <(grep -oE -- "--exclude '[^']+'" "$REPO/deploy.sh" | sed -E "s/^--exclude '//; s/'$//")
+
+# Eigener Zaehler statt ${#excl_args[@]}: das Array traegt zwei Eintraege je
+# Muster ('--exclude' und das Muster), die Laenge waere also das Doppelte.
+if [[ $n_pat -lt 10 ]]; then
+    echo "✗ Ausschlussliste aus deploy.sh nicht lesbar ($n_pat Muster gefunden)." >&2
+    echo "  Hat sich der rsync-Aufruf dort geaendert? Dann muss dieses Skript mit." >&2
+    exit 1
+fi
+echo "  $n_pat Muster aus deploy.sh uebernommen"
+
+rsync -a "${excl_args[@]}" "$REPO/" "$DEST/"
 
 echo "✓ fertig: $DEST"
 echo "  jetzt:  docker compose up -d   (dann http://localhost:8080, Admin/zabbix)"

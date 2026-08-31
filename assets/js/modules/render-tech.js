@@ -101,6 +101,16 @@ export function render(wrap, nodes, edges, dataUrl) {
         return;
     }
 
+    // Die unveraenderte Hostliste festhalten. Unten wird "nodes" dreimal
+    // ersetzt — Gruppen-Aggregate, Internet-Wolke, Ghosts — und keines davon
+    // ist ein ueberwachter Host. Die Kennzahlenzeile bekommt deshalb DIESE
+    // Liste, dieselbe, die auch der 30-Sekunden-Refresh und refreshKpi()
+    // benutzen. Vorher war der Render-Pfad der einzige, der die angereicherte
+    // Fassung uebergab: wer im Gruppen-View eine Kante zog, sah die Zahl von
+    // "3 Hosts" auf "47 Hosts" springen, ohne dass sich ein Host geaendert
+    // haette.
+    const rawNodes = nodes;
+
     const cfg = window.NT_CONFIG;
     const sel = (cfg && cfg.selected_group_names) || [];
     nodes.forEach(function(n) { n.id = String(n.id); n._primaryGroup = primaryGroup(n, sel); });
@@ -454,16 +464,11 @@ export function render(wrap, nodes, edges, dataUrl) {
     applyManualLinks(cy);
     showMinimap();
 
-    // NACH applyManualLinks, nicht davor.
-    //
-    // Die Kennzahlen zaehlen ueber cy.edges(). Der Aufruf stand frueher weiter
-    // oben, noch vor dem Einfuegen der gespeicherten Kanten — beim ersten Laden
-    // stand deshalb "0 Edges", obwohl welche gezeichnet waren. Erst der
-    // naechste Refresh (bis zu 30 s) oder ein Re-Render brachte die richtige
-    // Zahl. Im Browser nachgemessen: nach dem Beenden einer Simulation sprang
-    // der Zaehler von 0 auf "3 Edges, 3 manual", ohne dass sich am Graphen
-    // etwas geaendert hatte.
-    updateKpi(nodes, cy);
+    // NACH applyManualLinks, nicht davor: die Kennzahlen zaehlen ueber
+    // cy.edges(), und vorher stecken die gespeicherten Kanten noch nicht im
+    // Graphen — beim ersten Laden stand deshalb "0 Edges", obwohl welche
+    // gezeichnet waren.
+    updateKpi(rawNodes, cy);
 
     // ── Pin/Note aus localStorage wiederherstellen ─────────────────────────
     (function() {

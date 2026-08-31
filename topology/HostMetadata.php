@@ -158,22 +158,18 @@ final class HostMetadata {
         $map = [
             // Network security
             'firewall'       => ['fw-','firewall','fortigate','pfsense','opnsense','-asa-','srx',
-                                 'opnsense by snmp',
-                                 // UniFi-Gateways: UDM (Dream Machine), USG (Security
-                                 // Gateway), UXG. Das sind Firewall/Router, keine
-                                 // Access Points — siehe Hinweis unter der Map.
-                                 'udm','usg-','uxg'],
+                                 'opnsense by snmp'],
             'router'         => ['rtr-','router','-gw-','gateway','mikrotik routeros','vyos'],
             'switch'         => ['sw-','switch','-core-','-acc-','catalyst','procurve','nexus',
-                                 'hp enterprise switch','tp-link by snmp','usw-'],
+                                 'hp enterprise switch','tp-link by snmp'],
             // NUR echte Access Points. 'unifi' und 'omada' standen hier frueher
             // und waren der Grund, warum eine UDM Pro (Firewall) und ein NVR
             // (Videorecorder) beide als WAP angezeigt wurden: das sind
             // PRODUKTLINIEN, keine Geraeteklassen. UniFi umfasst Gateways,
             // Switches, Kameras, Recorder und APs; Omada bei TP-Link genauso.
             // Ein Herstellername sagt nichts darueber, WAS ein Geraet ist.
-            'wireless'       => ['-ap-','wlan','wifi','wireless','uap-','unifi ap',
-                                 'unifi access point'],
+            // Die Modellreihen, die sehr wohl APs sind, stehen unten in $rx.
+            'wireless'       => ['-ap-','wlan','wifi','wireless','unifi access point'],
             // Storage & backup
             'storage'        => ['nas-','synology','qnap','netapp','storage','truenas',
                                  'truenas core by snmp','synology active backup'],
@@ -207,10 +203,35 @@ final class HostMetadata {
             'server'         => ['srv-','server'],
         ];
 
+        // Modellreihen statt Herstellernamen — und als Ausdruck statt als
+        // Teilstring, weil diese Tokens zu kurz zum blinden Suchen sind:
+        // 'udm' steckt in "cloudmail", 'uxg' in "luxgate", und beide stuenden
+        // in der ZUERST geprueften Klasse. Ein Mailserver waere damit eine
+        // Firewall gewesen.
+        //
+        // \b bindet nur VORNE, weil hinter dem Token die Modellnummer folgt
+        // (UDM Pro, USG-3P, U6-Lite, USW24). Die eine Ausnahme ist 'unifi ap':
+        // dort muss auch hinten eine Grenze stehen, sonst passt "UniFi API" —
+        // und dann haengt der NVR wieder als WAP im Netz, also genau der
+        // Fehler, dessentwegen 'unifi' oben verschwunden ist.
+        //
+        // 'eap' verlangt eine Ziffer dahinter (EAP245, EAP660 sind die Omada-
+        // APs). Ohne sie faenge es "radius-eap-01" mit — EAP ist auch ein
+        // Authentifizierungsprotokoll.
+        $rx = [
+            'firewall' => '/\budm|\busg|\buxg/',
+            'switch'   => '/\busw/',
+            'wireless' => '/\buap|\bu6|\bu7|\beap\d|\bunifi ap\b/',
+        ];
+
+        // Ein Durchlauf, damit die Reihenfolge der Map fuer beide Formen
+        // gilt — sonst haetten Ausdruecke stillschweigend Vorrang vor
+        // spezifischeren Teilstring-Treffern.
         foreach ($map as $type => $kws) {
             foreach ($kws as $kw) {
                 if (strpos($s, $kw) !== false) return $type;
             }
+            if (isset($rx[$type]) && preg_match($rx[$type], $s)) return $type;
         }
 
         return 'server';

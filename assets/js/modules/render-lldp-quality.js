@@ -100,11 +100,11 @@ function _aggregateBlock(perHost, theme) {
         + '</div>';
 }
 
+// Ohne Eintraege kommt diese Funktion nicht mehr dran: renderLldpQuality
+// steigt vorher mit _noDataBlock aus. Der fruehere Leerzustand hier (eine
+// kursive Zeile) ist damit weg — zwei Darstellungen fuer denselben Zustand
+// waeren eine zu viel.
 function _perHostTable(perHost, theme) {
-    if (!perHost.length) {
-        return '<div style="color:' + theme.subSoft + ';padding:20px 0;font-style:italic">'
-            + esc(t('lldpq.no_hosts')) + '</div>';
-    }
     // Sortierung: meiste Issues (unmatched+ambiguous) zuerst, dann nach matched desc
     const sorted = perHost.slice().sort(function(a, b) {
         const ia = (a.unmatched || []).length + (a.ambiguous || []).length;

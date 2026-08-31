@@ -160,12 +160,17 @@ function tile(value, label, colour, sub) {
  * Kanten aus der Cytoscape-Instanz.
  */
 function collect(nodes, cy) {
-    // Ghosts raus, BEVOR irgendetwas gezaehlt wird. Bei aktivem Toggle uebergibt
-    // render-tech.js das bereits angereicherte Array, und ein Ghost ist kein
-    // Host: er hat severity 0 und liefe damit als "OK" durch, waehrend er in
-    // Wahrheit ein Geraet ist, ueber das wir gar nichts wissen. Genau das stand
-    // auf der Karte — 12 Hosts bei 11 echten, und ein grünes Kaestchen zu viel.
-    const base = nodes.filter(function(n) { return !n._isGhost; });
+    // Was kein ueberwachter Host ist, wird auch nicht als einer gezaehlt: ein
+    // Ghost ist ein Geraet, ueber das wir nichts wissen, die Internet-Wolke im
+    // Hierarchie-Layout ist gar kein Geraet. Beide tragen severity 0 und liefen
+    // sonst als "OK" durch — genau das stand auf der Karte: 12 Hosts bei 11
+    // echten, und ein gruenes Kaestchen zu viel.
+    //
+    // Die Aufrufer uebergeben inzwischen alle die rohe Hostliste, in der das
+    // gar nicht vorkommt. Der Filter bleibt trotzdem: er ist die Stelle, an der
+    // "Hosts" definiert ist, und ohne ihn haengt die Richtigkeit der Zeile
+    // daran, dass jeder kuenftige Aufrufer dasselbe weiss.
+    const base = nodes.filter(function(n) { return !n._isGhost && !n._isInternet; });
 
     // Severity-Stufen sind ['Normal','Info','Warning','Average','High','Disaster'].
     //
@@ -221,7 +226,10 @@ function collect(nodes, cy) {
     try { ghostsHidden = localStorage.getItem(NT_GHOSTS_KEY) !== '1'; } catch (e) {}
 
     return {
-        hosts: nodes.length, ok: ok, warn: warn, crit: crit,
+        // base, nicht nodes: sonst zaehlt die Zeile Ghosts als Hosts mit und
+        // "Hosts" ist groesser als OK + Warn + Crit — eine Zeile, die sichtbar
+        // nicht aufgeht, sieht kaputt aus, egal wie die Zahlen gemeint waren.
+        hosts: base.length, ok: ok, warn: warn, crit: crit,
         edges: edges, manual: manual, ghosts: ghosts,
         lldp: Math.max(0, edges - manual),
         ghostsHidden: ghostsHidden
@@ -229,31 +237,19 @@ function collect(nodes, cy) {
 }
 
 /**
- * Schreibt die Zeile neu. Wird bei jedem render und bei jedem Auto-Refresh
- * gerufen.
- */
-/**
- * Zeile aus dem aktuellen Stand neu schreiben, ohne dass der Aufrufer die
- * Knotenliste kennen muss.
+ * Zeile aus dem letzten Fetch neu schreiben, ohne dass der Aufrufer die
+ * Knotenliste kennen muss — fuer jede Stelle, die den Graphen veraendert.
  *
- * ANLASS
- * ------
- * updateKpi lief nur an zwei Stellen: beim Render und beim 30-Sekunden-
- * Refresh. Wer im Star-Mode eine Kante zog oder alle Links loeschte, sah die
- * Aenderung sofort im Graphen — der Zaehler daneben blieb bis zu 30 Sekunden
- * auf dem alten Wert stehen. Aufgefallen ist es auf einem Screenshot: drei
- * sichtbare Kanten, daneben "0 Edges". Wer das sieht, haelt die Zahl fuer
- * kaputt, nicht fuer veraltet — und hat damit nicht ganz unrecht.
- *
- * Die Knotenliste steht in window._ntLastData; sie wird nach jedem Fetch dort
- * abgelegt. Deshalb braucht diese Funktion keine Argumente und passt an jede
- * Stelle, die den Graphen veraendert.
+ * Ohne sie blieb der Zaehler nach einer gezogenen oder geloeschten Kante bis
+ * zu 30 Sekunden auf dem alten Wert stehen: drei sichtbare Kanten, daneben
+ * "0 Edges". Wer das sieht, haelt die Zahl fuer kaputt, nicht fuer veraltet.
  */
 export function refreshKpi() {
     const d = window._ntLastData || {};
     updateKpi(d.nodes || [], window._ntCy || null);
 }
 
+/** Schreibt die Zeile neu. nodes ist die rohe Hostliste aus dem Backend. */
 export function updateKpi(nodes, cy) {
     const row = ensureKpiRow();
     if (!row) return;

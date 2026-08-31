@@ -322,9 +322,17 @@
   Refresh-Pfad die rohen Backend-Knoten übergibt — die unangenehmste Sorte
   Fehler: beim Nachsehen ist er weg.
 
-  Die Zählung filtert jetzt einmal `_isGhost`, bevor irgendetwas gezählt wird.
-  Das KPI-**Widget** war nie betroffen; es bekommt die Backend-Daten direkt und
-  leitet die Ghosts eigenständig ab.
+  Die Zählung filtert jetzt `_isGhost` und die Internet-Wolke heraus, bevor
+  irgendetwas gezählt wird — auch für die Zahl „Hosts" selbst. Der erste Anlauf
+  hatte nur die Severity-Aufteilung umgestellt, weshalb die Zeile sichtbar nicht
+  mehr aufging: „14 Hosts, 11 OK" und sonst nichts.
+
+  Dazu bekommen alle vier Aufrufer dieselbe Menge, nämlich die rohe Hostliste
+  aus dem Backend. Der Render-Pfad war der einzige, der die um Gruppen-Aggregate,
+  Internet-Wolke und Ghosts angereicherte Fassung reichte; im Gruppen-View
+  sprang die Zahl beim Ziehen einer Kante von „3 Hosts" auf „47 Hosts", ohne
+  dass sich ein Host geändert hätte. Das KPI-**Widget** war nie betroffen; es
+  bekommt die Backend-Daten direkt und leitet die Ghosts eigenständig ab.
 
 - **Port-zu-Port-Beschriftungen waren seit jeher tot.** Das README bewirbt, dass
   jede Kante auf LLDP/SNMP-Switches den lokalen **und** den entfernten Port
@@ -665,6 +673,66 @@
 
 - **Prozentspalte im Items-Widget sprang.** Die Rundung schnitt die abschließende
   Null ab, wodurch „6%" neben „5.9%" stand. Feste Nachkommastelle.
+
+- **Eine Firewall und ein Videorecorder wurden als WLAN-Accesspoint gezeichnet.**
+  In der Typ-Heuristik standen `unifi` und `omada` in der Liste für „wireless" —
+  das sind aber **Produktlinien, keine Geräteklassen**: UniFi umfasst Gateways,
+  Switches, Kameras, Recorder und Accesspoints. Dazu wird „wireless" vor
+  „camera" geprüft, weshalb der breite Herstellername sogar das spezifische
+  `nvr` schlug. Gematcht wird gegen Hostname **plus** Template-Namen, und beide
+  Geräte hingen am UniFi-Template — sie trugen den Herstellernamen also
+  implizit mit sich.
+
+  Der Herstellername entscheidet jetzt nichts mehr; erkannt werden Modellreihen:
+  UDM/USG/UXG → Firewall, USW → Switch, UAP/U6/U7 und die Omada-EAP-Reihe →
+  Accesspoint. Wo nichts passt, bleibt es beim Server-Default — ehrlicher als
+  eine geratene Klasse, und wem das nicht passt, der setzt `nt:icon`.
+
+  Diese kurzen Kürzel werden an Wortgrenzen gebunden statt als Teilstring
+  gesucht: `udm` steckt in „cloudmail", `uxg` in „luxgate", und „firewall" wird
+  als Erstes geprüft — ein Mailserver wäre sonst eine Firewall geworden. Aus
+  demselben Grund muss hinter `unifi ap` eine Wortgrenze stehen: ohne sie passt
+  auch „UniFi API", und der Recorder hinge wieder als WAP im Netz. **Nach dem
+  Update können sich Icons ändern** — an den Daten ändert das nichts.
+
+- **Der Kantenzähler blieb nach jeder Änderung bis zu 30 Sekunden stehen.** Wer
+  im Stern-Modus eine Kante zog oder alle Links löschte, sah es sofort im
+  Graphen — die Zeile daneben erst beim nächsten Refresh. Aufgefallen auf einem
+  Screenshot: drei sichtbare Kanten, daneben „0 Edges". Wer das sieht, hält die
+  Zahl für kaputt, nicht für veraltet.
+
+  Beim ersten Laden stand die Zahl aus demselben Grund auf null, weil sie vor
+  dem Einfügen der gespeicherten Kanten gezogen wurde. Auch der Rückrollweg
+  zählt jetzt neu: lehnt der Server eine Kante ab, verschwindet sie aus dem
+  Graphen — und die Zeile behauptete sie bis zum nächsten Refresh weiter. Eine
+  Zahl, die einen gescheiterten Speichervorgang bestätigt, ist schlimmer als
+  eine veraltete.
+
+- **„PDF (print)" öffnete kein Fenster mehr.** `window.open()` stand hinter dem
+  Aufbau des Reports, und der rendert die ganze Karte per `cy.png()` — bei einer
+  größeren Topologie hunderte Millisekunden. Danach ist das Zeitfenster der
+  Benutzeraktion zu, der Popup-Blocker greift, `window.open()` liefert `null`,
+  und das umgebende `if (w) { … }` verschluckte genau das: Klick, nichts
+  passiert, keine Meldung. Das Fenster geht jetzt synchron im Klick auf, der
+  teure Teil kommt danach — und blockiertes Popup, fehlende Karte und
+  gescheiterter Report sagen es jeweils.
+
+  Gedruckt wird erst, wenn der eingebettete Kartenschnappschuss geladen ist;
+  vorher stand dort ein fester Timeout, der bei großen Karten ein leeres Bild
+  druckte. Der Audit-Report hatte davon nur die Hälfte abbekommen — beide teilen
+  sich jetzt dieselbe Routine, samt Freigabe der Blob-URL nach dem Download.
+
+- **Der LLDP-Q-Tab meldete „0 %" in Rot, wenn es nichts zu bewerten gab.** Ohne
+  LLDP-Items ist die Match-Quote nicht null, sondern undefiniert. Die rote Null
+  sah aus wie ein Messergebnis und ließ das Modul kaputt aussehen, während die
+  Ursache davor liegt: das mitgelieferte Template ist nicht gelinkt, oder die
+  Discovery lief noch nicht. Meldet kein Host Nachbarn, steht dort jetzt genau
+  das — mit dem Weg zum Nachsehen — statt einer Kennzahl.
+
+- **Das Export-Menü lief rechts aus dem Fenster.** Der Knopf sitzt am rechten
+  Ende der Werkzeugleiste, das Menü klappte nach rechts auf: „PDF (pri…", „Save
+  HT…" und „Audit rep…" waren abgeschnitten und nicht anklickbar. Es klappt
+  jetzt rechtsbündig auf.
 
 ### Performance
 - **Response-Cache für `network.topology.data`.** Die Action ist der teuerste

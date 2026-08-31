@@ -14,6 +14,7 @@ import { fmt } from './utils.js';
 import { loadLinks, setLinkErrorHandler } from './storage.js';
 import { toast } from './toast.js';
 import { t } from './i18n.js';
+import { refreshKpi } from './kpi.js';
 
 // storage.js schreibt optimistisch: die Kante erscheint sofort, der POST laeuft
 // hinterher. Scheitert er, rollt storage.js den Speicher zurueck und meldet es
@@ -25,6 +26,11 @@ setLinkErrorHandler(function(err) {
     if (window._ntCy) {
         window._ntCy.edges('[id^="ml_"]').remove();
         applyManualLinks(window._ntCy);
+        // Auch hier: der Graph ist zurueckgerollt, die Zeile daneben behauptet
+        // sonst bis zum naechsten Refresh die Kante, die der Server gerade
+        // abgelehnt hat. Eine Zahl, die einen gescheiterten Speichervorgang
+        // bestaetigt, ist schlimmer als eine veraltete.
+        refreshKpi();
     }
 });
 

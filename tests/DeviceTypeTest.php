@@ -227,6 +227,43 @@ check('UniFi-Switch -> switch',
 check('nur Herstellername -> kein wireless',
       HostMetadata::deviceType('geraet-42', ['UniFi Network API']), 'server');
 
+// Die Modellreihen, die tatsaechlich Access Points sind, muessen weiter
+// durchkommen — sonst hat der Verzicht auf 'unifi'/'omada' nur die Fehlerrichtung
+// getauscht: statt Gateways als WAP jetzt WAPs als Server.
+echo "\n  Modellreihen statt Herstellername\n\n";
+
+check('U6-Pro (aktuelle UniFi-AP-Reihe) -> wireless',
+      HostMetadata::deviceType('U6-Pro', ['UniFi Network API']), 'wireless');
+check('U7-Pro -> wireless',
+      HostMetadata::deviceType('U7-Pro', []), 'wireless');
+check('EAP245 (Omada-AP) -> wireless',
+      HostMetadata::deviceType('EAP245', ['TP-Link Omada by SNMP']), 'wireless');
+check('USW24 ohne Bindestrich -> switch',
+      HostMetadata::deviceType('USW24', []), 'switch');
+check('USG3P ohne Bindestrich -> firewall',
+      HostMetadata::deviceType('usg3p', []), 'firewall');
+
+// Und die Kehrseite: kurze Modell-Tokens duerfen nicht mitten im Wort greifen.
+// 'udm' steckt in "cloudmail", 'uxg' in "luxgate", 'eap' in "radius-eap-01" —
+// und firewall/wireless werden VOR mailserver geprueft. Ohne Wortgrenze waere
+// ein Mailserver eine Firewall.
+echo "\n  Kurze Tokens greifen nicht mitten im Wort\n\n";
+
+check('cloudmail-01 bleibt mailserver',
+      HostMetadata::deviceType('cloudmail-01', []), 'mailserver');
+check('nas-cloudmirror bleibt storage',
+      HostMetadata::deviceType('nas-cloudmirror', []), 'storage');
+check('luxgate01 wird keine Firewall',
+      HostMetadata::deviceType('luxgate01', []), 'server');
+check('radius-eap-01 wird kein Access Point',
+      HostMetadata::deviceType('radius-eap-01', []), 'server');
+
+// Der Ausloeser des Ganzen, in der Variante, die fast wieder hineingefallen
+// waere: das Template heisst "UniFi API", und 'unifi ap' ist dessen Praefix.
+// Ohne die hintere Wortgrenze haenge der Recorder wieder als WAP im Netz.
+check('NVR am Template "UniFi API" -> camera, nicht wireless',
+      HostMetadata::deviceType('nvr-01', ['UniFi API']), 'camera');
+
 echo "\n";
 if ($failures > 0) {
     echo "  === {$failures} FEHLER ===\n\n";

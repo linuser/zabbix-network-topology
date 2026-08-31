@@ -115,9 +115,11 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
   the LLDP table. For admins, a menu entry opens Zabbix' own host form
   **pre-filled**; the host is created by Zabbix, not by the module.
 - **Device type from the protocol** — the icon comes from the host name and
-  templates first; where that yields nothing, the **LLDP capabilities** decide
-  (IEEE 802.1AB: Bridge → switch, Router, WLAN AP). The device announces what
-  it is, vendor-independently. `nt:icon` overrides both.
+  templates first, matching **model series, not vendor names**: a plain "UniFi"
+  or "Omada" covers gateways, switches, cameras and access points alike and
+  says nothing about what a device is. Where that yields nothing, the **LLDP
+  capabilities** decide (IEEE 802.1AB: Bridge → switch, Router, WLAN AP). The
+  device announces what it is, vendor-independently. `nt:icon` overrides both.
 - **Service probe on click** — a context-menu entry checks a fixed list of 11
   ports and distinguishes *open* / *refused* / *timeout*. It runs on click
   only, never on its own; the address is resolved server-side through the
@@ -281,10 +283,12 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
   Menüeintrag Zabbix' eigenes Host-Formular **vorbefüllt**; angelegt wird der
   Host von Zabbix, nicht vom Modul.
 - **Gerätetyp aus dem Protokoll** — welches Symbol ein Knoten bekommt, leitet
-  sich zuerst aus Name und Template ab; greift das nicht, entscheiden die
-  **LLDP-Capabilities** (IEEE 802.1AB: Bridge → Switch, Router, WLAN AP). Das
-  Gerät sagt selbst, was es ist, herstellerunabhängig. `nt:icon` überstimmt
-  beides.
+  sich zuerst aus Name und Template ab, und zwar über **Modellreihen, nicht über
+  Herstellernamen**: ein bloßes „UniFi" oder „Omada" umfasst Gateways, Switches,
+  Kameras und Accesspoints gleichermaßen und sagt nichts darüber, *was* ein
+  Gerät ist. Greift das nicht, entscheiden die **LLDP-Capabilities** (IEEE
+  802.1AB: Bridge → Switch, Router, WLAN AP). Das Gerät sagt selbst, was es ist,
+  herstellerunabhängig. `nt:icon` überstimmt beides.
 - **Dienste-Probe auf Klick** — im Kontextmenü eines Hosts prüft ein Eintrag
   eine feste Liste von 11 Ports und unterscheidet *offen* / *abgewiesen* /
   *Zeitüberschreitung*. Läuft nur auf Klick, nie von selbst; die Adresse löst

@@ -45,7 +45,11 @@ bad()  { printf '  [FAIL] %s\n' "$1"; fails=$((fails + 1)); }
 cleanup() {
     note "Aufraeumen"
     docker compose down -v >/dev/null 2>&1 || true
-    rm -rf "$HERE/module"
+    # '|| true' wie eine Zeile darueber: unter 'set -e' bestimmt der LETZTE
+    # Befehl des EXIT-Traps den Rueckgabewert des Skripts. Ein rm, das an
+    # Dateirechten scheitert, faerbt den Job damit rot, obwohl jede Pruefung
+    # bestanden hat — nachgestellt, es passiert wirklich.
+    rm -rf "$HERE/module" || true
 }
 trap cleanup EXIT
 
