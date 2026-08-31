@@ -84,13 +84,18 @@ Safari identisch reproduziert.
 
 ## Warum nur 8.0
 
-Gemessen an drei laufenden Instanzen, jeweils dieselbe Datei, dieselbe Zeile:
+Gemessen an vier Installationen, jeweils dieselbe Datei, dieselbe Zeile:
 
-| Instanz | `js/common.js:114` | Folge |
+| Zabbix | `js/common.js:114` | Folge |
 |---|---|---|
-| zabbix.fox1.de (7.4) | `Array.prototype.xor = function(arr) {` | beschreibbar → keine Kollision |
-| zabbixcloud.de | `Array.prototype.xor = function(arr) {` | beschreibbar → keine Kollision |
-| Test-VM (8.0.0beta2) | `Object.defineProperty(Array.prototype, 'xor', {…})` | **Kollision** |
+| 7.0 (offizielles Image `zabbix-web-nginx-pgsql:alpine-7.0`) | `Array.prototype.xor = function(arr) {` | beschreibbar → keine Kollision |
+| 7.4 (Produktivinstanz) | `Array.prototype.xor = function(arr) {` | beschreibbar → keine Kollision |
+| 7.x (zweite Produktivinstanz) | `Array.prototype.xor = function(arr) {` | beschreibbar → keine Kollision |
+| 8.0.0beta2 (Test-VM) | `Object.defineProperty(Array.prototype, 'xor', {…})` | **Kollision** |
+
+Die 7.0-Zeile ist die nachprüfbarste: das Image lässt sich ziehen, die Datei
+liegt unter `/usr/share/zabbix/js/common.js`. Wer die Aussage anzweifelt,
+braucht dafür keinen Zugang zu irgendeiner unserer Instanzen.
 
 Eine einfache Zuweisung lässt die Eigenschaft beschreibbar und konfigurierbar.
 Zabbix hat in 8.0 genau diese eine Zeile umgestellt.
