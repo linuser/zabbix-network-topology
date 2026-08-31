@@ -387,28 +387,33 @@ network_topology/
 ├── Module.php                 menu registration / Menü-Eintrag
 ├── views/
 │   └── network.topology.view.php   HTML container + JS loader
-├── actions/                        17 actions (JSON via layout.json)
-│   ├── NetworkTopologyView.php               renders the page (layout.htmlpage)
-│   ├── NetworkTopologyData.php               nodes + edges + traffic + LLDP/CDP + health
-│   ├── NetworkTopologyHistory.php            trigger events for a time window
-│   ├── NetworkTopologyItems.php              item pivot (wildcard pattern)
-│   ├── NetworkTopologyItemHistory.php        batch sparklines for the pivot
-│   ├── NetworkTopologyItemCount.php          live autocomplete count
-│   ├── NetworkTopologySpark.php              CPU/ping history for tooltips
-│   ├── NetworkTopologyDiscoverPatterns.php   preset pattern suggestions
-│   ├── NetworkTopologyCompliance.php         per-host compliance checks (admin)
-│   ├── NetworkTopologyDiag.php               backend telemetry (super admin)
-│   ├── NetworkTopologyCapacityForecast.php   link capacity forecast (trends)
-│   ├── NetworkTopologyResourceForecast.php   CPU/memory forecast (trends)
-│   ├── NetworkTopologyHealthHistory.php      health score history (trapper items)
-│   └── NetworkTopologyMaintenance.php        one-time maintenance (WRITE, admin)
-├── topology/                       HostMetadata · HostTagParser · LldpEdgeBuilder · ManualLinks
-│                                   MetricExtractor · NodeBuilder · NodePositions · ProblemLoader
+├── actions/                        17 registered actions + 2 shared classes
+│   ├── NetworkTopologyView.php                  renders the page (layout.htmlpage)
+│   ├── NetworkTopologyData.php                  nodes + edges + traffic + LLDP/CDP + health
+│   ├── NetworkTopologyHistory.php               trigger events for a time window
+│   ├── NetworkTopologyItems.php                 item pivot (wildcard pattern)
+│   ├── NetworkTopologyItemHistory.php           batch sparklines for the pivot
+│   ├── NetworkTopologyItemCount.php             live autocomplete count
+│   ├── NetworkTopologySpark.php                 CPU/ping history for tooltips
+│   ├── NetworkTopologyDiscoverPatterns.php      preset pattern suggestions
+│   ├── NetworkTopologyCompliance.php            per-host compliance checks (admin)
+│   ├── NetworkTopologyDiag.php                  backend telemetry (super admin)
+│   ├── NetworkTopologyCapacityForecast.php      link capacity forecast (trends)
+│   ├── NetworkTopologyResourceForecast.php      CPU/memory forecast (trends)
+│   ├── NetworkTopologyHealthHistory.php         health score history (trapper items)
+│   ├── NetworkTopologyMaintenance.php           one-time maintenance (WRITE, admin)
+│   ├── NetworkTopologyLinks.php                 manual edges (WRITE, shared = super admin)
+│   ├── NetworkTopologyPositions.php             map layout (WRITE, shared = super admin)
+│   ├── NetworkTopologyPortScan.php              port probe on click (WRITE-ish: network side effect)
+│   ├── NetworkTopologyController.php            base class, not an action: CSRF, throttling, JSON
+│   └── NtCache.php                              helper, not an action: topology baseline cache (APCu)
+├── topology/                       HostMetadata · HostTagParser · LldpEdgeBuilder · ManualLinks · MetricExtractor
+│                                   NodeBuilder · NodePositions · ProblemLoader · Revision · SharedLayerFilter
 └── assets/
     ├── css/network-topology.css
     └── js/
         ├── network-topology.js     main: tab switching, init, refresh loop
-        └── modules/                ~47 ES modules
+        └── modules/                45 ES modules
 ```
 
 Key frontend modules: `build-elements.js` (Cytoscape node/edge builder) · `render-tech.js` / `render-mgmt.js` / `render-table.js` / `render-geo.js` (the four views) · `items-pivot.js` (pivot table) · `whatif.js` + `root-cause.js` (failure simulation) · `traffic.js` (weathermap) · `aggregation.js` (group view) · `query.js` (table query language) · `storage.js` (user-scoped localStorage) · `utils.js` (`esc()`, formatters) · `i18n.js` + `i18n/{de,en}.js`.
