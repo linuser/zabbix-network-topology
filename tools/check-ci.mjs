@@ -33,6 +33,10 @@
 //   4. Jedes tools/check-* wird von der CI aufgerufen — direkt oder ueber ein
 //      npm-Skript.
 //   5. Auskommentierter Code zaehlt nirgends als Referenz.
+//   6. Was auf GitLab laeuft, laeuft auch auf GitHub. Die Pipeline liegt auf
+//      einem selbstgehosteten GitLab; Beitraege kommen ueber GitHub-PRs. Ohne
+//      diese Regel sieht ein Beitragender von zwoelf Gates genau keins — so
+//      stand PR #5 einen Tag ohne jedes Signal da.
 //
 // Aufruf: node tools/check-ci.mjs  (aus jedem Verzeichnis)
 
@@ -189,6 +193,45 @@ for (const t of tools.sort()) {
     if (t === 'check-ci.mjs') continue;
     if (!resolved.includes(`tools/${t}`)) {
         fail(`tools/${t} existiert, wird aber von .gitlab-ci.yml nie aufgerufen — ein Gate, das nie laeuft`);
+    }
+}
+
+// ── Regel 6: GitLab und GitHub fuehren dieselben Gates aus ────────────────
+// Verglichen wird das, was sich eindeutig vergleichen laesst: welche
+// tools/check-*-Dateien laufen, und ob die drei Nicht-Node-Gates (php -l,
+// Unit-Tests, shellcheck) vorkommen. Kein Vergleich der Kommandozeilen —
+// die duerfen sich unterscheiden, die Runner sind verschieden.
+const WORKFLOW = join(ROOT, '.github/workflows/gates.yml');
+if (!existsSync(WORKFLOW)) {
+    fail('.github/workflows/gates.yml fehlt — dann sieht ein PR auf GitHub keine einzige Pruefung');
+}
+else {
+    const wf_raw = readFileSync(WORKFLOW, 'utf8')
+        .split('\n').map((l) => l.replace(/(^|\s)#.*$/, '$1')).join('\n');
+    let wf = wf_raw;
+    for (const m of wf_raw.matchAll(/npm run ([\w:-]+)/g)) {
+        if (m[1] in pkg_scripts) wf += '\n' + pkg_scripts[m[1]];
+    }
+
+    const gl_tools = new Set([...resolved.matchAll(/tools\/(check-[\w.-]+)/g)].map((m) => m[1]));
+    const wf_tools = new Set([...wf.matchAll(/tools\/(check-[\w.-]+)/g)].map((m) => m[1]));
+    for (const t of [...gl_tools].sort()) {
+        if (!wf_tools.has(t)) {
+            fail(`tools/${t} laeuft in .gitlab-ci.yml, aber nicht in .github/workflows/gates.yml — `
+                 + 'ein Beitragender auf GitHub bekaeme dieses Gate nie zu sehen');
+        }
+    }
+
+    // Die drei Gates ohne tools/-Datei, jeweils an einem Merkmal erkannt.
+    const marks = [
+        [/\bphp -l\b/,            'php-lint (php -l)'],
+        [/tests\/\*Test\.php/,    'unit-tests (tests/*Test.php)'],
+        [/\bshellcheck\b/,        'shellcheck'],
+    ];
+    for (const [re, label] of marks) {
+        if (re.test(code) && !re.test(wf)) {
+            fail(`Gate "${label}" laeuft in .gitlab-ci.yml, aber nicht in .github/workflows/gates.yml`);
+        }
     }
 }
 

@@ -30,6 +30,12 @@ SSH aus. Für eine Wegwerf-Instanz siehe
 
 ## Was die CI hart erzwingt
 
+Die Gates laufen an zwei Orten: auf einem selbstgehosteten GitLab und — seit
+PR #5 einen Tag lang ohne jedes Signal dastand — als GitHub-Action
+(`.github/workflows/gates.yml`) auch an jedem Pull Request hier. Beide führen
+dieselben Prüfungen aus; `npm run ci:pipeline` fällt, wenn eine Seite ein Gate
+bekommt und die andere nicht.
+
 Das sind die Stolperfallen — ein erster Patch fällt sonst durch die Pipeline,
 ohne dass klar ist warum:
 

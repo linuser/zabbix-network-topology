@@ -1,0 +1,85 @@
+# Dieselben Gates wie .gitlab-ci.yml — hier, damit ein Beitragender sie SIEHT.
+#
+# ANLASS
+# ------
+# Die Pipeline dieses Projekts laeuft auf einem selbstgehosteten GitLab. Wer auf
+# GitHub einen Pull Request oeffnet, bekam deshalb: nichts. Keine Haken, keine
+# Kreuze, keine Rueckmeldung — bei einem Projekt, dessen erklaerte Haltung
+# "ein kaputtes Gate meldet sich nicht" ist, war das die groesste Luecke davon.
+# Aufgefallen an PR #5, einem sauberen Beitrag von aussen, der einen Tag lang
+# ohne jedes Signal dastand.
+#
+# Bewusst NICHT hier: clean-install-smoke. Der Job faehrt zwei Container hoch,
+# dauert Minuten und ist auch auf GitLab manuell — ein Gate, das jede Pipeline
+# rot faerbt, schaut sich nach zwei Wochen niemand mehr an.
+#
+# Wer hier oder in .gitlab-ci.yml ein Gate ergaenzt, ergaenzt es in BEIDEN
+# Dateien. 'npm run ci:pipeline' prueft das und faellt sonst — zwei Listen sind
+# zwei Stellen, die auseinanderlaufen.
+
+name: gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: php-lint + unit-tests
+    runs-on: ubuntu-latest
+    container: php:8.2-cli-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - name: php-lint
+        run: find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: unit-tests
+        run: for t in tests/*Test.php; do echo "--- $t"; php "$t" || exit 1; done
+
+  node:
+    name: eslint + parity + templates + package + layers + pipeline + bundle-drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: eslint-dom-sinks
+        run: npm run ci:eslint
+      - name: parity
+        run: node tools/check-parity.mjs
+      - name: templates
+        run: node tools/check-templates.mjs
+      - name: package
+        run: node tools/check-package.mjs
+      - name: layers
+        run: node tools/check-layers.mjs
+      - name: pipeline
+        run: npm run ci:pipeline
+      - name: npm-audit
+        run: npm audit --audit-level=moderate
+      # Der wichtige: das Bundle ist eingecheckt und kann von den Quellmodulen
+      # abweichen, wenn jemand den Build vergisst.
+      - name: bundle-drift
+        run: |
+          npm run build
+          git diff --exit-code -- assets/js/dist/nt-bundle.js
+
+  shell:
+    name: xss-tripwire + shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: xss-tripwire
+        run: bash tools/check-xss.sh --strict
+      # shellcheck ist auf den GitHub-Runnern vorinstalliert; die Zeile faellt
+      # sichtbar, falls sich das aendert, statt den Job still zu ueberspringen.
+      - name: shellcheck
+        run: |
+          command -v shellcheck >/dev/null || { echo "shellcheck fehlt auf dem Runner"; exit 1; }
+          shellcheck nt-install.sh nt-uninstall.sh deploy.sh tools/*.sh tools/clean-install-test/*.sh
