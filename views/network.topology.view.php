@@ -230,7 +230,13 @@ window.NT_CONFIG = <?= json_encode([
     // Action prueft es noch einmal und loest die Adresse selbst ueber die API
     // auf — der Client schickt nie eine IP.
     'portscan_csrf' => \CCsrfTokenHelper::get('network.topology.portscan'),
-    'portscan_url'  => 'zabbix.php?action=network.topology.portscan'
+    'portscan_url'  => 'zabbix.php?action=network.topology.portscan',
+    // Basis fuer die Konflikterkennung. Ohne diese Zeile schickt storage.js
+    // eine leere 'base', und Revision::matches('') gibt true zurueck — die
+    // gesamte Erkennung (Server, Client, Test, Fehlermeldung in zwei Sprachen)
+    // war gebaut und lief ins Leere. Zwei Tabs desselben Benutzers haben sich
+    // gegenseitig ueberschrieben, ohne dass jemand etwas gemerkt haette.
+    'revisions'     => $data['revisions'] ?? new stdClass()
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert
