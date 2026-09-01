@@ -83,7 +83,40 @@ dort), Zabbix-Host-ID (liegt vor, nur nicht durchsucht).
 **Danach: „Locate on topology"** — bei einem Treffer hinspringen statt nur zu
 dimmen. Das Dimmen gibt es schon.
 
-### 5. Pfad als Liste, nicht nur als Hervorhebung
+### 5. Teilbare Deep Links
+
+Ein Link, der genau das zeigt, was man gerade sieht — Host, Gruppe, Ansicht
+oder ein bestimmtes Problem.
+
+**Halb vorhanden, und der fehlende Teil ist klein.** Was heute schon in der URL
+steht:
+
+- `groupids[]` — die Hostgruppen-Auswahl
+- die komplette Tabellen-Ansicht: `t_sev`, `t_g`, `t_q`, `t_off`, `t_sort`,
+  `t_sdir`, `t_mode` (Schweregrad, Gruppe, Suchtext, nur-offline, Sortierung,
+  Modus)
+- mit PR #8 zusätzlich `hostid` und `hops`
+
+**Was fehlt, ist der aktive Tab.** Der liegt in `localStorage`
+(`NT_TAB_KEY`, gelesen in `network-topology.js:70`) — also **im Browser des
+Betrachters, nicht im Link**. Schickt jemand eine URL zur Compliance-Ansicht,
+landet der Empfänger auf dem Tab, den *er* zuletzt offen hatte.
+
+Das ist die eigentliche Lücke, und sie ist klein: den Tab beim Umschalten in die
+URL schreiben (`network-topology.js:162` setzt ihn schon in den localStorage,
+dieselbe Stelle) und beim Laden von dort lesen, mit dem localStorage als
+Rückfall. Danach ist praktisch jede Ansicht teilbar.
+
+**Danach offen, in dieser Reihenfolge:**
+
+- Zoom und Ausschnitt der Karte — braucht eine Entscheidung, ob das in die URL
+  gehört oder eher stört (ein Link, der beim Empfänger einen anderen
+  Bildschirm trifft, zeigt einen sinnlosen Ausschnitt).
+- Ein bestimmtes Problem — dafür gibt es heute keinen Anker; der Link würde
+  eher auf den betroffenen Host zeigen (was mit `hostid` aus PR #8 bereits
+  ginge).
+
+### 6. Pfad als Liste, nicht nur als Hervorhebung
 
 Der Pfad wird berechnet und auf der Karte markiert (siehe Tabelle oben). Was
 fehlt, ist die **textuelle Hop-Liste** mit Zustand je Link:
