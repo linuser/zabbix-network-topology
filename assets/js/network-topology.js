@@ -66,8 +66,31 @@ import { setHistoryRenderCallback, getHistorySeverities, isHistoryActive, setLiv
 // ── Tab-State ──────────────────────────────────────────────────────────────
 // Lebt im Hauptmodul, wird via Getter an tabs.js gereicht. Persistenz im
 // User-scoped localStorage.
+// Gueltige Tabs — die Liste ist die Pruefung fuer den URL-Parameter. Ein
+// fremder Wert soll auf 'tech' fallen und nicht in switchTab() ins Leere laufen.
+const NT_TABS = ['tech', 'mgmt', 'tree', 'geo', 'health', 'stats',
+                 'lldpq', 'compliance', 'diag'];
+const NT_TAB_PARAM = 'nt_tab';
+
+// Reihenfolge: URL vor localStorage.
+//
+// Der Tab lag bisher NUR im localStorage — also im Browser des Betrachters,
+// nicht im Link. Wer eine URL zur Compliance-Ansicht verschickte, schickte
+// faktisch "oeffne den Tab, den du zuletzt offen hattest". Damit war keine
+// Ansicht teilbar, obwohl Hostgruppen, Tabellenfilter und (mit hostid/hops)
+// die Host-Auswahl laengst in der URL stehen.
+//
+// localStorage bleibt als Rueckfall: wer die Seite ohne Parameter aufruft,
+// landet weiterhin dort, wo er zuletzt war.
 let _activeTab = 'tech';
-try { _activeTab = localStorage.getItem(NT_TAB_KEY) || 'tech'; } catch (e) {}
+try {
+    const _p = new URL(window.location.href).searchParams.get(NT_TAB_PARAM);
+    if (_p && NT_TABS.indexOf(_p) >= 0) {
+        _activeTab = _p;
+    } else {
+        _activeTab = localStorage.getItem(NT_TAB_KEY) || 'tech';
+    }
+} catch (e) {}
 
 // ── Cross-Module-Glue (Callback-Registrierung) ─────────────────────────────
 // Diese Callbacks vermeiden zirkuläre Imports: das jeweils tiefere Modul ruft
@@ -160,6 +183,15 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     }
     _activeTab = tab;
     try { localStorage.setItem(NT_TAB_KEY, tab); } catch (e) {}
+    // Den Tab in die Adresszeile schreiben, damit ein kopierter Link die
+    // Ansicht mitbringt. replaceState statt pushState: jeder Tabwechsel wuerde
+    // sonst einen History-Eintrag anlegen, und der Zurueck-Knopf muesste sich
+    // erst durch acht Tabs arbeiten, bevor er die Seite verlaesst.
+    try {
+        const _u = new URL(window.location.href);
+        _u.searchParams.set(NT_TAB_PARAM, tab);
+        window.history.replaceState(null, '', _u.toString());
+    } catch (e) {}
     // History-Severities anwenden falls History-Mode aktiv
     applyHistoryOverrides(nodes);
     if      (tab === 'mgmt')   renderManagement(wrap, nodes, edges);
