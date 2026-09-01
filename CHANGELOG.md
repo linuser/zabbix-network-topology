@@ -7,6 +7,26 @@
 
 ### Fixed
 
+- **Dashboard-Widgets zählten manuelle Verbindungen nicht mit.** Das Hauptmodul
+  zeigte „4 Edges, 4 manual", das NT-KPI-Widget daneben „0 Edges" — dieselben
+  Daten, verschiedene Zahlen. Grund: manuelle Links kommen über die
+  Seitenkonfiguration des Hauptmoduls (`NetworkTopologyView` → `NT_CONFIG`), und
+  die Kanten entstehen erst im Client. Ein Widget hat keinen solchen
+  View-Controller und konnte sie deshalb prinzipiell nie sehen; der `ml_`-Zähler
+  im KPI-Widget war toter Code.
+
+  `network.topology.data` liefert sie jetzt auf Anforderung mit
+  (`manual_links=1`). Das Flag setzen **nur** die Widgets — das Hauptmodul baut
+  seine Kanten weiter selbst, sonst gäbe es sie doppelt.
+
+  Bewusst **nur die geteilte Ebene**: die persönliche gehört einem einzelnen
+  Benutzer (`CProfile`), und ein Dashboard, dessen Kantenzahl vom Betrachter
+  abhängt, wäre schlimmer als eine zu niedrige.
+
+  *Dashboard widgets did not count manual links: they reach the client only
+  through the main module's page config, which widgets do not have. The data
+  action now returns them on request — shared layer only, and only for widgets.*
+
 - **Topologie-Widget: ein einzelner, aufgeblasener Knoten statt des Graphen**
   (Widget 3.1.1, [#7]). Im Konstruktor lief ein Layout mit `animate: true`,
   und der Layout-Nachlauf startete daneben ein zweites. Beide schreiben

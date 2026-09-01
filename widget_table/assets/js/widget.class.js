@@ -50,6 +50,10 @@ if (!window.NtWidgetData) {
             for (var i = 0; i < ids.length; i++) {
                 params.append('groupids[]', ids[i]);
             }
+            // Widgets haben keinen View-Controller und bekommen manuelle
+            // Verbindungen sonst nie zu sehen — das Hauptmodul zaehlte sie mit,
+            // die Widgets nicht. Server liefert nur die GETEILTE Ebene.
+            params.append('manual_links', '1');
 
             var p = fetch('zabbix.php?' + params.toString(), {
                 credentials: 'same-origin',

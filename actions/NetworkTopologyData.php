@@ -11,6 +11,7 @@ use Modules\NetworkTopology\Topology\LldpEdgeBuilder;
 use Modules\NetworkTopology\Topology\HostTagParser;
 use Modules\NetworkTopology\Topology\NodeBuilder;
 use Modules\NetworkTopology\Topology\ProblemLoader;
+use Modules\NetworkTopology\Topology\ManualLinks;
 use CControllerResponseFatal;
 use API;
 
@@ -47,7 +48,12 @@ class NetworkTopologyData extends NetworkTopologyController {
 
     protected function checkInput(): bool {
         if (!$this->requireAjax()) return false;
-        $ret = $this->validateInput(['groupids' => 'array_id']);
+        $ret = $this->validateInput([
+            'groupids' => 'array_id',
+            // Nur die Widgets setzen das. Siehe respondData(): sie haben keinen
+            // View-Controller und kommen sonst nie an manuelle Verbindungen.
+            'manual_links' => 'in 0,1',
+        ]);
         if (!$ret) $this->setResponse(new CControllerResponseFatal());
         return $ret;
     }
@@ -620,6 +626,50 @@ class NetworkTopologyData extends NetworkTopologyController {
             }
         }
         NtCache::set('topo_baseline', [$groupids], $current, 7 * 86400);
+
+        // ── Manuelle Verbindungen, nur fuer Widgets ───────────────────────
+        //
+        // Das Hauptmodul bekommt sie ueber NT_CONFIG (NetworkTopologyView) und
+        // baut die Kanten im Client. Ein Dashboard-Widget hat keinen solchen
+        // View-Controller und sah sie deshalb nie: das Hauptmodul zeigte
+        // "4 Edges, 4 manual", NT KPI daneben "0 Edges" — dieselben Daten,
+        // verschiedene Zahlen. Der ml_-Zaehler im KPI-Widget war toter Code.
+        //
+        // NUR die GETEILTE Ebene. Die persoenliche gehoert einem einzelnen
+        // Nutzer (CProfile); ein Dashboard, das je nach Betrachter eine andere
+        // Kantenzahl zeigt, waere schlimmer als eine zu niedrige.
+        //
+        // Die Platzierung ist nicht beliebig: HIER, nach dem Baseline-Diff und
+        // ausserhalb von $core. Weiter oben wuerden die Links in den
+        // data_payload-Cache wandern (und damit auch ohne Flag ausgeliefert)
+        // und in die topo_baseline, deren Schluessel das Flag nicht enthaelt —
+        // jeder Widget-Aufruf haette dann "neue Verbindung" gemeldet.
+        if ((int) $this->getInput('manual_links', 0) === 1) {
+            $known = [];
+            foreach ($nodes as $n) {
+                $known[(string) ($n['id'] ?? '')] = true;
+            }
+            $seen = [];
+            foreach ($edges as $e) {
+                $seen[(string) ($e['id'] ?? '')] = true;
+            }
+            foreach (ManualLinks::loadShared() as $l) {
+                $a = (string) ($l['s'] ?? '');
+                $b = (string) ($l['t'] ?? '');
+                // Endpunkte, die es in dieser Auswahl nicht gibt (fremde Gruppe,
+                // Ghost-Node), waeren Kanten ins Leere.
+                if ($a === '' || $b === '' || !isset($known[$a]) || !isset($known[$b])) {
+                    continue;
+                }
+                // Beide Richtungen pruefen, wie der Client es tut.
+                if (isset($seen['ml_' . $a . '_' . $b]) || isset($seen['ml_' . $b . '_' . $a])) {
+                    continue;
+                }
+                $seen['ml_' . $a . '_' . $b] = true;
+                $edges[] = ['id' => 'ml_' . $a . '_' . $b, 'from' => $a, 'to' => $b,
+                            '_type' => 'manual'];
+            }
+        }
 
         $_payload = $this->encodeJson(
             ['nodes' => $nodes, 'edges' => $edges,
