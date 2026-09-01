@@ -1,94 +1,95 @@
-name: Bug melden
-description: Etwas funktioniert nicht wie erwartet
+name: Bug report
+description: Something does not work the way it should
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Danke fürs Melden! **Sicherheitslücken bitte nicht hier**, sondern
-        vertraulich per Mail — siehe [SECURITY.md](../blob/main/SECURITY.md).
+        Thanks for reporting. **Please don't file security issues here** — mail
+        them confidentially instead, see [SECURITY.md](../blob/main/SECURITY.md).
 
-        Bei **fehlenden Kanten im Graphen** lohnt vorher ein Blick in die
-        Vendor-Matrix in [LLDP-SETUP.md](../blob/main/LLDP-SETUP.md) — viele
-        Geräte liefern schlicht keine LLDP-Daten per SNMP.
+        For **missing edges in the graph**, the vendor matrix in
+        [LLDP-SETUP.md](../blob/main/LLDP-SETUP.md) is worth a look first: many
+        devices simply don't hand out LLDP data over SNMP, and the guide names
+        the three different things an empty result can mean.
 
   - type: textarea
     id: what
     attributes:
-      label: Was passiert?
-      description: Und was hättest du stattdessen erwartet?
+      label: What happens?
+      description: And what did you expect instead?
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: Schritte zum Reproduzieren
+      label: Steps to reproduce
       placeholder: |
         1. Monitoring → Network Topology for Zabbix
-        2. Hostgruppe "…" wählen, Apply
-        3. Tab "…" öffnen
+        2. select host group "…", Apply
+        3. open the "…" tab
     validations:
       required: true
 
   - type: input
     id: module-version
     attributes:
-      label: Modul-Version
-      description: Steht im Footer der Modul-Seite (z. B. 4.38.3)
+      label: Module version
+      description: Shown in the footer of the module page (e.g. 5.1.1)
     validations:
       required: true
 
   - type: input
     id: zabbix-version
     attributes:
-      label: Zabbix-Version
-      description: z. B. 7.4.12 oder 7.0.28
+      label: Zabbix version
+      description: e.g. 7.4.12 or 7.0.28
     validations:
       required: true
 
   - type: input
     id: php-version
     attributes:
-      label: PHP-Version
-      description: "`php -v` auf dem Frontend-Server"
+      label: PHP version
+      description: "`php -v` on the frontend server"
     validations:
       required: true
 
   - type: dropdown
     id: area
     attributes:
-      label: Betroffener Bereich
+      label: Affected area
       options:
-        - Technische Topologie (Graph)
-        - Management-Wallboard
-        - Tabelle / Items-Pivot
-        - Geo-Karte
+        - Technical topology (graph)
+        - Management wallboard
+        - Table / items pivot
+        - Geo map
         - Health / Stats / Compliance
-        - Dashboard-Widget
-        - Installation / Deploy
-        - Sonstiges / weiß nicht
+        - Dashboard widget
+        - Installation / deployment
+        - Something else / not sure
     validations:
       required: true
 
   - type: input
     id: snmp-vendor
     attributes:
-      label: SNMP-Vendor (nur bei fehlenden Kanten)
-      description: Hersteller + Modell des Geräts, das keine Kante bekommt
-      placeholder: z. B. HPE Aruba 2530, Cisco C9200, MikroTik CRS326
+      label: SNMP vendor (only for missing edges)
+      description: Vendor and model of the device that gets no edge
+      placeholder: e.g. HPE Aruba 2530, Cisco C9200, MikroTik CRS326
 
   - type: textarea
     id: console
     attributes:
-      label: Browser-Konsole (F12)
-      description: Rote Fehlermeldungen — hilft bei allem, was nicht rendert
+      label: Browser console (F12)
+      description: Red error messages — helps with anything that doesn't render
       render: text
 
   - type: checkboxes
     id: checks
     attributes:
-      label: Vorab geprüft
+      label: Checked beforehand
       options:
-        - label: Nach dem Update „Administration → General → Modules → Scan directory" ausgeführt
-        - label: Seite einmal hart neu geladen (Strg+F5 / ⌘⇧R) — Browser-Cache ausgeschlossen
+        - label: Ran "Administration → General → Modules → Scan directory" after the update
+        - label: Hard-reloaded the page once (Ctrl+F5 / ⌘⇧R) to rule out the browser cache
