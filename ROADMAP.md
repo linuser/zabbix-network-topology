@@ -67,14 +67,16 @@ Kombination mit den Widget-Änderungen aber **ungetestet**.
 liegt nur 7.4). Ohne Testinstanz nicht verifizierbar, und ungetestet gehört es
 in kein Release.
 
-### 4. Suche über mehr als den Anzeigenamen
+### 4. Suche über mehr als den Anzeigenamen — **erledigt**
 
-Das Suchfeld im Technical-Tab vergleicht heute **ausschließlich `label`**
-(`toolbar.js`, ein `indexOf` auf den Anzeigenamen).
+Die Karte benutzt jetzt dieselbe Suchsprache wie die Tabelle (`query.js`):
+bare Token treffen Name **und** IP, dazu Feldsuche (`type:switch`,
+`group:"core sites"`), Negation, ODER und Klammern. Es war ein Import und ein
+ersetzter Handler — die Sprache lag fertig da und war nur nie angeschlossen.
 
-Ein Knoten trägt aber bereits `host` (technischer Name) und `ip`. **Zwei
-weitere Vergleiche**, und Hostname und IP sind abgedeckt — der billigste Punkt
-auf dieser ganzen Liste, gemessen an dem, wie oft man ihn benutzt.
+Die Feld-Strings hängen per `scratch()` am Knoten, weil der Handler bei jedem
+Tastendruck über alle Knoten läuft; ab der Performance-Schwelle (400) wäre das
+sonst spürbar.
 
 Alles Weitere braucht neue Daten: MAC und LLDP-Nachbar (siehe ARP/FDB unten),
 Seriennummer (Inventory `serialno_a`, wird heute nicht geladen), VLAN (siehe
@@ -83,38 +85,19 @@ dort), Zabbix-Host-ID (liegt vor, nur nicht durchsucht).
 **Danach: „Locate on topology"** — bei einem Treffer hinspringen statt nur zu
 dimmen. Das Dimmen gibt es schon.
 
-### 5. Teilbare Deep Links
+### 5. Teilbare Deep Links — **erledigt**
 
-Ein Link, der genau das zeigt, was man gerade sieht — Host, Gruppe, Ansicht
-oder ein bestimmtes Problem.
+`?nt_tab=<tab>` steht jetzt im Link und wird bei jedem Wechsel mitgeschrieben.
+Reihenfolge URL vor localStorage; ein fremder Wert fällt zurück statt ins Leere
+zu laufen, und `replaceState` statt `pushState` hält die History sauber.
 
-**Halb vorhanden, und der fehlende Teil ist klein.** Was heute schon in der URL
-steht:
+Damit ist praktisch jede Ansicht teilbar: Hostgruppen, Tabellenfilter, Tab, und
+mit PR #8 auch Host + Hops.
 
-- `groupids[]` — die Hostgruppen-Auswahl
-- die komplette Tabellen-Ansicht: `t_sev`, `t_g`, `t_q`, `t_off`, `t_sort`,
-  `t_sdir`, `t_mode` (Schweregrad, Gruppe, Suchtext, nur-offline, Sortierung,
-  Modus)
-- mit PR #8 zusätzlich `hostid` und `hops`
-
-**Was fehlt, ist der aktive Tab.** Der liegt in `localStorage`
-(`NT_TAB_KEY`, gelesen in `network-topology.js:70`) — also **im Browser des
-Betrachters, nicht im Link**. Schickt jemand eine URL zur Compliance-Ansicht,
-landet der Empfänger auf dem Tab, den *er* zuletzt offen hatte.
-
-Das ist die eigentliche Lücke, und sie ist klein: den Tab beim Umschalten in die
-URL schreiben (`network-topology.js:162` setzt ihn schon in den localStorage,
-dieselbe Stelle) und beim Laden von dort lesen, mit dem localStorage als
-Rückfall. Danach ist praktisch jede Ansicht teilbar.
-
-**Danach offen, in dieser Reihenfolge:**
-
-- Zoom und Ausschnitt der Karte — braucht eine Entscheidung, ob das in die URL
-  gehört oder eher stört (ein Link, der beim Empfänger einen anderen
-  Bildschirm trifft, zeigt einen sinnlosen Ausschnitt).
-- Ein bestimmtes Problem — dafür gibt es heute keinen Anker; der Link würde
-  eher auf den betroffenen Host zeigen (was mit `hostid` aus PR #8 bereits
-  ginge).
+**Weiterhin offen, bewusst:** Zoom und Ausschnitt der Karte (ein Link, der beim
+Empfänger einen anderen Bildschirm trifft, zeigt einen sinnlosen Ausschnitt) und
+ein Anker auf ein einzelnes Problem — dafür gibt es keinen; der Link zeigt
+sinnvoller auf den Host.
 
 ### 6. Pfad als Liste, nicht nur als Hervorhebung
 
@@ -402,8 +385,10 @@ Alle drei fielen erst auf, als jemand sie im Betrieb ansah.
 
 Deshalb gehört zu jedem „ist schon da" ein Test, bevor es als erledigt gilt:
 
-- **Rechte-Filterung geteilter Links** — `SharedLayerFilter` macht es für
-  Positionen. Ob für Links dieselbe Lücke besteht, ist ungeprüft.
+- ~~Rechte-Filterung geteilter Links~~ — **geprüft, keine Lücke.**
+  `SharedLayerFilter::links()` existiert und wird in `NetworkTopologyView`
+  benutzt: eine geteilte Kante überlebt nur, wenn beide Endpunkte sichtbare
+  Hosts sind oder einer davon ein Ghost ist. Es leckt keine fremde Host-ID.
 - **Teilweise importierte Anordnung** — liegt auf dem Server, die Karte legte
   im Test ein eigenes Layout darüber.
 
@@ -413,9 +398,6 @@ Deshalb gehört zu jedem „ist schon da" ein Test, bevor es als erledigt gilt:
   kritisch. Für Rot-Grün-Schwäche unbrauchbar. Der Compliance-Tab macht es
   bereits richtig (✗ / i / ✓ **zusätzlich** zur Farbe) — der Beleg, dass es im
   Modul geht.
-- **Sprachumschalter uneinheitlich.** README und CONTRIBUTING beginnen
-  englisch, INSTALL und SECURITY deutsch. Ausgerechnet `INSTALL.md` führt eine
-  neue Nutzerin mit Deutsch an.
 - **Fullscreen:** Promise-Behandlung und Beschriftung sind repariert; **warum
   Chrome ablehnt**, ist ungeklärt.
 
