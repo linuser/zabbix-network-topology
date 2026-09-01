@@ -17,7 +17,7 @@
 //
 // Leaflet ist als globales L verfügbar (vor diesem Modul per <script> geladen).
 
-import { fmt } from './utils.js';
+import { esc, fmt } from './utils.js';
 import { SEV_COL, SEV_LBL } from './severity.js';
 import { loadGeoProvider, saveGeoProvider } from './storage.js';
 import { GEO_PROVIDERS, getProvider } from './geo-providers.js';

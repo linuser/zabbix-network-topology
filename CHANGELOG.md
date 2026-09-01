@@ -7,6 +7,20 @@
 
 ### Fixed
 
+- **Der Geo-Tab stürzte ab, sobald kein Host Koordinaten hatte.**
+  `render-geo.js` ruft `esc()` dreimal im Leerzustand auf, importiert es aber
+  nicht aus `utils.js`. esbuild bündelt so etwas klaglos — der freie Name landet
+  im Bundle, und zur Laufzeit kommt `ReferenceError: esc is not defined`. Die
+  Bedingung ist alltäglich: eine Hostgruppe ohne Geokoordinaten reicht.
+  Gefunden hat es **@christos-diamantis** beim Debuggen von etwas ganz anderem.
+
+  Der eigentliche Fund ist aber, dass es durch zwölf Gates gekommen ist: ESLint
+  lief hier nur mit `no-unsanitized`, und `no-undef` war nicht aktiviert. Das ist
+  es jetzt — mit einer ausdrücklichen Liste der 25 Fremd-Globals, die dieses
+  Modul voraussetzt (Browser, Cytoscape, Leaflet, Zabbix' `CWidget`), statt einer
+  neuen Abhängigkeit. Gegengeprüft, dass die Regel den Fehler auch wirklich
+  fängt: Import wieder entfernt → drei Meldungen, Import zurück → sauber.
+
 - **Die Huawei-Zeile der Vendor-Matrix ist jetzt eine Messung.** Sie stand auf
   „ungeprüft", weil kein S5700 zum Gegenchecken da war und es auch keine
   öffentliche SNMP-Aufzeichnung eines solchen Geräts mit LLDP-Daten gibt — die

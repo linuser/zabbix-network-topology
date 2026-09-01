@@ -36,6 +36,26 @@ export default [
         languageOptions: {
             ecmaVersion: 2019,
             sourceType: 'module',
+
+            // Ausdrueckliche Liste statt des 'globals'-Pakets: der Build haengt
+            // an esbuild und sonst nichts, und eine Abhaengigkeit fuer eine
+            // Lint-Regel waere der falsche Tausch. Die Liste ist ausserdem
+            // Dokumentation — sie sagt, welche Fremd-Globals dieses Modul
+            // ueberhaupt voraussetzt: Browser, Cytoscape, Leaflet (L), und
+            // CWidget aus Zabbix' eigener Widget-Basisklasse.
+            globals: {
+                window: 'readonly', document: 'readonly', console: 'readonly',
+                navigator: 'readonly', localStorage: 'readonly',
+                setTimeout: 'readonly', clearTimeout: 'readonly',
+                setInterval: 'readonly', clearInterval: 'readonly',
+                requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly',
+                fetch: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
+                Blob: 'readonly', Event: 'readonly', CSS: 'readonly',
+                ResizeObserver: 'readonly', btoa: 'readonly',
+                confirm: 'readonly', prompt: 'readonly',
+                cytoscape: 'readonly', cytoscapeCola: 'readonly',
+                L: 'readonly', CWidget: 'readonly',
+            },
         },
 
         plugins: {
@@ -47,6 +67,16 @@ export default [
             // als sicher, alles andere Dynamische nicht.
             'no-unsanitized/property': ['error', { escape: { methods: ['esc', '_esc'] } }],
             'no-unsanitized/method':   ['error', { escape: { methods: ['esc', '_esc'] } }],
+
+            // Dazugekommen, weil genau dieser Fehler ausgeliefert wurde:
+            // render-geo.js rief esc() dreimal auf, ohne es aus utils.js zu
+            // importieren. esbuild buendelt so etwas klaglos — der freie Name
+            // steht dann im Bundle und wirft zur Laufzeit ReferenceError,
+            // sichtbar erst, wenn jemand den Geo-Tab ohne Geo-Hosts oeffnet.
+            // Zwoelf Gates liefen gruen daran vorbei; ein Nutzer hat es
+            // gefunden. Mit der Globals-Liste oben meldet die Regel null
+            // Falschtreffer.
+            'no-undef': 'error',
         },
     },
 ];
