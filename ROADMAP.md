@@ -17,7 +17,7 @@ und schreibt hin, was er gefunden hat.
 | **Layout sperren / Knoten fixieren** | **Fertig.** Kontextmenü Pin/Unpin, `node.lock()`, `savePinned()` persistiert, eigenes Knotenbild, `group-cluster-layout.js` filtert `.not(':locked')`. |
 | **Export/Import der Layouts als JSON** | **Fertig seit v5.2-Arbeit** (`layout-file.js`). Zwei Knöpfe neben den Presets, Prüfung beim Einlesen mit denselben Mustern und Grenzen wie serverseitig. |
 | **Konflikterkennung bei gleichzeitigem Bearbeiten** | **Fertig, war aber wirkungslos.** Revisionen, `base`, `Revision::matches()`, Konfliktmeldung — das View-Template reichte `revisions` nur nicht durch. Behoben. |
-| **Problem Impact / Root Cause** | **Fertig** (`root-cause.js`, 190 Zeilen). Zweimal BFS vom Uplink: Ursache = ausgefallener Host mit noch erreichbarem Nachbarn („Frontier"), Folge = ausgefallener Host dahinter. Erreichbare Hosts werden nie markiert, bei redundanten Pfaden teilen sich mehrere Frontier-Hosts die Opfer. Overlay rot (`nt-rc-cause`) / amber (`nt-rc-victim`), Knopf „🔍 Root cause" im Tools-Menü, Banner mit Ursachen- und Opferzahl. **Aber: im Betrieb nie nachgemessen** — siehe unten. |
+| **Pfad zwischen zwei Hosts** | **Fertig** (`path-highlight.js`, 98 Zeilen). Kürzester Pfad per BFS, Auswahl über Kontextmenü „Pfad von hier" / „Pfad zu hier", alles außerhalb gedimmt, Pfadkanten fett-cyan. Eigene BFS-Implementierung mit begründetem Vorbehalt: Cytoscapes `bfs()` lieferte in der minifizierten Fassung `found:null` bei verbundenen Knoten. |
 | **Presets (Positionen, Pins, Notizen, Links)** | Vorhanden. Achtung: Positionen wurden bis zur Korrektur still verschluckt, weil `applyPreset()` in den localStorage schrieb, den seit der Server-Umstellung nur noch die Migration liest. |
 
 ---
@@ -64,6 +64,39 @@ Kombination mit den Widget-Änderungen aber **ungetestet**.
 liegt nur 7.4). Ohne Testinstanz nicht verifizierbar, und ungetestet gehört es
 in kein Release.
 
+### 4. Suche über mehr als den Anzeigenamen
+
+Das Suchfeld im Technical-Tab vergleicht heute **ausschließlich `label`**
+(`toolbar.js`, ein `indexOf` auf den Anzeigenamen).
+
+Ein Knoten trägt aber bereits `host` (technischer Name) und `ip`. **Zwei
+weitere Vergleiche**, und Hostname und IP sind abgedeckt — der billigste Punkt
+auf dieser ganzen Liste, gemessen an dem, wie oft man ihn benutzt.
+
+Alles Weitere braucht neue Daten: MAC und LLDP-Nachbar (siehe ARP/FDB unten),
+Seriennummer (Inventory `serialno_a`, wird heute nicht geladen), VLAN (siehe
+dort), Zabbix-Host-ID (liegt vor, nur nicht durchsucht).
+
+**Danach: „Locate on topology"** — bei einem Treffer hinspringen statt nur zu
+dimmen. Das Dimmen gibt es schon.
+
+### 5. Pfad als Liste, nicht nur als Hervorhebung
+
+Der Pfad wird berechnet und auf der Karte markiert (siehe Tabelle oben). Was
+fehlt, ist die **textuelle Hop-Liste** mit Zustand je Link:
+
+```
+Core-SW  →  Distribution-SW  →  Access-SW-03  →  VMware Host  →  VM
+```
+
+Die Zwischenschritte hat der BFS bereits; er rekonstruiert den Pfad über
+Parent-Pointer. Es fehlt die Darstellung und die Frage, was „Zustand" je Link
+heißt — dieselben Portmetriken wie bei der Interface-Ansicht.
+
+Ein *impliziter* Start („Pfad **zu** diesem Host", ohne A zu wählen) bräuchte
+außerdem eine Festlegung, was der Ausgangspunkt ist. `whatif.js` und
+`root-cause.js` benutzen dafür schon eine Uplink-Referenz.
+
 ---
 
 ## Später
@@ -86,6 +119,49 @@ entstanden — dort ging es nur um Nachbartabellen, nicht um Bitmasken.
 **Erster Schritt ist kein Code, sondern eine Messung:** ein `nt-vlan-probe.sh`
 nach dem Muster von `tools/nt-lldp-probe.sh`, um auf echten Switches zu prüfen,
 ob die MIB überhaupt herausrückt. Ein Nachmittag statt eines Releases.
+
+### ARP + MAC/FDB — „wo steckt dieses Gerät?"
+
+MAC auf Switch/Port auflösen, IP dazu, Hostname dazu. Wäre im Alltag stark und
+ist die Voraussetzung für die halbe Suchliste oben.
+
+Braucht zwei neue Quellen: **BRIDGE-MIB** (`dot1dTpFdbPort`, MAC → Bridge-Port)
+plus die Umsetzung Bridge-Port → ifIndex über `dot1dBasePortIfIndex`, und
+**ARP** aus `ipNetToMediaPhysAddress` (oder `ipNetToPhysicalPhysAddress`) vom
+Router. Zwei Tabellen, zwei Auflösungsschritte, und FDB-Einträge altern schnell
+(Standard 300 s) — eine Anzeige „gefunden auf Port 18" ist also immer eine
+Momentaufnahme und muss ihren Zeitstempel mitführen.
+
+Beides sind Standard-MIBs, anders als bei VLAN gibt es keine Bitmasken. Machbar,
+aber es ist ein eigenes Erhebungsthema, kein Anzeigethema.
+
+### PoE je Port
+
+`pethPsePortActualPower` aus der POWER-ETHERNET-MIB. Kleines, klar umrissenes
+Item — passt am besten als Zeile **in die Interface-Ansicht** (Punkt 1), nicht
+als eigenes Feature.
+
+### BGP/OSPF — physische gegen logische Ansicht
+
+Ein zweiter Graph über denselben Knoten: Nachbarschaften statt Kabel. Datenquelle
+wäre die BGP4-MIB (`bgpPeerState`) beziehungsweise OSPF-MIB.
+
+Der Aufwand steckt nicht im Einsammeln, sondern in der Umschaltung: der ganze
+Renderpfad geht heute davon aus, dass eine Kante ein Kabel ist — Weathermap,
+Pfad-BFS, Root Cause, What-if. Ein zweiter Kantentyp berührt alle vier.
+
+### Standortansicht für MSPs
+
+Deutschland → München → Firewall/Core/12 Switches.
+
+**Teilweise vorhanden:** `selectInventory` lädt bereits `location` (neben
+`location_lat`/`location_lon` für die Geo-Karte), und `nt:parent` trägt schon
+eine Trägerbeziehung. Das Gruppen-Cluster-Layout kann nach `_primaryGroup`
+gruppieren.
+
+Was fehlt, ist die **Ebenen-Tiefe**: heute gibt es eine Gruppierungsebene, die
+Skizze hat drei (Land → Stadt → Gebäude). Und die Frage, woher die Hierarchie
+kommt — aus `location` als Freitext lässt sie sich nicht ableiten.
 
 ### Historie / Topology-Snapshots
 
@@ -125,9 +201,6 @@ Alle drei fielen erst auf, als jemand sie im Betrieb ansah.
 
 Deshalb gehört zu jedem „ist schon da" ein Test, bevor es als erledigt gilt:
 
-- **Root Cause** — braucht einen ausgefallenen Host mit Geräten dahinter. Auf
-  der Wegwerf-Instanz sind alle sechs Hosts erreichbar; ein Agent müsste
-  gestoppt werden. Eine halbe Stunde.
 - **Rechte-Filterung geteilter Links** — `SharedLayerFilter` macht es für
   Positionen. Ob für Links dieselbe Lücke besteht, ist ungeprüft.
 - **Teilweise importierte Anordnung** — liegt auf dem Server, die Karte legte
