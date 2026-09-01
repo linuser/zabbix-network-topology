@@ -3,7 +3,7 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
-## v5.1.1 — unveröffentlicht
+## v5.1.1 — 2026-09-01
 
 ### Changed
 
