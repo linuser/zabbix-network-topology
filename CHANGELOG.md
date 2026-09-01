@@ -3,6 +3,35 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
+## Unveröffentlicht
+
+### Fixed
+
+- **Topologie-Widget: ein einzelner, aufgeblasener Knoten statt des Graphen**
+  (Widget 3.1.1, [#7]). Im Konstruktor lief ein Layout mit `animate: true`,
+  und der Layout-Nachlauf startete daneben ein zweites. Beide schreiben
+  Positionen. Der Nachlauf war nach ~30 ms fertig und lieferte ein brauchbares
+  Bild — Sekunden später wurde das animierte Init-Layout fertig und legte alle
+  Knoten wieder auf denselben Punkt. Danach fittet niemand mehr, der Zoom bleibt
+  stehen, und ein Knoten füllt die Kachel; die übrigen liegen exakt dahinter.
+
+  Auf einer frischen 7.4-Instanz mit sechs Hosts protokolliert — zwei
+  `layoutready` im Abstand von 1 ms, dann der Einbruch von 6 Positionen auf 1
+  bei 18,6 s. Der Konstruktor legt jetzt `preset` (bewegt nichts), damit der
+  Nachlauf die einzige Stelle ist, an der je ein Layout läuft.
+
+  Zweitens gilt der Nachlauf erst als erledigt, wenn sein **Ergebnis** taugt.
+  Vorher wurde `done = true` gesetzt, *bevor* das Layout lief — deshalb heilte
+  sich der Zustand nie von selbst. Jetzt wird bis zu fünfmal nachgefasst,
+  solange die Knoten noch deckungsgleich sind.
+
+  *Topology widget showed one oversized node instead of the graph: an animated
+  layout in the constructor raced the follow-up layout and overwrote its result
+  seconds later. The constructor no longer runs a layout, and the follow-up
+  retries until the nodes actually separate.*
+
+[#7]: https://github.com/linuser/zabbix-network-topology/issues/7
+
 ## v5.1.1 — 2026-09-01
 
 ### Changed

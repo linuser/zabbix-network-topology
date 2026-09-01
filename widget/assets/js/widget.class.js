@@ -452,11 +452,26 @@ class WidgetNetworkTopology extends CWidget {
                     'opacity': 0.8
                 }}
             ],
-            layout: hasCola
-                ? { name: 'cola', animate: true, animationDuration: 500,
-                    padding: 16, nodeSpacing: 10, edgeLength: 100,
-                    handleDisconnected: true }
-                : { name: 'cose', animate: true, padding: 16, nodeRepulsion: 5000 },
+            // KEIN Layout im Konstruktor. Hier stand eines mit animate:true,
+            // und das war die Ursache von #7: es laeuft noch, waehrend der
+            // Nachlauf weiter unten ein zweites startet. Beide schreiben
+            // Positionen. Der Nachlauf ist nach ~30ms fertig und liefert ein
+            // brauchbares Bild — und dann wird das animierte Init-Layout
+            // fertig und legt ALLE Knoten wieder auf einen Punkt. Danach
+            // fittet niemand mehr, der Zoom bleibt stehen, und ein einzelner
+            // aufgeblasener Knoten fuellt das Widget.
+            //
+            // Auf einer frischen 7.4-Instanz mit sechs Hosts protokolliert:
+            //   901ms  gebaut          6 Knoten, 1 Position
+            //   901ms  Nachlauf startet
+            //   911ms  layoutready     6 Positionen   <- Nachlauf
+            //   912ms  layoutready     6 Positionen   <- Init-Layout, zweites!
+            //   926ms  fit()           6 Positionen, Zoom 2.7   (gut)
+            //  18585ms layoutready     1 Position               (kaputt)
+            //
+            // 'preset' bewegt nichts. Damit ist der Nachlauf unten die
+            // einzige Stelle, die je ein Layout laufen laesst.
+            layout: { name: 'preset' },
             userZoomingEnabled: true,
             userPanningEnabled: true,
             minZoom: 0.1,
@@ -475,31 +490,73 @@ class WidgetNetworkTopology extends CWidget {
         // resize()+fit() heilt das NICHT, weil die Positionen da schon
         // feststehen: das Layout muss neu laufen. Das Hauptmodul loest denselben
         // Race in render-tech.js per ResizeObserver.
-        var self = this;
-        var cy   = this._cy;
-        var done = false;
+        // Der einzige Ort, an dem ein Layout laeuft — und er gilt erst als
+        // erledigt, wenn sein ERGEBNIS brauchbar ist.
+        //
+        // Vorher stand 'done = true' VOR dem Lauf: die Containergroesse war
+        // das einzige Kriterium. Das allein war nicht die Ursache von #7 (die
+        // steht oben am Konstruktor), aber es ist der Grund, warum sich der
+        // Fehler nie von selbst heilte — ein misslungener erster Versuch wurde
+        // nie wiederholt. Jetzt wird nachgefasst, bis die Knoten wirklich
+        // auseinanderliegen.
+        var self     = this;
+        var cy       = this._cy;
+        var done     = false;
+        var laeuft   = false;
+        var versuche = 0;
+        var MAX      = 5;
+
+        // Entartet = alle Knoten auf einem Punkt. Nicht ueber die Bounding-Box
+        // pruefbar: die traegt die Knotengroesse und war im Fehlerfall 109x61,
+        // also unauffaellig gross. Nur die POSITIONEN verraten den Zustand.
+        var entartet = function () {
+            var ns = cy.nodes();
+            if (ns.length < 2) { return false; }
+            var p0 = ns[0].position();
+            for (var i = 1; i < ns.length; i++) {
+                var p = ns[i].position();
+                if (Math.abs(p.x - p0.x) > 1 || Math.abs(p.y - p0.y) > 1) { return false; }
+            }
+            return true;
+        };
+
+        var fertig = function () {
+            done = true;
+            if (self._ro) {
+                try { self._ro.disconnect(); } catch (e) {}
+                self._ro = null;
+            }
+        };
+
         var relayout = function () {
-            if (done || !cy) { return done; }
+            // 'laeuft' verhindert, dass ein zweites Layout in ein noch
+            // laufendes hineingreift — der Init-Lauf oben ist animiert.
+            if (done || laeuft || !cy) { return done; }
             var c = cy.container();
             if (!c || c.offsetWidth < 50 || c.offsetHeight < 50) { return false; }
-            done = true;
+            if (versuche >= MAX) { fertig(); return true; }
+            versuche++;
+            laeuft = true;
             cy.resize();
             var l = cy.layout(self._layoutOpts());
-            l.one('layoutstop', function () { cy.fit(cy.nodes(), 16); });
+            l.one('layoutstop', function () {
+                laeuft = false;
+                cy.fit(cy.nodes(), 16);
+                if (!entartet()) { fertig(); return; }
+                setTimeout(relayout, 250 * versuche);
+            });
             l.run();
             return true;
         };
 
-        if (!relayout() && window.ResizeObserver) {
+        // Der Beobachter bleibt bestehen, bis ein Lauf ETWAS TAUGLICHES
+        // geliefert hat — nicht bis irgendein Lauf gestartet wurde.
+        if (window.ResizeObserver) {
             if (this._ro) { try { this._ro.disconnect(); } catch (e) {} }
-            this._ro = new ResizeObserver(function () {
-                if (relayout() && self._ro) {
-                    try { self._ro.disconnect(); } catch (e) {}
-                    self._ro = null;
-                }
-            });
+            this._ro = new ResizeObserver(function () { relayout(); });
             try { this._ro.observe(cyDiv); } catch (e) {}
         }
+        relayout();
         // Fallback fuer Browser ohne ResizeObserver bzw. wenn er nicht feuert.
         setTimeout(relayout, 700);
     }
