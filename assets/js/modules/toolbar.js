@@ -27,6 +27,7 @@ import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
 import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
 import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
 import { t } from './i18n.js';
+import { toast } from './toast.js';
 import { isLinkModeActive, enterLinkMode, exitLinkMode } from './manual-links.js';
 import { setupExportMenu } from './export.js';
 import { addHistoryButton } from './history-mode.js';
@@ -98,15 +99,44 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     };
 
     // Fullscreen
+    // Die Beschriftung wird NICHT mehr optimistisch umgestellt.
+    //
+    // Vorher setzte der Klick sofort "Exit Fullscreen" und rief requestFullscreen()
+    // ohne die Promise anzufassen. Lehnt Chrome ab — beobachtet mit
+    // "TypeError: not granted" —, dann passiert dreierlei auf einmal: das Vollbild
+    // kommt nicht, die Konsole bekommt eine unbehandelte Rejection, und der Knopf
+    // behauptet, man sei drin. Der naechste Klick ruft dann exitFullscreen() auf
+    // nichts. Von aussen sieht das aus wie "Fullscreen ist kaputt", ohne jeden
+    // Hinweis worauf.
+    //
+    // Jetzt: Promise abwarten, Beschriftung ausschliesslich ueber den
+    // fullscreenchange-Listener unten fuehren (der laeuft auch, wenn der User mit
+    // Esc rausgeht), und eine Ablehnung sichtbar melden statt sie zu verschlucken.
     const bFs = document.getElementById('nt-btn-fullscreen');
     if (bFs) bFs.addEventListener('click', function() {
         const root = document.getElementById('nt-root');
-        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-            (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
-            bFs.textContent = t('toolbar.fullscreen.exit');
-        } else {
-            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-            bFs.textContent = t('toolbar.fullscreen');
+        const drin = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        try {
+            if (!drin) {
+                const fn = root.requestFullscreen || root.webkitRequestFullscreen;
+                if (!fn) { toast(t('toolbar.fullscreen.unsupported'), 'warn', 6000); return; }
+                const p = fn.call(root);
+                if (p && typeof p.catch === 'function') {
+                    p.catch(function(err) {
+                        toast(t('toolbar.fullscreen.denied', {
+                            err: (err && err.message) || '?'
+                        }), 'warn', 8000);
+                    });
+                }
+            } else {
+                const fn = document.exitFullscreen || document.webkitExitFullscreen;
+                if (fn) {
+                    const p = fn.call(document);
+                    if (p && typeof p.catch === 'function') { p.catch(function() {}); }
+                }
+            }
+        } catch (err) {
+            toast(t('toolbar.fullscreen.denied', { err: (err && err.message) || '?' }), 'warn', 8000);
         }
     });
     // Fullscreen-Toggle aendert die Canvas-Groesse, aber Cytoscape bekommt

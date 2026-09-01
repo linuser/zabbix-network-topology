@@ -50,7 +50,7 @@ export default [
                 setInterval: 'readonly', clearInterval: 'readonly',
                 requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly',
                 fetch: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
-                Blob: 'readonly', Event: 'readonly', CSS: 'readonly',
+                Blob: 'readonly', FileReader: 'readonly', Event: 'readonly', CSS: 'readonly',
                 ResizeObserver: 'readonly', btoa: 'readonly',
                 confirm: 'readonly', prompt: 'readonly',
                 cytoscape: 'readonly', cytoscapeCola: 'readonly',

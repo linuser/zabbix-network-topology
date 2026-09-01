@@ -298,6 +298,57 @@ export function savePositions(cyInst) {
         .catch(function(e) { if (_onPosError) _onPosError(e); });
 }
 
+/**
+ * Wie savePositions(), aber aus einem fertigen {id: {x,y}}-Objekt statt aus der
+ * Cytoscape-Instanz. Fuer Preset-Anwendung und Datei-Import.
+ *
+ * WARUM ES DAS BRAUCHT
+ * --------------------
+ * applyPreset() schrieb Positionen frueher nach localStorage (posKey()). Seit
+ * Positionen auf dem Server liegen, wird dieser Schluessel nur noch an EINER
+ * Stelle gelesen: in der einmaligen Migration, und die kehrt sofort zurueck,
+ * wenn der Server fuer die Ansicht schon etwas hat. Ein Preset anzuwenden hat
+ * die Positionen deshalb still verschluckt — Pins und Notizen kamen an, die
+ * Anordnung nicht. Aufgefallen beim Bauen des Datei-Imports, der denselben
+ * Weg nahm.
+ *
+ * Die Ebenen-Logik ist dieselbe wie in savePositions(): Super-Admins schreiben
+ * die geteilte Karte komplett und loesen dabei ihre eigene Abweichung auf, alle
+ * anderen speichern nur die Abweichung.
+ */
+export function setPositions(pos) {
+    if (!pos || typeof pos !== 'object') return;
+
+    const view  = posViewKey();
+    const scope = defaultPositionScope();
+
+    if (scope === SCOPE_SHARED) {
+        _posShared[view] = pos;
+        _persistPositions(SCOPE_SHARED, _posShared)
+            .catch(function(e) { if (_onPosError) _onPosError(e); });
+        if (_posPersonal[view]) {
+            delete _posPersonal[view];
+            _persistPositions(SCOPE_PERSONAL, _posPersonal)
+                .catch(function(e) { if (_onPosError) _onPosError(e); });
+        }
+        return;
+    }
+
+    const shared = _posShared[view] || {};
+    const delta  = {};
+    for (const id in pos) {
+        if (!Object.prototype.hasOwnProperty.call(pos, id)) continue;
+        const sp = shared[id];
+        if (!sp || sp.x !== pos[id].x || sp.y !== pos[id].y) delta[id] = pos[id];
+    }
+
+    if (Object.keys(delta).length) _posPersonal[view] = delta;
+    else delete _posPersonal[view];
+
+    _persistPositions(SCOPE_PERSONAL, _posPersonal)
+        .catch(function(e) { if (_onPosError) _onPosError(e); });
+}
+
 /** Setzt die eigene Ebene fuer die aktuelle Ansicht zurueck. */
 export function clearPositions() {
     const view  = posViewKey();
@@ -700,8 +751,11 @@ export function applyPreset(preset) {
     // Positionen in den Key der View schreiben, in der das Preset ERFASST wurde
     // (posGrp), nicht in den der gerade aktiven View. Alte Presets ohne posGrp
     // gelten als Host-View (der Normalfall) → posKey(false).
+    // Ueber setPositions() statt in den localStorage: der alte Weg wurde seit
+    // der Server-Umstellung nur noch von der Migration gelesen und war damit
+    // wirkungslos (siehe setPositions).
     if (d.positions) {
-        try { localStorage.setItem(posKey(d.posGrp === true), JSON.stringify(d.positions)); } catch (e) {}
+        setPositions(d.positions);
     }
     // Pinned
     if (d.pinned) {

@@ -16,6 +16,7 @@ import {
     loadRelevantPresets, savePreset, deletePreset, applyPreset,
     collectCurrentState, loadActivePreset, saveActivePreset
 } from './storage.js';
+import { downloadLayout, importLayoutFile } from './layout-file.js';
 import { toast } from './toast.js';
 import { t } from './i18n.js';
 
@@ -178,6 +179,70 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     delBtn.title = t('presets.del.tip');
     delBtn.textContent = '\u{1F5D1}';
 
+    // Datei-Export/-Import. Bewusst NEBEN den Presets und nicht als weiterer
+    // Preset-Eintrag: ein Preset lebt im localStorage dieses Browsers, eine
+    // Datei geht auf ein anderes Geraet oder in ein anderes Zabbix. Das sind
+    // verschiedene Dinge, auch wenn sie denselben Zustand tragen.
+    const dlBtn = document.createElement('button');
+    dlBtn.className = 'btn-alt btn-small';
+    dlBtn.style.margin = '0';
+    dlBtn.title = t('layoutfile.export.tip');
+    dlBtn.textContent = '\u2B07';
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'btn-alt btn-small';
+    upBtn.style.margin = '0';
+    upBtn.title = t('layoutfile.import.tip');
+    upBtn.textContent = '\u2B06';
+
+    // Verstecktes Datei-Feld: ein <input type=file> laesst sich nicht sinnvoll
+    // als Toolbar-Knopf gestalten, also klickt der Knopf es an.
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/json,.json';
+    fileInput.style.display = 'none';
+
+    dlBtn.addEventListener('click', function() {
+        try {
+            const cfg = window.NT_CONFIG || {};
+            downloadLayout(cfg.module_version || '');
+            toast(t('layoutfile.exported'), 'info', 4000);
+        } catch (e) {
+            toast(t('layoutfile.err.export', { err: (e && e.message) || '?' }), 'error', 8000);
+        }
+    });
+
+    upBtn.addEventListener('click', function() { fileInput.click(); });
+
+    fileInput.addEventListener('change', function() {
+        const f = fileInput.files && fileInput.files[0];
+        // Zuruecksetzen, damit dieselbe Datei zweimal hintereinander waehlbar
+        // bleibt — 'change' feuert sonst beim zweiten Mal nicht.
+        importLayoutFile(f).then(function(st) {
+            fileInput.value = '';
+            // Der Import ist kein Preset: Auswahl auf "keins" stellen, sonst
+            // stuende dort ein Name, unter dem nichts gespeichert ist.
+            _active = null;
+            ddBtn.textContent = ddLabel();
+            updateButtons();
+            // Re-Render wie im Preset-Pfad oben: _renderFn ist render() aus
+            // render-tech.js und braucht (wrap, nodes, edges, url) — ein
+            // Aufruf ohne Argumente bricht an ld.nodes.length.
+            const wrap = document.getElementById('nt-canvas-wrap');
+            const ld   = window._ntLastData || {};
+            _renderFn(wrap, (ld.nodes || []).slice(), (ld.edges || []).slice(), ld.url || '');
+            toast(t('layoutfile.imported', {
+                pos: String(st.positions), links: String(st.links)
+            }), 'info', 6000);
+            if (st.verworfen > 0) {
+                toast(t('layoutfile.discarded', { n: String(st.verworfen) }), 'warn', 8000);
+            }
+        }).catch(function(err) {
+            fileInput.value = '';
+            toast((err && err.message) || t('layoutfile.err.read'), 'error', 8000);
+        });
+    });
+
     function updateButtons() {
         const has = !!(_active && _active.name);
         saveBtn.disabled = !has;
@@ -258,6 +323,9 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     wrap.appendChild(saveBtn);
     wrap.appendChild(saveAsBtn);
     wrap.appendChild(delBtn);
+    wrap.appendChild(dlBtn);
+    wrap.appendChild(upBtn);
+    wrap.appendChild(fileInput);
     bar.appendChild(wrap);
 
     updateButtons();

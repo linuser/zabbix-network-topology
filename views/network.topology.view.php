@@ -236,7 +236,13 @@ window.NT_CONFIG = <?= json_encode([
     // gesamte Erkennung (Server, Client, Test, Fehlermeldung in zwei Sprachen)
     // war gebaut und lief ins Leere. Zwei Tabs desselben Benutzers haben sich
     // gegenseitig ueberschrieben, ohne dass jemand etwas gemerkt haette.
-    'revisions'     => $data['revisions'] ?? new stdClass()
+    'revisions'     => $data['revisions'] ?? new stdClass(),
+    // Nur zur Kennzeichnung exportierter Layout-Dateien — dieselbe Quelle
+    // wie der Fussbereich oben.
+    'module_version' => (static function() {
+        $m = @json_decode((string) @file_get_contents(dirname(__DIR__) . '/manifest.json'), true);
+        return is_array($m) && !empty($m['version']) ? (string) $m['version'] : '';
+    })()
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert
