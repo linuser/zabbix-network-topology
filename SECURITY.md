@@ -1,6 +1,78 @@
 # Security Policy
 
-**🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english)**
+**🇬🇧 [English](#-english) · 🇩🇪 [Deutsch](#-deutsch)**
+
+---
+
+## 🇬🇧 English
+
+### Reporting a vulnerability
+
+**Please do not** open a public issue — that would disclose the flaw before a fix
+exists.
+
+Email **<mail@zabfox.de>** instead, ideally with the subject
+`[SECURITY] network-topology`.
+
+Useful in a report:
+
+- affected module version (shown in the page footer and in `manifest.json`)
+- Zabbix and PHP version
+- the shortest reproduction you can manage — request/response or a brief sequence
+- your view of what an attacker gains
+
+I acknowledge reports **within 7 days** and follow up with an assessment once I
+have reproduced the issue. This is a one-person side project, so I cannot promise
+fixed remediation deadlines — but security reports take priority over features.
+
+Happy to credit you by name in the CHANGELOG; just tell me whether and how.
+
+### Supported versions
+
+Fixes are provided for the **latest release only** (see [CHANGELOG](CHANGELOG.md)).
+Backports to older versions are not planned.
+
+### Scope
+
+**In scope:** this module — the PHP actions in `actions/`, topology logic in
+`topology/`, the frontend in `assets/js/`, the five widget modules in `widget*/`,
+and the shipped scripts `deploy.sh`, `nt-install.sh`, `tools/`.
+
+**Out of scope:** Zabbix itself (→ [Zabbix Security](https://www.zabbix.com/security))
+and the bundled third-party libraries (Cytoscape.js, Leaflet — please report those
+upstream).
+
+### Security model in brief
+
+The module states its assumptions openly in the
+[README, "Sicherheit" section](README.md#sicherheit):
+
+- **CSRF:** read actions require `X-Requested-With` (`requireAjax()`).
+  **Four actions have outward effects** and additionally verify a real Zabbix
+  CSRF token:
+
+  | Action | Effect | Gate |
+  |---|---|---|
+  | `network.topology.maintenance` | creates a maintenance window | admin **plus** host write permission |
+  | `network.topology.links` | writes manual edges | shared layer is Super admin only |
+  | `network.topology.positions` | writes the map layout | shared layer is Super admin only |
+  | `network.topology.portscan` | **network side effect**: TCP connect attempts | admin, fixed port list, target resolved server-side via the API, throttled |
+
+  The port probe is the only one with an effect outside Zabbix. It accepts **no**
+  address from the client — the target is resolved from the host ID through the
+  API, so the user's permissions apply and SSRF is ruled out.
+
+  Earlier revisions of this file spoke of "the single writing action". That was
+  last true in 4.x; links, positions and the port probe came afterwards.
+- **XSS:** anything coming from Zabbix or from the network — including **LLDP/CDP
+  neighbour names announced by foreign devices** — must pass through `esc()` or be
+  set via `textContent` before reaching the DOM. Two CI gates enforce this
+  (`tools/check-xss.sh --strict` and ESLint `no-unsanitized`).
+- **Permissions:** client-supplied IDs are always intersected against the Zabbix
+  API, never trusted directly. APCu cache keys are user-scoped.
+
+If you find a spot that breaks these promises, that is a valid report — even
+without a working exploit.
 
 ---
 
@@ -77,75 +149,3 @@ Das Modul dokumentiert seine Annahmen offen im
 
 Findest du eine Stelle, die diese Zusagen bricht, ist das ein gültiger Report —
 auch ohne fertigen Exploit.
-
----
-
-## 🇬🇧 English
-
-### Reporting a vulnerability
-
-**Please do not** open a public issue — that would disclose the flaw before a fix
-exists.
-
-Email **<mail@zabfox.de>** instead, ideally with the subject
-`[SECURITY] network-topology`.
-
-Useful in a report:
-
-- affected module version (shown in the page footer and in `manifest.json`)
-- Zabbix and PHP version
-- the shortest reproduction you can manage — request/response or a brief sequence
-- your view of what an attacker gains
-
-I acknowledge reports **within 7 days** and follow up with an assessment once I
-have reproduced the issue. This is a one-person side project, so I cannot promise
-fixed remediation deadlines — but security reports take priority over features.
-
-Happy to credit you by name in the CHANGELOG; just tell me whether and how.
-
-### Supported versions
-
-Fixes are provided for the **latest release only** (see [CHANGELOG](CHANGELOG.md)).
-Backports to older versions are not planned.
-
-### Scope
-
-**In scope:** this module — the PHP actions in `actions/`, topology logic in
-`topology/`, the frontend in `assets/js/`, the five widget modules in `widget*/`,
-and the shipped scripts `deploy.sh`, `nt-install.sh`, `tools/`.
-
-**Out of scope:** Zabbix itself (→ [Zabbix Security](https://www.zabbix.com/security))
-and the bundled third-party libraries (Cytoscape.js, Leaflet — please report those
-upstream).
-
-### Security model in brief
-
-The module states its assumptions openly in the
-[README, "Sicherheit" section](README.md#sicherheit):
-
-- **CSRF:** read actions require `X-Requested-With` (`requireAjax()`).
-  **Four actions have outward effects** and additionally verify a real Zabbix
-  CSRF token:
-
-  | Action | Effect | Gate |
-  |---|---|---|
-  | `network.topology.maintenance` | creates a maintenance window | admin **plus** host write permission |
-  | `network.topology.links` | writes manual edges | shared layer is Super admin only |
-  | `network.topology.positions` | writes the map layout | shared layer is Super admin only |
-  | `network.topology.portscan` | **network side effect**: TCP connect attempts | admin, fixed port list, target resolved server-side via the API, throttled |
-
-  The port probe is the only one with an effect outside Zabbix. It accepts **no**
-  address from the client — the target is resolved from the host ID through the
-  API, so the user's permissions apply and SSRF is ruled out.
-
-  Earlier revisions of this file spoke of "the single writing action". That was
-  last true in 4.x; links, positions and the port probe came afterwards.
-- **XSS:** anything coming from Zabbix or from the network — including **LLDP/CDP
-  neighbour names announced by foreign devices** — must pass through `esc()` or be
-  set via `textContent` before reaching the DOM. Two CI gates enforce this
-  (`tools/check-xss.sh --strict` and ESLint `no-unsanitized`).
-- **Permissions:** client-supplied IDs are always intersected against the Zabbix
-  API, never trusted directly. APCu cache keys are user-scoped.
-
-If you find a spot that breaks these promises, that is a valid report — even
-without a working exploit.

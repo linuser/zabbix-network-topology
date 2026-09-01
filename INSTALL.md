@@ -1,275 +1,10 @@
 # Installation — Network Topology for Zabbix
 
-**🇩🇪 [Deutsch](#-deutsch) · 🇬🇧 [English](#-english)**
+**🇬🇧 [English](#-english) · 🇩🇪 [Deutsch](#-deutsch)**
 
 Technische Modul-ID / technical module id: **`network_topology`** — das
 Installationsverzeichnis **muss** genau so heißen / the install directory
 **must** be named exactly like this.
-
----
-
-## 🇩🇪 Deutsch
-
-### Voraussetzungen
-
-- **Zabbix 7.0 LTS oder 7.4+** (Frontend) — die Dashboard-Widgets (Abschnitt 3) brauchen **7.4**
-- **PHP 8.x** mit php-fpm (bzw. der PHP-Handler deines Webservers)
-- **`unzip`** auf dem Frontend-Host (für Variante A). Minimal-Installationen bringen es nicht immer mit: `sudo apt install unzip` bzw. `sudo dnf install unzip`
-- Schreibzugriff auf das Zabbix-UI-Verzeichnis `modules/` und die Möglichkeit, php-fpm neu zu laden
-- Moderner Browser (ES2019 — Chrome/Firefox/Safari/Edge, aktuelle Versionen)
-- **Keine Build-Tools nötig**: das fertige JS-Bundle (`assets/js/dist/nt-bundle.js`) liegt im Paket. Node/esbuild brauchst du nur, wenn du aus dem Quellcode neu bauen willst (siehe [Aus Source bauen](#5-optional-aus-source-bauen-entwickler)).
-- **Für den Weathermap-Modus** (Edge-Farbe nach Auslastung): die Geräte müssen per **SNMP** mit einem Interface-Template überwacht werden, das `ifSpeed`/`ifHighSpeed` liefert. Der Zabbix-Agent liefert **keine** Link-Speed (siehe README → Weathermap).
-
-### 1. Hauptmodul installieren
-
-> Das Verzeichnis **muss** `network_topology` heißen (= die Modul-ID). Ein direkt heruntergeladenes Repo heißt evtl. `zabbix-network-topology-v2-main` o. ä. → **umbenennen**.
-
-**Der kurze Weg.** `nt-install.sh` erledigt genau das, was unten von Hand steht:
-Es findet das `modules/`-Verzeichnis unabhängig vom Layout, entpackt das ZIP,
-setzt die Rechte, stellt auf der RHEL-Familie den SELinux-Kontext wieder her,
-lädt php-fpm neu und sichert beim Update die vorherige Version.
-
-```bash
-curl -fLO https://github.com/linuser/zabbix-network-topology/releases/latest/download/network_topology.zip
-curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/nt-install.sh
-chmod +x nt-install.sh
-sudo ./nt-install.sh install
-```
-
-`sudo ./nt-install.sh check` prüft Umgebung und vorhandene Installation, ohne
-etwas zu verändern — der richtige erste Befehl, wenn du unsicher bist. Später
-aktualisiert `sudo ./nt-install.sh update`, und `update --rollback` führt zurück.
-
-Danach weiter mit **Schritt 2**: Das Modul muss in der Zabbix-Oberfläche noch
-gescannt und aktiviert werden. Dafür gibt es keine API.
-
-<details>
-<summary><b>Lieber von Hand?</b> Alle Schritte einzeln — Verzeichnis-Layouts, Rechte, SELinux, Service-Namen, Installation ohne Internet.</summary>
-
-**Zuerst: wo liegt `modules/` bei dir?** Das ist nicht überall gleich. Pakete aus dem Zabbix-Repo legen das Frontend nach `/usr/share/zabbix` — **ohne** `ui`. Andere Installationen haben `/usr/share/zabbix/ui`. Statt zu raten:
-
-```bash
-# findet das richtige Verzeichnis, egal welches Layout
-sudo find / -maxdepth 6 -type d -path '*zabbix*' -name modules 2>/dev/null
-```
-
-Beide Layouts sind normal. `nt-install.sh` und `deploy.sh` erkennen sie selbst — der Handbetrieb unten nicht, dort musst du den gefundenen Pfad einsetzen.
-
-```bash
-# In den gefundenen Modules-Ordner wechseln — einer von beiden:
-cd /usr/share/zabbix/modules        # Pakete aus dem Zabbix-Repo
-cd /usr/share/zabbix/ui/modules     # andere Installationen
-
-# Release-ZIP entpacken (Download: github.com/linuser/zabbix-network-topology/releases)
-sudo unzip /pfad/zu/network_topology.zip
-
-# Rechte setzen. root:root genügt — der Webserver muss die Dateien nur LESEN.
-# Ihm den Besitz zu geben (www-data:www-data) heißt: ein kompromittierter
-# PHP-Prozess könnte den Modulcode überschreiben.
-sudo chown -R root:root network_topology
-
-# php-fpm neu laden. ACHTUNG: Der Dienstname haengt von Distribution UND
-# PHP-Version ab — erst nachsehen, dann neu laden:
-systemctl list-units --type=service | grep -i fpm
-sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
-```
-
-> **Der Dienstname ist die haeufigste Stolperfalle.** `php8.2-fpm` (Debian 12) ·
-> `php8.3-fpm` / `php8.4-fpm` (neuere PHP-Versionen) · `php-fpm` (RHEL/Rocky/Alma).
-> Findet `grep -i fpm` gar nichts, laeuft PHP als Webserver-Modul — dann stattdessen
-> `sudo systemctl reload apache2` bzw. `httpd`.
->
-> [`deploy.sh`](deploy.sh) erkennt den Dienst **selbst** und nimmt dir das ab.
-
-> **Nicht per `git clone` installieren.** Der Weg liegt nahe und funktioniert
-> auch — er legt aber das **gesamte Repository** unter deinen Web-Root, und
-> Zabbix' nginx-Konfiguration sperrt dort nur `/\.ht`, nicht `.git`. An einer
-> Testinstallation nachgemessen:
->
-> ```
-> /modules/<verzeichnis>/.git/HEAD                    HTTP 200   lesbar
-> /modules/<verzeichnis>/.git/index                   HTTP 200   lesbar
-> /modules/<verzeichnis>/tools/topo-change-sender.sh  HTTP 200   lesbar
-> ```
->
-> Das Repository ist öffentlich, es entweicht also zunächst nichts Geheimes.
-> Aber `tools/` enthält ein Skript, das Zabbix-Zugangsdaten aus
-> Umgebungsvariablen liest — trägt sie jemand stattdessen in die Datei ein,
-> stehen sie im Netz. Genau deshalb schließt das Release-ZIP `tools/`,
-> `templates/`, `tests/` und die Skripte aus.
->
-> Wer den Clone-Weg trotzdem geht, räumt hinterher auf:
->
-> ```bash
-> cd <modules>/network_topology
-> sudo rm -rf .git tools templates tests .github deploy.sh nt-*.sh
-> ```
-
-> **Kein Internet auf dem Zabbix-Server?** Der Normalfall bei Monitoring-Systemen —
-> sie stehen oft bewusst ohne ausgehenden Zugang. Dann das ZIP **nicht dort** laden,
-> sondern auf einem Arbeitsplatz und übertragen:
->
-> ```bash
-> # auf dem Arbeitsplatz
-> scp network_topology*.zip <server>:/tmp/
->
-> # auf dem Zabbix-Server
-> cd /usr/share/zabbix/ui/modules
-> sudo unzip -q /tmp/network_topology.zip && rm /tmp/network_topology*.zip
-> ```
->
-> Merke: Der Server antwortet auf `ping`, aber `curl` scheitert nach wenigen
-> Millisekunden? Dann blockiert eine Firewall ausgehend TCP/443 (ICMP ist oft
-> erlaubt) — kein DNS- oder IPv6-Problem. Gegenprobe:
-> `curl -4 -sS -o /dev/null -w '%{http_code}\n' --max-time 8 https://github.com`
->
-> Am bequemsten ist in dem Fall [`deploy.sh`](deploy.sh): es baut lokal, überträgt
-> per SSH und braucht auf dem Server **keinerlei** Internet-Zugang.
-
-> **RHEL / RedHat / Rocky / Alma** — drei Extra-Punkte:
-> - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`. **Wer `nt-install.sh` oder `deploy.sh` nutzt, braucht das nicht** — beide rufen `restorecon` seit 5.0 selbst auf. Nötig ist es nur beim Entpacken von Hand.
-> - **Owner/Service**: der Dienst heißt `php-fpm` (nicht php8.x-fpm) → `sudo systemctl reload php-fpm`. **Der Eigentümer bleibt `root:root`** — auch hier. php-fpm braucht nur Leserechte; gäbe man dem Web-User den Modulcode zu eigen, könnte ein kompromittierter PHP-Prozess ihn umschreiben. Was auf RHEL wirklich fehlt, ist der SELinux-Kontext (Punkt darüber), nicht der Eigentümer.
-> - **APCu** (optional, empfohlen für Cache + Rate-Limit): `sudo dnf install php-pecl-apcu` und für die **FPM**-SAPI aktivieren. Ohne APCu läuft das Modul trotzdem: der Cache entfällt, die Drosselung fällt auf einen schwächeren Session-Fallback zurück (pro Sitzung statt pro Benutzer). Für den Portscan ist APCu deshalb **empfohlen**, nicht nur nett — er arbeitet synchron, und ohne Drosselung blockieren elf Ports mal Timeout einen PHP-Worker mehrere Sekunden.
-
-</details>
-
-### 2. Modul aktivieren
-
-1. **Administration → General → Modules → Scan directory**
-2. In der Liste **„Network Topology for Zabbix"** auf **Enabled** stellen.
-3. Aufruf über **Monitoring → Network Topology for Zabbix**.
-
-### 3. Optional: Dashboard-Widgets
-
-Fünf separate Widget-Module (alle nutzen die Daten des Hauptmoduls):
-
-| ZIP | Im Dashboard-Menü | Zeigt |
-|---|---|---|
-| `network_topology_widget.zip` | **NT Topology** | die Karte als Kachel |
-| `network_topology_health_widget.zip` | **NT Health Score** | Score je Hostgruppe |
-| `network_topology_table_widget.zip` | **NT Table** | Nagios-Style Hostliste |
-| `network_topology_kpi_widget.zip` | **NT KPI** | Kennzahlen als Ring oder Kacheln |
-| `network_topology_items_widget.zip` | **NT Items** | ein Item-Muster über alle Hosts |
-
-```bash
-cd /usr/share/zabbix/ui/modules
-for w in widget health_widget table_widget kpi_widget items_widget; do
-    sudo unzip "/pfad/network_topology_$w.zip" -d "network_topology_$w"
-done
-sudo chown -R root:root network_topology_*_widget network_topology_widget
-sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
-```
-Dann **Scan directory** → die gewünschten Module auf *Enabled* → im Dashboard-Editor verfügbar. Die ZIPs enthalten ihre Dateien **direkt**, ohne Oberordner — deshalb ist `-d <ziel>` zwingend.
-**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
-
-> **Warum nicht eigenständig?** Die Daten-Action `network.topology.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
-
-### 4. Optional: Topologie-Events + Health-Score-Historie
-
-Für echte Zabbix-Events bei Topologie-Änderungen und einen Health-Score-Verlauf:
-
-> **Die drei Dateien für diesen Schritt sind absichtlich nicht im Modul-ZIP.**
-> Das Modulverzeichnis liegt unter dem Web-Root und ist öffentlich abrufbar —
-> dort gehört nur hinein, was zur Laufzeit gebraucht wird. Templates und das
-> Sender-Skript holst du direkt aus dem Repository:
->
-> ```bash
-> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_topology_change_template.yaml
-> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_health_score_template.yaml
-> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/tools/topo-change-sender.sh
-> ```
-
-1. Templates importieren (Data collection → Templates → Import):
-   - `nt_topology_change_template.yaml`
-   - `nt_health_score_template.yaml`
-   → an einen Trägerhost linken (z. B. „Zabbix server").
-2. **Dedizierten Monitoring-User** anlegen (USER-Rolle, Lesezugriff auf die Hostgruppen). Wichtig: die APCu-Baseline ist user-scoped — ein geteilter User würde sich die Baseline mit UI-Sessions verrollen.
-3. `topo-change-sender.sh` auf den Zabbix-Server, als **Cron** (alle 2 min), konfiguriert per ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). Das Skript pusht Topo-Änderungen **und** den Health-Score per `zabbix_sender`.
-
-### 5. Optional: Aus Source bauen (Entwickler)
-
-Nur nötig, wenn du die JS-Module änderst:
-
-```bash
-npm install          # esbuild (devDependency)
-npm run build        # -> assets/js/dist/nt-bundle.js
-```
-`deploy.sh` baut das Bundle vor dem Ausrollen ohnehin frisch aus dem Source.
-
-### Update
-
-Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
-
-> **Von 5.0 auf 5.1:** Es sind drei Actions dazugekommen (`links`, `positions`, `portscan`). Ohne „Scan directory" lädt die Karte zwar, aber manuelle Verbindungen und die gespeicherte Knotenanordnung bleiben mit „Unknown action" stehen. `nt-install.sh update` sagt es beim Update dazu, sobald es neue Actions findet; `nt-install.sh check` zeigt die installierte Version und die vorhandenen Widgets.
-
-#### Umstieg von 4.x auf 5.0
-
-In 5.0 ist der `_v6`-Suffix aus allen Bezeichnern entfallen — das Verzeichnis heißt jetzt `network_topology` statt `network_topology_v6`. **Das alte Verzeichnis muss weg**, sonst registriert Zabbix beide Module und der Menüeintrag erscheint doppelt:
-
-Am sichersten mit dem Uninstaller — er kennt die alten Namen, verschiebt statt zu löschen und lässt fremde Module in Ruhe:
-
-```bash
-./nt-uninstall.sh --dry-run     # erst ansehen
-./nt-uninstall.sh
-```
-
-Von Hand geht es auch, dann aber **vorher nachsehen, was wirklich dort liegt**:
-
-```bash
-# Pfad je nach Layout — siehe Abschnitt 1, "wo liegt modules/ bei dir?"
-cd /usr/share/zabbix/ui/modules      # oder /usr/share/zabbix/modules
-grep -l '"id".*network_topology' */manifest.json     # zeigt ALLE Verzeichnisse des Moduls
-sudo rm -rf network_topology_v6 network_topology_v6_widget \
-            network_topology_v6_health_widget network_topology_v6_table_widget
-```
-
-Der `grep` ist nicht überflüssig: Bei einer Handinstallation wird gern das **Quellverzeichnis** als Name genommen — `widget_health/` statt `network_topology_v6_health_widget/`. Beide deklarieren dann dieselbe Modul-ID, und Zabbix registriert **keines** von beiden. Auf einer realen Instanz genau so vorgefunden; von vier Modulen standen nur zwei in der Datenbank, ohne jede Fehlermeldung.
-
-Danach normal installieren (Schritt 1–3) und **Scan directory** ausführen; die alten Einträge verschwinden dabei von selbst.
-
-Zwei Dinge musst du danach von Hand nachziehen:
-
-- **Dashboard-Kacheln.** Die Widget-IDs sind Teil des Dashboards; Zabbix kennt den alten Typ nicht mehr und blendet die Kacheln aus. Einmalig neu hinzufügen und konfigurieren — das Dashboard selbst bleibt intakt.
-
-  Wer das vermeiden will, findet im [CHANGELOG](CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein `UPDATE`-Skript, das die Bezeichner direkt in der Datenbank umschreibt. **Auf diesem Weg entfallen auch Schritt 2 und 3**: die Module bleiben aktiviert, „Scan directory" ist nicht nötig, und die Kacheln bleiben stehen. Nachgefahren auf zwei unabhängigen Installationen, davon eine auf PostgreSQL.
-- **Lesezeichen.** Die Ansicht liegt jetzt unter `zabbix.php?action=network.topology.view`.
-
-Alles Nutzerseitige bleibt erhalten. Kartenanordnung und manuelle Links liegen serverseitig — an `module.config` und am Benutzerprofil, nicht am Modulnamen. Pins, Notizen, Filter-Presets und Toolbar-Einstellungen liegen im `localStorage`, dessen Schlüssel nie an den Modulnamen gebunden waren. Host-Tags (`nt:parent`) sind ohnehin unberührt.
-
-### Deinstallation
-
-```bash
-./nt-uninstall.sh --dry-run     # zeigt nur, was passieren würde
-./nt-uninstall.sh               # entfernt Hauptmodul + alle Widgets
-```
-
-Das Skript **verschiebt** die Verzeichnisse nach `/var/backups/nt-uninstall-<datum>/`, statt sie zu löschen, und nennt am Ende den Befehl zum Zurückholen. Es fasst nur Verzeichnisse an, deren `manifest.json` eine `network_topology`-ID trägt — ein fremdes Modul, das zufällig `widget/` heißt, bleibt liegen. Alte `_v6`-Verzeichnisse aus 4.x nimmt es mit.
-
-Danach in der UI **Administration → General → Modules → Scan directory**. Erst dann verschwinden die Modul-Einträge aus der Datenbank — und mit ihnen die **geteilten** Links und Positionen, die als `module.config` an der Modul-Zeile hängen.
-
-Von Hand geht es genauso: Modul in der UI auf **Disabled**, Verzeichnisse löschen, php-fpm reloaden, *Scan directory*.
-
-**Was liegen bleibt.** Die **persönliche** Ebene hängt nicht an der Modul-Zeile, sondern im Benutzerprofil, und überlebt jede Deinstallation:
-
-```sql
-DELETE FROM profiles WHERE idx = 'web.network_topology.manual_links';
-DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
-```
-
-`./nt-uninstall.sh --purge` erledigt das nach Rückfrage — es zeigt vorher, wie viele Zeilen wie viele Benutzer betrifft.
-
-**Was das Skript bewusst nicht anfasst:** die Host-Tags (`nt:parent`, `nt:icon`, …), die importierten Templates, den Cron für `topo-change-sender.sh` und den dafür angelegten Monitoring-User. Das sind selbst angelegte Daten — `nt:parent` beschreibt deine Infrastruktur, nicht das Modul. Das Skript zählt sie auf und gibt das SQL aus, ausführen musst du es selbst. Pins, Notizen und Filter-Presets liegen im `localStorage` der jeweiligen Browser und lassen sich serverseitig ohnehin nicht entfernen.
-
-### Troubleshooting
-
-| Symptom | Ursache / Lösung |
-|---|---|
-| `Unit php8.3-fpm.service not found` | Dein php-fpm heißt anders. `systemctl list-units --type=service \| grep -i fpm` zeigt den echten Namen (Debian 12 → `php8.2-fpm`, RHEL → `php-fpm`). |
-| `curl: (7) Failed to connect … after 1 ms` | Firewall blockt ausgehend TCP/443. ZIP auf einem Arbeitsplatz laden und per `scp` übertragen — oder `deploy.sh` nutzen (braucht kein Server-Internet). |
-| Modul erscheint nicht in der Liste | Verzeichnis heißt nicht exakt `network_topology`, oder falsche Rechte/Owner. Auf **RHEL/Rocky/Alma** zusätzlich `sudo restorecon -Rv …` (SELinux). |
-| „Loading topology…" bleibt / leerer Bereich | Browser-**Console** öffnen (F12). Häufigste Ursache in gehärteten Setups: eine **Content-Security-Policy**. Ab v4.30.0 (Bundle) reicht `script-src 'self'`; es werden echte Stacktraces (Datei + Zeile) angezeigt. |
-| Weathermap färbt Edges nicht | Kein `ifSpeed`/`ifHighSpeed`-Item auf den Hosts → SNMP-Interface-Monitoring nötig. |
-| „Unknown action …" (Wartung/Forecast) | Nach dem Update „Scan directory" vergessen. |
 
 ---
 
@@ -540,6 +275,271 @@ DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
 | "Unknown action …" (maintenance/forecast) | You forgot "Scan directory" after the update. |
 
 ---
+
+---
+
+## 🇩🇪 Deutsch
+
+### Voraussetzungen
+
+- **Zabbix 7.0 LTS oder 7.4+** (Frontend) — die Dashboard-Widgets (Abschnitt 3) brauchen **7.4**
+- **PHP 8.x** mit php-fpm (bzw. der PHP-Handler deines Webservers)
+- **`unzip`** auf dem Frontend-Host (für Variante A). Minimal-Installationen bringen es nicht immer mit: `sudo apt install unzip` bzw. `sudo dnf install unzip`
+- Schreibzugriff auf das Zabbix-UI-Verzeichnis `modules/` und die Möglichkeit, php-fpm neu zu laden
+- Moderner Browser (ES2019 — Chrome/Firefox/Safari/Edge, aktuelle Versionen)
+- **Keine Build-Tools nötig**: das fertige JS-Bundle (`assets/js/dist/nt-bundle.js`) liegt im Paket. Node/esbuild brauchst du nur, wenn du aus dem Quellcode neu bauen willst (siehe [Aus Source bauen](#5-optional-aus-source-bauen-entwickler)).
+- **Für den Weathermap-Modus** (Edge-Farbe nach Auslastung): die Geräte müssen per **SNMP** mit einem Interface-Template überwacht werden, das `ifSpeed`/`ifHighSpeed` liefert. Der Zabbix-Agent liefert **keine** Link-Speed (siehe README → Weathermap).
+
+### 1. Hauptmodul installieren
+
+> Das Verzeichnis **muss** `network_topology` heißen (= die Modul-ID). Ein direkt heruntergeladenes Repo heißt evtl. `zabbix-network-topology-v2-main` o. ä. → **umbenennen**.
+
+**Der kurze Weg.** `nt-install.sh` erledigt genau das, was unten von Hand steht:
+Es findet das `modules/`-Verzeichnis unabhängig vom Layout, entpackt das ZIP,
+setzt die Rechte, stellt auf der RHEL-Familie den SELinux-Kontext wieder her,
+lädt php-fpm neu und sichert beim Update die vorherige Version.
+
+```bash
+curl -fLO https://github.com/linuser/zabbix-network-topology/releases/latest/download/network_topology.zip
+curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/nt-install.sh
+chmod +x nt-install.sh
+sudo ./nt-install.sh install
+```
+
+`sudo ./nt-install.sh check` prüft Umgebung und vorhandene Installation, ohne
+etwas zu verändern — der richtige erste Befehl, wenn du unsicher bist. Später
+aktualisiert `sudo ./nt-install.sh update`, und `update --rollback` führt zurück.
+
+Danach weiter mit **Schritt 2**: Das Modul muss in der Zabbix-Oberfläche noch
+gescannt und aktiviert werden. Dafür gibt es keine API.
+
+<details>
+<summary><b>Lieber von Hand?</b> Alle Schritte einzeln — Verzeichnis-Layouts, Rechte, SELinux, Service-Namen, Installation ohne Internet.</summary>
+
+**Zuerst: wo liegt `modules/` bei dir?** Das ist nicht überall gleich. Pakete aus dem Zabbix-Repo legen das Frontend nach `/usr/share/zabbix` — **ohne** `ui`. Andere Installationen haben `/usr/share/zabbix/ui`. Statt zu raten:
+
+```bash
+# findet das richtige Verzeichnis, egal welches Layout
+sudo find / -maxdepth 6 -type d -path '*zabbix*' -name modules 2>/dev/null
+```
+
+Beide Layouts sind normal. `nt-install.sh` und `deploy.sh` erkennen sie selbst — der Handbetrieb unten nicht, dort musst du den gefundenen Pfad einsetzen.
+
+```bash
+# In den gefundenen Modules-Ordner wechseln — einer von beiden:
+cd /usr/share/zabbix/modules        # Pakete aus dem Zabbix-Repo
+cd /usr/share/zabbix/ui/modules     # andere Installationen
+
+# Release-ZIP entpacken (Download: github.com/linuser/zabbix-network-topology/releases)
+sudo unzip /pfad/zu/network_topology.zip
+
+# Rechte setzen. root:root genügt — der Webserver muss die Dateien nur LESEN.
+# Ihm den Besitz zu geben (www-data:www-data) heißt: ein kompromittierter
+# PHP-Prozess könnte den Modulcode überschreiben.
+sudo chown -R root:root network_topology
+
+# php-fpm neu laden. ACHTUNG: Der Dienstname haengt von Distribution UND
+# PHP-Version ab — erst nachsehen, dann neu laden:
+systemctl list-units --type=service | grep -i fpm
+sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
+```
+
+> **Der Dienstname ist die haeufigste Stolperfalle.** `php8.2-fpm` (Debian 12) ·
+> `php8.3-fpm` / `php8.4-fpm` (neuere PHP-Versionen) · `php-fpm` (RHEL/Rocky/Alma).
+> Findet `grep -i fpm` gar nichts, laeuft PHP als Webserver-Modul — dann stattdessen
+> `sudo systemctl reload apache2` bzw. `httpd`.
+>
+> [`deploy.sh`](deploy.sh) erkennt den Dienst **selbst** und nimmt dir das ab.
+
+> **Nicht per `git clone` installieren.** Der Weg liegt nahe und funktioniert
+> auch — er legt aber das **gesamte Repository** unter deinen Web-Root, und
+> Zabbix' nginx-Konfiguration sperrt dort nur `/\.ht`, nicht `.git`. An einer
+> Testinstallation nachgemessen:
+>
+> ```
+> /modules/<verzeichnis>/.git/HEAD                    HTTP 200   lesbar
+> /modules/<verzeichnis>/.git/index                   HTTP 200   lesbar
+> /modules/<verzeichnis>/tools/topo-change-sender.sh  HTTP 200   lesbar
+> ```
+>
+> Das Repository ist öffentlich, es entweicht also zunächst nichts Geheimes.
+> Aber `tools/` enthält ein Skript, das Zabbix-Zugangsdaten aus
+> Umgebungsvariablen liest — trägt sie jemand stattdessen in die Datei ein,
+> stehen sie im Netz. Genau deshalb schließt das Release-ZIP `tools/`,
+> `templates/`, `tests/` und die Skripte aus.
+>
+> Wer den Clone-Weg trotzdem geht, räumt hinterher auf:
+>
+> ```bash
+> cd <modules>/network_topology
+> sudo rm -rf .git tools templates tests .github deploy.sh nt-*.sh
+> ```
+
+> **Kein Internet auf dem Zabbix-Server?** Der Normalfall bei Monitoring-Systemen —
+> sie stehen oft bewusst ohne ausgehenden Zugang. Dann das ZIP **nicht dort** laden,
+> sondern auf einem Arbeitsplatz und übertragen:
+>
+> ```bash
+> # auf dem Arbeitsplatz
+> scp network_topology*.zip <server>:/tmp/
+>
+> # auf dem Zabbix-Server
+> cd /usr/share/zabbix/ui/modules
+> sudo unzip -q /tmp/network_topology.zip && rm /tmp/network_topology*.zip
+> ```
+>
+> Merke: Der Server antwortet auf `ping`, aber `curl` scheitert nach wenigen
+> Millisekunden? Dann blockiert eine Firewall ausgehend TCP/443 (ICMP ist oft
+> erlaubt) — kein DNS- oder IPv6-Problem. Gegenprobe:
+> `curl -4 -sS -o /dev/null -w '%{http_code}\n' --max-time 8 https://github.com`
+>
+> Am bequemsten ist in dem Fall [`deploy.sh`](deploy.sh): es baut lokal, überträgt
+> per SSH und braucht auf dem Server **keinerlei** Internet-Zugang.
+
+> **RHEL / RedHat / Rocky / Alma** — drei Extra-Punkte:
+> - **SELinux** (Hauptursache für „Modul erscheint nicht"): nach dem Ablegen den httpd-Lesekontext setzen, sonst kann php-fpm die Dateien nicht lesen → `sudo restorecon -Rv /usr/share/zabbix/ui/modules/network_topology`. **Wer `nt-install.sh` oder `deploy.sh` nutzt, braucht das nicht** — beide rufen `restorecon` seit 5.0 selbst auf. Nötig ist es nur beim Entpacken von Hand.
+> - **Owner/Service**: der Dienst heißt `php-fpm` (nicht php8.x-fpm) → `sudo systemctl reload php-fpm`. **Der Eigentümer bleibt `root:root`** — auch hier. php-fpm braucht nur Leserechte; gäbe man dem Web-User den Modulcode zu eigen, könnte ein kompromittierter PHP-Prozess ihn umschreiben. Was auf RHEL wirklich fehlt, ist der SELinux-Kontext (Punkt darüber), nicht der Eigentümer.
+> - **APCu** (optional, empfohlen für Cache + Rate-Limit): `sudo dnf install php-pecl-apcu` und für die **FPM**-SAPI aktivieren. Ohne APCu läuft das Modul trotzdem: der Cache entfällt, die Drosselung fällt auf einen schwächeren Session-Fallback zurück (pro Sitzung statt pro Benutzer). Für den Portscan ist APCu deshalb **empfohlen**, nicht nur nett — er arbeitet synchron, und ohne Drosselung blockieren elf Ports mal Timeout einen PHP-Worker mehrere Sekunden.
+
+</details>
+
+### 2. Modul aktivieren
+
+1. **Administration → General → Modules → Scan directory**
+2. In der Liste **„Network Topology for Zabbix"** auf **Enabled** stellen.
+3. Aufruf über **Monitoring → Network Topology for Zabbix**.
+
+### 3. Optional: Dashboard-Widgets
+
+Fünf separate Widget-Module (alle nutzen die Daten des Hauptmoduls):
+
+| ZIP | Im Dashboard-Menü | Zeigt |
+|---|---|---|
+| `network_topology_widget.zip` | **NT Topology** | die Karte als Kachel |
+| `network_topology_health_widget.zip` | **NT Health Score** | Score je Hostgruppe |
+| `network_topology_table_widget.zip` | **NT Table** | Nagios-Style Hostliste |
+| `network_topology_kpi_widget.zip` | **NT KPI** | Kennzahlen als Ring oder Kacheln |
+| `network_topology_items_widget.zip` | **NT Items** | ein Item-Muster über alle Hosts |
+
+```bash
+cd /usr/share/zabbix/ui/modules
+for w in widget health_widget table_widget kpi_widget items_widget; do
+    sudo unzip "/pfad/network_topology_$w.zip" -d "network_topology_$w"
+done
+sudo chown -R root:root network_topology_*_widget network_topology_widget
+sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
+```
+Dann **Scan directory** → die gewünschten Module auf *Enabled* → im Dashboard-Editor verfügbar. Die ZIPs enthalten ihre Dateien **direkt**, ohne Oberordner — deshalb ist `-d <ziel>` zwingend.
+**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
+
+> **Warum nicht eigenständig?** Die Daten-Action `network.topology.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
+
+### 4. Optional: Topologie-Events + Health-Score-Historie
+
+Für echte Zabbix-Events bei Topologie-Änderungen und einen Health-Score-Verlauf:
+
+> **Die drei Dateien für diesen Schritt sind absichtlich nicht im Modul-ZIP.**
+> Das Modulverzeichnis liegt unter dem Web-Root und ist öffentlich abrufbar —
+> dort gehört nur hinein, was zur Laufzeit gebraucht wird. Templates und das
+> Sender-Skript holst du direkt aus dem Repository:
+>
+> ```bash
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_topology_change_template.yaml
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_health_score_template.yaml
+> curl -fLO https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/tools/topo-change-sender.sh
+> ```
+
+1. Templates importieren (Data collection → Templates → Import):
+   - `nt_topology_change_template.yaml`
+   - `nt_health_score_template.yaml`
+   → an einen Trägerhost linken (z. B. „Zabbix server").
+2. **Dedizierten Monitoring-User** anlegen (USER-Rolle, Lesezugriff auf die Hostgruppen). Wichtig: die APCu-Baseline ist user-scoped — ein geteilter User würde sich die Baseline mit UI-Sessions verrollen.
+3. `topo-change-sender.sh` auf den Zabbix-Server, als **Cron** (alle 2 min), konfiguriert per ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). Das Skript pusht Topo-Änderungen **und** den Health-Score per `zabbix_sender`.
+
+### 5. Optional: Aus Source bauen (Entwickler)
+
+Nur nötig, wenn du die JS-Module änderst:
+
+```bash
+npm install          # esbuild (devDependency)
+npm run build        # -> assets/js/dist/nt-bundle.js
+```
+`deploy.sh` baut das Bundle vor dem Ausrollen ohnehin frisch aus dem Source.
+
+### Update
+
+Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
+
+> **Von 5.0 auf 5.1:** Es sind drei Actions dazugekommen (`links`, `positions`, `portscan`). Ohne „Scan directory" lädt die Karte zwar, aber manuelle Verbindungen und die gespeicherte Knotenanordnung bleiben mit „Unknown action" stehen. `nt-install.sh update` sagt es beim Update dazu, sobald es neue Actions findet; `nt-install.sh check` zeigt die installierte Version und die vorhandenen Widgets.
+
+#### Umstieg von 4.x auf 5.0
+
+In 5.0 ist der `_v6`-Suffix aus allen Bezeichnern entfallen — das Verzeichnis heißt jetzt `network_topology` statt `network_topology_v6`. **Das alte Verzeichnis muss weg**, sonst registriert Zabbix beide Module und der Menüeintrag erscheint doppelt:
+
+Am sichersten mit dem Uninstaller — er kennt die alten Namen, verschiebt statt zu löschen und lässt fremde Module in Ruhe:
+
+```bash
+./nt-uninstall.sh --dry-run     # erst ansehen
+./nt-uninstall.sh
+```
+
+Von Hand geht es auch, dann aber **vorher nachsehen, was wirklich dort liegt**:
+
+```bash
+# Pfad je nach Layout — siehe Abschnitt 1, "wo liegt modules/ bei dir?"
+cd /usr/share/zabbix/ui/modules      # oder /usr/share/zabbix/modules
+grep -l '"id".*network_topology' */manifest.json     # zeigt ALLE Verzeichnisse des Moduls
+sudo rm -rf network_topology_v6 network_topology_v6_widget \
+            network_topology_v6_health_widget network_topology_v6_table_widget
+```
+
+Der `grep` ist nicht überflüssig: Bei einer Handinstallation wird gern das **Quellverzeichnis** als Name genommen — `widget_health/` statt `network_topology_v6_health_widget/`. Beide deklarieren dann dieselbe Modul-ID, und Zabbix registriert **keines** von beiden. Auf einer realen Instanz genau so vorgefunden; von vier Modulen standen nur zwei in der Datenbank, ohne jede Fehlermeldung.
+
+Danach normal installieren (Schritt 1–3) und **Scan directory** ausführen; die alten Einträge verschwinden dabei von selbst.
+
+Zwei Dinge musst du danach von Hand nachziehen:
+
+- **Dashboard-Kacheln.** Die Widget-IDs sind Teil des Dashboards; Zabbix kennt den alten Typ nicht mehr und blendet die Kacheln aus. Einmalig neu hinzufügen und konfigurieren — das Dashboard selbst bleibt intakt.
+
+  Wer das vermeiden will, findet im [CHANGELOG](CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein `UPDATE`-Skript, das die Bezeichner direkt in der Datenbank umschreibt. **Auf diesem Weg entfallen auch Schritt 2 und 3**: die Module bleiben aktiviert, „Scan directory" ist nicht nötig, und die Kacheln bleiben stehen. Nachgefahren auf zwei unabhängigen Installationen, davon eine auf PostgreSQL.
+- **Lesezeichen.** Die Ansicht liegt jetzt unter `zabbix.php?action=network.topology.view`.
+
+Alles Nutzerseitige bleibt erhalten. Kartenanordnung und manuelle Links liegen serverseitig — an `module.config` und am Benutzerprofil, nicht am Modulnamen. Pins, Notizen, Filter-Presets und Toolbar-Einstellungen liegen im `localStorage`, dessen Schlüssel nie an den Modulnamen gebunden waren. Host-Tags (`nt:parent`) sind ohnehin unberührt.
+
+### Deinstallation
+
+```bash
+./nt-uninstall.sh --dry-run     # zeigt nur, was passieren würde
+./nt-uninstall.sh               # entfernt Hauptmodul + alle Widgets
+```
+
+Das Skript **verschiebt** die Verzeichnisse nach `/var/backups/nt-uninstall-<datum>/`, statt sie zu löschen, und nennt am Ende den Befehl zum Zurückholen. Es fasst nur Verzeichnisse an, deren `manifest.json` eine `network_topology`-ID trägt — ein fremdes Modul, das zufällig `widget/` heißt, bleibt liegen. Alte `_v6`-Verzeichnisse aus 4.x nimmt es mit.
+
+Danach in der UI **Administration → General → Modules → Scan directory**. Erst dann verschwinden die Modul-Einträge aus der Datenbank — und mit ihnen die **geteilten** Links und Positionen, die als `module.config` an der Modul-Zeile hängen.
+
+Von Hand geht es genauso: Modul in der UI auf **Disabled**, Verzeichnisse löschen, php-fpm reloaden, *Scan directory*.
+
+**Was liegen bleibt.** Die **persönliche** Ebene hängt nicht an der Modul-Zeile, sondern im Benutzerprofil, und überlebt jede Deinstallation:
+
+```sql
+DELETE FROM profiles WHERE idx = 'web.network_topology.manual_links';
+DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
+```
+
+`./nt-uninstall.sh --purge` erledigt das nach Rückfrage — es zeigt vorher, wie viele Zeilen wie viele Benutzer betrifft.
+
+**Was das Skript bewusst nicht anfasst:** die Host-Tags (`nt:parent`, `nt:icon`, …), die importierten Templates, den Cron für `topo-change-sender.sh` und den dafür angelegten Monitoring-User. Das sind selbst angelegte Daten — `nt:parent` beschreibt deine Infrastruktur, nicht das Modul. Das Skript zählt sie auf und gibt das SQL aus, ausführen musst du es selbst. Pins, Notizen und Filter-Presets liegen im `localStorage` der jeweiligen Browser und lassen sich serverseitig ohnehin nicht entfernen.
+
+### Troubleshooting
+
+| Symptom | Ursache / Lösung |
+|---|---|
+| `Unit php8.3-fpm.service not found` | Dein php-fpm heißt anders. `systemctl list-units --type=service \| grep -i fpm` zeigt den echten Namen (Debian 12 → `php8.2-fpm`, RHEL → `php-fpm`). |
+| `curl: (7) Failed to connect … after 1 ms` | Firewall blockt ausgehend TCP/443. ZIP auf einem Arbeitsplatz laden und per `scp` übertragen — oder `deploy.sh` nutzen (braucht kein Server-Internet). |
+| Modul erscheint nicht in der Liste | Verzeichnis heißt nicht exakt `network_topology`, oder falsche Rechte/Owner. Auf **RHEL/Rocky/Alma** zusätzlich `sudo restorecon -Rv …` (SELinux). |
+| „Loading topology…" bleibt / leerer Bereich | Browser-**Console** öffnen (F12). Häufigste Ursache in gehärteten Setups: eine **Content-Security-Policy**. Ab v4.30.0 (Bundle) reicht `script-src 'self'`; es werden echte Stacktraces (Datei + Zeile) angezeigt. |
+| Weathermap färbt Edges nicht | Kein `ifSpeed`/`ifHighSpeed`-Item auf den Hosts → SNMP-Interface-Monitoring nötig. |
+| „Unknown action …" (Wartung/Forecast) | Nach dem Update „Scan directory" vergessen. |
 
 ---
 
