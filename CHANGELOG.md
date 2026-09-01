@@ -7,6 +7,21 @@
 
 ### Fixed
 
+- **Die Installationsanleitung stellte den schwersten Weg nach vorn.** Schritt 1
+  war 93 Zeilen lang — Verzeichnis-Layouts, Rechte, SELinux, Service-Namen,
+  Installation ohne Internet — während `nt-install.sh`, das genau das alles
+  selbst erledigt, nur in drei Fußnoten vorkam. Wer neu ist, liest also die
+  Handarbeit und erfährt erst danach, dass es sie nicht gebraucht hätte.
+
+  Jetzt stehen vorn vier Befehle mit dem Skript (rund 20 Zeilen inklusive
+  Erklärung), und die Handarbeit steht vollständig darunter in einem
+  aufklappbaren Block. **Nichts davon ist gelöscht** — die 93 Zeilen sind hart
+  erarbeitet, SELinux ist laut eigener Troubleshooting-Tabelle der häufigste
+  Grund für „Modul erscheint nicht". Sie stehen nur nicht mehr im Weg.
+
+  Beide Sprachfassungen. Die verwendeten URLs sind gegengeprüft: die
+  `releases/latest/download`-Adresse liefert 712 KB, das Skript 20 KB.
+
 - **Die mitgelieferten Templates trugen deutsche Beschreibungen.** Nicht in
   Kommentaren, sondern in `description:`-Feldern — also genau dem Text, den
   Zabbix nach dem Import in der Oberfläche anzeigt. Wer der inzwischen
