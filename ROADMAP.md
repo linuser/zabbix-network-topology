@@ -18,6 +18,8 @@ und schreibt hin, was er gefunden hat.
 | **Export/Import der Layouts als JSON** | **Fertig seit v5.2-Arbeit** (`layout-file.js`). Zwei Knöpfe neben den Presets, Prüfung beim Einlesen mit denselben Mustern und Grenzen wie serverseitig. |
 | **Konflikterkennung bei gleichzeitigem Bearbeiten** | **Fertig, war aber wirkungslos.** Revisionen, `base`, `Revision::matches()`, Konfliktmeldung — das View-Template reichte `revisions` nur nicht durch. Behoben. |
 | **Pfad zwischen zwei Hosts** | **Fertig** (`path-highlight.js`, 98 Zeilen). Kürzester Pfad per BFS, Auswahl über Kontextmenü „Pfad von hier" / „Pfad zu hier", alles außerhalb gedimmt, Pfadkanten fett-cyan. Eigene BFS-Implementierung mit begründetem Vorbehalt: Cytoscapes `bfs()` lieferte in der minifizierten Fassung `found:null` bei verbundenen Knoten. |
+| **Unmanaged Devices** | **Fertig — heißen „Ghost Nodes"** (`build-elements.js`, §9). LLDP/CDP-Nachbarn, die auf keinen überwachten Host auflösen, aus `lldp_quality[].unmatched`. Mehrere Melder desselben Unbekannten ergeben **einen** Knoten mit mehreren Kanten. Umschalter „👻 Ghost nodes" im Technical-Tab, standardmäßig aus. |
+| **Mini Map bei großen Topologien** | **Fertig** (`minimap.js`, 164 Zeilen). SVG unten rechts, severity-farbige Punkte, Viewport-Rechteck, Klick schwenkt die Karte, Aktualisierung auf zoom/pan (80 ms entprellt) plus alle 5 s. |
 | **Presets (Positionen, Pins, Notizen, Links)** | Vorhanden. Achtung: Positionen wurden bis zur Korrektur still verschluckt, weil `applyPreset()` in den localStorage schrieb, den seit der Server-Umstellung nur noch die Migration liest. |
 
 ---
@@ -162,6 +164,45 @@ gruppieren.
 Was fehlt, ist die **Ebenen-Tiefe**: heute gibt es eine Gruppierungsebene, die
 Skizze hat drei (Land → Stadt → Gebäude). Und die Frage, woher die Hierarchie
 kommt — aus `location` als Freitext lässt sie sich nicht ableiten.
+
+### Cloud-Knoten und Docker/Kubernetes-Ebenen
+
+Azure/AWS/Hetzner-Instanzen neben physischen Hosts; Workload → Node →
+physischer Host → Netzwerk.
+
+**Vermutlich fast kein neuer Code nötig.** Beides sind in Zabbix ganz normale
+Hosts, und das Modul zeichnet jeden Host. Was fehlt, ist die *Verbindung* — und
+dafür gibt es bereits `nt:parent=<host>` (dokumentiert als „VM → Hypervisor").
+Der Kanten-Aufbau in `NetworkTopologyData` legt je Kind-Elternteil-Paar eine
+eigene `hosts`-Kante an, **Ketten funktionieren also von selbst**: Pod →
+Node → Hypervisor → Switch sind drei unabhängige Kanten.
+
+Zu klären wäre eher: reicht ein Freitext-Tag, oder braucht es eine automatische
+Ableitung aus den Cloud-/Kubernetes-Templates? Und wie verhindert man, dass 400
+Pods die Karte unlesbar machen — Zusammenfalten je Node?
+
+**Erster Schritt ist ein Versuch, kein Feature:** ein paar Hosts mit
+`nt:parent` verketten und sehen, wie es sich anfühlt.
+
+### Optical Metrics (SFP DDM)
+
+RX/TX Optical Power, Temperatur, Warnbereiche.
+
+**Die heikelste Datenquelle auf der ganzen Liste.** Es gibt zwar die
+ENTITY-SENSOR-MIB (`entPhySensorValue`), aber die Zuordnung Sensor → Port ist
+herstellerspezifisch, und viele Geräte liefern DDM nur über eigene MIBs
+(`CISCO-ENTITY-SENSOR-MIB` und Verwandte, bei anderen völlig anders benannt).
+Die Warnbereiche kommen teils gar nicht per SNMP.
+
+Gleiche Klasse wie VLAN: **erst messen, dann planen.** Ohne eine Probe auf
+echten Geräten ist jede Aufwandsschätzung geraten.
+
+### PoE-Budget je Switch
+
+Gesamtbudget und Verbrauch: `pethMainPsePower` und `pethMainPseUsagePower` aus
+derselben POWER-ETHERNET-MIB wie die Port-Leistung. **Standard-MIB, zwei
+Items** — der kleinste Punkt in diesem Abschnitt. Gehört zusammen mit dem
+PoE-Wert je Port erledigt, nicht getrennt.
 
 ### Historie / Topology-Snapshots
 
