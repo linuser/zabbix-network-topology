@@ -7,6 +7,15 @@
 
 ### Fixed
 
+- **„Modul" wurde als „Widget" gelesen.** Bei Zabbix sind die meisten
+  Community-Module Dashboard-Widgets, und genau so verstand mancher auch dieses
+  — obwohl das Hauptmodul eine **eigene Seite** unter *Monitoring → Network
+  Topology* ist und die fünf Widgets nur optionale Zugabe sind, die ohne das
+  Hauptmodul gar nicht laufen. Das stand bisher erst in Schritt 3 der
+  Installationsanleitung. Jetzt steht es im README im ersten Absatz, in beiden
+  Sprachen, mit einer Tabelle: was erforderlich ist, was optional, und was
+  jeweils vorausgesetzt wird.
+
 - **Der Geo-Tab stürzte ab, sobald kein Host Koordinaten hatte.**
   `render-geo.js` ruft `esc()` dreimal im Leerzustand auf, importiert es aber
   nicht aus `utils.js`. esbuild bündelt so etwas klaglos — der freie Name landet
