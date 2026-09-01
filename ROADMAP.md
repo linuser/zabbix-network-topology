@@ -163,6 +163,35 @@ Aus einem rohen FDB-Abzug wird damit eine Aussage.
 `tools/nt-lldp-probe.sh` — auf echten Switches messen, ob die BRIDGE-MIB
 herausrückt und ob `dot1dBasePortIfIndex` gefüllt ist. Ein Nachmittag.
 
+### Link Quality Score
+
+Ein Wert je Kante aus Errors, Drops, Flaps, Speed und Auslastung — statt nur
+Auslastung wie heute in der Weathermap.
+
+**Zwei der fünf Eingangsgrößen liegen bereits vor:** `port_metrics` trägt `in`,
+`out` und `speed`, die Weathermap rechnet daraus schon die Auslastung. Es
+fehlen:
+
+- **Errors und Drops** — `ifInErrors`, `ifOutDiscards`. Kommen ohnehin mit der
+  Interface-Ansicht (Punkt 1, Schritt 2).
+- **Flaps** — die einzige echte Neuerung. Ein Flap ist kein Messwert, sondern
+  ein *Ereignis über Zeit*: `ifLastChange` beobachten oder Trigger-Historie
+  auswerten. Das braucht eine Entscheidung über den Zeitraum („Flaps der
+  letzten 24 h") und einen Ort, an dem der Verlauf liegt.
+
+**Der Bauplan existiert schon — samt der Falle darin.** Der Health-Score macht
+genau das für Hosts: gewichtete Faktoren (offline 40, stale 15, critical 25,
+unacked 20), Schwellen [85, 65, 40], im UI als Zahl mit Farbband.
+
+Diese Formel steht an **zwei** Stellen — im Hauptmodul und im Health-Widget,
+weil Widgets den Modulcode nicht importieren können. Genau deshalb gibt es
+`ci:parity`: laufen die auseinander, zeigt dieselbe Hostgruppe auf Karte und
+Dashboard verschiedene Werte, und niemand weiß, welcher stimmt.
+
+**Ein Link-Score würde denselben Weg gehen** — sichtbar auf der Karte, und
+früher oder später auch in einer Kachel. Wer ihn baut, erweitert `ci:parity`
+im selben Zug, nicht später.
+
 ### PoE je Port
 
 `pethPsePortActualPower` aus der POWER-ETHERNET-MIB. Kleines, klar umrissenes
