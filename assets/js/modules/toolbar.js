@@ -28,6 +28,7 @@ import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
 import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
 import { t } from './i18n.js';
 import { toast } from './toast.js';
+import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
 import { isLinkModeActive, enterLinkMode, exitLinkMode } from './manual-links.js';
 import { setupExportMenu } from './export.js';
 import { addHistoryButton } from './history-mode.js';
@@ -610,12 +611,33 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         si.id = 'nt-search-input';
         si.type = 'text';
         si.placeholder = t('toolbar.search');
+        si.title = t('toolbar.search.tip');
         si.style.cssText = 'width:140px;height:26px;font-size:12px;margin-left:8px;padding:0 8px;'
             + 'border:1px solid #e2e8f0;border-radius:4px;outline:none;background:#fff;color:#334155';
+        // Dieselbe Suchsprache wie in der Tabelle, statt eines indexOf auf den
+        // Anzeigenamen. Damit kann die Karte, was die Tabelle laengst konnte:
+        //
+        //   192.168.20.43           bare Token -> Name UND IP
+        //   type:switch             Feldsuche (host, label, ip, type, iftype,
+        //                           proxy, group)
+        //   -type:server            Negation
+        //   (host:fw OR host:core)  Gruppierung und ODER
+        //
+        // parseQuery/matchQuery/nodeToQueryFields liegen fertig in query.js und
+        // werden von render-table.js an drei Stellen benutzt — hier kam nichts
+        // Neues dazu, es war nur nie angeschlossen.
         si.addEventListener('input', function() {
-            const q = this.value.toLowerCase();
+            const ast = parseQuery(this.value);
             cy.nodes('[!isGroup]').forEach(function(n) {
-                n.style('opacity', !q || (n.data('label') || '').toLowerCase().indexOf(q) >= 0 ? 1 : 0.15);
+                // Die Feld-Strings je Knoten EINMAL bauen und am Element
+                // merken: nodeToQueryFields() erzeugt sieben Lowercase-Strings,
+                // und dieser Handler laeuft bei jedem Tastendruck ueber alle
+                // Knoten. Ab der Performance-Schwelle (400) waere das spuerbar.
+                // Ein Re-Render legt neue Elemente an, der Cache verfaellt also
+                // von selbst.
+                let f = n.scratch('_ntQF');
+                if (!f) { f = nodeToQueryFields(n.data()); n.scratch('_ntQF', f); }
+                n.style('opacity', matchQuery(ast, f) ? 1 : 0.15);
             });
         });
         if (bar) bar.appendChild(si);
