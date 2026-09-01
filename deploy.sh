@@ -241,6 +241,7 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
         --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
         --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-*.sh' \
         --exclude 'tests' --exclude '.gitlab-ci.yml' \
+        --exclude 'CLAUDE.md' \
         --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
         "$SCRIPT_DIR/" "$STAGE/network_topology/"
     rm -f "$TMP_MAIN"
