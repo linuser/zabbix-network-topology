@@ -45,6 +45,8 @@ import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
 import { buildLayoutConfig } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
 import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
+import { isFocusActive, filterToFocus, dropFocus, renderFocusBanner } from './focus-mode.js';
+import { toast } from './toast.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
 import { NT_GROUP_CLUSTER_KEY, NT_GHOSTS_KEY } from './storage.js';
@@ -99,6 +101,23 @@ export function render(wrap, nodes, edges, dataUrl) {
         wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
                        + 'height:100%;color:#999">' + esc(t('tech.no_hosts')) + '</div>';
         return;
+    }
+
+    // Per-host focus (focus-mode.js): filter FIRST, before aggregation,
+    // internet cloud and ghosts — Cytoscape then only lays out the hop
+    // neighbourhood. rawNodes (below, for the KPI row) is thereby the focus
+    // subset as well; the banner states the ratio.
+    if (isFocusActive()) {
+        const _f = filterToFocus(nodes, edges);
+        if (_f.found) {
+            nodes = _f.nodes;
+            edges = _f.edges;
+        } else {
+            // Focus host disappeared from the data (group switched, host
+            // deleted) → drop the focus quietly, show the full map.
+            dropFocus();
+            toast(t('focus.gone'), 'warn');
+        }
     }
 
     // Die unveraenderte Hostliste festhalten. Unten wird "nodes" dreimal
@@ -227,10 +246,23 @@ export function render(wrap, nodes, edges, dataUrl) {
         && groupNames.length >= 2
         && _clusterMode !== 'off';
 
-    // Layout-Config: bei Cluster ein leeres preset, der eigentliche Layout-
+    // Layout-Config: bei Cluster ein preset, der eigentliche Layout-
     // Lauf passiert nach Cytoscape-Init pro Cluster-BoundingBox.
+    // The preset seeds a deterministic grid scatter instead of leaving nodes
+    // unpositioned: the deferred cluster layout can bail (canvas not sized
+    // yet at +50ms) or an inner layout can fail — nodes without coordinates
+    // then never appear at all (blank map, KPI row still counting them).
+    // With seeds, the worst case is an unclustered scatter that fit() frames.
     const _initialLayout = _useCluster
-        ? { name: 'preset', positions: function() { return undefined; }, fit: false }
+        ? (function() {
+            const _seed = {};
+            nodes.forEach(function(n, i) {
+                _seed[String(n.id)] = { x: (i % 8) * 140, y: Math.floor(i / 8) * 140 };
+            });
+            return { name: 'preset',
+                     positions: function(n) { return _seed[n.id()]; },
+                     fit: false };
+        })()
         : buildLayoutConfig(loadLayout(), nodes, edges, false);
     // Im Performance-Modus kein Layout-Animate (bei 1000+ Knoten = Freeze).
     if (perfMode && _initialLayout) _initialLayout.animate = false;
@@ -464,6 +496,10 @@ export function render(wrap, nodes, edges, dataUrl) {
     applyManualLinks(cy);
     showMinimap();
 
+    // Build the focus banner AFTER the wrap cleanup above (which also swept
+    // away a stale banner) — shows host, hop count and "N of M hosts".
+    if (isFocusActive()) renderFocusBanner(wrap);
+
     // NACH applyManualLinks, nicht davor: die Kennzahlen zaehlen ueber
     // cy.edges(), und vorher stecken die gespeicherten Kanten noch nicht im
     // Graphen — beim ersten Laden stand deshalb "0 Edges", obwohl welche
@@ -486,7 +522,12 @@ export function render(wrap, nodes, edges, dataUrl) {
     })();
 
     // ── Drag → Position speichern (debounced) ──────────────────────────────
+    // NOT in focus mode: savePositions stores the COMPLETE state of the view,
+    // and in focus only the subset is in the graph — a save would throw away
+    // the stored positions of every other host of the view. The focus
+    // arrangement is deliberately ephemeral.
     cy.on('dragfree', 'node[!isGroup]', function() {
+        if (isFocusActive()) return;
         clearTimeout(_posSaveTimer);
         _posSaveTimer = setTimeout(function() { savePositions(cy); }, 400);
     });
@@ -506,11 +547,12 @@ export function render(wrap, nodes, edges, dataUrl) {
         }, 1000);
     });
 
-    // Nach automatischem Layout Position einmalig speichern
+    // Nach automatischem Layout Position einmalig speichern — likewise
+    // skipped in focus mode (same reasoning as the dragfree save above).
     cy.one('layoutstop', function() {
         setTimeout(function() {
             if (window._ntCy) {
-                savePositions(window._ntCy);
+                if (!isFocusActive()) savePositions(window._ntCy);
                 window._ntCy.fit(window._ntCy.nodes(), 40);
                 applyTrafficHeatmap(window._ntCy);
                 applyPortLabels(window._ntCy);
@@ -581,7 +623,15 @@ export function render(wrap, nodes, edges, dataUrl) {
                         node.data('bgImage', makeNodeImage(node.data()));
                     }
                 });
-                updateKpi(data.nodes || [], window._ntCy);
+                // With an active focus, compute the KPIs on the focus subset
+                // — otherwise the row would jump to the numbers of the full
+                // group selection every 30s while the map is filtered.
+                let _kpiNodes = data.nodes || [];
+                if (isFocusActive()) {
+                    const _fk = filterToFocus(_kpiNodes, data.edges || []);
+                    if (_fk.found) _kpiNodes = _fk.nodes;
+                }
+                updateKpi(_kpiNodes, window._ntCy);
                 window._ntCy && window._ntCy.edges('[id^="ml_"]').forEach(function(e) {
                     e.data('tLabel', edgeLabel(window._ntCy, e.source().id(), e.target().id()));
                 });

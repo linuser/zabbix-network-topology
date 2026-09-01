@@ -57,6 +57,19 @@ export default {
     'whatif.banner':        'Simulation: {failed} ausgefallen → {cut} Hosts abgeschnitten',
     'whatif.end':           'Beenden',
     'whatif.root_fallback': 'Keine Internet-Wolke/Firewall im Graph — Erreichbarkeit bezieht sich auf "{host}" (hoechster Vernetzungsgrad)',
+
+    // Per-host focus (hop-limited neighbourhood)
+    'focus.row_one':   '🎯 Fokus: 1 Hop',
+    'focus.row_n':     '🎯 Fokus: {n} Hops',
+    'focus.end_ctx':   '✕ Fokus beenden',
+    'focus.banner':    'Fokus: {host} · {hops} · {shown} von {total} Hosts',
+    'focus.hop_one':   '1 Hop',
+    'focus.hop_n':     '{n} Hops',
+    'focus.end':       'Beenden',
+    'focus.minus.tip': 'Ein Hop weniger',
+    'focus.plus.tip':  'Ein Hop mehr',
+    'focus.gone':      'Fokus-Host ist nicht mehr in den Daten — Fokus beendet',
+    'focus.hop_view':  '🗺 Hop-Ansicht öffnen (serverseitig)',
     // Weathermap + Topology-Change
     'toolbar.weathermap':     'Weathermap: {state}',
     'toolbar.weathermap.tip': 'Edge-Farbe nach Auslastungs-% (Traffic / Link-Kapazitaet aus ifSpeed) statt absolutem Traffic',
@@ -410,7 +423,7 @@ export default {
     'tip.no_traffic_history': 'Kein Traffic-Verlauf verfügbar (keine net.if-/ifIn/ifOut-Items)',
     'tip.last_1h': 'letzte 1h',
     'tip.host_total': 'Host gesamt (beide Enden)',
-    'app.pick_groups': '← Bitte Host-Gruppen wählen und Apply klicken.',
+    'app.pick_groups': '← Bitte Host-Gruppen (oder einen Host + Hops) wählen und Apply klicken.',
     'app.loading': 'Lade Topologie...',
     'app.error': 'Error: {msg}',
     'agg.no_group': '— Ohne Gruppe —',

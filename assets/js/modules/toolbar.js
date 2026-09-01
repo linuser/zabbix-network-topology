@@ -23,6 +23,7 @@ import { refreshKpi } from './kpi.js';
 import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isSimActive, clearSimulation } from './whatif.js';
+import { isFocusActive, clearFocus } from './focus-mode.js';
 import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
 import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
 import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
@@ -139,8 +140,11 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     const bReset = mkbtn('nt-btn-reset', t('toolbar.fit'), null);
     bReset.addEventListener('click', function() {
         cy.fit(cy.nodes(), 40);
-        // Positions sicherheitshalber nach kurzer Pause nochmal speichern
-        setTimeout(function() { savePositions(cy); }, 200);
+        // Positions sicherheitshalber nach kurzer Pause nochmal speichern.
+        // NOT in focus mode: what gets stored is the COMPLETE state of the
+        // view, and in focus only the subset is in the graph — a save would
+        // throw away the positions of every other host of the view.
+        setTimeout(function() { if (!isFocusActive()) savePositions(cy); }, 200);
     });
 
     // Layout-Auswahl als Dropdown (Auto / Force / Konzentrisch / Raster / Baum).
@@ -198,7 +202,11 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 // einer neuen Position obwohl sie eigentlich genau den Sinn
                 // haben "stay where I put you". Jetzt: locked bleiben locked,
                 // Cytoscape's Layouts respektieren das und ueberspringen sie.
-                clearPositions();
+                // In focus mode do NOT touch the stored positions:
+                // clearPositions wipes the whole view layer, and the saves
+                // below would write back only the focus subset. The layout
+                // switch then acts only ephemerally on the excerpt.
+                if (!isFocusActive()) clearPositions();
                 cy.resize();
 
                 // Wenn Cluster-Mode aktiv ist (>=2 Gruppen + nicht 'off') muss
@@ -214,8 +222,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 if (_useCluster) {
                     runGroupClusterLayout(cy, groupNames, _clusterMode, function() {
                         setTimeout(function() {
-                            savePositions(cy);
-                            savePinned(cy);
+                            if (!isFocusActive()) { savePositions(cy); savePinned(cy); }
                             // Bei der Fit nur ueber NICHT-pinned Nodes — sonst
                             // koennten Pins ausserhalb des fit-Bereichs liegen
                             // und nach Layout abgeschnitten sein.
@@ -226,8 +233,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                     const lo = cy.layout(buildLayoutConfig(opt.id, nodes, [], true));
                     lo.one('layoutstop', function() {
                         setTimeout(function() {
-                            savePositions(cy);
-                            savePinned(cy);
+                            if (!isFocusActive()) { savePositions(cy); savePinned(cy); }
                             cy.fit(cy.nodes(), 40);
                         }, 400);
                     });
@@ -540,11 +546,12 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             if (e.key !== 'Escape') return;
             if (isLinkModeActive()) { exitLinkMode(); return; }
             const cyRef = window._ntCy;
-            // ESC-Kette: Pfad-Highlight → Ausfall-Simulation → Root-Cause —
-            // ein ESC beendet EINEN Modus, nicht alle auf einmal.
+            // ESC-Kette: Pfad-Highlight → Ausfall-Simulation → Root-Cause →
+            // Fokus — ein ESC beendet EINEN Modus, nicht alle auf einmal.
             if (cyRef && (isPathActive() || getPathStart())) { clearPathState(cyRef); return; }
             if (cyRef && isSimActive()) { clearSimulation(cyRef); return; }
-            if (cyRef && isRootCauseActive()) clearRootCause(cyRef);
+            if (cyRef && isRootCauseActive()) { clearRootCause(cyRef); return; }
+            if (cyRef && isFocusActive()) clearFocus();
         });
     }
 

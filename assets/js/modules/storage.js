@@ -97,6 +97,13 @@ export const NT_GROUP_CLUSTER_KEY  = 'nt_' + PFX + 'group_cluster';   // 'auto'|
 
 function selectedGroupIds() {
     const cfg = window.NT_CONFIG;
+    // Host+hops mode gets its own view-key space: positions/pins/notes saved
+    // for "core-sw + 2 hops" must not collide with a group selection — both
+    // layers store the COMPLETE state per view key, so a shared key would let
+    // one view's save wipe the other's arrangement.
+    if (cfg && cfg.selected_hostid) {
+        return 'host' + cfg.selected_hostid + '_h' + (cfg.hops || 1);
+    }
     const ids = (cfg && cfg.selected_groupids) ? cfg.selected_groupids.slice().sort() : [];
     return ids.join('_');
 }
