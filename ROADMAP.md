@@ -123,20 +123,45 @@ entstanden — dort ging es nur um Nachbartabellen, nicht um Bitmasken.
 nach dem Muster von `tools/nt-lldp-probe.sh`, um auf echten Switches zu prüfen,
 ob die MIB überhaupt herausrückt. Ein Nachmittag statt eines Releases.
 
-### ARP + MAC/FDB — „wo steckt dieses Gerät?"
+### MAC/FDB-Suche — „hängt an Switch X, Port Y"
 
-MAC auf Switch/Port auflösen, IP dazu, Hostname dazu. Wäre im Alltag stark und
-ist die Voraussetzung für die halbe Suchliste oben.
+MAC oder IP eingeben, Antwort: Zugangsswitch und Port. Im Support die Frage,
+die man am häufigsten stellt.
 
-Braucht zwei neue Quellen: **BRIDGE-MIB** (`dot1dTpFdbPort`, MAC → Bridge-Port)
-plus die Umsetzung Bridge-Port → ifIndex über `dot1dBasePortIfIndex`, und
-**ARP** aus `ipNetToMediaPhysAddress` (oder `ipNetToPhysicalPhysAddress`) vom
-Router. Zwei Tabellen, zwei Auflösungsschritte, und FDB-Einträge altern schnell
-(Standard 300 s) — eine Anzeige „gefunden auf Port 18" ist also immer eine
-Momentaufnahme und muss ihren Zeitstempel mitführen.
+**Warum das hierher gehört und nicht in ein Zabbix-Item:** eine MAC steht in der
+FDB **jedes** Switches auf dem Pfad — bei jedem auf dem Uplink-Port. Eine
+schlichte Abfrage liefert also fünf Treffer und keine Antwort. Brauchbar ist
+allein der **Zugangsport**: der eine Switch-Port, auf dem die MAC steht und der
+**kein** Uplink ist.
 
-Beides sind Standard-MIBs, anders als bei VLAN gibt es keine Bitmasken. Machbar,
-aber es ist ein eigenes Erhebungsthema, kein Anzeigethema.
+Genau diese Unterscheidung kann dieses Modul treffen und ein generisches Item
+nicht: es weiß aus LLDP bereits, welche Ports Switch-zu-Switch gehen —
+`lldp_ports[hid][port]` je Host, und jede Kante trägt `ports` für beide Enden.
+Aus einem rohen FDB-Abzug wird damit eine Aussage.
+
+**Datenquellen** (beides Standard-MIBs, keine Bitmasken wie bei VLAN):
+
+- **BRIDGE-MIB** `dot1dTpFdbPort` (MAC → Bridge-Port), aufgelöst über
+  `dot1dBasePortIfIndex` (Bridge-Port → ifIndex). Der zweite Schritt ist nötig
+  und wird gern vergessen: Bridge-Port-Nummern sind **nicht** ifIndex.
+- **ARP** für IP → MAC: `ipNetToMediaPhysAddress` (bzw.
+  `ipNetToPhysicalPhysAddress`) vom Router, nicht vom Switch.
+
+**Was bleibt schwierig:**
+
+- FDB-Einträge altern (Standard 300 s). „Gefunden auf Port 18" ist immer eine
+  Momentaufnahme und muss ihren **Zeitstempel** mitführen — sonst behauptet die
+  Oberfläche Gegenwart, wo sie Vergangenheit meint.
+- Bei mehreren MACs an einem Port (nachgelagerter unmanaged Switch, VMs hinter
+  einem Hypervisor) ist der „Zugangsport" nicht eindeutig. Das muss die Anzeige
+  sagen dürfen, statt sich auf einen festzulegen.
+- Ohne LLDP auf einem Switch fehlt dessen Uplink-Kennzeichnung — dann fällt man
+  auf „MAC steht auf diesen Ports" zurück. Kein Fehler, aber die Antwort ist
+  schwächer, und das gehört gesagt.
+
+**Erster Schritt:** ein `nt-fdb-probe.sh` nach dem Muster von
+`tools/nt-lldp-probe.sh` — auf echten Switches messen, ob die BRIDGE-MIB
+herausrückt und ob `dot1dBasePortIfIndex` gefüllt ist. Ein Nachmittag.
 
 ### PoE je Port
 
