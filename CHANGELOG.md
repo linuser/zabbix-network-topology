@@ -56,7 +56,7 @@
   action now returns them on request — shared layer only, and only for widgets.*
 
 - **Topologie-Widget: ein einzelner, aufgeblasener Knoten statt des Graphen**
-  (Widget 3.1.1, [#7]). Im Konstruktor lief ein Layout mit `animate: true`,
+  (Widget 3.1.1). Im Konstruktor lief ein Layout mit `animate: true`,
   und der Layout-Nachlauf startete daneben ein zweites. Beide schreiben
   Positionen. Der Nachlauf war nach ~30 ms fertig und lieferte ein brauchbares
   Bild — Sekunden später wurde das animierte Init-Layout fertig und legte alle
@@ -77,6 +77,13 @@
   layout in the constructor raced the follow-up layout and overwrote its result
   seconds later. The constructor no longer runs a layout, and the follow-up
   retries until the nodes actually separate.*
+
+  **Nicht zu verwechseln mit [#7]**: das ist ein anderer Fehler, im *Hauptmodul*.
+  Dort schreibt `cose` **mit `boundingBox`** `y = null` in jede Knotenposition,
+  die Leinwand bleibt leer, während die KPI-Leiste weiterzählt. Der Commit, der
+  den Widget-Fehler behebt, verweist versehentlich auf #7 — er ist bereits
+  veröffentlicht und lässt sich nicht mehr umschreiben. #7 bleibt offen und wird
+  von PR #8 adressiert.
 
 [#7]: https://github.com/linuser/zabbix-network-topology/issues/7
 
