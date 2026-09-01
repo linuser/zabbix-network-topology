@@ -7,6 +7,18 @@
 
 ### Fixed
 
+- **Die mitgelieferten Templates trugen deutsche Beschreibungen.** Nicht in
+  Kommentaren, sondern in `description:`-Feldern — also genau dem Text, den
+  Zabbix nach dem Import in der Oberfläche anzeigt. Wer der inzwischen
+  englischen Anleitung folgte, bekam deutsches Zabbix. `nt_health_score` und
+  `nt_topology_change` sind umgestellt (je vier Beschreibungen, darunter die
+  mehrzeilige Template-Beschreibung).
+
+  `nt_lldp_snmp_template.yaml` mit seinen 27 Stellen folgt, sobald
+  [PR #5](https://github.com/linuser/zabbix-network-topology/pull/5) gemerged
+  ist — der baut dieselbe Datei gerade um, und zwei parallele Umbauten an einer
+  Datei ergeben nur Konflikte.
+
 - **„Modul" wurde als „Widget" gelesen.** Bei Zabbix sind die meisten
   Community-Module Dashboard-Widgets, und genau so verstand mancher auch dieses
   — obwohl das Hauptmodul eine **eigene Seite** unter *Monitoring → Network

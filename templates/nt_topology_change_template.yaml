@@ -8,16 +8,16 @@ zabbix_export:
       template: 'NT Topology Change'
       name: 'NT Topology Change'
       description: |
-        Empfaengt Topologie-Aenderungen des Network-Topology-Moduls via
-        zabbix_sender (tools/topo-change-sender.sh als Cron).
+        Receives topology changes from the Network Topology module via
+        zabbix_sender (tools/topo-change-sender.sh as a cron job).
 
-        Items sind Trapper — der Sender pusht:
-          nt.topo.changes       Anzahl neue+verschwundene LLDP/CDP-Edges
-                                seit dem letzten Poll
-          nt.topo.changes.text  menschenlesbare Liste ("+ A <-> B; - C <-> D")
+        The items are trappers - the sender pushes:
+          nt.topo.changes       number of new + vanished LLDP/CDP edges
+                                since the last poll
+          nt.topo.changes.text  human-readable list ("+ A <-> B; - C <-> D")
 
-        Der Trigger feuert bei changes > 0 und recovert beim naechsten
-        0-Poll — jede Umsteck-Aktion wird ein eigenes Event.
+        The trigger fires on changes > 0 and recovers on the next 0 poll,
+        so every re-cabling becomes an event of its own.
       groups:
         - name: Templates
       items:
@@ -28,13 +28,13 @@ zabbix_export:
           value_type: UNSIGNED
           history: 31d
           trends: 365d
-          description: 'Anzahl neue + verschwundene Edges seit letztem Sender-Poll.'
+          description: 'Number of new + vanished edges since the last sender poll.'
           triggers:
             - uuid: e28354047fcc4533bfff035e7acfd185
               expression: 'last(/NT Topology Change/nt.topo.changes)>0'
               name: 'Network topology changed: {ITEM.LASTVALUE1} link(s)'
               priority: WARNING
-              description: 'LLDP/CDP-Topologie hat sich geaendert — Details im Text-Item nt.topo.changes.text.'
+              description: 'The LLDP/CDP topology has changed - see the text item nt.topo.changes.text for details.'
               manual_close: 'YES'
         - uuid: c0d63dae79cd4191b632ec81e64886ce
           name: 'NT: Topology change details'
@@ -43,4 +43,4 @@ zabbix_export:
           value_type: TEXT
           history: 31d
           trends: '0'
-          description: 'Menschenlesbare Liste der Aenderungen ("+ A <-> B; - C <-> D"), "-" wenn keine.'
+          description: 'Human-readable list of the changes ("+ A <-> B; - C <-> D"), "-" if none.'

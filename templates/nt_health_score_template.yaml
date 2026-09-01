@@ -8,14 +8,14 @@ zabbix_export:
       template: 'NT Health Score'
       name: 'NT Health Score'
       description: |
-        Empfaengt den Topology-Health-Score des Network-Topology-Moduls
-        via zabbix_sender (tools/topo-change-sender.sh als Cron — derselbe
-        Cron pusht auch die Topologie-Aenderungen).
+        Receives the topology health score of the Network Topology module
+        via zabbix_sender (tools/topo-change-sender.sh as a cron job - the
+        same cron also pushes the topology changes).
 
-        Score 0-100, Formel wie im Health-Tab des Moduls:
+        Score 0-100, same formula as the module's Health tab:
           100 - offline%*40 - stale%*15 - critical%*25 - unacked%*20
-        pro Hostgroup. Gesendet werden der Durchschnitt ueber alle Gruppen
-        (nt.health.score) und die schlechteste Gruppe (nt.health.score.min).
+        per host group. Sent are the average across all groups
+        (nt.health.score) and the worst group (nt.health.score.min).
       groups:
         - name: Templates
       items:
@@ -26,13 +26,13 @@ zabbix_export:
           value_type: FLOAT
           history: 90d
           trends: 365d
-          description: 'Durchschnitts-Score ueber alle Hostgroups (0-100). Gefuellt vom Sender-Cron.'
+          description: 'Average score across all host groups (0-100). Filled by the sender cron.'
           triggers:
             - uuid: 6b5dcbbdff304f75b34bb221a3056b07
               expression: 'last(/NT Health Score/nt.health.score)<70'
               name: 'Network health score low: {ITEM.LASTVALUE1}'
               priority: WARNING
-              description: 'Topology-Health-Score unter 70 — Details im Health-Tab des Network-Topology-Moduls (offline/stale/critical/unacked pro Gruppe).'
+              description: 'Topology health score below 70 - see the Health tab of the Network Topology module for details (offline/stale/critical/unacked per group).'
         - uuid: 7e6952ab23da425f8950443f5b8a7c11
           name: 'NT: Health score (worst group)'
           type: TRAP
@@ -40,4 +40,4 @@ zabbix_export:
           value_type: FLOAT
           history: 90d
           trends: 365d
-          description: 'Score der schlechtesten Hostgroup (0-100) — bei Bedarf eigene Trigger anlegen (z.B. <40 = HIGH).'
+          description: 'Score of the worst host group (0-100) - add your own triggers if needed (e.g. <40 = HIGH).'
