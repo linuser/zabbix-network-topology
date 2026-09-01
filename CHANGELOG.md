@@ -5,6 +5,51 @@
 
 ## v5.1.1 — unveröffentlicht
 
+### Changed
+
+- **Das LLDP-Template pollt per `walk[]` statt mit instanzgenauen GETs.**
+  Der SNMP-Index der `lldpRemTable` ist
+  `lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex` — und `lldpRemTimeMark` ist
+  ein RMON-2-TimeFilter. Auf zwei unabhängigen Geräteklassen macht das die alten
+  Item-Prototypen unbrauchbar: **FortiGate** erhöht den TimeMark bei jedem
+  empfangenen LLDP-PDU, der bei der Discovery gemerkte Index ist Sekunden später
+  ungültig. **MikroTik RouterOS** beantwortet auf diesem Subtree Walks, liefert
+  für exakte GETs aber `noSuchObject` — die Discovery legte also Items an, von
+  denen jedes einzelne dauerhaft unsupported blieb.
+
+  Beides ist unser Entwurfsfehler, nicht ein Gerätefehler: instanzgenaue GETs auf
+  eine TimeFilter-Tabelle sind konstruktionsbedingt fragil. Jetzt gibt es ein
+  `walk[]`-Master-Item über die sechs benötigten Spalten; Discovery und alle
+  sechs Prototypen hängen als **dependent** daran und lesen den Walk-Text. Der
+  Index wird auf `0.Port.RemIndex` normiert, ein Guard verwirft Duplikate
+  (höchster TimeMark gewinnt).
+
+  **Kein Eingriff am Modul nötig** — die Schlüsselform bleibt, `LldpEdgeBuilder`
+  liest den lokalen Port weiterhin aus der Mitte des Index.
+
+  **Beim Update ändern sich die Item-Schlüssel** von
+  `lldpRemSysName[582295907.23.4]` auf `[0.23.4]`. Die Prototypen behalten ihre
+  UUIDs und aktualisieren sich beim Import in place; die bereits *entdeckten*
+  Items laufen in die Lost-Resource-Lifetime und nehmen ihre History mit. Neu
+  entdeckt wird beim nächsten Walk.
+
+  Beigesteuert von **@christos-diamantis**, getestet gegen FortiGate und eine
+  MikroTik CRS326-24S+2Q+
+  ([#3](https://github.com/linuser/zabbix-network-topology/issues/3),
+  [#4](https://github.com/linuser/zabbix-network-topology/issues/4),
+  [PR #5](https://github.com/linuser/zabbix-network-topology/pull/5)).
+
+- **Die MikroTik-Zeile der Vendor-Matrix ist eine Messung.** Sie stand seit ihrer
+  Entstehung auf „ungeprüft", weil nie jemand bestätigt hatte, was RouterOS tut.
+  Jetzt steht dort, was gemessen wurde: Walks ja, exakte GETs nein. Damit hat die
+  Matrix **keine unbelegte Zeile mehr** — Huawei und MikroTik sind innerhalb eines
+  Tages von Behauptungen zu Messungen geworden, beide durch Nutzermeldungen.
+
+- **Auch das LLDP-Template spricht Englisch.** Die restlichen zwölf
+  Beschreibungsblöcke sind übersetzt — Template, Makro, Discovery-Regeln und alle
+  acht Prototypen. In keiner der drei mitgelieferten Vorlagen steht noch deutscher
+  Text.
+
 ### Fixed
 
 - **Die Installationsanleitung stellte den schwersten Weg nach vorn.** Schritt 1

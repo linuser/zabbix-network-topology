@@ -150,7 +150,7 @@ doubt, verify with the [test below](#the-test-that-settles-it)):
 | **Ubiquiti UniFi** (USW/UDM) | ✗ often **no** SNMP at all | **works via API** | LLDP lives in the controller → the official *UniFi Network API* template provides `uplink.id`, which the module reads directly |
 | **Cisco** (IOS/NX-OS) | ✓ | **works** | CDP on by default, LLDP opt-in (`lldp run`) |
 | **Huawei** (VRP, e.g. S5700) | ✓ | **works** | confirmed on an S5700 in a production network. VRP answers the standard LLDP-MIB — but the default SNMP view may hide it, see below. The official *Huawei VRP by SNMP* template does **not** collect the neighbour table |
-| **MikroTik** (RouterOS) | ? | **unverified** | the module has a hook for `discovery.neighbor`, but **no RouterOS device has ever confirmed it** — see below |
+| **MikroTik** (RouterOS) | ✓ walks only | **works** | confirmed on a CRS326-24S+2Q+ (RouterOS 7.22): the LLDP-MIB answers walks, but exact-instance GETs return `noSuchObject` — see below |
 
 **Vendor missing, or a row that says "unverified"?** Both are gaps, not
 decisions. One command on your device settles a row —
@@ -195,18 +195,19 @@ person the afternoon you just spent.
 > Source: [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2),
 > confirmed by the reporter on 2026-08-31.
 
-> **MikroTik: what here is claim and what is measurement.** This row long read
-> "works". Only half of that is established: the module **looks** for items with
-> `discovery.neighbor` in the key and processes them when they arrive. Whether
-> RouterOS exposes the LLDP neighbour table over plain SNMP, or whether you have to
-> build your own item for it, has **never been checked on a device** — there is
-> neither a test nor a fixture for it.
+> **MikroTik: measured, and it changed the template.** This row read "unverified"
+> from the day it was written, because nobody had ever confirmed what RouterOS
+> does. Now we know, from a CRS326-24S+2Q+ on RouterOS 7.22: the agent **answers
+> walks** on the LLDP subtree, and returns `noSuchObject` for **exact-instance
+> GETs** on the very rows a walk just printed.
 >
-> Anyone running RouterOS can clear this up in five minutes and get us further than
-> any guess: does `snmpwalk` on `1.0.8802.1.1.2.1.4.1.1.9` (`lldpRemSysName`) return
-> values? If yes, the standard path works exactly as it does for Cisco and HP. If
-> no, an item whose key contains `discovery.neighbor` is needed — and then the
-> question is what's in it. Either answer is useful.
+> That is not a MikroTik curiosity, it is why the shipped template changed. Zabbix
+> LLD uses a walk (so discovery always worked), while the old item prototypes used
+> exact GETs — so every discovered item went unsupported, permanently. Since 5.1.1
+> the template polls one `walk[]` master item and derives discovery and all
+> prototypes from it, which removes the per-instance GET entirely.
+>
+> Source: [Issue #4](https://github.com/linuser/zabbix-network-topology/issues/4) and the pull request that followed it.
 
 > **UniFi in detail:** UniFi builds LLDP for its *own* controller, not for external
 > SNMP polling. In practice it's even starker: on a **UDM Pro Max** with SNMP
