@@ -192,6 +192,60 @@ Dashboard verschiedene Werte, und niemand weiß, welcher stimmt.
 früher oder später auch in einer Kachel. Wer ihn baut, erweitert `ci:parity`
 im selben Zug, nicht später.
 
+### Firmware-/Modell-Abweichung
+
+„7× Aruba 2930F, davon einer auf anderer Firmware." Nicht eine Regel, die
+jemand pflegt, sondern eine **Abweichung von der Mehrheit** — genau die Form,
+die im Alltag auffällt.
+
+**Der Rahmen steht schon.** Der Compliance-Tab hat sieben Prüfungen (SNMP v1/v2c,
+SNMP v3, Agent ohne TLS, kein Proxy, Inventory aus, kein Standort, kein
+Template, veraltetes kritisches Problem, Wartung ohne Kommentar), eine Aggregat-
+zeile und eine Matrix je Host. Eine achte einzuhängen ist Fleißarbeit, kein
+Umbau.
+
+**Was fehlt, ist eine Zeile in der API-Abfrage.** `NetworkTopologyCompliance`
+holt heute `selectInventory => ['location_lat', 'location_lon', 'location']`.
+Zabbix führt daneben `model`, `serialno_a`, `hardware`, `software`,
+`software_full`, `os` und `os_full` — alles, was gebraucht wird, und für viele
+Netzwerkgeräte füllt das offizielle Template diese Felder automatisch.
+
+**Der interessante Teil ist die Auswertung, nicht die Erhebung:**
+
+- Gruppieren nach `model`, dann innerhalb der Gruppe die Firmware vergleichen.
+  Mehrheit = Soll, Abweichler = Befund.
+- Ab welcher Gruppengröße lohnt die Aussage? Bei zwei Geräten mit zwei
+  Versionen gibt es keine Mehrheit — dann ist es kein Befund, sondern eine
+  Beobachtung.
+- Versionsstrings sind Freitext (`WC.16.10.0021`). Ein Vergleich auf
+  Gleichheit trägt; ein Vergleich auf „neuer als" trägt nicht ohne
+  herstellerspezifisches Parsen. **Bei Gleichheit bleiben.**
+- Leere Felder sind kein Verstoß. Ein Gerät ohne ausgelesene Firmware ist
+  unbekannt, nicht abweichend — die bestehenden Prüfungen unterscheiden das
+  bereits über die Stufen bad/info/good.
+
+Mit ARP/FDB und der Interface-Ansicht zusammen ist das der kleinste Posten in
+diesem Abschnitt.
+
+### VPN-Overlay
+
+IPsec/WireGuard/OpenVPN als logische Kanten über der physischen Topologie.
+
+**Dasselbe Grundproblem wie BGP/OSPF** (siehe dort), deshalb gehören beide
+zusammen entschieden: der gesamte Renderpfad nimmt an, **eine Kante ist ein
+Kabel**. Weathermap, Pfad-BFS, Root Cause und What-if hängen alle daran. Ein
+zweiter Kantentyp berührt alle vier — und bei Root Cause wäre es sogar falsch,
+ihn mitzurechnen: ein Tunnel fällt aus, *weil* die Leitung darunter ausfällt,
+nicht unabhängig davon.
+
+Wenn ein zweiter Kantentyp kommt, dann einmal und für beide — mit einer
+klaren Regel, welche Analysen welchen Typ sehen.
+
+Datenseitig ist VPN dazu heterogener als Routing: WireGuard hat keine
+Standard-MIB, IPsec je nach Gerät `IPSEC-FLOW-MONITOR-MIB` oder Herstellereigenes,
+OpenVPN meist gar kein SNMP. In der Praxis liefe es auf Zabbix-Items je
+Plattform hinaus und nicht auf eine gemeinsame Quelle.
+
 ### PoE je Port
 
 `pethPsePortActualPower` aus der POWER-ETHERNET-MIB. Kleines, klar umrissenes
