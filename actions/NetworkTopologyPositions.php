@@ -144,7 +144,7 @@ class NetworkTopologyPositions extends NetworkTopologyController {
             error_log('network.topology.positions: ' . $e);
             $this->jsonResponse(['error' => $e instanceof \APIException
                 ? $e->getMessage()
-                : 'Positionen konnten nicht gespeichert werden (interner Fehler).']);
+                : _('The positions could not be saved (internal error).')]);
             return;
         }
 

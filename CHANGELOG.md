@@ -5,6 +5,34 @@
 
 ## Unveröffentlicht
 
+### Changed
+
+- **Kein deutscher Text mehr im UI — und ein Gate, das das hält.** 26 Stellen
+  umgestellt: sieben PHP-Meldungen auf `_('English')` (die Konvention stand
+  längst im Code), 13 Stellen im Hauptmodul-JS über `t()` mit zwölf neuen
+  Schlüsseln in `de.js` **und** `en.js`, sechs Widget-Meldungen schlicht auf
+  Englisch — Widgets haben kein `t()`.
+
+  Darunter eine, die es aus dem Modul heraus schaffte: die Beschreibung, die
+  beim Anlegen eines Wartungsfensters in die Zabbix-Datenbank geschrieben wird
+  (`NetworkTopologyMaintenance.php`).
+
+  Neu: **`npm run ci:i18n`** (`tools/check-i18n.mjs`). Es liest String-Literale
+  mit einem eigenen Scanner statt mit grep — beide grep-Wege scheitern an
+  echtem Code: ein `// Toggle "nur Offline-Hosts zeigen"` am Zeilenende ist ein
+  Kommentar und muss ignoriert werden, während `url: 'https://…'` ein `//`
+  **im** String trägt. Kommentare dürfen weiter deutsch sein, das ist so
+  gewollt.
+
+  Drei Lücken der ersten Fassung sind eingebaut und je durch eine Regression
+  geprüft: die Wortliste war case-sensitiv (übersah „Ohne …"), sie kannte keine
+  Substantiv-Endungen (übersah „Zusammenfassung", fiel erst im Browser auf), und
+  sie kannte keine ASCII-Umschrift (übersah dreimal „Laedt…"). `-tum` ist
+  bewusst **nicht** in der Endungsregel: es fängt „Momentum" und „Quantum".
+
+  *No German text reaches the UI any more, and `ci:i18n` keeps it that way.
+  Comments stay German by choice; the gate only reads string literals.*
+
 ### Fixed
 
 - **Dashboard-Widgets zählten manuelle Verbindungen nicht mit.** Das Hauptmodul

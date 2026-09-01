@@ -104,7 +104,7 @@ function buildPopup(node) {
         if (node.maintenance) {
             row.appendChild(mk('span',
                 'background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
-                '\u{1F527} Wartung'));
+                t('geo.maintenance')));
         }
         if (node.acknowledged) {
             row.appendChild(mk('span',
@@ -155,7 +155,7 @@ function showToast(message) {
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.2);border:1px solid #f59e0b;'
         + 'cursor:pointer;font-family:sans-serif';
     toast.textContent = '\u26A0 ' + message;
-    toast.title = 'Klicken zum Schliessen';
+    toast.title = t('geo.toast.dismiss');
     toast.addEventListener('click', function() { toast.remove(); });
     document.body.appendChild(toast);
     setTimeout(function() {
@@ -175,7 +175,7 @@ function switchProvider(providerId) {
     const opts = { maxZoom: p.maxZoom || 19, attribution: p.attribution };
     if (p.subdomains) opts.subdomains = p.subdomains;
     _tileLayer = L.tileLayer(p.url, opts).addTo(_map);
-    if (p.warning) showToast(p.warning);
+    if (p.warningKey) showToast(t(p.warningKey));
 }
 
 // Helper: Marker und Edges aus den Layern aufbauen. Wird sowohl beim

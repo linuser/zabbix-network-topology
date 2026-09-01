@@ -79,7 +79,7 @@ function _aggregateBlock(perHost, theme) {
         + ';border-radius:6px;padding:14px 18px;margin-bottom:18px;display:flex;'
         + 'gap:24px;align-items:center;flex-wrap:wrap">'
         + '<div><div style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase;'
-        +   'letter-spacing:0.05em">Match-Quote</div>'
+        +   'letter-spacing:0.05em">' + t('lldpq.match_rate') + '</div>'
         +   '<div style="font-size:28px;font-weight:700;color:' + pctCol + ';font-family:monospace;'
         +     'line-height:1">' + pctText + '</div></div>'
         + '<div><div style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase">Reporter</div>'
@@ -168,7 +168,7 @@ function _topUnmatchedTable(perHost, theme) {
         + ';text-transform:uppercase;letter-spacing:0.04em">Top Unmatched Neighbors</h3>'
         + '<table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
-        + ['Reported Name', 'Source', 'Hits', 'Gemeldet von'].map(function(h) {
+        + ['Reported Name', 'Source', 'Hits', t('lldpq.col.reported_by')].map(function(h) {
             return '<th style="padding:6px 10px;text-align:left;color:' + theme.sub + ';font-weight:600">' + h + '</th>';
         }).join('') + '</tr></thead><tbody>';
     list.slice(0, 50).forEach(function(u) {

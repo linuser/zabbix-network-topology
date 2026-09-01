@@ -123,8 +123,8 @@ class NetworkTopologyMaintenance extends NetworkTopologyController {
         // ueberraschend Wartung nur fuer die erlaubte Teilmenge an.
         if (count($hosts) !== count($hostids)) {
             $this->fail($hosts
-                ? 'Mindestens ein Host wurde nicht gefunden oder darf nicht bearbeitet werden.'
-                : 'Keine Schreibberechtigung fuer den/die Host(s).');
+                ? _('At least one host was not found or may not be edited.')
+                : _('No write permission for the host(s).'));
             return;
         }
 
@@ -147,7 +147,7 @@ class NetworkTopologyMaintenance extends NetworkTopologyController {
         try {
             $res = API::Maintenance()->create([
                 'name'         => $name,
-                'description'  => sprintf('Aus Network-Topology-Map angelegt (%s).',
+                'description'  => sprintf(_('Created from the Network Topology map (%s).'),
                                           date('Y-m-d H:i:s', $now)),
                 // 0 = MAINTENANCE_TYPE_NORMAL (mit Datensammlung) — Metriken
                 // laufen weiter, nur Problem-Alarme werden unterdrueckt.
@@ -174,7 +174,7 @@ class NetworkTopologyMaintenance extends NetworkTopologyController {
             // zwar Admin, die Meldung soll aber trotzdem sauber bleiben.
             $this->fail($e instanceof \APIException
                 ? $e->getMessage()
-                : 'Wartung konnte nicht angelegt werden (interner Fehler).');
+                : _('The maintenance period could not be created (internal error).'));
             return;
         }
 

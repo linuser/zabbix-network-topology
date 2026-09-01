@@ -128,12 +128,36 @@ without it being clear why:
    **What the gate does not cover:** the path server → database → permission
    check. That needs two logged-in users in one browser.
 
+8. **No German text may reach the UI.** Comments in this repository are German
+   and stay that way — but anything a user reads has to be English.
+   `npm run ci:i18n` checks it.
+
+   The gate exists because the hand-kept list of leftover German strings was
+   wrong at four places when it was finally checked: two entries were comments,
+   three strings were missing entirely, and every line number had drifted. A
+   list nobody maintains is not a list.
+
+   Where the string belongs depends on where it is:
+
+   - **Main module JS:** through `t()`, key in `i18n/de.js` **and** `en.js`.
+   - **PHP:** `_('English text')` — Zabbix' own translation function, as in
+     `NetworkTopologyLinks.php`.
+   - **Widgets:** plain English. They have no `t()` — the jsLoader knows nothing
+     about the main module's i18n.
+
+   The gate parses string literals with its own scanner rather than grep, and
+   that is not over-engineering — both grep approaches fail on real code here:
+   a trailing `// Toggle "nur Offline-Hosts zeigen"` is a comment and must be
+   ignored, while `url: 'https://…'` contains `//` inside a string. Cutting at
+   the first `//` breaks the second; anchoring comments to line starts misses
+   the first.
+
 Run everything locally:
 
 ```bash
 npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
   && npm run ci:templates && npm run ci:package && npm run ci:layers \
-  && npm run ci:pipeline
+  && npm run ci:i18n && npm run ci:pipeline
 ```
 
 > Three gates are missing from that chain because they need tools not everyone
@@ -330,12 +354,36 @@ ohne dass klar ist warum:
    **Was das Gate nicht abdeckt:** den Weg Server → Datenbank → Rechteprüfung.
    Dafür braucht es zwei angemeldete Benutzer in einem Browser.
 
+8. **Kein deutscher Text darf ins UI.** Die Kommentare in diesem Repository sind
+   deutsch und bleiben es — was ein Benutzer liest, muss aber englisch sein.
+   `npm run ci:i18n` prüft das.
+
+   Das Gate gibt es, weil die handgepflegte Liste der übrig gebliebenen
+   deutschen Strings beim Nachprüfen an vier Stellen falsch war: zwei Einträge
+   waren Kommentare, drei Strings fehlten ganz, und sämtliche Zeilennummern
+   hatten sich verschoben. Eine Liste, die niemand pflegt, ist keine.
+
+   Wohin der String gehört, hängt davon ab, wo er steht:
+
+   - **Hauptmodul-JS:** über `t()`, Schlüssel in `i18n/de.js` **und** `en.js`.
+   - **PHP:** `_('English text')` — Zabbix' eigene Übersetzungsfunktion, wie in
+     `NetworkTopologyLinks.php`.
+   - **Widgets:** schlicht Englisch. Dort gibt es kein `t()` — der jsLoader weiß
+     nichts von der i18n des Hauptmoduls.
+
+   Das Gate liest String-Literale mit einem eigenen Scanner statt mit grep, und
+   das ist keine Spielerei — beide grep-Wege scheitern hier an echtem Code: ein
+   `// Toggle "nur Offline-Hosts zeigen"` am Zeilenende ist ein Kommentar und
+   muss ignoriert werden, während `url: 'https://…'` ein `//` **im** String
+   trägt. Wer beim ersten `//` abschneidet, zerlegt das zweite; wer Kommentare
+   am Zeilenanfang verankert, übersieht das erste.
+
 Alles zusammen lokal prüfen:
 
 ```bash
 npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
   && npm run ci:templates && npm run ci:package && npm run ci:layers \
-  && npm run ci:pipeline
+  && npm run ci:i18n && npm run ci:pipeline
 ```
 
 > Drei Gates fehlen in dieser Kette, weil sie Werkzeuge brauchen, die nicht

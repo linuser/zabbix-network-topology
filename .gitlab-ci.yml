@@ -121,6 +121,15 @@ templates:
   script:
     - node tools/check-templates.mjs
 
+# Deutsche Texte, die im UI landen. Kommentare duerfen deutsch bleiben — das
+# Gate liest nur String-Literale, mit eigenem Scanner statt grep (Regex mit
+# Anfuehrungszeichen und Zeilenend-Kommentare brechen jede grep-Loesung).
+i18n:
+  stage: test
+  image: node:22-alpine
+  script:
+    - node tools/check-i18n.mjs
+
 # Prueft, was im Modul-ZIP landen wuerde. Liest die Ausschlussmuster aus
 # deploy.sh, statt sie zu wiederholen — eine zweite Liste waere eine zweite
 # Stelle, die auseinanderlaeuft. Anlass: nt-uninstall.sh rutschte ins Paket,

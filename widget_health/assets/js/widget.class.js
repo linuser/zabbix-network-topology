@@ -268,7 +268,7 @@ class WidgetNetworkTopologyHealth extends CWidget {
         if (stats.length === 0) {
             root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
                 + 'height:100%;color:' + this._COL_SUBSOFT + ';font-size:11px">'
-                + 'Keine Hostgroups gefunden.</div>';
+                + 'No host groups found.</div>';
             return;
         }
 
@@ -306,6 +306,6 @@ class WidgetNetworkTopologyHealth extends CWidget {
         var root = this._target.querySelector('.nt-health-widget-canvas');
         if (!root) return;
         root.innerHTML = '<div style="padding:14px;color:' + this._COL_CRIT + ';font-size:12px">'
-            + 'Health-Widget: Hauptmodul nicht erreichbar (' + this._esc(msg) + ')</div>';
+            + 'Health widget: main module not reachable (' + this._esc(msg) + ')</div>';
     }
 }

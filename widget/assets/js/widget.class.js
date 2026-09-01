@@ -636,7 +636,7 @@ class WidgetNetworkTopology extends CWidget {
             }
             if (stale) {
                 html += '<div style="margin-top:4px;color:#fbbf24;font-size:9px;'
-                     +  'font-style:italic">Werte sind eingefroren</div>';
+                     +  'font-style:italic">Values are frozen</div>';
             }
 
             tooltip.innerHTML = html;
@@ -737,7 +737,7 @@ class WidgetNetworkTopology extends CWidget {
                 + ';background:white;font-size:10px;cursor:pointer;flex:1 1 110px;'
                 + 'opacity:' + dimOpacity + ';transition:opacity 0.12s';
             tile.title = name + (st.state === 'stale'
-                ? ' — letzter Wert vor ' + Number(st.ageMin || 0) + 'm'
+                ? ' — last value ' + Number(st.ageMin || 0) + 'm ago'
                 : '');
             tile.innerHTML =
                 '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">'

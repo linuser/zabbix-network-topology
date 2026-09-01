@@ -223,7 +223,7 @@ class WidgetNetworkTopologyTable extends CWidget {
 
         if (total === 0) {
             root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
-                + 'height:100%;color:' + this._COL_SUBSOFT + ';font-size:11px">Keine Hosts.</div>';
+                + 'height:100%;color:' + this._COL_SUBSOFT + ';font-size:11px">No hosts.</div>';
             return;
         }
 
@@ -288,6 +288,6 @@ class WidgetNetworkTopologyTable extends CWidget {
         var root = this._target.querySelector('.nt-table-widget-canvas');
         if (!root) return;
         root.innerHTML = '<div style="padding:14px;color:' + this._COL_CRIT + ';font-size:12px">'
-            + 'Table-Widget: Hauptmodul nicht erreichbar (' + this._esc(msg) + ')</div>';
+            + 'Table widget: main module not reachable (' + this._esc(msg) + ')</div>';
     }
 }

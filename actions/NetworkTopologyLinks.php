@@ -158,7 +158,7 @@ class NetworkTopologyLinks extends NetworkTopologyController {
             error_log('network.topology.links: ' . $e);
             $this->jsonResponse(['error' => $e instanceof \APIException
                 ? $e->getMessage()
-                : 'Verbindungen konnten nicht gespeichert werden (interner Fehler).']);
+                : _('The links could not be saved (internal error).')]);
             return;
         }
 
