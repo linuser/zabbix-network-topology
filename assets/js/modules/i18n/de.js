@@ -18,8 +18,6 @@ export default {
     'tabs.diag':       'Diag',
 
     // Basis-Toolbar
-    'toolbar.dark':          'Dark',
-    'toolbar.light':         'Light',
     'toolbar.menu.view':     'Anzeige',
     'toolbar.menu.layout':   'Layout',
     'toolbar.menu.tools':    'Tools',

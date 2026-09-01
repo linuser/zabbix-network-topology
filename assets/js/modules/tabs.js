@@ -5,12 +5,20 @@
 // nuetzlich z.B. nach einem Schichtwechsel.
 //
 // ensureBaseToolbar() ist idempotent: wird von jedem render-Pfad aufgerufen,
-// baut Tab-Wrap und Dark-Button nur wenn sie fehlen, und hält den aktiven
+// baut den Tab-Wrap nur wenn er fehlt, und hält den aktiven
 // Tab-Zustand synchron.
 //
-// applyDarkMode() schaltet das nt-root-Element zwischen normal/dunkel um und
-// zieht passende Cytoscape-Styles nach (für den Tech-Tab) bzw. ruft den
-// registrierten Re-Render-Callback (für den Management-Tab).
+// DUNKELMODUS: der Umschalter ist entfernt.
+//
+// Er schaltete die Klasse 'nt-dark' auf #nt-root und war NIE persistiert —
+// weder localStorage noch Server. Nach jedem Neuladen war die Karte wieder
+// hell, was den Modus zu einer Geste ohne Wirkung machte. Genau deshalb ist er
+// raus, und genau deshalb kann niemand darin feststecken.
+//
+// Die Abfragen auf 'nt-dark' in den Render-Modulen bleiben stehen: sie liefern
+// jetzt durchgehend false. Das ist Absicht — die Theme-Abstraktion herauszu-
+// operieren haette jeden Render-Pfad angefasst, ohne dass sich am Bild etwas
+// aendert.
 //
 // Cross-Module-Glue:
 //   - getActiveTab(): liefert den aktiven Tab; wird vom Hauptmodul gesetzt
@@ -29,38 +37,6 @@ let _onMgmtRerender = null;
 export function setActiveTabGetter(fn) { _getActiveTab = fn; }
 export function setMgmtRerenderCallback(fn) { _onMgmtRerender = fn; }
 
-function applyDarkMode(forceState) {
-    const root = document.getElementById('nt-root');
-    if (!root) return;
-    const nowDark = (forceState !== undefined)
-        ? !!forceState
-        : !root.classList.contains('nt-dark');
-    root.classList.toggle('nt-dark', nowDark);
-
-    const btn = document.getElementById('nt-btn-dark');
-    if (btn) btn.textContent = nowDark ? t('toolbar.light') : t('toolbar.dark');
-
-    const activeTab = _getActiveTab();
-
-    // Technisch aktiv → Cytoscape-Styles nachziehen
-    if (activeTab === 'tech' && window._ntCy) {
-        try {
-            window._ntCy.nodes('[!isGroup]').style({
-                'color': nowDark ? '#e2e8f0' : '#334155',
-                'text-background-color': nowDark ? '#1e293b' : '#f8fafc'
-            });
-            window._ntCy.edges().style('line-color', nowDark ? '#334155' : '#cbd5e1');
-            window._ntCy.nodes('[?isGroup]').forEach(function(n) {
-                n.style('color', nowDark ? '#e2e8f0' : grpColor(n.data('label')));
-            });
-        } catch (e) {}
-    }
-
-    // Management aktiv → re-rendern, weil Kachel-Farben statisch gesetzt sind
-    if (activeTab === 'mgmt' && _onMgmtRerender) {
-        _onMgmtRerender();
-    }
-}
 
 export function ensureBaseToolbar(wrap) {
     const bar = document.querySelector('.nt-topbar__actions');
@@ -128,19 +104,6 @@ export function ensureBaseToolbar(wrap) {
             b.style.color      = activeTab === item.tab ? '#fff'    : '';
         }
     });
-
-    // Dark-Button (einmal anlegen)
-    if (!document.getElementById('nt-btn-dark')) {
-        const bDark = document.createElement('button');
-        bDark.id = 'nt-btn-dark';
-        bDark.className = 'btn-alt btn-small';
-        bDark.style.marginLeft = '4px';
-        const isDark = !!(document.getElementById('nt-root')
-                       && document.getElementById('nt-root').classList.contains('nt-dark'));
-        bDark.textContent = isDark ? t('toolbar.light') : t('toolbar.dark');
-        bDark.addEventListener('click', function() { applyDarkMode(); });
-        bar.appendChild(bDark);
-    }
 
     // Snapshot/Diff-Buttons (einmal anlegen). Snapshot speichert den
     // aktuellen Stand in localStorage; sobald gesetzt zeigt die Tabelle (und
@@ -420,7 +383,6 @@ function regroupToolbar() {
     if (!mTools.parentNode)  bar.appendChild(mTools);
 
     // Buttons in Menus einsortieren
-    _moveIntoMenu('nt-btn-dark',       'nt-menu-view');
     _moveIntoMenu('nt-btn-fullscreen', 'nt-menu-view');
     _moveIntoMenu('nt-btn-labels',     'nt-menu-view');   // Tech-only, im Mgmt/Tabelle leer
     _moveIntoMenu('nt-btn-reset',      'nt-menu-view');

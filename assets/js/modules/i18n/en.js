@@ -13,8 +13,6 @@ export default {
     'tabs.diag':       'Diag',
 
     // Base toolbar
-    'toolbar.dark':          'Dark',
-    'toolbar.light':         'Light',
     'toolbar.menu.view':     'View',
     'toolbar.menu.layout':   'Layout',
     'toolbar.menu.tools':    'Tools',
