@@ -20,6 +20,7 @@ und schreibt hin, was er gefunden hat.
 | **Pfad zwischen zwei Hosts** | **Fertig** (`path-highlight.js`, 98 Zeilen). Kürzester Pfad per BFS, Auswahl über Kontextmenü „Pfad von hier" / „Pfad zu hier", alles außerhalb gedimmt, Pfadkanten fett-cyan. Eigene BFS-Implementierung mit begründetem Vorbehalt: Cytoscapes `bfs()` lieferte in der minifizierten Fassung `found:null` bei verbundenen Knoten. |
 | **Unmanaged Devices** | **Fertig — heißen „Ghost Nodes"** (`build-elements.js`, §9). LLDP/CDP-Nachbarn, die auf keinen überwachten Host auflösen, aus `lldp_quality[].unmatched`. Mehrere Melder desselben Unbekannten ergeben **einen** Knoten mit mehreren Kanten. Umschalter „👻 Ghost nodes" im Technical-Tab, standardmäßig aus. |
 | **Mini Map bei großen Topologien** | **Fertig** (`minimap.js`, 164 Zeilen). SVG unten rechts, severity-farbige Punkte, Viewport-Rechteck, Klick schwenkt die Karte, Aktualisierung auf zoom/pan (80 ms entprellt) plus alle 5 s. |
+| **Cluster-Knoten zusammenfassen** | **Fertig** (`aggregation.js`, 106 Zeilen). `aggregateByGroup()` verschmilzt alle Hosts einer Gruppe zu einem Pseudo-Knoten, Kanten zwischen Gruppen werden zu Aggregat-Kanten. Reine Funktion ohne Seiteneffekte. Umschalter „🗂 Group". Nicht zu verwechseln mit `group-cluster-layout.js` — das ordnet Gruppen räumlich an, ohne zu verschmelzen. |
 | **Presets (Positionen, Pins, Notizen, Links)** | Vorhanden. Achtung: Positionen wurden bis zur Korrektur still verschluckt, weil `applyPreset()` in den localStorage schrieb, den seit der Server-Umstellung nur noch die Migration liest. |
 
 ---
@@ -203,6 +204,24 @@ Gesamtbudget und Verbrauch: `pethMainPsePower` und `pethMainPseUsagePower` aus
 derselben POWER-ETHERNET-MIB wie die Port-Leistung. **Standard-MIB, zwei
 Items** — der kleinste Punkt in diesem Abschnitt. Gehört zusammen mit dem
 PoE-Wert je Port erledigt, nicht getrennt.
+
+### Progressives Rendern bei 1000+ Hosts
+
+**Teilweise vorhanden, aber nicht dasselbe.** Es gibt einen Performance-Modus,
+der **ab 400 Knoten automatisch** greift (`PERF_THRESHOLD` in `render-tech.js`,
+per „⚡ Performance" auch manuell): keine gerenderten Icons mehr (Farbe und Rand
+statt Bild), kleinere Knoten, Labels erst ab stärkerem Zoom, keine
+Layout-Animation.
+
+Das ist **billiger zeichnen, nicht schrittweise zeichnen**. Ein progressives
+Rendern würde in Häppchen aufbauen — erst die Struktur, dann Details — und die
+Oberfläche zwischendurch bedienbar halten.
+
+**Vor dem Bauen zu klären: reicht der Performance-Modus?** Die Schwelle von 400
+ist gesetzt, nicht gemessen, und niemand hier hat eine Installation mit 1000+
+Hosts. Ohne eine solche Messung wäre progressives Rendern eine Lösung für ein
+unbelegtes Problem — die Testinstanz lässt sich mit 1500 Attrappen-Hosts füllen,
+das wäre der ehrliche erste Schritt.
 
 ### Historie / Topology-Snapshots
 
