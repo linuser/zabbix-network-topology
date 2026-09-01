@@ -10,7 +10,7 @@ zabbix_export:
       description: |
         Entdeckt LLDP- (und optional Cisco-CDP-) Nachbarn per SNMP fuer das
         "Network Topology for Zabbix"-Frontend-Modul. Das Modul zeichnet aus den
-        Nachbar-System-Namen die Verbindungen (Kanten) — Details in LLDP-SETUP.md.
+        Nachbar-System-Namen die Verbindungen (Kanten) - Details in LLDP-SETUP.md.
 
         Verwendung:
           - an SNMP-faehige Switches/Router/Firewalls linken
@@ -27,7 +27,7 @@ zabbix_export:
           description: 'Polling-Intervall der LLDP/CDP-Nachbar-Items.'
         - macro: '{$NT.LLDP.DISCOVERY.INTERVAL}'
           value: 3h
-          description: 'DEPRECATED seit dem walk[]-Umbau: Die LLDP-Discovery haengt jetzt als Dependent-Rule am Walk-Item und folgt {$NT.LLDP.INTERVAL}. Nur noch fuer die (Cisco-)CDP-Discovery in Gebrauch.'
+          description: 'DEPRECATED since the walk[] rework: LLDP discovery is now a dependent rule on the walk item and follows {$NT.LLDP.INTERVAL}. Only still used by the (Cisco) CDP discovery.'
       items:
         - uuid: 084b4a88188c4714abbd5055588aa4ac
           name: 'LLDP: remote systems table (SNMP walk)'
@@ -38,18 +38,18 @@ zabbix_export:
           history: '0'
           value_type: TEXT
           description: |
-            Ein Bulk-Walk ueber die sechs benoetigten Spalten der lldpRemTable
+            One bulk walk over the six needed columns of lldpRemTable
             (LLDP-MIB, 1.0.8802.1.1.2.1.4.1.1): ChassisId (.5), PortId (.7),
             PortDesc (.8), SysName (.9), SysDesc (.10), SysCapEnabled (.12).
 
-            WARUM EIN WALK STATT EINZELNER GETs: Der SNMP-Index der lldpRemTable
-            ist lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex. TimeMark ist
-            ein RMON-2-TimeFilter — bei etlichen Implementierungen (FortiGate:
-            neuer Wert bei jedem empfangenen PDU; MikroTik RouterOS: exakte GETs
-            liefern noSuchObject, nur Walks funktionieren) sind instanzgenaue
-            GETs auf diese Tabelle unzuverlaessig. Ein Walk umgeht beides:
-            Discovery und Item-Prototypen haengen als DEPENDENT an diesem Item
-            und parsen den Walk-Text — kein einziger instanzgenauer GET mehr.
+            WHY A WALK INSTEAD OF PER-INSTANCE GETs: The SNMP index of
+            lldpRemTable is lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex.
+            TimeMark is an RMON-2 TimeFilter - on several implementations
+            (FortiGate: new value on every received PDU; MikroTik RouterOS:
+            exact GETs return noSuchObject, only walks work) instance-exact
+            GETs on this table are unreliable. A walk sidesteps both:
+            discovery and item prototypes hang off this item as DEPENDENT
+            and parse the walk text - not a single instance-exact GET left.
       discovery_rules:
         - uuid: f388b88ad77144c7b94dfd9c1913713a
           name: 'LLDP neighbor discovery'
@@ -68,28 +68,52 @@ zabbix_export:
             - type: JAVASCRIPT
               parameters:
                 - |
-                  // Der SNMP-Index der lldpRemTable ist
-                  // TimeMark.LocalPort.RemIndex. TimeMark ist volatil
-                  // (FortiGate erhoeht ihn bei jedem empfangenen PDU) und
-                  // fliegt hier raus: {#SNMPINDEX} wird auf 0.Port.RemIndex
-                  // normiert, damit die Item-Keys stabil bleiben. Port und
-                  // RemIndex wandern zusaetzlich in eigene Makros — die
-                  // Prototypen greifen damit per Regex timemark-agnostisch
-                  // auf den Walk-Text zu.
-                  var rows = JSON.parse(value), out = [];
+                  // The SNMP index of lldpRemTable is
+                  // TimeMark.LocalPort.RemIndex. TimeMark is volatile
+                  // (FortiGate bumps it on every received PDU) and is
+                  // dropped here: {#SNMPINDEX} is normalized to
+                  // 0.Port.RemIndex so item keys stay stable. Port and
+                  // RemIndex additionally go into their own macros - the
+                  // prototypes use them to grab values from the walk text
+                  // with a timemark-agnostic regex.
+                  //
+                  // SEEN GUARD: If an agent returns the same row under two
+                  // TimeMarks within ONE walk (TimeFilter semantics - exactly
+                  // what misbehaves on these devices), the normalization
+                  // would emit two LLD rows with an identical {#SNMPINDEX}.
+                  // So per normalized index only the row with the HIGHEST
+                  // TimeMark is kept (newest state wins). Side note: on such
+                  // duplicates the prototype regexes still extract the FIRST
+                  // matching walk line - TimeMark leads the index and walks
+                  // come back in index order, so that is the OLDEST instance.
+                  // Same neighbor row, at worst a briefly stale value -
+                  // cosmetic, but better documented than rediscovered.
+                  var rows = JSON.parse(value), best = {}, order = [];
                   for (var i = 0; i < rows.length; i++) {
                       var r = rows[i];
                       var m = /^(\d+)\.(\d+)\.(\d+)$/.exec(r['{#SNMPINDEX}'] || '');
                       if (!m) continue;
-                      r['{#SNMPINDEX}'] = '0.' + m[2] + '.' + m[3];
+                      var tm = parseInt(m[1], 10);
+                      var idx = '0.' + m[2] + '.' + m[3];
+                      r['{#SNMPINDEX}'] = idx;
                       r['{#NT_PORT}'] = m[2];
                       r['{#NT_REMIDX}'] = m[3];
-                      out.push(r);
+                      if (!Object.prototype.hasOwnProperty.call(best, idx)) {
+                          order.push(idx);
+                          best[idx] = {tm: tm, row: r};
+                      }
+                      else if (tm > best[idx].tm) {
+                          best[idx] = {tm: tm, row: r};
+                      }
+                  }
+                  var out = [];
+                  for (var j = 0; j < order.length; j++) {
+                      out.push(best[order[j]].row);
                   }
                   return JSON.stringify(out);
           description: |
             LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). Der {#SNMPINDEX}
-            traegt TimeMark.LocalPort.RemIndex — das Modul liest daraus den lokalen
+            traegt TimeMark.LocalPort.RemIndex - das Modul liest daraus den lokalen
             Port. Ueber denselben Index holt es:
 
               .7  lldpRemPortId       Remote-Port (Fallback)
@@ -139,7 +163,7 @@ zabbix_export:
               trends: '0'
               description: |
                 Remote-Port-ID des Nachbarn (lldpRemPortId, OID ...4.1.1.7). Je nach
-                PortIdSubtype ein Interface-Name ("Gi1/0/8") ODER eine MAC-Adresse —
+                PortIdSubtype ein Interface-Name ("Gi1/0/8") ODER eine MAC-Adresse -
                 deshalb liest das Modul bevorzugt lldpRemPortDesc und faellt nur
                 hierauf zurueck. Gleicher {#SNMPINDEX} wie der SysName → dieselbe
                 Nachbar-Zeile (darueber korreliert das Modul).
@@ -180,14 +204,14 @@ zabbix_export:
               history: 7d
               trends: '0'
               description: |
-                Systembeschreibung des Nachbarn (lldpRemSysDesc, OID ...4.1.1.10) —
+                Systembeschreibung des Nachbarn (lldpRemSysDesc, OID ...4.1.1.10) -
                 in der Regel Hersteller, Modell und Firmware im Klartext, z.B.
                 "Cisco IOS Software, C2960X Software ...".
 
                 Fuer UEBERWACHTE Nachbarn ist das Beiwerk. Der Wert zaehlt bei den
                 NICHT ueberwachten: dort kennt das Modul sonst nur den Namen. Mit
                 der Beschreibung wird aus "da haengt sw-edge-03" ein "da haengt ein
-                Cisco-Switch" — und damit ein Hinweis, welches Template passt.
+                Cisco-Switch" - und damit ein Hinweis, welches Template passt.
             - uuid: 36a88ecbea114b5e89f55f7aa684f43d
               name: 'LLDP neighbor capabilities [{#SNMPINDEX}]: {#NT_SYSNAME}'
               type: DEPENDENT
@@ -209,7 +233,7 @@ zabbix_export:
                 ...4.1.1.12) als Bitmaske: Repeater, Bridge, WLAN-AP, Router,
                 Telefon, DOCSIS, Station.
 
-                Sagt, WAS dort haengt, ohne den Namen deuten zu muessen — ein
+                Sagt, WAS dort haengt, ohne den Namen deuten zu muessen - ein
                 Access-Point, ein Telefon und ein Switch sehen sonst gleich aus.
                 Das Modul waehlt darueber das Icon fuer nicht ueberwachte Geraete
                 statt des generischen Platzhalters.
@@ -236,7 +260,7 @@ zabbix_export:
                 Das ist die einzige STABILE Kennung, die LLDP ueber einen nicht
                 ueberwachten Nachbarn liefert. Entdoppelt wird heute ueber den
                 Systemnamen: dasselbe Geraet, von drei Switches gemeldet, wird
-                ueber den Namen zusammengefuehrt — benennt es jemand um, erscheint
+                ueber den Namen zusammengefuehrt - benennt es jemand um, erscheint
                 es als neues Geraet. Ueber die Chassis-ID bleibt die Identitaet
                 erhalten.
         - uuid: 8e6fb294701f48d3a41dd38e59d1fbf0
