@@ -164,6 +164,30 @@ check('umgekehrte Richtung zaehlt als dieselbe Kante',
     }, 'return S.loadLinks();'),
     [{ s: 'a', t: 'b', scope: 'shared' }]);
 
+console.log('\n== Beide Schreibwege putzen gleich ==\n');
+
+// Es gibt zwei Wege in die Positions-Ebene: savePositions() liest aus der
+// Karte, setPositions() bekommt sie fertig (Presets). Sie fuehrten die
+// Ebenen-Logik getrennt, und nur einer der beiden warf Internet-Knoten weg und
+// rundete. Aufgefallen ist das nie, weil Presets ihre Positionen aus
+// loadPositions() ziehen — also aus schon geputzten Serverdaten. Presets aus
+// der Zeit VOR der Server-Umstellung kommen dagegen aus dem localStorage.
+
+check('setPositions: Internet-Knoten raus, Koordinaten gerundet',
+    scenario('n', { ...base, is_super_admin: false, user_id: 5 },
+        `S.setPositions({ h1: { x: 1.4, y: 2.6 }, internet_0: { x: 5, y: 5 } }, false);
+         return S.loadPositions();`),
+    { h1: { x: 1, y: 3 }, h2: { x: 20, y: 20 }, h3: { x: 30, y: 30 } });
+
+// Ein Preset, in dem alles auf 0,0 liegt, ist keine Anordnung — es waere der
+// Zustand vor dem ersten Layout-Durchlauf. Frueher haette es die gespeicherte
+// Karte ueberschrieben.
+check('setPositions: alles auf 0,0 wird nicht geschrieben',
+    scenario('o', { ...base, is_super_admin: false, user_id: 5 },
+        `S.setPositions({ h1: { x: 0, y: 0 }, h2: { x: 0, y: 0 } }, false);
+         return S.loadPositions();`),
+    { h1: { x: 10, y: 10 }, h2: { x: 20, y: 20 }, h3: { x: 30, y: 30 } });
+
 console.log('\n== Konflikt: was der Server mitschickt, gilt ==\n');
 
 // WARUM DAS HIER STEHT

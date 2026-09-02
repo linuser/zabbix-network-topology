@@ -276,28 +276,48 @@ function _persistPositions(scope, views) {
     });
 }
 
-export function savePositions(cyInst) {
-    const pos = {};
+/**
+ * Macht aus einer beliebigen {id: {x,y}}-Sammlung das, was gespeichert werden
+ * darf — oder null, wenn nichts uebrig bleibt, das jemand gemeint haben kann.
+ *
+ * Das stand frueher NUR in savePositions(), und setPositions() hat die
+ * Ebenen-Logik daneben ein zweites Mal gefuehrt, ohne diesen Teil. Die
+ * Abweichung war still: Presets tragen ihre Positionen aus loadPositions(),
+ * also aus schon geputzten Serverdaten, und fielen deshalb nicht auf. Presets
+ * aus der Zeit VOR der Server-Umstellung kommen dagegen aus dem localStorage
+ * und koennen beides mitbringen — Internet-Knoten und Nachkommastellen.
+ */
+function _cleanPositions(pos) {
+    const out = {};
     let nonZero = 0;
 
-    cyInst.nodes('[!isGroup]').forEach(function(n) {
+    for (const key in pos) {
+        if (!Object.prototype.hasOwnProperty.call(pos, key)) continue;
+
         // Virtuelle Knoten (Internet-Wolke) NICHT speichern — sie werden pro
         // Render frisch injiziert und ihre Position ist nicht user-signifikant.
-        const id = String(n.id());
-        if (id.indexOf('internet_') === 0) return;
-        const p = n.position();
-        pos[id] = { x: Math.round(p.x), y: Math.round(p.y) };
+        const id = String(key);
+        if (id.indexOf('internet_') === 0) continue;
+
+        const p = pos[key];
+        if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+
+        out[id] = { x: Math.round(p.x), y: Math.round(p.y) };
         if (Math.abs(p.x) > 1 || Math.abs(p.y) > 1) nonZero++;
-    });
+    }
 
-    // Degenerierter Zustand (alles auf 0,0) nicht persistieren — das ist der
-    // Moment vor dem ersten Layout-Durchlauf, keine Anordnung.
-    if (nonZero === 0) return;
+    // Leer oder alles auf 0,0: der Moment vor dem ersten Layout-Durchlauf,
+    // keine Anordnung. Wuerde ueber diesen Weg die gespeicherte Karte loeschen.
+    return nonZero === 0 ? null : out;
+}
 
-    const view  = posViewKey();
-    const scope = defaultPositionScope();
-
-    if (scope === SCOPE_SHARED) {
+/**
+ * Die Ebenen-Logik, EINMAL. Beide Wege — aus der Karte gelesen und fertig
+ * uebergeben — muenden hier; vorher fuehrten sie sie getrennt und drifteten
+ * auseinander.
+ */
+function _writePositions(pos, view) {
+    if (defaultPositionScope() === SCOPE_SHARED) {
         // Der Super-Admin pflegt die Karte: seine Anordnung IST sie, komplett.
         _posShared[view] = pos;
         _persistPositions(SCOPE_SHARED, _posShared)
@@ -335,6 +355,16 @@ export function savePositions(cyInst) {
         .catch(_reportPosError);
 }
 
+export function savePositions(cyInst) {
+    const pos = {};
+    cyInst.nodes('[!isGroup]').forEach(function(n) {
+        pos[String(n.id())] = n.position();
+    });
+
+    const clean = _cleanPositions(pos);
+    if (clean) _writePositions(clean, posViewKey());
+}
+
 /**
  * Wie savePositions(), aber aus einem fertigen {id: {x,y}}-Objekt statt aus der
  * Cytoscape-Instanz. Fuer Preset-Anwendung und Datei-Import.
@@ -349,18 +379,16 @@ export function savePositions(cyInst) {
  * Anordnung nicht. Aufgefallen beim Bauen des Datei-Imports, der denselben
  * Weg nahm.
  *
- * Die Ebenen-Logik ist dieselbe wie in savePositions(): Super-Admins schreiben
- * die geteilte Karte komplett und loesen dabei ihre eigene Abweichung auf, alle
- * anderen speichern nur die Abweichung.
+ * Die Ebenen-Logik ist NICHT nur "dieselbe wie in savePositions()", sie ist
+ * inzwischen dasselbe Stueck Code (_writePositions). Solange es zwei waren, ist
+ * genau das passiert, was bei Duplikaten passiert: savePositions() bekam den
+ * View-Parameter und das Putzen, setPositions() nicht.
  */
 export function setPositions(pos, groupView) {
     if (!pos || typeof pos !== 'object') return;
 
-    // Leere Anordnung NICHT schreiben — dieselbe Ueberlegung wie der
-    // nonZero-Guard in savePositions(): das ist kein Zustand, den jemand
-    // gemeint hat. Ueber diesen Weg kaeme sie aus einem Preset oder einer
-    // Datei und wuerde die gespeicherte Karte loeschen.
-    if (Object.keys(pos).length === 0) return;
+    const clean = _cleanPositions(pos);
+    if (!clean) return;
 
     // groupView durchreichen: der Aufrufer weiss, in WELCHER Ansicht die
     // Positionen erfasst wurden (Presets tragen das als posGrp mit). Ohne
@@ -368,34 +396,7 @@ export function setPositions(pos, groupView) {
     // ein in der Gruppenansicht erfasstes Preset schrieb seine grp_*-IDs dann
     // in den Host-Schluessel, wo sie zu keinem Knoten passen. Genau die Regel,
     // die der Kommentar oben bei posKey() beschreibt.
-    const view  = posViewKey(groupView);
-    const scope = defaultPositionScope();
-
-    if (scope === SCOPE_SHARED) {
-        _posShared[view] = pos;
-        _persistPositions(SCOPE_SHARED, _posShared)
-            .catch(_reportPosError);
-        if (_posPersonal[view]) {
-            delete _posPersonal[view];
-            _persistPositions(SCOPE_PERSONAL, _posPersonal)
-                .catch(_reportPosError);
-        }
-        return;
-    }
-
-    const shared = _posShared[view] || {};
-    const delta  = {};
-    for (const id in pos) {
-        if (!Object.prototype.hasOwnProperty.call(pos, id)) continue;
-        const sp = shared[id];
-        if (!sp || sp.x !== pos[id].x || sp.y !== pos[id].y) delta[id] = pos[id];
-    }
-
-    if (Object.keys(delta).length) _posPersonal[view] = delta;
-    else delete _posPersonal[view];
-
-    _persistPositions(SCOPE_PERSONAL, _posPersonal)
-        .catch(_reportPosError);
+    _writePositions(clean, posViewKey(groupView));
 }
 
 /** Setzt die eigene Ebene fuer die aktuelle Ansicht zurueck. */
