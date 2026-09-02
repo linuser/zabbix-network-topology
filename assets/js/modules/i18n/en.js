@@ -50,6 +50,19 @@ export default {
     'whatif.banner':        'Simulation: {failed} failed → {cut} hosts cut off',
     'whatif.end':           'End',
     'whatif.root_fallback': 'No internet cloud/firewall in graph — reachability is relative to "{host}" (highest degree)',
+
+    // Per-host focus (hop-limited neighbourhood)
+    'focus.row_one':   '🎯 Focus: 1 hop',
+    'focus.row_n':     '🎯 Focus: {n} hops',
+    'focus.end_ctx':   '✕ End focus',
+    'focus.banner':    'Focus: {host} · {hops} · showing {shown} of {total} hosts',
+    'focus.hop_one':   '1 hop',
+    'focus.hop_n':     '{n} hops',
+    'focus.end':       'End',
+    'focus.minus.tip': 'One hop less',
+    'focus.plus.tip':  'One hop more',
+    'focus.gone':      'Focus host is no longer in the data — focus ended',
+    'focus.hop_view':  '🗺 Open hop view (server-side)',
     // Weathermap + topology change
     'toolbar.weathermap':     'Weathermap: {state}',
     'toolbar.weathermap.tip': 'Edge color by utilization % (traffic / link capacity from ifSpeed) instead of absolute traffic',
@@ -406,7 +419,7 @@ export default {
     'tip.no_traffic_history': 'No traffic history available (no net.if/ifIn/ifOut items)',
     'tip.last_1h': 'last 1h',
     'tip.host_total': 'host total (both ends)',
-    'app.pick_groups': '← Please select host groups and click Apply.',
+    'app.pick_groups': '← Please select host groups (or a host + hops) and click Apply.',
     'app.loading': 'Loading topology...',
     'app.error': 'Error: {msg}',
     'agg.no_group': '— No group —',

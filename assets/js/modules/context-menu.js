@@ -19,6 +19,8 @@ import { resetHighlight } from './highlight.js';
 import { toast } from './toast.js';
 import { isSimulated, isSimActive, simulatedCount,
          toggleSimulatedHost, clearSimulation } from './whatif.js';
+import { isFocusActive, getFocusId, getFocusHops,
+         setFocus, clearFocus } from './focus-mode.js';
 import { t } from './i18n.js';
 
 const _ctx = document.createElement('div');
@@ -378,7 +380,11 @@ export function showCtx(cx, cy2, d) {
         clearImgCache();
         node.data('bgImage', makeNodeImage(node.data()));
         if (nowPinned) node.lock(); else node.unlock();
-        savePinned(cy);
+        // Don't persist in focus mode: savePinned stores the pins of the
+        // WHOLE view from the graph, and only the focus subset is in there —
+        // pins outside the focus would be lost. The pin then only lasts for
+        // the running session within the excerpt.
+        if (!isFocusActive()) savePinned(cy);
     }));
 
     // Notiz
@@ -453,6 +459,38 @@ export function showCtx(cx, cy2, d) {
             clearSimulation(window._ntCy);
         }));
     }
+
+    // Per-host focus: boil the map down to this host + N hops (focus-mode.js).
+    // The tool for large environments — "show me the core switch and what
+    // hangs off it" instead of a thousand nodes. The hop count can be changed
+    // later via the banner (+/−) or by re-focusing here.
+    const focusSep = document.createElement('div');
+    focusSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+    _ctx.appendChild(focusSep);
+    [1, 2, 3].forEach(function(hops) {
+        // Don't offer the combination that is already active
+        if (isFocusActive() && getFocusId() === hostId && getFocusHops() === hops) return;
+        _ctx.appendChild(_ctxRow(
+            hops === 1 ? t('focus.row_one') : t('focus.row_n', { n: hops }),
+            '#1d4ed8',
+            function() { setFocus(hostId, hops); }
+        ));
+    });
+    if (isFocusActive()) {
+        _ctx.appendChild(_ctxRow(t('focus.end_ctx'), '#64748b', function() {
+            clearFocus();
+        }));
+    }
+    // Server-side hop view: navigates to the map scoped to THIS host + N hops
+    // (data fetched only for the neighbourhood — the tool for environments
+    // where even loading the group payload is too much). The client focus
+    // above filters what is already loaded; this reloads scoped.
+    _ctx.appendChild(_ctxRow(t('focus.hop_view'), '#1d4ed8', function() {
+        window.location.href = window.location.origin + base
+            + 'zabbix.php?action=network.topology.view'
+            + '&hostid=' + encodeURIComponent(hostId)
+            + '&hops=' + encodeURIComponent(String((window.NT_CONFIG && window.NT_CONFIG.hops) || 2));
+    }));
 
     // Wartung direkt aus der Map (nur Admins — can_edit = >= ZABBIX_ADMIN;
     // die Action prueft die Rechte serverseitig nochmal). One-Time-Wartung

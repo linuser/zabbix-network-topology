@@ -30,6 +30,49 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   colors end up as CSS values in Cytoscape styles and the legend, hence strict
   six-digit hex.
 
+## v5.2.0 — unreleased
+
+### Added
+
+- **A single host plus a hop radius as its own map scope — next to the
+  host groups.** In large environments the full map is unreadable, and the
+  question is rarely "show me group X" but "show me this core switch and
+  what hangs off it". The filter now additionally takes one host plus a
+  hop count (1–6); a selected host wins over the group selection, which
+  stays untouched. The backend resolves the neighbourhood FIRST — a cheap
+  discovery pass fetches only host names/IPs/tags and the neighbour-name
+  items across everything the user is allowed to see, a depth-limited BFS
+  (`topology/HopScope.php`, tested) walks that graph, and only the
+  resulting subset goes through the expensive enrichment. LLDP/CDP,
+  `nt:parent` and manual edges all count as hops; the edge graph is cached
+  per user for 60 s. Host views get their own cache and view keys
+  (`host<id>_h<n>`), so they can never overwrite the stored arrangements
+  of the group views.
+
+- **Focus mode on the loaded map.** Right-click a host → "Focus: 1/2/3
+  hops" filters the already-loaded data BEFORE the Cytoscape build —
+  banner with ±hop and exit, ESC joins the existing mode chain.
+  Deliberately ephemeral: while the focus is active, positions and pins
+  are NOT saved — both layers persist the complete state per view, and a
+  save from the subset would throw away the arrangement of every other
+  host. "Open hop view" in the context menu leads from the focus into the
+  server-side scoped view.
+
+### Fixed
+
+- **Blank map as soon as the selection spans two or more primary groups.**
+  The bundled Cytoscape miscomputes `cose` with a `boundingBox` and
+  silently writes `y = null` into every node position — nodes without
+  coordinates render nowhere, while the KPI row keeps counting merrily.
+  Reproduced deterministically with a 4-node group; the hop view merely
+  made the bug visible, it hit every multi-group selection. Cose now runs
+  UNBOUNDED per cluster, `fitNodesIntoBox()` scales the result into the
+  box (grid fallback for anything left without finite coordinates), the
+  cluster guards fall back to a real whole-graph layout instead of
+  fitting unpositioned nodes, and the cluster preset seeds a
+  deterministic scatter — no layout failure can make the map invisible
+  any more.
+
 ## v5.1.2 — 2026-09-01
 
 ### Changed

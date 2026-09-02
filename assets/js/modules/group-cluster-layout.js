@@ -86,6 +86,29 @@ function resolveMode(mode, numGroups) {
     return 'rows';
 }
 
+// Fallback when the cluster boxes cannot be computed (canvas too small or
+// not sized yet at call time): run ONE normal cose layout over the whole
+// graph instead of merely fitting. A bare fit() was the old behaviour — over
+// nodes the empty cluster-preset had left unpositioned it framed nothing,
+// and the map stayed blank while the KPI row happily counted the hosts.
+function fallbackWholeLayout(cy, onComplete) {
+    const movable = cy.nodes('[!isGroup]').not(':locked');
+    if (movable.length === 0) {
+        cy.fit(cy.nodes(), 40);
+        if (onComplete) onComplete();
+        return;
+    }
+    const lay = movable.layout({
+        name: 'cose', animate: false, randomize: true, fit: false,
+        padding: 30, nodeRepulsion: 6000, idealEdgeLength: 80,
+    });
+    lay.one('layoutstop', function() {
+        cy.fit(cy.nodes(), 40);
+        if (onComplete) onComplete();
+    });
+    lay.run();
+}
+
 // Layout-Config pro Cluster. animate=false ist viel schneller.
 // innerLayoutId: 'cose' (default) | 'grid' | 'breadthfirst' | 'concentric' | 'circle'
 // 'auto' / 'hierarchy' / unbekannt fallen auf cose zurueck (cose ist immer die
@@ -135,7 +158,12 @@ function buildClusterLayoutConfig(boundingBox, nodeCount, innerLayoutId) {
             avoidOverlap: true,
         };
     }
-    // cose (default + Fallback fuer 'auto' / 'hierarchy' / Unbekannte)
+    // cose (default + Fallback fuer 'auto' / 'hierarchy' / Unbekannte).
+    // Deliberately WITHOUT boundingBox: the bundled cytoscape build
+    // mishandles cose+boundingBox and writes y=null on every node — the map
+    // goes blank while the KPI row keeps counting hosts (reproduced
+    // deterministically with a 4-node group). The layout runs unbounded and
+    // fitNodesIntoBox() afterwards scales the result into the cluster box.
     return {
         name: 'cose',
         animate: false,
@@ -145,10 +173,41 @@ function buildClusterLayoutConfig(boundingBox, nodeCount, innerLayoutId) {
         idealEdgeLength: 80,
         gravity: 0.8,
         fit: false,
-        boundingBox: boundingBox,
         componentSpacing: 30,
         numIter: nodeCount < 6 ? 500 : 1000,
     };
+}
+
+// Move a laid-out node subset into its cluster box: first grid-place any
+// node without finite coordinates (a layout may fail partially — null/NaN
+// positions render nowhere), then scale + translate the subgraph so it fits
+// the box. Scale only shrinks (cap 1): blowing a compact 2-node result up to
+// box size would spread them absurdly far apart; hulls adapt either way.
+function fitNodesIntoBox(nodes, bb) {
+    const cols = Math.max(1, Math.ceil(Math.sqrt(nodes.length)));
+    const rows = Math.max(1, Math.ceil(nodes.length / cols));
+    nodes.forEach(function(n, i) {
+        const p = n.position();
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) return;
+        n.position({
+            x: bb.x1 + ((i % cols) + 0.5) * (bb.w / cols),
+            y: bb.y1 + (Math.floor(i / cols) + 0.5) * (bb.h / rows),
+        });
+    });
+
+    const cur = nodes.boundingBox();
+    const sx = cur.w > 1 ? bb.w / cur.w : 1;
+    const sy = cur.h > 1 ? bb.h / cur.h : 1;
+    const s  = Math.min(sx, sy, 1);
+    const cx = cur.x1 + cur.w / 2;
+    const cy2 = cur.y1 + cur.h / 2;
+    nodes.positions(function(n) {
+        const p = n.position();
+        return {
+            x: bb.x1 + bb.w / 2 + (p.x - cx) * s,
+            y: bb.y1 + bb.h / 2 + (p.y - cy2) * s,
+        };
+    });
 }
 
 export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLayoutId) {
@@ -198,8 +257,7 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
         const availW = canvasW - totalGap;
         const colH = canvasH - TOP_RESERVE - BOTTOM_PADDING;
         if (availW < MIN_COLUMN_W * count || colH < 100) {
-            cy.fit(cy.nodes(), 40);
-            if (onComplete) onComplete();
+            fallbackWholeLayout(cy, onComplete);
             return;
         }
         const colWidths = isCircular
@@ -220,8 +278,7 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
         const availH = canvasH - TOP_RESERVE - BOTTOM_PADDING - totalGap;
         const rowW = canvasW - 2 * ROW_PADDING;
         if (rowW < 100 || availH < MIN_ROW_H * count) {
-            cy.fit(cy.nodes(), 40);
-            if (onComplete) onComplete();
+            fallbackWholeLayout(cy, onComplete);
             return;
         }
         const rowHeights = isCircular
@@ -297,6 +354,10 @@ export function runGroupClusterLayout(cy, groupNames, mode, onComplete, innerLay
         bb.h  -= LABEL_OFFSET;
         const lay = nodes.layout(buildClusterLayoutConfig(bb, nodes.length, innerLayoutId));
         lay.one('layoutstop', function() {
+            // Into the box + sanitize: cose ran unbounded (see above), the
+            // discrete layouts already sit in the box (transform ≈ identity)
+            // but get the same non-finite-coordinate safety net.
+            fitNodesIntoBox(nodes, bb);
             completed++;
             checkDone();
         });

@@ -9,9 +9,10 @@ use Modules\NetworkTopology\Topology\HostMetadata;
 use Modules\NetworkTopology\Topology\MetricExtractor;
 use Modules\NetworkTopology\Topology\LldpEdgeBuilder;
 use Modules\NetworkTopology\Topology\HostTagParser;
+use Modules\NetworkTopology\Topology\HopScope;
+use Modules\NetworkTopology\Topology\ManualLinks;
 use Modules\NetworkTopology\Topology\NodeBuilder;
 use Modules\NetworkTopology\Topology\ProblemLoader;
-use Modules\NetworkTopology\Topology\ManualLinks;
 use CControllerResponseFatal;
 use API;
 
@@ -42,6 +43,20 @@ class NetworkTopologyData extends NetworkTopologyController {
      */
     private const CACHE_TTL = 15;
 
+    /**
+     * Host+hops mode: upper bound for the hop distance. Mirrors MAX_HOPS in
+     * the client-side focus mode (focus-mode.js) — one shared mental model.
+     */
+    private const MAX_HOPS = 6;
+
+    /**
+     * TTL of the discovered edge graph (host+hops mode). LLDP tables change
+     * on the scale of minutes, and the graph is rebuilt per user anyway —
+     * 60 s makes repeated hop queries (banner +/− clicks, 30 s refresh)
+     * cheap without serving a noticeably stale neighbourhood.
+     */
+    private const EDGE_GRAPH_TTL = 60;
+
     protected function init(): void {
         $this->disableCsrfValidation();
     }
@@ -50,6 +65,10 @@ class NetworkTopologyData extends NetworkTopologyController {
         if (!$this->requireAjax()) return false;
         $ret = $this->validateInput([
             'groupids' => 'array_id',
+            // Host+hops mode: scope the map to one host and its neighbourhood
+            // instead of a host-group selection. hostid wins over groupids.
+            'hostid'   => 'id',
+            'hops'     => 'int32',
             // Nur die Widgets setzen das. Siehe respondData(): sie haben keinen
             // View-Controller und kommen sonst nie an manuelle Verbindungen.
             'manual_links' => 'in 0,1',
@@ -71,16 +90,42 @@ class NetworkTopologyData extends NetworkTopologyController {
         $_t0 = microtime(true);
         $groupids = $this->getInput('groupids', []);
 
-        if (!$groupids) {
-            $this->jsonResponse(['nodes' => [], 'edges' => []]);
-            return;
-        }
-        // Nicht still abschneiden: die Zahlen gehen mit in die Antwort, damit das
-        // Frontend warnen kann, statt ein unvollstaendiges Bild als vollstaendig
-        // darzustellen.
-        $requested_groups = count($groupids);
-        if ($requested_groups > self::MAX_GROUPS) {
-            $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
+        // Host+hops mode: the map is scoped to ONE host and its N-hop
+        // neighbourhood instead of a host-group selection. The neighbourhood
+        // is resolved FIRST (cheap discovery over neighbour-name items only,
+        // see hopScope()) — the expensive enrichment pipeline below then runs
+        // unchanged, just on 'hostids' instead of 'groupids'.
+        $hostid    = (string) $this->getInput('hostid', '0');
+        $hops      = max(1, min(self::MAX_HOPS, (int) $this->getInput('hops', 1)));
+        $host_mode = ($hostid !== '' && $hostid !== '0');
+        $scope_hostids = [];
+
+        if ($host_mode) {
+            $scope_hostids = $this->hopScope($hostid, $hops);
+            if (!$scope_hostids) {
+                // Focus host not visible/monitored for this user — same
+                // response shape as an empty group selection.
+                $this->jsonResponse(['nodes' => [], 'edges' => []]);
+                return;
+            }
+            $groupids = [];
+            $requested_groups = 0;
+            // Own cache-key space ('host' prefix): a host scope must never
+            // collide with a groupids list in data_payload/topo_baseline.
+            $cache_parts = ['host', $hostid, (string) $hops];
+        } else {
+            if (!$groupids) {
+                $this->jsonResponse(['nodes' => [], 'edges' => []]);
+                return;
+            }
+            // Nicht still abschneiden: die Zahlen gehen mit in die Antwort, damit das
+            // Frontend warnen kann, statt ein unvollstaendiges Bild als vollstaendig
+            // darzustellen.
+            $requested_groups = count($groupids);
+            if ($requested_groups > self::MAX_GROUPS) {
+                $groupids = array_slice($groupids, 0, self::MAX_GROUPS);
+            }
+            $cache_parts = [$groupids];
         }
 
         // Response-Cache. Der Schluessel ist user- UND gruppengebunden (das
@@ -97,9 +142,9 @@ class NetworkTopologyData extends NetworkTopologyController {
         //                   Schluessel steckt: zwei Anfragen mit 150 und 100
         //                   Gruppen teilen sich nach dem Kuerzen denselben
         //                   Eintrag, muessen aber verschieden warnen.
-        $cached = NtCache::get('data_payload', [$groupids]);
+        $cached = NtCache::get('data_payload', $cache_parts);
         if (is_array($cached)) {
-            $this->respondData($cached, $groupids, $requested_groups, $_t0, true);
+            $this->respondData($cached, $cache_parts, $requested_groups, count($groupids), $_t0, true);
             return;
         }
 
@@ -112,9 +157,8 @@ class NetworkTopologyData extends NetworkTopologyController {
         // PASSIVEN Heartbeat-Agent trackt). Aelteren Versionen ignorieren das
         // Feld silently — keine Auswirkung. Werte: 0=unknown, 1=available,
         // 2=unavailable.
-        $hosts = API::Host()->get([
+        $host_query = [
             'output'                => ['hostid', 'host', 'name', 'status', 'maintenance_status', 'maintenanceid', 'proxyid', 'proxy_groupid', 'active_available'],
-            'groupids'              => $groupids,
             // available + errors_from + disable_until pro Interface — fuer
             // Offline-Detection. Zabbix-API: available 0=unknown, 1=available,
             // 2=unavailable. errors_from = Unix-Timestamp seit wann es
@@ -128,7 +172,14 @@ class NetworkTopologyData extends NetworkTopologyController {
             'selectHostGroups'      => ['name'],
             'monitored_hosts'       => true,
             'preservekeys'          => true
-        ]);
+        ];
+        // The only fork between the two modes: which hosts feed the pipeline.
+        if ($host_mode) {
+            $host_query['hostids'] = $scope_hostids;
+        } else {
+            $host_query['groupids'] = $groupids;
+        }
+        $hosts = API::Host()->get($host_query);
 
         if (!$hosts) {
             $this->jsonResponse(['nodes' => [], 'edges' => []]);
@@ -300,45 +351,12 @@ class NetworkTopologyData extends NetworkTopologyController {
         // Die Itemids stammen aus einer rechtegefilterten API::Item()-Abfrage
         // und werden vor der Interpolation nach int gecastet; sie kommen nie
         // ungeprueft aus einer Benutzereingabe.
-        // Statt N separaten DB-Roundtrips machen wir eine Query pro 20 Items
-        // mit UNION ALL von Subqueries. Jedes Subquery nutzt den Index (itemid, clock)
-        // über ORDER BY clock DESC LIMIT 1 effizient.
-        // Für 482 Items reduziert das 482 Queries auf ~25.
+        // (Batching extracted to fetchLastValues() — the host+hops discovery
+        // needs the exact same mechanism for the neighbour-name items.)
         $all_items = $items_a + $items_show;
-        $last_values = [];
-        $last_clocks = [];   // itemid => max(clock) — fuer Stale-Detection
-        $CHUNK = 20;
-
-        foreach ([
-            ITEM_VALUE_TYPE_FLOAT  => 'history',
-            ITEM_VALUE_TYPE_UINT64 => 'history_uint',
-            ITEM_VALUE_TYPE_STR    => 'history_str',
-            ITEM_VALUE_TYPE_TEXT   => 'history_text',
-        ] as $vtype => $table) {
-            $type_itemids = array_keys(array_filter($all_items, function($i) use ($vtype) {
-                return (int)$i['value_type'] === $vtype;
-            }));
-            if (empty($type_itemids)) continue;
-
-            foreach (array_chunk($type_itemids, $CHUNK) as $chunk) {
-                $parts = [];
-                foreach ($chunk as $iid) {
-                    $iid = (int) $iid;
-                    // value + clock fuer Stale-Detection beide aus dem
-                    // selben SELECT — kein zusaetzlicher Roundtrip.
-                    $parts[] = '(SELECT ' . $iid . ' AS itemid, value, clock FROM ' . $table
-                             . ' WHERE itemid=' . $iid
-                             . ' ORDER BY clock DESC LIMIT 1)';
-                }
-                $sql = implode(' UNION ALL ', $parts);
-                $res = DBselect($sql);
-                while ($row = DBfetch($res)) {
-                    $iid = (int) $row['itemid'];
-                    $last_values[$iid] = $row['value'];
-                    $last_clocks[$iid] = (int) $row['clock'];
-                }
-            }
-        }
+        $lv = $this->fetchLastValues($all_items);
+        $last_values = $lv['values'];
+        $last_clocks = $lv['clocks'];   // itemid => max(clock) — fuer Stale-Detection
 
         // Stale-Detection: pro Host das max(lastclock) aller seiner Items.
         // Wenn das alle Items des Hosts mehrere Minuten alt sind, kommen
@@ -407,23 +425,10 @@ class NetworkTopologyData extends NetworkTopologyController {
         // technischem Namen (host) ODER Anzeigename (name), case-insensitiv;
         // technischer Name gewinnt. Referenzen auf nicht sichtbare/unbekannte
         // Hosts werden still verworfen (Kante zu Nicht-Knoten faellt eh weg).
+        // (Aufloesung extracted to parentEdges() — the host+hops discovery
+        // builds the same edges so a VM is reachable via its hypervisor.)
         if ($host_parent) {
-            $name_to_id = [];
-            foreach ($hosts as $h2id => $h2) {
-                $vis = strtolower(trim((string) ($h2['name'] ?? '')));
-                if ($vis !== '' && !isset($name_to_id[$vis])) $name_to_id[$vis] = $h2id;
-            }
-            foreach ($hosts as $h2id => $h2) {
-                $tech = strtolower(trim((string) ($h2['host'] ?? '')));
-                if ($tech !== '') $name_to_id[$tech] = $h2id;   // technischer Name gewinnt
-            }
-            $hn = 0;
-            foreach ($host_parent as $child_id => $ref) {
-                $pid = $name_to_id[strtolower($ref)] ?? null;
-                if ($pid === null || (string) $pid === (string) $child_id) continue;
-                $edges[] = ['id' => 'h' . $hn++, 'from' => $pid, 'to' => $child_id,
-                            '_type' => 'hosts'];
-            }
+            $edges = array_merge($edges, self::parentEdges($hosts, $host_parent));
         }
 
         // ── 5b. PROXY + PROXY-GROUP LOOKUP ────────────────────────────────
@@ -564,9 +569,9 @@ class NetworkTopologyData extends NetworkTopologyController {
             'lldp_quality'   => $lldp_quality_out,
             'health'         => $health,
         ];
-        NtCache::set('data_payload', [$groupids], $core, self::CACHE_TTL);
+        NtCache::set('data_payload', $cache_parts, $core, self::CACHE_TTL);
 
-        $this->respondData($core, $groupids, $requested_groups, $_t0, false);
+        $this->respondData($core, $cache_parts, $requested_groups, count($groupids), $_t0, false);
     }
 
     /**
@@ -580,13 +585,16 @@ class NetworkTopologyData extends NetworkTopologyController {
      * Aenderungen dazwischen.
      *
      * @param array $core             nodes, edges, lldp_*, health
-     * @param array $groupids         gekuerzte Gruppenliste (= Cache-Schluessel)
-     * @param int   $requested_groups Anzahl VOR dem Kuerzen
+     * @param array $cache_parts      cache key parts — the (truncated) group
+     *                                list, or ['host', hostid, hops] in
+     *                                host+hops mode
+     * @param int   $requested_groups Anzahl VOR dem Kuerzen (0 in host mode)
+     * @param int   $processed_groups Anzahl NACH dem Kuerzen (0 in host mode)
      * @param float $t0               Startzeit fuer die Diagnose
      * @param bool  $cache_hit        kam der Kern aus dem Cache?
      */
-    private function respondData(array $core, array $groupids, int $requested_groups,
-            float $t0, bool $cache_hit): void {
+    private function respondData(array $core, array $cache_parts, int $requested_groups,
+            int $processed_groups, float $t0, bool $cache_hit): void {
 
         $nodes = $core['nodes'] ?? [];
         $edges = $core['edges'] ?? [];
@@ -616,7 +624,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             sort($pair);
             $current[$pair[0] . '|' . $pair[1]] = [$host_label($pair[0]), $host_label($pair[1])];
         }
-        $baseline = NtCache::get('topo_baseline', [$groupids]);
+        $baseline = NtCache::get('topo_baseline', $cache_parts);
         if (is_array($baseline)) {
             foreach ($current as $k => $lbls) {
                 if (!isset($baseline[$k])) $topo_changes['added'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
@@ -625,7 +633,7 @@ class NetworkTopologyData extends NetworkTopologyController {
                 if (!isset($current[$k])) $topo_changes['removed'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
             }
         }
-        NtCache::set('topo_baseline', [$groupids], $current, 7 * 86400);
+        NtCache::set('topo_baseline', $cache_parts, $current, 7 * 86400);
 
         // ── Manuelle Verbindungen, nur fuer Widgets ───────────────────────
         //
@@ -680,7 +688,7 @@ class NetworkTopologyData extends NetworkTopologyController {
              // Truncation sichtbar machen (statt still abzuschneiden).
              'truncated'       => $requested_groups > self::MAX_GROUPS,
              'requested_count' => $requested_groups,
-             'processed_count' => count($groupids),
+             'processed_count' => $processed_groups,
              // Review §12: versionierter, dokumentierter API-Contract. Additiv,
              // bestehende Top-Level-Felder bleiben unveraendert.
              'api_version'     => self::API_VERSION,
@@ -695,6 +703,166 @@ class NetworkTopologyData extends NetworkTopologyController {
             'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],
         ]);
         $this->jsonResponseRaw($_payload);
+    }
+
+    /**
+     * Host+hops mode: resolve the N-hop neighbourhood of one host, cheaply.
+     *
+     * The discovery fetches ONLY what edge building needs — host names/IPs/
+     * tags plus the neighbour-NAME items (same key list as the main pipeline,
+     * so the scope never contains an edge the map afterwards cannot show) —
+     * across ALL hosts the user may see. The expensive metric enrichment then
+     * runs on just the resulting subset. The edge graph is cached per user
+     * (EDGE_GRAPH_TTL) so the banner's +/− hop clicks and the 30 s refresh
+     * do not re-discover; manual links are merged in fresh on every call —
+     * they are cheap to load and the personal layer changes in-session.
+     *
+     * @return array hostids within $hops of $hostid (incl. itself), filtered
+     *               to hosts visible to this user; empty if the focus host
+     *               itself is not visible/monitored.
+     */
+    private function hopScope(string $hostid, int $hops): array {
+        $graph = NtCache::get('edge_graph', []);
+        if (!is_array($graph) || !isset($graph['edges'], $graph['visible'])) {
+            $hosts = API::Host()->get([
+                'output'           => ['hostid', 'host', 'name'],
+                'selectInterfaces' => ['ip'],
+                'selectTags'       => ['tag', 'value'],
+                'monitored_hosts'  => true,
+                'preservekeys'     => true
+            ]);
+            $edges = [];
+            if ($hosts) {
+                $items = API::Item()->get([
+                    'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type'],
+                    'hostids'      => array_keys($hosts),
+                    'search'       => ['key_' => [
+                        'lldpRemSysName', 'cdpCacheDeviceId',
+                        'neighbor.sysName', 'discovery.neighbor',
+                    ]],
+                    'searchByAny'  => true,
+                    'monitored'    => true,
+                    'preservekeys' => true
+                ]);
+                $lv = $this->fetchLastValues($items);
+                foreach ($items as $iid => &$it) {
+                    $it['lastvalue'] = $lv['values'][$iid] ?? null;
+                }
+                unset($it);
+                $metrics = MetricExtractor::extract($items);
+                $lldp = LldpEdgeBuilder::build($hosts, $metrics['lldp_raw']);
+                // Slim to endpoint pairs — the BFS needs nothing else, and the
+                // APCu entry stays small even with thousands of edges.
+                foreach ($lldp['edges'] as $e) {
+                    $edges[] = ['from' => (string) $e['from'], 'to' => (string) $e['to']];
+                }
+                $tags = HostTagParser::parse($hosts);
+                if ($tags['parent']) {
+                    foreach (self::parentEdges($hosts, $tags['parent']) as $e) {
+                        $edges[] = ['from' => (string) $e['from'], 'to' => (string) $e['to']];
+                    }
+                }
+            }
+            $graph = [
+                'edges'   => $edges,
+                'visible' => array_fill_keys(array_map('strval', array_keys($hosts)), true),
+            ];
+            NtCache::set('edge_graph', [], $graph, self::EDGE_GRAPH_TTL);
+        }
+
+        if (!isset($graph['visible'][$hostid])) {
+            return [];
+        }
+        $links = array_merge(ManualLinks::loadShared(), ManualLinks::loadPersonal());
+        $scope = HopScope::neighborhood($hostid, $hops, $graph['edges'], $links);
+
+        // Manual links may reference nodes that are no monitored hosts (ghost
+        // or otherwise stale ids) — they may act as bridges in the BFS, but
+        // must not reach host.get: a non-numeric id there is an API error,
+        // and an invisible one would leak through the permission model.
+        return array_values(array_filter($scope, static function ($id) use ($graph) {
+            return isset($graph['visible'][$id]);
+        }));
+    }
+
+    /**
+     * Letzte Werte fuer eine Item-Menge via batched UNION-ALL Queries.
+     *
+     * Statt N separaten DB-Roundtrips machen wir eine Query pro 20 Items
+     * mit UNION ALL von Subqueries. Jedes Subquery nutzt den Index (itemid, clock)
+     * über ORDER BY clock DESC LIMIT 1 effizient.
+     * Für 482 Items reduziert das 482 Queries auf ~25.
+     *
+     * @param array $items itemid => Item (braucht 'value_type')
+     * @return array{values: array<int, mixed>, clocks: array<int, int>}
+     */
+    private function fetchLastValues(array $items): array {
+        $last_values = [];
+        $last_clocks = [];
+        $CHUNK = 20;
+
+        foreach ([
+            ITEM_VALUE_TYPE_FLOAT  => 'history',
+            ITEM_VALUE_TYPE_UINT64 => 'history_uint',
+            ITEM_VALUE_TYPE_STR    => 'history_str',
+            ITEM_VALUE_TYPE_TEXT   => 'history_text',
+        ] as $vtype => $table) {
+            $type_itemids = array_keys(array_filter($items, function($i) use ($vtype) {
+                return (int)$i['value_type'] === $vtype;
+            }));
+            if (empty($type_itemids)) continue;
+
+            foreach (array_chunk($type_itemids, $CHUNK) as $chunk) {
+                $parts = [];
+                foreach ($chunk as $iid) {
+                    $iid = (int) $iid;
+                    // value + clock fuer Stale-Detection beide aus dem
+                    // selben SELECT — kein zusaetzlicher Roundtrip.
+                    $parts[] = '(SELECT ' . $iid . ' AS itemid, value, clock FROM ' . $table
+                             . ' WHERE itemid=' . $iid
+                             . ' ORDER BY clock DESC LIMIT 1)';
+                }
+                $sql = implode(' UNION ALL ', $parts);
+                $res = DBselect($sql);
+                while ($row = DBfetch($res)) {
+                    $iid = (int) $row['itemid'];
+                    $last_values[$iid] = $row['value'];
+                    $last_clocks[$iid] = (int) $row['clock'];
+                }
+            }
+        }
+
+        return ['values' => $last_values, 'clocks' => $last_clocks];
+    }
+
+    /**
+     * nt:parent-Tags → gerichtete hosts-Kanten (Parent→Child). Aufloesung nach
+     * technischem Namen (host) ODER Anzeigename (name), case-insensitiv;
+     * technischer Name gewinnt. Referenzen auf nicht sichtbare/unbekannte
+     * Hosts werden still verworfen (Kante zu Nicht-Knoten faellt eh weg).
+     *
+     * @param array $hosts       hostid => Host ('host', 'name')
+     * @param array $host_parent child hostid => Parent-Referenz (Name)
+     */
+    private static function parentEdges(array $hosts, array $host_parent): array {
+        $name_to_id = [];
+        foreach ($hosts as $h2id => $h2) {
+            $vis = strtolower(trim((string) ($h2['name'] ?? '')));
+            if ($vis !== '' && !isset($name_to_id[$vis])) $name_to_id[$vis] = $h2id;
+        }
+        foreach ($hosts as $h2id => $h2) {
+            $tech = strtolower(trim((string) ($h2['host'] ?? '')));
+            if ($tech !== '') $name_to_id[$tech] = $h2id;   // technischer Name gewinnt
+        }
+        $edges = [];
+        $hn = 0;
+        foreach ($host_parent as $child_id => $ref) {
+            $pid = $name_to_id[strtolower($ref)] ?? null;
+            if ($pid === null || (string) $pid === (string) $child_id) continue;
+            $edges[] = ['id' => 'h' . $hn++, 'from' => $pid, 'to' => $child_id,
+                        '_type' => 'hosts'];
+        }
+        return $edges;
     }
 
 }

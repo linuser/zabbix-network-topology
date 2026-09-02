@@ -83,6 +83,7 @@ setPositionTruncatedHandler(function(n) {
     toast(t('positions.truncated', { n: n }), 'warn', 8000);
 });
 import { setResolveAggregateCallback } from './modules/context-menu.js';
+import { setFocusRenderCallback } from './modules/focus-mode.js';
 import { allowedTabs, setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
          setGraphToolbarVisible } from './modules/tabs.js';
 import { renderTable, cleanupTable } from './modules/render-table.js';
@@ -143,6 +144,17 @@ try {
 
 // "Aggregat auflösen" aus dem Kontextmenü → kompletter Re-Render
 setResolveAggregateCallback(function() {
+    const dd = window._ntLastData || {};
+    const wrap = document.getElementById('nt-canvas-wrap');
+    if (wrap && dd.nodes) render(wrap, dd.nodes.slice(), (dd.edges || []).slice(), dd.url || '');
+});
+
+// Per-host focus (set/change/end) → full re-render; the filter itself runs
+// inside render(). Tech tab only: the ESC handler is global, and ending the
+// focus from another tab must not render the map into that tab's wrap — the
+// state is gone regardless, the next tech render shows the full map.
+setFocusRenderCallback(function() {
+    if (_activeTab !== 'tech') return;
     const dd = window._ntLastData || {};
     const wrap = document.getElementById('nt-canvas-wrap');
     if (wrap && dd.nodes) render(wrap, dd.nodes.slice(), (dd.edges || []).slice(), dd.url || '');
@@ -312,7 +324,12 @@ function init() {
     // Basis-Toolbar (Tabs + Dark-Button) initial bauen — idempotent.
     ensureBaseToolbar(wrap);
 
-    if (!cfg.selected_groupids || !cfg.selected_groupids.length) {
+    // Host+hops mode: a selected host replaces the group selection as the
+    // data scope. Guard the group auto-restore below — it would redirect and
+    // silently drop the hostid from the URL.
+    const hostMode = !!cfg.selected_hostid;
+
+    if (!hostMode && (!cfg.selected_groupids || !cfg.selected_groupids.length)) {
         // Keine Gruppen ausgewählt — versuche die letzte Auswahl wiederherzustellen.
         // Wenn vorhanden: URL ergänzen und reload, damit das PHP-Backend die
         // Hostgroups validiert und das Multiselect korrekt vorbefüllt.
@@ -346,7 +363,12 @@ function init() {
 
     // Daten holen und initial rendern
     const params = new URLSearchParams();
-    cfg.selected_groupids.forEach(function(id) { params.append('groupids[]', id); });
+    if (hostMode) {
+        params.append('hostid', cfg.selected_hostid);
+        params.append('hops', String(cfg.hops || 1));
+    } else {
+        cfg.selected_groupids.forEach(function(id) { params.append('groupids[]', id); });
+    }
     const url = cfg.data_url + '&' + params;
     fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function(r) { return r.json(); })
@@ -373,7 +395,9 @@ function init() {
             // Hosts geliefert hat. Sonst speichern wir eine "tote" Auswahl
             // (z.B. weil Permissions entzogen wurden) und der User bleibt
             // beim nächsten Page-Load in einer leeren Karte hängen.
-            if (data.nodes && data.nodes.length > 0) {
+            // Not in host mode: the group selection was not what got rendered,
+            // and a host view is not something to auto-restore into.
+            if (!hostMode && data.nodes && data.nodes.length > 0) {
                 saveLastGroups(cfg.selected_groupids);
             }
 

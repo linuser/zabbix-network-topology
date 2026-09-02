@@ -32,7 +32,12 @@ class NetworkTopologyView extends CController {
             'groupids' => 'array_id',
             'groups'   => 'string',  // Komma-Liste von Gruppennamen für Bookmarks
             'internet' => 'string',  // Optionaler Provider-Label für Internet-Wolke (Hierarchie-Layout)
-            'wallboard' => 'in 0,1'  // Vollbild-Modus für Büro-Monitor
+            'wallboard' => 'in 0,1', // Vollbild-Modus für Büro-Monitor
+            // Host+hops mode: one host + its N-hop neighbourhood instead of a
+            // group selection. A set hostid wins over groupids in the data
+            // action; both can sit in the URL side by side.
+            'hostid'   => 'id',
+            'hops'     => 'int32'
         ];
 
         $ret = $this->validateInput($fields);
@@ -103,6 +108,25 @@ class NetworkTopologyView extends CController {
         // Group-IDs" bereits ab — ein zweiter, identischer HostGroup.get-Filter
         // stand hier frueher redundant; entfernt.)
 
+        // Host+hops mode: resolve and permission-check the selected host. The
+        // API call is permission-filtered — an inaccessible or deleted hostid
+        // silently falls back to group mode instead of leaving the multiselect
+        // prefilled with a host the data action will then refuse.
+        $selected_hostid    = (string) $this->getInput('hostid', '0');
+        $selected_host_name = '';
+        $hops               = max(1, min(6, (int) $this->getInput('hops', 1)));
+        if ($selected_hostid !== '0' && $selected_hostid !== '') {
+            $sel_host = API::Host()->get([
+                'output'  => ['hostid', 'name'],
+                'hostids' => [$selected_hostid]
+            ]);
+            if ($sel_host) {
+                $selected_host_name = (string) $sel_host[0]['name'];
+            } else {
+                $selected_hostid = '0';
+            }
+        }
+
         // Was der Benutzer ueberhaupt sehen darf. Beide Abfragen sind
         // API-seitig rechtegefiltert; 'output' bleibt minimal, damit die
         // Kosten auch bei mehreren tausend Hosts eine reine ID-Liste sind.
@@ -125,6 +149,10 @@ class NetworkTopologyView extends CController {
         $response = new CControllerResponseData([
             'hostgroups'        => $hostgroups,
             'selected_groupids' => $selected_groupids,
+            // Host+hops mode ('' = group mode)
+            'selected_hostid'    => $selected_hostid !== '0' ? $selected_hostid : '',
+            'selected_host_name' => $selected_host_name,
+            'hops'               => $hops,
             'internet_label'    => trim($this->getInput('internet', '')),
             'wallboard'         => (int) $this->getInput('wallboard', 0) === 1,
             // Link color scales set by a Super admin (module.config); null =
