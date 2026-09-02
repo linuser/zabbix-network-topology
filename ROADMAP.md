@@ -297,24 +297,21 @@ Standard-MIB, IPsec je nach Gerät `IPSEC-FLOW-MONITOR-MIB` oder Herstellereigen
 OpenVPN meist gar kein SNMP. In der Praxis liefe es auf Zabbix-Items je
 Plattform hinaus und nicht auf eine gemeinsame Quelle.
 
-### Einstellbare Traffic-Schwellen
+### Einstellbare Traffic-Schwellen — **erledigt**
 
-Aus [Issue #9](https://github.com/linuser/zabbix-network-topology/issues/9)
-(christos-diamantis). Die absolute Kantenfarbe hat feste Stufen in
-`traffic.js`: unter 1 Mb/s blau, unter 10 Mb/s orange, darüber rot. Auf einem
-10G-Campus-Link ist das falsch kalibriert — 10 Mb/s sind dort 0,1 % und stehen
-trotzdem in Rot.
+Kam aus [Issue #9](https://github.com/linuser/zabbix-network-topology/issues/9)
+und ist mit [PR #10](https://github.com/linuser/zabbix-network-topology/pull/10)
+in 5.2.0 drin — beides von christos-diamantis. Ich hatte den Punkt hier
+abgelegt, weil er einen Ort braucht, an dem eine Installation ihre Werte
+hinterlegt; der PR nimmt `module.config` und die neue Action
+`network.topology.scales`, also genau die Ebene, die für die geteilten
+Positionen schon existiert.
 
-**Nicht Teil des Fixes in 5.2.0.** Dort werden die drei gemeldeten Fehler
-behoben (Legende zeigt die tatsächlich benutzte Skala, gleiche Schwellen in
-Tooltip und Kante, Label über `text-opacity` statt Leerstring). Einstellbare
-Schwellen sind etwas anderes: sie brauchen einen Ort, an dem eine Installation
-ihre Werte ablegt. `module.config` böte sich an — dieselbe Ebene wie die
-geteilten Positionen, also auch dieselbe Frage nach Rechten und Revision.
-
-Die naheliegende Alternative wäre, gar keine absoluten Stufen mehr anzubieten
-und immer prozentual zu färben. Dagegen spricht `capBps`: die Kapazität kommt
-aus `ifSpeed` beider Endpunkte und fehlt öfter, als man denkt.
+Offen geblieben ist dabei eines: die Skalen sind die **einzige** der fünf
+schreibenden Actions ohne Revisionsprüfung. Zwei Super-Admins überschreiben
+sich still. Die Einsätze sind klein — eine Handvoll Zahlen gegen eine ganze
+Kartenanordnung —, aber es ist eine Ausnahme von einer Regel, die der Rest
+einhält.
 
 ### Network Insights als Widget
 
