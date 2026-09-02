@@ -47,7 +47,7 @@ setPositionTruncatedHandler(function(n) {
     toast(t('positions.truncated', { n: n }), 'warn', 8000);
 });
 import { setResolveAggregateCallback } from './modules/context-menu.js';
-import { setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
+import { allowedTabs, setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
          setGraphToolbarVisible } from './modules/tabs.js';
 import { renderTable, cleanupTable } from './modules/render-table.js';
 import { renderManagement } from './modules/render-mgmt.js';
@@ -66,10 +66,11 @@ import { setHistoryRenderCallback, getHistorySeverities, isHistoryActive, setLiv
 // ── Tab-State ──────────────────────────────────────────────────────────────
 // Lebt im Hauptmodul, wird via Getter an tabs.js gereicht. Persistenz im
 // User-scoped localStorage.
-// Gueltige Tabs — die Liste ist die Pruefung fuer den URL-Parameter. Ein
-// fremder Wert soll auf 'tech' fallen und nicht in switchTab() ins Leere laufen.
-const NT_TABS = ['tech', 'mgmt', 'tree', 'geo', 'health', 'stats',
-                 'lldpq', 'compliance', 'diag'];
+// Welche Tabs gueltig sind, sagt tabs.js — dort stehen sie ohnehin, samt der
+// Rechtepruefung (compliance >= Admin, diag === Super-Admin). Eine zweite Liste
+// hier war genau die Luecke: sie fuehrte beide OHNE Pruefung, also oeffnete
+// "?nt_tab=diag" einem Nutzer ohne Rechte eine Ansicht ohne Knopf zum
+// Verlassen — und switchTab schrieb sie ihm zusaetzlich in den localStorage.
 const NT_TAB_PARAM = 'nt_tab';
 
 // Reihenfolge: URL vor localStorage.
@@ -83,13 +84,20 @@ const NT_TAB_PARAM = 'nt_tab';
 // localStorage bleibt als Rueckfall: wer die Seite ohne Parameter aufruft,
 // landet weiterhin dort, wo er zuletzt war.
 let _activeTab = 'tech';
+// Auch der localStorage wird geprueft, nicht nur die URL: wer einmal auf einem
+// Tab gelandet ist, den er nicht oeffnen darf, haette ihn sonst dauerhaft
+// gespeichert. Getrennte try-Bloecke, damit ein Fehler im einen den anderen
+// nicht ueberspringt.
 try {
-    const _p = new URL(window.location.href).searchParams.get(NT_TAB_PARAM);
-    if (_p && NT_TABS.indexOf(_p) >= 0) {
-        _activeTab = _p;
-    } else {
-        _activeTab = localStorage.getItem(NT_TAB_KEY) || 'tech';
-    }
+    const _erlaubt = allowedTabs();
+    try {
+        const _ls = localStorage.getItem(NT_TAB_KEY);
+        if (_ls && _erlaubt.indexOf(_ls) >= 0) _activeTab = _ls;
+    } catch (e) {}
+    try {
+        const _p = new URL(window.location.href).searchParams.get(NT_TAB_PARAM);
+        if (_p && _erlaubt.indexOf(_p) >= 0) _activeTab = _p;
+    } catch (e) {}
 } catch (e) {}
 
 // ── Cross-Module-Glue (Callback-Registrierung) ─────────────────────────────

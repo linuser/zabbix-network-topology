@@ -34,6 +34,45 @@ import { t } from './i18n.js';
 let _getActiveTab = function() { return 'tech'; };
 let _onMgmtRerender = null;
 
+// Die Tab-Liste. EINE Quelle fuer drei Verwendungen: die Knoepfe hier, die
+// Pruefung des URL-Parameters in network-topology.js, und die Rechte.
+//
+// Vorher stand dieselbe Liste zweimal — hier mit Rechtepruefung, und in
+// network-topology.js als flaches NT_TABS ohne. Damit oeffnete
+// "?nt_tab=diag" einem Nutzer ohne Rechte eine Ansicht, fuer die es bei ihm
+// keinen Knopf gibt; switchTab schrieb "diag" zusaetzlich in seinen
+// localStorage, also landete er bei JEDEM weiteren Besuch wieder dort. Der
+// Server verweigert die Daten, kaputt war nur die Bedienung — aber ohne
+// Ausweg.
+//
+// 'needs' spiegelt, was das Backend prueft: compliance >= ZABBIX_ADMIN,
+// diag === SUPER_ADMIN.
+const TAB_DEFS = [
+    { id: 'nt-tab-tech',       key: 'tabs.tech',       tab: 'tech'   },
+    { id: 'nt-tab-mgmt',       key: 'tabs.mgmt',       tab: 'mgmt'   },
+    { id: 'nt-tab-tree',       key: 'tabs.table',      tab: 'tree'   },
+    { id: 'nt-tab-geo',        key: 'tabs.geo',        tab: 'geo'    },
+    { id: 'nt-tab-health',     key: 'tabs.health',     tab: 'health' },
+    { id: 'nt-tab-stats',      key: 'tabs.stats',      tab: 'stats'  },
+    { id: 'nt-tab-lldpq',      key: 'tabs.lldpq',      tab: 'lldpq',      dataOptional: true },
+    // Compliance zeigt Security-Posture pro Host ("Agent ohne TLS",
+    // SNMP-Versionen) — nur fuer Admins.
+    { id: 'nt-tab-compliance', key: 'tabs.compliance', tab: 'compliance', dataOptional: true, needs: 'admin' },
+    { id: 'nt-tab-diag',       key: 'tabs.diag',       tab: 'diag',       dataOptional: true, needs: 'superadmin' },
+];
+
+function mayUseTab(def) {
+    const cfg = window.NT_CONFIG || {};
+    if (def.needs === 'admin')      return !!cfg.can_edit;
+    if (def.needs === 'superadmin') return !!cfg.is_super_admin;
+    return true;
+}
+
+/** Tab-Kennungen, die der aktuelle Benutzer oeffnen darf. */
+export function allowedTabs() {
+    return TAB_DEFS.filter(mayUseTab).map(function(d) { return d.tab; });
+}
+
 export function setActiveTabGetter(fn) { _getActiveTab = fn; }
 export function setMgmtRerenderCallback(fn) { _onMgmtRerender = fn; }
 
@@ -43,24 +82,15 @@ export function ensureBaseToolbar(wrap) {
     if (!bar) return;
     const activeTab = _getActiveTab();
 
-    // Tab-Wrap (einmal anlegen). Diag-Tab nur fuer Admins (NT_CONFIG.can_edit) —
-    // das Backend prueft nochmal, aber wir zeigen den Tab im UI gleich nicht an.
-    const isAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.can_edit);
-    const TABS = [
-        { id: 'nt-tab-tech',       lbl: t('tabs.tech'),   tab: 'tech' },
-        { id: 'nt-tab-mgmt',       lbl: t('tabs.mgmt'),   tab: 'mgmt' },
-        { id: 'nt-tab-tree',       lbl: t('tabs.table'),  tab: 'tree' },
-        { id: 'nt-tab-geo',        lbl: t('tabs.geo'),    tab: 'geo'  },
-        { id: 'nt-tab-health',     lbl: t('tabs.health'), tab: 'health' },
-        { id: 'nt-tab-stats',      lbl: t('tabs.stats'),  tab: 'stats' },
-        { id: 'nt-tab-lldpq',      lbl: t('tabs.lldpq'),  tab: 'lldpq', dataOptional: true },
-    ];
-    // Compliance zeigt Security-Posture pro Host ("Agent ohne TLS", SNMP-
-    // Versionen) — nur fuer Admins. Backend prueft >= ZABBIX_ADMIN nochmal.
-    if (isAdmin) TABS.push({ id: 'nt-tab-compliance', lbl: t('tabs.compliance'), tab: 'compliance', dataOptional: true });
-    // Diag-Tab nur fuer Super-Admins (Backend prueft USER_TYPE_SUPER_ADMIN ===)
+    // Tab-Wrap (einmal anlegen). Welche Tabs jemand sehen darf, entscheidet
+    // TAB_DEFS oben — dieselbe Quelle, aus der allowedTabs() die URL-Pruefung
+    // speist. Das Backend prueft ohnehin nochmal.
+    const TABS = TAB_DEFS.filter(mayUseTab).map(function(d) {
+        const o = { id: d.id, lbl: t(d.key), tab: d.tab };
+        if (d.dataOptional) o.dataOptional = true;
+        return o;
+    });
     const isSuperAdmin = !!(window.NT_CONFIG && window.NT_CONFIG.is_super_admin);
-    if (isSuperAdmin) TABS.push({ id: 'nt-tab-diag', lbl: t('tabs.diag'), tab: 'diag', dataOptional: true });
 
     if (!document.getElementById('nt-tab-wrap')) {
         const tw = document.createElement('div');
