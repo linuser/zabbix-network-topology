@@ -342,6 +342,63 @@ sich still. Die Einsätze sind klein — eine Handvoll Zahlen gegen eine ganze
 Kartenanordnung —, aber es ist eine Ausnahme von einer Regel, die der Rest
 einhält.
 
+### Dokumentationsdrift gegen NetBox
+
+Die Integrations-Makros für NetBox gibt es schon (`{$NT.INT.NETBOX.URL}`), sie
+setzen aber nur einen Link pro Host. Der eigentliche Wert liegt eine Stufe
+weiter: **die Karte kennt die echte Verkabelung, NetBox die dokumentierte.**
+Die Differenz — „NetBox sagt A–B, LLDP sagt A–C" — ist für einen Netzbetreiber
+wertvoller als beide Datensätze einzeln.
+
+**Was zuerst zu entscheiden ist, und es ist keine Codefrage:**
+
+1. **Wo liegen die Zugangsdaten?** Ein NetBox-Token ist ein Geheimnis. Global-
+   Makros können `{$SECRET}` sein, `module.config` ist es nicht — dort läge er
+   im Klartext, und die Konfiguration geht bei jedem Seitenaufbau ins DOM. Das
+   schließt den naheliegenden Weg aus.
+2. **Wer fragt an?** Ein Aufruf aus dem Browser bräuchte CORS und legte den
+   Token offen. Also serverseitig, also eine neue Action mit Rate-Limit — die
+   sechste. Und sie ruft erstmals einen **fremden** Dienst; alles bisherige
+   spricht nur mit Zabbix.
+3. **Was ist der Vergleich?** NetBox-Kabel haben Interfaces, LLDP-Kanten haben
+   Portnamen, und die stimmen nicht zwangsläufig überein (`Gi1/0/1` gegen
+   `GigabitEthernet1/0/1`). Ohne Normalisierung meldet der Abgleich lauter
+   Falschmeldungen und ist damit wertlos.
+
+**Deshalb liegt es hier und nicht weiter oben.** Punkt 1 und 2 sind
+Sicherheitsentscheidungen, Punkt 3 ist ein Haufen Fleißarbeit mit ungewissem
+Ausgang. Als Kantentyp gedacht deckt es sich mit
+[Nachbarschaft jenseits von LLDP/CDP](#nachbarschaft-jenseits-von-lldpcdp-ip-bgp-ospf-bridge)
+— eine „dokumentiert, aber nicht gemessen"-Kante ist derselbe Fall wie eine
+OSPF-Kante: eine Kante, die kein Kabel ist.
+
+### NT Neighbours — Widget fürs Host-Dashboard
+
+PR #8 hat den Hop-Radius serverseitig gebaut, Zabbix 7 hat Host-Dashboards. Ein
+Widget, das **diesen einen Host plus einen Hop** zeigt, wäre die natürliche
+Verlängerung: die Frage aus seinem PR — „show me this switch and what hangs off
+it" — dort beantwortet, wo man den Switch ohnehin gerade anschaut.
+
+**Warum es klein sein könnte:** keine neue Datenquelle. `HopScope` und die
+`hostid`/`hops`-Parameter der Data-Action existieren; das Widget bräuchte nur
+den Host aus dem Dashboard-Kontext zu ziehen.
+
+**Warum es das vermutlich nicht ist, und das gehört vorher gesagt:**
+
+- Widgets sind **ES5** und können den Code des Hauptmoduls nicht importieren.
+  Der Rendercode für einen Graphen läge damit ein zweites Mal da — das
+  Topologie-Widget zeigt, was das heißt: es hat seinen eigenen Layout-Fehler
+  gehabt, den das Hauptmodul nie hatte.
+- Ein sechstes Widget heißt eine sechste Kopie von `window.NtWidgetData`, die
+  `ci:parity` byteweise bewacht.
+- Der Host-Kontext eines Dashboards ist eine 7.4-Sache; auf 7.0 LTS liefe es
+  nicht, wie alle Widgets.
+
+**Zuerst zu klären:** reicht eine Liste statt eines Graphen? „Diese sechs
+Nachbarn, mit Port und Auslastung" beantwortet dieselbe Frage, braucht kein
+Cytoscape im Widget und macht die ES5-Dopplung auf ein Zehntel kleiner. Wenn
+ja, ist es ein Nachmittag statt einer Woche.
+
 ### Network Insights als Widget
 
 Deine Einordnung aus dem Feature-Block: **eher ein Widget als ein Tab.** Eine
