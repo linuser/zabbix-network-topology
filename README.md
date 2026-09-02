@@ -239,6 +239,15 @@ Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inse
 - **Want to send a patch?** → [CONTRIBUTING.md](CONTRIBUTING.md) — it lists the eight rules CI enforces strictly.
 - **Security issue?** → [SECURITY.md](SECURITY.md), confidentially by mail.
 
+### Thanks
+
+**[@christos-diamantis](https://github.com/christos-diamantis)** has shaped a
+large part of 5.1.1 and 5.2.0 — the `walk[]` rework of the LLDP template, the
+host + hop-radius scope with focus mode, and the mode-aware color guide with
+configurable scales. He tests against real hardware (FortiGate, MikroTik,
+Huawei) and sends the patch along with the report. Several of the defects he
+found had been in the module since the code was written.
+
 ---
 
 ## 🇩🇪 Deutsch
@@ -422,6 +431,16 @@ Aktuelle Chrome, Firefox, Safari, Edge. ES6-Module (kein IE11), `fetch`, CSS `in
 - **Bug gefunden?** → [Issue anlegen](https://github.com/linuser/zabbix-network-topology/issues). Bitte Zabbix-Version, PHP-Version und bei fehlenden Kanten den SNMP-Vendor angeben.
 - **Patch beisteuern?** → [CONTRIBUTING.md](CONTRIBUTING.md) — dort stehen die acht Regeln, die die CI hart erzwingt.
 - **Sicherheitslücke?** → [SECURITY.md](SECURITY.md), vertraulich per Mail.
+
+### Dank
+
+**[@christos-diamantis](https://github.com/christos-diamantis)** hat einen
+großen Teil von 5.1.1 und 5.2.0 geprägt — den `walk[]`-Umbau des
+LLDP-Templates, den Host-plus-Hop-Radius samt Fokus-Modus und die Farbskala,
+die dem Modus folgt und sich einstellen lässt. Er testet an echter Hardware
+(FortiGate, MikroTik, Huawei) und schickt zur Meldung gleich den Patch. Mehrere
+der Fehler, die er gefunden hat, standen seit dem Tag im Modul, an dem der Code
+geschrieben wurde.
 
 ---
 

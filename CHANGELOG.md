@@ -4,6 +4,36 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ## v5.2.0 — unreleased
 
+### Thanks
+
+Most of what is listed below comes from
+**[@christos-diamantis](https://github.com/christos-diamantis)**. He runs the
+module against real networks — FortiGate, MikroTik, Huawei, campus links on
+10G — and he does not stop at the report: for every issue he opened in this
+cycle he also sent the patch. The host + hop-radius scope and focus mode
+([#6](https://github.com/linuser/zabbix-network-topology/issues/6),
+[#7](https://github.com/linuser/zabbix-network-topology/issues/7),
+[PR #8](https://github.com/linuser/zabbix-network-topology/pull/8)) and the
+mode-aware color guide with configurable scales
+([#9](https://github.com/linuser/zabbix-network-topology/issues/9),
+[PR #10](https://github.com/linuser/zabbix-network-topology/pull/10)) are his
+work, tested on his own hardware and rebased on request without complaint.
+
+This follows 5.1.1, where his FortiGate and MikroTik findings
+([#3](https://github.com/linuser/zabbix-network-topology/issues/3),
+[#4](https://github.com/linuser/zabbix-network-topology/issues/4)) moved the
+LLDP template to `walk[]` plus dependent items
+([PR #5](https://github.com/linuser/zabbix-network-topology/pull/5)) and turned
+two rows of the vendor matrix from claims into measurements.
+
+Two of the defects he found had been in the module since the code was written,
+and no amount of re-reading would have surfaced them: the blank map on a
+multi-group selection was reproducible for anyone with two host groups, and the
+color guide had been explaining the wrong scale in the default mode all along.
+Both needed someone to look at a real network and take the trouble to say so.
+
+Thank you.
+
 ### Added
 
 - **A single host plus a hop radius as its own map scope — next to the
@@ -30,7 +60,8 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   host. "Open hop view" in the context menu leads from the focus into the
   server-side scoped view.
 
-
+  Contributed by **@christos-diamantis**
+  ([PR #8](https://github.com/linuser/zabbix-network-topology/pull/8)).
 
 - **Configurable color scales (Super admin).** *View → Color scales* opens an
   editor for both edge scales — thresholds and colors per tier, add/remove
@@ -40,6 +71,11 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   to the defaults when invalid. `ColorScales::sanitize()` has its own test —
   colors end up as CSS values in Cytoscape styles and the legend, hence strict
   six-digit hex.
+
+  Contributed by **@christos-diamantis**
+  ([PR #10](https://github.com/linuser/zabbix-network-topology/pull/10)), who
+  asked for exactly this in the "Expected" part of his report: a 10G campus link
+  should not be red at 10 Mb/s.
 
 ### Fixed
 
@@ -55,8 +91,6 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   fitting unpositioned nodes, and the cluster preset seeds a
   deterministic scatter — no layout failure can make the map invisible
   any more.
-
-
 
 - **The color guide explained the wrong scale.** It always showed the
   weathermap gradient — even with weathermap mode off, where edges are colored
