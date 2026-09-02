@@ -12,13 +12,105 @@
 // startet eine setInterval-Schleife, die line-dash-offset auf allen lebenden
 // Edges animiert — das erzeugt die wandernden Punkte in der Karte.
 
+// Both scales exist as data (not just as an if-cascade) so the legend
+// (legend.js) and the tooltip (tooltip.js) show the same thresholds and colors
+// as the edges. Three copies used to drift apart: the legend gradient had
+// different colors than the edges, and the tooltip turned the percentage
+// orange at 40% while the edge only did so at 55%.
+// max = exclusive upper bound of the tier; the last tier has max: Infinity.
+//
+// Since 5.2 a Super admin can override both scales (View menu →
+// "Color scales…", stored in module.config, action network.topology.scales).
+// Scale format: { bounds: [ascending exclusive upper bounds],
+// colors: [bounds.length + 1 colors] } — the last color applies above the
+// last bound. The tier arrays below are built from it; line width grows
+// linearly across the tiers from 2 to 8 px, the label color is the line
+// color slightly darkened.
+export const DEFAULT_SCALES = {
+    traffic: { bounds: [10e3, 100e3, 1e6, 10e6],
+               colors: ['#22c55e', '#06b6d4', '#3b82f6', '#f97316', '#ef4444'] },
+    util:    { bounds: [1, 10, 25, 40, 55, 70, 85],
+               colors: ['#94a3b8', '#3b82f6', '#22c55e', '#a3e635', '#facc15', '#f97316', '#ef4444', '#a21caf'] },
+};
+export const MAX_SCALE_COLORS = 12;
+
+// Filled in place (applyColorScales) so imports in legend.js and friends
+// always see the current state.
+export const TRAFFIC_TIERS = [];
+export const UTIL_TIERS    = [];
+export const IDLE_TIER = { w: 2, col: '#94a3b8', tcol: '#94a3b8' };
+
+function darken(hex, f) {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+    if (!m) return hex;
+    return '#' + [1, 2, 3].map(function(i) {
+        return ('0' + Math.round(parseInt(m[i], 16) * (1 - f)).toString(16)).slice(-2);
+    }).join('');
+}
+
+function buildTiers(target, scale) {
+    target.length = 0;
+    const n = scale.colors.length;
+    scale.colors.forEach(function(col, i) {
+        const w = n > 1 ? 2 + 6 * i / (n - 1) : 4;
+        target.push({
+            max:  i < scale.bounds.length ? scale.bounds[i] : Infinity,
+            w:    Math.round(w * 2) / 2,
+            col:  col,
+            tcol: darken(col, 0.25),
+        });
+    });
+}
+
+// Validates a scales configuration (client draft or NT_CONFIG) and returns a
+// cleaned copy — or null. Mirror of ColorScales::sanitize() in the backend;
+// both must accept the same input.
+export function normalizeScales(cfg) {
+    if (!cfg || typeof cfg !== 'object') return null;
+    const out = {};
+    const limits = { traffic: Infinity, util: 1000 };
+    for (const key in limits) {
+        const s = cfg[key];
+        if (!s || !Array.isArray(s.bounds) || !Array.isArray(s.colors)) return null;
+        const n = s.colors.length;
+        if (n < 2 || n > MAX_SCALE_COLORS || s.bounds.length !== n - 1) return null;
+        const bounds = [], colors = [];
+        let prev = 0;
+        for (let i = 0; i < s.bounds.length; i++) {
+            const v = Number(s.bounds[i]);
+            if (!isFinite(v) || v <= prev || v > limits[key]) return null;
+            bounds.push(v); prev = v;
+        }
+        for (let i = 0; i < n; i++) {
+            const c = String(s.colors[i] || '');
+            if (!/^#[0-9a-fA-F]{6}$/.test(c)) return null;
+            colors.push(c.toLowerCase());
+        }
+        out[key] = { bounds: bounds, colors: colors };
+    }
+    return out;
+}
+
+let _scales = null;     // active scales (cleaned)
+let _custom = false;    // true = overridden by an admin, false = defaults
+
+// Activate scales. null/invalid → defaults. Rebuilds the tier arrays; the
+// caller must follow up with applyTrafficHeatmap() so the edges follow.
+export function applyColorScales(cfg) {
+    const norm = normalizeScales(cfg);
+    _custom = norm !== null;
+    _scales = norm || normalizeScales(DEFAULT_SCALES);
+    buildTiers(TRAFFIC_TIERS, _scales.traffic);
+    buildTiers(UTIL_TIERS,    _scales.util);
+}
+export function getColorScales() { return JSON.parse(JSON.stringify(_scales)); }
+export function hasCustomScales() { return _custom; }
+applyColorScales(null);
+
 function trafficTier(bitsPerSec) {
-    if (bitsPerSec <= 0)    return { w: 2,   col: '#94a3b8', tcol: '#94a3b8', dash: true  };
-    if (bitsPerSec < 10e3)  return { w: 2,   col: '#22c55e', tcol: '#16a34a', dash: false };
-    if (bitsPerSec < 100e3) return { w: 3,   col: '#06b6d4', tcol: '#0891b2', dash: false };
-    if (bitsPerSec < 1e6)   return { w: 4.5, col: '#3b82f6', tcol: '#1d4ed8', dash: false };
-    if (bitsPerSec < 10e6)  return { w: 6,   col: '#f97316', tcol: '#c2410c', dash: false };
-    return                         { w: 8,   col: '#ef4444', tcol: '#b91c1c', dash: false };
+    if (bitsPerSec <= 0) return { w: IDLE_TIER.w, col: IDLE_TIER.col, tcol: IDLE_TIER.tcol, dash: true };
+    const tier = TRAFFIC_TIERS.find(function(x) { return bitsPerSec < x.max; });
+    return { w: tier.w, col: tier.col, tcol: tier.tcol, dash: false };
 }
 
 // Schwellen fuer Interface-Health-Override. Errors/Discards sind nach
@@ -33,16 +125,24 @@ const HEALTH_DROP_THRESHOLD = 5;
 // Kapazitaet kommt als edge.data('capBps') aus min(ifSpeed beider Endpunkte).
 let _weathermap = false;
 export function setWeathermapMode(on) { _weathermap = !!on; }
+export function isWeathermapMode() { return _weathermap; }
 
 function utilizationTier(pct) {
-    if (pct < 1)   return { w: 2,   col: '#94a3b8' };   // idle
-    if (pct < 10)  return { w: 3,   col: '#3b82f6' };   // blau
-    if (pct < 25)  return { w: 4,   col: '#22c55e' };   // gruen
-    if (pct < 40)  return { w: 4.5, col: '#a3e635' };   // lime
-    if (pct < 55)  return { w: 5,   col: '#facc15' };   // gelb
-    if (pct < 70)  return { w: 6,   col: '#f97316' };   // orange
-    if (pct < 85)  return { w: 7,   col: '#ef4444' };   // rot
-    return           { w: 8,   col: '#a21caf' };        // magenta (>85, Weathermap-Klassiker)
+    return UTIL_TIERS.find(function(x) { return pct < x.max; });
+}
+
+// Color for a utilization % — for the tooltip, so the number there is tinted
+// in the same tier as the edge next to it.
+export function utilizationColor(pct) {
+    return utilizationTier(pct).col;
+}
+
+// Utilization label: one decimal below 10% ("0.2%"), integer otherwise. Below
+// 1% an empty label used to be set — but Cytoscape treats an empty bypass as
+// "remove the bypass", so the traffic label from the stylesheet came back and
+// the edge looked as if weathermap mode were off.
+export function formatUtilization(pct) {
+    return (pct < 10 ? pct.toFixed(1) : pct.toFixed(0)) + '%';
 }
 
 // Auslastung einer Edge in %. Bei der Node-Summen-Schaetzung ist Traffic die
@@ -113,8 +213,8 @@ export function applyTrafficHeatmap(cy) {
 
         // Label: im Weathermap-Modus die Auslastung inline, sonst zurueck
         // auf das Stylesheet-Mapping (data(tLabel) mit Traffic-Werten).
-        if (_weathermap && wmPct !== null) {
-            edge.style('label', wmPct < 1 ? '' : (wmPct.toFixed(0) + '%'));
+        if (_weathermap && wmPct !== null && total > 0) {
+            edge.style('label', formatUtilization(wmPct));
         } else {
             edge.removeStyle('label');
         }

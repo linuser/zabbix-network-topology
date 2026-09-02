@@ -230,7 +230,12 @@ window.NT_CONFIG = <?= json_encode([
     // Action prueft es noch einmal und loest die Adresse selbst ueber die API
     // auf — der Client schickt nie eine IP.
     'portscan_csrf' => \CCsrfTokenHelper::get('network.topology.portscan'),
-    'portscan_url'  => 'zabbix.php?action=network.topology.portscan'
+    'portscan_url'  => 'zabbix.php?action=network.topology.portscan',
+    // Link color scales (absolute traffic / weathermap utilization). Super
+    // admins can override them for everyone; null = frontend defaults.
+    'color_scales'  => $data['color_scales'] ?? null,
+    'scales_csrf'   => \CCsrfTokenHelper::get('network.topology.scales'),
+    'scales_url'    => 'zabbix.php?action=network.topology.scales'
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert

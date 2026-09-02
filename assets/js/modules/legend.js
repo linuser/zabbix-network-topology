@@ -5,10 +5,11 @@
 // setupLegend nochmal mit den neuen Counts aufrufen, das passiert aber
 // nirgendwo, weil der Legend-Block einen Snapshot des Zustands bei Load zeigt).
 
-import { esc } from './utils.js';
+import { esc, fmt } from './utils.js';
 import { t } from './i18n.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { NT_LEGEND_COLLAPSED_KEY } from './storage.js';
+import { TRAFFIC_TIERS, UTIL_TIERS, IDLE_TIER, isWeathermapMode, hasCustomScales } from './traffic.js';
 
 export function setupLegend(groupNames, nodes) {
     const leg = document.getElementById('nt-legend');
@@ -56,8 +57,16 @@ export function setupLegend(groupNames, nodes) {
 // Offline/Wartung, Edge-Typen inkl. Weathermap-Skala, Metrik-Ringe). Anders
 // als die Seiten-Legende ist das eine statische Erklaerung ohne Counts.
 // Zustand (ein/ausgeklappt) in localStorage; im Wallboard ausgeblendet.
+// Remember the last arguments so the weathermap toggle can rebuild the bar
+// (it shows the scale of the currently active mode).
+let _blWrap = null, _blDark = false;
+export function refreshBottomLegend() {
+    if (_blWrap && _blWrap.isConnected) setupBottomLegend(_blWrap, _blDark);
+}
+
 export function setupBottomLegend(wrap, dark) {
     if (!wrap) return;
+    _blWrap = wrap; _blDark = !!dark;
     const old = document.getElementById('nt-bottom-legend');
     if (old) old.remove();
     if (document.body.classList.contains('nt-wallboard')) return;
@@ -114,14 +123,32 @@ export function setupBottomLegend(wrap, dark) {
     r1 += chip('<span style="opacity:0.4;margin-right:4px">◐</span>' + esc(t('legend.guide.maint')));
 
     // Verbindungen — LLDP/CDP (gruen gestrichelt), Internet (blau), Down
-    // (rot gestrichelt), plus Weathermap-Auslastungsskala als Verlauf.
+    // (rot gestrichelt).
     let r2 = grpTitle(t('legend.guide.edges'));
     r2 += chip(line('#22c55e', true)  + esc(t('legend.guide.link_lldp')));
     r2 += chip(line('#3b82f6', false) + esc(t('legend.guide.link_inet')));
     r2 += chip(line('#dc2626', true)  + esc(t('legend.guide.iface_down')));
-    r2 += chip('<span style="display:inline-block;width:74px;height:7px;border-radius:3px;'
-        + 'margin-right:5px;vertical-align:middle;background:linear-gradient(90deg,'
-        + '#3b82f6,#22c55e,#eab308,#f59e0b,#ef4444,#a21caf)"></span>' + esc(t('legend.guide.weathermap')));
+
+    // Edge color by traffic — the scale of the ACTIVE mode, with the same
+    // tiers and colors as traffic.js. This used to show only the weathermap
+    // gradient, even with the mode off: a 1.9 Mb/s edge is orange on the
+    // absolute scale, and the gradient made that read like ~50% utilization.
+    const wm = isWeathermapMode();
+    let r2b = grpTitle(t(wm ? 'legend.guide.weathermap' : 'legend.guide.traffic'));
+    // Mark an admin-overridden scale — otherwise anyone who knows the
+    // defaults from the docs wonders about the different colors.
+    if (hasCustomScales()) r2b += '<span style="opacity:0.55;margin-right:8px">(' + esc(t('scales.custom')) + ')</span>';
+    // Absolute: 0 b/s is its own tier ("idle", dashed grey). For utilization
+    // the first tier (< 1%) is part of the scale itself.
+    if (!wm) r2b += chip(line(IDLE_TIER.col, true) + esc(t('legend.guide.idle')));
+    const tiers = wm ? UTIL_TIERS : TRAFFIC_TIERS;
+    tiers.forEach(function(x, i) {
+        const isLast = !isFinite(x.max);
+        const bound  = isLast ? tiers[i - 1].max : x.max;
+        // "10.0 Kb/s" → "10 Kb/s": in a legend the tier matters, not the decimal
+        const num    = wm ? bound + '%' : fmt(bound).replace('.0 ', ' ');
+        r2b += chip(line(x.col, false) + (isLast ? '\u2265 ' : '< ') + esc(num));
+    });
 
     // Metrik-Ringe (die farbigen Segmente im Node-Icon)
     let r3 = grpTitle(t('legend.guide.rings'));
@@ -132,7 +159,7 @@ export function setupBottomLegend(wrap, dark) {
 
     const body = document.createElement('div');
     body.style.cssText = 'padding:2px 10px 8px;max-width:840px;display:' + (collapsed ? 'none' : 'block');
-    body.innerHTML = rowDiv(r1) + rowDiv(r2) + rowDiv(r3);
+    body.innerHTML = rowDiv(r1) + rowDiv(r2) + rowDiv(r2b) + rowDiv(r3);
     bar.appendChild(body);
 
     head.addEventListener('click', function() {

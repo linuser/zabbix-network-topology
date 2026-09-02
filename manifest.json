@@ -75,6 +75,10 @@
         "network.topology.portscan": {
             "class": "NetworkTopologyPortScan",
             "layout": "layout.json"
+        },
+        "network.topology.scales": {
+            "class": "NetworkTopologyScales",
+            "layout": "layout.json"
         }
     }
 }

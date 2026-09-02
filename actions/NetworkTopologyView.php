@@ -17,6 +17,7 @@ use Modules\NetworkTopology\Topology\ManualLinks;
 use Modules\NetworkTopology\Topology\NodePositions;
 use Modules\NetworkTopology\Topology\SharedLayerFilter;
 use Modules\NetworkTopology\Topology\Revision;
+use Modules\NetworkTopology\Topology\ColorScales;
 use API;
 
 class NetworkTopologyView extends CController {
@@ -126,6 +127,9 @@ class NetworkTopologyView extends CController {
             'selected_groupids' => $selected_groupids,
             'internet_label'    => trim($this->getInput('internet', '')),
             'wallboard'         => (int) $this->getInput('wallboard', 0) === 1,
+            // Link color scales set by a Super admin (module.config); null =
+            // the built-in defaults from traffic.js.
+            'color_scales'      => ColorScales::loadShared(),
             'user'              => [
                 'type'           => $this->getUserType(),
                 'can_edit'       => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN,
