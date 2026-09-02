@@ -33,6 +33,7 @@ import { notifyTopoChanges } from './topo-notify.js';
 import { showTip, hideTip, moveTip, showEdgeTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
+import { showEdgeDetail } from './edge-detail.js';
 import { setupLegend, setupBottomLegend } from './legend.js';
 import { setupMinimap, showMinimap } from './minimap.js';
 import {
@@ -422,6 +423,19 @@ export function render(wrap, nodes, edges, dataUrl) {
     });
     cy.on('mousemove', 'edge', function(e) { moveTip(e); });
     cy.on('mouseout',  'edge', function()  { hideTip(); });
+    // Klick auf eine KANTE. Den gab es bis 5.3 gar nicht — Kanten trugen ihre
+    // Ports, ihren Traffic und ihre Interface-Health seit jeher mit, sichtbar
+    // war das aber nur im Hover-Tooltip, der beim ersten Mausschubser weg ist.
+    //
+    // Im Stern-Modus NICHT: dort belegt jeder Klick das Ziehen einer manuellen
+    // Verbindung, und ein Panel mittendrin waere im Weg.
+    cy.on('tap', 'edge', function(e) {
+        if (isLinkModeActive()) return;
+        hideTip();
+        hideCtx();
+        if (pnl) showEdgeDetail(pnl, e.target);
+    });
+
     cy.on('tap', function(e) {
         hideTip();
         if (e.target === cy) {

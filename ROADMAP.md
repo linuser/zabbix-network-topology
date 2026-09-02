@@ -27,7 +27,19 @@ und schreibt hin, was er gefunden hat.
 
 ## Als Nächstes
 
-### 1. Interface-Ansicht beim Klick auf eine Kante
+### 1. Interface-Ansicht beim Klick auf eine Kante — **Schritt 1 erledigt**
+
+`edge-detail.js` (5.3): Klick auf eine Kante oeffnet ein bleibendes Panel mit
+Ports beider Enden, Traffic, Auslastung und dem Interface-Zustand
+aufgeschluesselt. **Schritt 2 steht weiter offen** (Errors/Drops/Link-Uptime als
+eigene Items, Sparklines) — unten steht, was dafuer noch fehlt.
+
+Der Vorbehalt ist beim Bauen nicht verschwunden, sondern **sichtbar geworden**:
+das Panel schreibt an die Zahl, ob sie am Port gemessen oder aus den
+Knotensummen geschaetzt ist, und bei gemeldeten Ports ohne zuordenbare Metrik
+steht daneben warum. Eine Zahl ohne ihre Herkunft ist in dieser Ansicht
+schlimmer als keine.
+
 
 **Schritt 1 — nur vorhandene Daten.** Eine Kante trägt bereits `ports` (beide
 Enden) und `port_metrics` mit `in`, `out`, `speed`. Es fehlt allein die
