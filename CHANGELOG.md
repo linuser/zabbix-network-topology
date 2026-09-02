@@ -1,89 +1,74 @@
 # Changelog
 
-Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
-*Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
+Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ## v5.1.2 — 2026-09-01
 
 ### Changed
 
-- **Kein deutscher Text mehr im UI — und ein Gate, das das hält.** 26 Stellen
-  umgestellt: sieben PHP-Meldungen auf `_('English')` (die Konvention stand
-  längst im Code), 13 Stellen im Hauptmodul-JS über `t()` mit zwölf neuen
-  Schlüsseln in `de.js` **und** `en.js`, sechs Widget-Meldungen schlicht auf
-  Englisch — Widgets haben kein `t()`.
+- **No German text in the UI any more — and a gate that keeps it that way.**
+  26 places converted: seven PHP messages to `_('English')` (the convention was
+  already in the code), 13 places in the main module's JS through `t()` with
+  twelve new keys in `de.js` **and** `en.js`, six widget messages simply in
+  English — widgets have no `t()`.
 
-  Darunter eine, die es aus dem Modul heraus schaffte: die Beschreibung, die
-  beim Anlegen eines Wartungsfensters in die Zabbix-Datenbank geschrieben wird
+  One of them had escaped the module altogether: the description written into
+  the Zabbix database when a maintenance window is created
   (`NetworkTopologyMaintenance.php`).
 
-  Neu: **`npm run ci:i18n`** (`tools/check-i18n.mjs`). Es liest String-Literale
-  mit einem eigenen Scanner statt mit grep — beide grep-Wege scheitern an
-  echtem Code: ein `// Toggle "nur Offline-Hosts zeigen"` am Zeilenende ist ein
-  Kommentar und muss ignoriert werden, während `url: 'https://…'` ein `//`
-  **im** String trägt. Kommentare dürfen weiter deutsch sein, das ist so
-  gewollt.
+  New: **`npm run ci:i18n`** (`tools/check-i18n.mjs`). It reads string literals
+  with its own scanner rather than with grep, because both grep approaches fail
+  on real code: a trailing `// Toggle "show offline hosts only"` is a comment
+  and must be ignored, while `url: 'https://…'` carries a `//` *inside* the
+  string. Comments may stay German — that is deliberate.
 
-  Drei Lücken der ersten Fassung sind eingebaut und je durch eine Regression
-  geprüft: die Wortliste war case-sensitiv (übersah „Ohne …"), sie kannte keine
-  Substantiv-Endungen (übersah „Zusammenfassung", fiel erst im Browser auf), und
-  sie kannte keine ASCII-Umschrift (übersah dreimal „Laedt…"). `-tum` ist
-  bewusst **nicht** in der Endungsregel: es fängt „Momentum" und „Quantum".
-
-  *No German text reaches the UI any more, and `ci:i18n` keeps it that way.
-  Comments stay German by choice; the gate only reads string literals.*
+  Three gaps in the first version were closed, each covered by a regression
+  test: the word list was case-sensitive (it missed „Ohne …"), it knew no noun
+  endings (it missed „Zusammenfassung", which only surfaced in the browser), and
+  it knew no ASCII transliteration (it missed „Laedt…" three times). `-tum` is
+  deliberately **not** in the ending rule: it would catch "Momentum" and
+  "Quantum".
 
 ### Fixed
 
-- **Dashboard-Widgets zählten manuelle Verbindungen nicht mit.** Das Hauptmodul
-  zeigte „4 Edges, 4 manual", das NT-KPI-Widget daneben „0 Edges" — dieselben
-  Daten, verschiedene Zahlen. Grund: manuelle Links kommen über die
-  Seitenkonfiguration des Hauptmoduls (`NetworkTopologyView` → `NT_CONFIG`), und
-  die Kanten entstehen erst im Client. Ein Widget hat keinen solchen
-  View-Controller und konnte sie deshalb prinzipiell nie sehen; der `ml_`-Zähler
-  im KPI-Widget war toter Code.
+- **Dashboard widgets did not count manual links.** The main module showed
+  "4 edges, 4 manual" while the NT KPI widget next to it showed "0 edges" — the
+  same data, different numbers. The reason: manual links arrive through the main
+  module's page config (`NetworkTopologyView` → `NT_CONFIG`), and the edges are
+  built in the client. A widget has no such view controller and therefore could
+  never see them; the `ml_` counter in the KPI widget was dead code.
 
-  `network.topology.data` liefert sie jetzt auf Anforderung mit
-  (`manual_links=1`). Das Flag setzen **nur** die Widgets — das Hauptmodul baut
-  seine Kanten weiter selbst, sonst gäbe es sie doppelt.
+  `network.topology.data` now returns them on request (`manual_links=1`). Only
+  the widgets set that flag — the main module keeps building its edges itself,
+  otherwise they would exist twice.
 
-  Bewusst **nur die geteilte Ebene**: die persönliche gehört einem einzelnen
-  Benutzer (`CProfile`), und ein Dashboard, dessen Kantenzahl vom Betrachter
-  abhängt, wäre schlimmer als eine zu niedrige.
+  Deliberately **the shared layer only**: the personal layer belongs to an
+  individual user (`CProfile`), and a dashboard whose edge count depends on who
+  is looking would be worse than one that counts too low.
 
-  *Dashboard widgets did not count manual links: they reach the client only
-  through the main module's page config, which widgets do not have. The data
-  action now returns them on request — shared layer only, and only for widgets.*
+- **Topology widget: a single oversized node instead of the graph**
+  (widget 3.1.1). The constructor ran a layout with `animate: true`, and the
+  follow-up layout started a second one alongside it. Both write positions. The
+  follow-up finished after ~30 ms and produced a usable picture — seconds later
+  the animated init layout finished and put every node back on the same spot.
+  After that nobody fits the view again, the zoom stays where it was, and one
+  node fills the tile while the others sit exactly behind it.
 
-- **Topologie-Widget: ein einzelner, aufgeblasener Knoten statt des Graphen**
-  (Widget 3.1.1). Im Konstruktor lief ein Layout mit `animate: true`,
-  und der Layout-Nachlauf startete daneben ein zweites. Beide schreiben
-  Positionen. Der Nachlauf war nach ~30 ms fertig und lieferte ein brauchbares
-  Bild — Sekunden später wurde das animierte Init-Layout fertig und legte alle
-  Knoten wieder auf denselben Punkt. Danach fittet niemand mehr, der Zoom bleibt
-  stehen, und ein Knoten füllt die Kachel; die übrigen liegen exakt dahinter.
+  Recorded on a fresh 7.4 instance with six hosts: two `layoutready` events 1 ms
+  apart, then the drop from 6 positions to 1 at 18.6 s. The constructor now uses
+  `preset` (which moves nothing), so the follow-up is the only place a layout
+  ever runs.
 
-  Auf einer frischen 7.4-Instanz mit sechs Hosts protokolliert — zwei
-  `layoutready` im Abstand von 1 ms, dann der Einbruch von 6 Positionen auf 1
-  bei 18,6 s. Der Konstruktor legt jetzt `preset` (bewegt nichts), damit der
-  Nachlauf die einzige Stelle ist, an der je ein Layout läuft.
+  Second, the follow-up only counts as done once its **result** is usable.
+  Previously `done = true` was set *before* the layout ran, which is why the
+  state never healed by itself. It now retries up to five times while the nodes
+  are still coincident.
 
-  Zweitens gilt der Nachlauf erst als erledigt, wenn sein **Ergebnis** taugt.
-  Vorher wurde `done = true` gesetzt, *bevor* das Layout lief — deshalb heilte
-  sich der Zustand nie von selbst. Jetzt wird bis zu fünfmal nachgefasst,
-  solange die Knoten noch deckungsgleich sind.
-
-  *Topology widget showed one oversized node instead of the graph: an animated
-  layout in the constructor raced the follow-up layout and overwrote its result
-  seconds later. The constructor no longer runs a layout, and the follow-up
-  retries until the nodes actually separate.*
-
-  **Nicht zu verwechseln mit [#7]**: das ist ein anderer Fehler, im *Hauptmodul*.
-  Dort schreibt `cose` **mit `boundingBox`** `y = null` in jede Knotenposition,
-  die Leinwand bleibt leer, während die KPI-Leiste weiterzählt. Der Commit, der
-  den Widget-Fehler behebt, verweist versehentlich auf #7 — er ist bereits
-  veröffentlicht und lässt sich nicht mehr umschreiben. #7 bleibt offen und wird
-  von PR #8 adressiert.
+  **Not to be confused with [#7]**: that is a different bug, in the *main
+  module*. There, `cose` **with `boundingBox`** writes `y = null` into every node
+  position, the canvas stays empty while the KPI bar keeps counting. The commit
+  fixing the widget bug references #7 by mistake — it is already published and
+  cannot be rewritten. #7 remains open and is addressed by PR #8.
 
 [#7]: https://github.com/linuser/zabbix-network-topology/issues/7
 
@@ -91,1015 +76,986 @@
 
 ### Changed
 
-- **Das LLDP-Template pollt per `walk[]` statt mit instanzgenauen GETs.**
-  Der SNMP-Index der `lldpRemTable` ist
-  `lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex` — und `lldpRemTimeMark` ist
-  ein RMON-2-TimeFilter. Auf zwei unabhängigen Geräteklassen macht das die alten
-  Item-Prototypen unbrauchbar: **FortiGate** erhöht den TimeMark bei jedem
-  empfangenen LLDP-PDU, der bei der Discovery gemerkte Index ist Sekunden später
-  ungültig. **MikroTik RouterOS** beantwortet auf diesem Subtree Walks, liefert
-  für exakte GETs aber `noSuchObject` — die Discovery legte also Items an, von
-  denen jedes einzelne dauerhaft unsupported blieb.
+- **The LLDP template polls with `walk[]` instead of instance-exact GETs.**
+  The SNMP index of `lldpRemTable` is
+  `lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex` — and `lldpRemTimeMark` is
+  an RMON-2 TimeFilter. On two independent device classes that makes the old
+  item prototypes unusable: **FortiGate** increments the TimeMark on every LLDP
+  PDU it receives, so the index noted during discovery is invalid seconds later.
+  **MikroTik RouterOS** answers walks on this subtree but returns
+  `noSuchObject` for exact GETs — discovery therefore created items every single
+  one of which stayed permanently unsupported.
 
-  Beides ist unser Entwurfsfehler, nicht ein Gerätefehler: instanzgenaue GETs auf
-  eine TimeFilter-Tabelle sind konstruktionsbedingt fragil. Jetzt gibt es ein
-  `walk[]`-Master-Item über die sechs benötigten Spalten; Discovery und alle
-  sechs Prototypen hängen als **dependent** daran und lesen den Walk-Text. Der
-  Index wird auf `0.Port.RemIndex` normiert, ein Guard verwirft Duplikate
-  (höchster TimeMark gewinnt).
+  Both are our design error, not a device fault: instance-exact GETs against a
+  TimeFilter table are fragile by construction. There is now a `walk[]` master
+  item covering the six required columns; discovery and all six prototypes hang
+  off it as **dependent** items and parse the walk text. The index is normalised
+  to `0.Port.RemIndex`, and a guard discards duplicates (highest TimeMark wins).
 
-  **Kein Eingriff am Modul nötig** — die Schlüsselform bleibt, `LldpEdgeBuilder`
-  liest den lokalen Port weiterhin aus der Mitte des Index.
+  **No change needed in the module** — the key shape stays, and
+  `LldpEdgeBuilder` still reads the local port from the middle of the index.
 
-  **Beim Update ändern sich die Item-Schlüssel** von
-  `lldpRemSysName[582295907.23.4]` auf `[0.23.4]`. Die Prototypen behalten ihre
-  UUIDs und aktualisieren sich beim Import in place; die bereits *entdeckten*
-  Items laufen in die Lost-Resource-Lifetime und nehmen ihre History mit. Neu
-  entdeckt wird beim nächsten Walk.
+  **Item keys change on update**, from `lldpRemSysName[582295907.23.4]` to
+  `[0.23.4]`. The prototypes keep their UUIDs and update in place on import; the
+  already *discovered* items run into the lost-resource lifetime and take their
+  history with them. They are rediscovered on the next walk.
 
-  Beigesteuert von **@christos-diamantis**, getestet gegen FortiGate und eine
+  Contributed by **@christos-diamantis**, tested against a FortiGate and a
   MikroTik CRS326-24S+2Q+
   ([#3](https://github.com/linuser/zabbix-network-topology/issues/3),
   [#4](https://github.com/linuser/zabbix-network-topology/issues/4),
   [PR #5](https://github.com/linuser/zabbix-network-topology/pull/5)).
 
-- **Die MikroTik-Zeile der Vendor-Matrix ist eine Messung.** Sie stand seit ihrer
-  Entstehung auf „ungeprüft", weil nie jemand bestätigt hatte, was RouterOS tut.
-  Jetzt steht dort, was gemessen wurde: Walks ja, exakte GETs nein. Damit hat die
-  Matrix **keine unbelegte Zeile mehr** — Huawei und MikroTik sind innerhalb eines
-  Tages von Behauptungen zu Messungen geworden, beide durch Nutzermeldungen.
+- **The MikroTik row of the vendor matrix is a measurement.** It had said
+  "unverified" ever since it was written, because nobody had confirmed what
+  RouterOS actually does. It now states what was measured: walks yes, exact GETs
+  no. With that the matrix has **no unsupported row left** — Huawei and MikroTik
+  went from claims to measurements within a single day, both through user
+  reports.
 
-- **Auch das LLDP-Template spricht Englisch.** Die restlichen zwölf
-  Beschreibungsblöcke sind übersetzt — Template, Makro, Discovery-Regeln und alle
-  acht Prototypen. In keiner der drei mitgelieferten Vorlagen steht noch deutscher
-  Text.
+- **The LLDP template speaks English too.** The remaining twelve description
+  blocks are translated — template, macro, discovery rules and all eight
+  prototypes. None of the three shipped templates contains German text any more.
 
 ### Fixed
 
-- **Die Installationsanleitung stellte den schwersten Weg nach vorn.** Schritt 1
-  war 93 Zeilen lang — Verzeichnis-Layouts, Rechte, SELinux, Service-Namen,
-  Installation ohne Internet — während `nt-install.sh`, das genau das alles
-  selbst erledigt, nur in drei Fußnoten vorkam. Wer neu ist, liest also die
-  Handarbeit und erfährt erst danach, dass es sie nicht gebraucht hätte.
+- **The installation guide put the hardest path first.** Step 1 was 93 lines
+  long — directory layouts, permissions, SELinux, service names, installing
+  without internet access — while `nt-install.sh`, which does all of that
+  itself, appeared only in three footnotes. A newcomer therefore read the manual
+  procedure and only afterwards learned it had not been necessary.
 
-  Jetzt stehen vorn vier Befehle mit dem Skript (rund 20 Zeilen inklusive
-  Erklärung), und die Handarbeit steht vollständig darunter in einem
-  aufklappbaren Block. **Nichts davon ist gelöscht** — die 93 Zeilen sind hart
-  erarbeitet, SELinux ist laut eigener Troubleshooting-Tabelle der häufigste
-  Grund für „Modul erscheint nicht". Sie stehen nur nicht mehr im Weg.
+  Now four commands using the script come first (about 20 lines including
+  explanation), and the manual procedure sits below it in full, inside a
+  collapsible block. **Nothing was deleted** — those 93 lines were hard-won, and
+  by the guide's own troubleshooting table SELinux is the most common reason for
+  "the module does not appear". They are simply no longer in the way.
 
-  Beide Sprachfassungen. Die verwendeten URLs sind gegengeprüft: die
-  `releases/latest/download`-Adresse liefert 712 KB, das Skript 20 KB.
+  Both language versions. The URLs used are verified: the
+  `releases/latest/download` address serves 712 KB, the script 20 KB.
 
-- **Die mitgelieferten Templates trugen deutsche Beschreibungen.** Nicht in
-  Kommentaren, sondern in `description:`-Feldern — also genau dem Text, den
-  Zabbix nach dem Import in der Oberfläche anzeigt. Wer der inzwischen
-  englischen Anleitung folgte, bekam deutsches Zabbix. `nt_health_score` und
-  `nt_topology_change` sind umgestellt (je vier Beschreibungen, darunter die
-  mehrzeilige Template-Beschreibung).
+- **The shipped templates carried German descriptions.** Not in comments, but in
+  `description:` fields — precisely the text Zabbix displays in the UI after
+  import. Anyone following the by-then English guide ended up with German
+  Zabbix. `nt_health_score` and `nt_topology_change` are converted (four
+  descriptions each, including the multi-line template description).
 
-  `nt_lldp_snmp_template.yaml` mit seinen 27 Stellen folgt, sobald
-  [PR #5](https://github.com/linuser/zabbix-network-topology/pull/5) gemerged
-  ist — der baut dieselbe Datei gerade um, und zwei parallele Umbauten an einer
-  Datei ergeben nur Konflikte.
+  `nt_lldp_snmp_template.yaml` with its 27 places follows once
+  [PR #5](https://github.com/linuser/zabbix-network-topology/pull/5) is merged —
+  that PR is restructuring the same file, and two parallel rewrites of one file
+  produce nothing but conflicts.
 
-- **„Modul" wurde als „Widget" gelesen.** Bei Zabbix sind die meisten
-  Community-Module Dashboard-Widgets, und genau so verstand mancher auch dieses
-  — obwohl das Hauptmodul eine **eigene Seite** unter *Monitoring → Network
-  Topology* ist und die fünf Widgets nur optionale Zugabe sind, die ohne das
-  Hauptmodul gar nicht laufen. Das stand bisher erst in Schritt 3 der
-  Installationsanleitung. Jetzt steht es im README im ersten Absatz, in beiden
-  Sprachen, mit einer Tabelle: was erforderlich ist, was optional, und was
-  jeweils vorausgesetzt wird.
+- **"Module" was read as "widget".** In Zabbix most community modules are
+  dashboard widgets, and that is how some people understood this one — even
+  though the main module is a **page of its own** under *Monitoring → Network
+  Topology*, and the five widgets are an optional extra that cannot run without
+  it. Until now that only appeared in step 3 of the installation guide. It is
+  now in the first paragraph of the README, in both languages, with a table:
+  what is required, what is optional, and what each of them assumes.
 
-- **Der Geo-Tab stürzte ab, sobald kein Host Koordinaten hatte.**
-  `render-geo.js` ruft `esc()` dreimal im Leerzustand auf, importiert es aber
-  nicht aus `utils.js`. esbuild bündelt so etwas klaglos — der freie Name landet
-  im Bundle, und zur Laufzeit kommt `ReferenceError: esc is not defined`. Die
-  Bedingung ist alltäglich: eine Hostgruppe ohne Geokoordinaten reicht.
-  Gefunden hat es **@christos-diamantis** beim Debuggen von etwas ganz anderem.
+- **The geo tab crashed as soon as no host had coordinates.**
+  `render-geo.js` calls `esc()` three times in its empty state but does not
+  import it from `utils.js`. esbuild bundles that without complaint — the free
+  name ends up in the bundle, and at runtime you get
+  `ReferenceError: esc is not defined`. The trigger is an everyday one: a host
+  group without geo coordinates is enough. Found by **@christos-diamantis**
+  while debugging something entirely different.
 
-  Der eigentliche Fund ist aber, dass es durch zwölf Gates gekommen ist: ESLint
-  lief hier nur mit `no-unsanitized`, und `no-undef` war nicht aktiviert. Das ist
-  es jetzt — mit einer ausdrücklichen Liste der 25 Fremd-Globals, die dieses
-  Modul voraussetzt (Browser, Cytoscape, Leaflet, Zabbix' `CWidget`), statt einer
-  neuen Abhängigkeit. Gegengeprüft, dass die Regel den Fehler auch wirklich
-  fängt: Import wieder entfernt → drei Meldungen, Import zurück → sauber.
+  The real finding, though, is that it passed twelve gates: ESLint ran here with
+  `no-unsanitized` only, and `no-undef` was not enabled. It is now — with an
+  explicit list of the 25 foreign globals this module assumes (browser,
+  Cytoscape, Leaflet, Zabbix's `CWidget`) rather than a new dependency. Verified
+  that the rule really catches the error: import removed again → three
+  diagnostics, import restored → clean.
 
-- **Die Huawei-Zeile der Vendor-Matrix ist jetzt eine Messung.** Sie stand auf
-  „ungeprüft", weil kein S5700 zum Gegenchecken da war und es auch keine
-  öffentliche SNMP-Aufzeichnung eines solchen Geräts mit LLDP-Daten gibt — die
-  sechs Huawei-Walks im LibreNMS-Bestand sind Richtfunk, USV und
-  Stromversorgung. Der Melder aus [Issue #2](https://github.com/linuser/zabbix-network-topology/issues/2)
-  hat es am Gerät entschieden: Template gelinkt, Discovery angestoßen, Kanten
-  da. VRP beantwortet die IEEE-Standard-LLDP-MIB.
+- **The Huawei row of the vendor matrix is now a measurement.** It had said
+  "unverified", because no S5700 was available to cross-check and there is no
+  public SNMP recording of such a device carrying LLDP data — the six Huawei
+  walks in the LibreNMS collection are radio links, UPS and power supplies. The
+  reporter from [issue #2](https://github.com/linuser/zabbix-network-topology/issues/2)
+  settled it on the device: template linked, discovery triggered, edges there.
+  VRP answers the IEEE standard LLDP MIB.
 
-- **Die SNMP-View war die zweite Hürde — und sie stand in keiner Zeile Doku.**
-  Auf einigen seiner Switches lieferte `snmpwalk` nichts, obwohl LLDP
-  nachweislich lief: die LLDP-OIDs lagen gar nicht in der View des Geräts. Was
-  nicht in der View steht, existiert für SNMP nicht. Auf VRP:
+- **The SNMP view was the second hurdle — and no line of documentation
+  mentioned it.** On some of his switches `snmpwalk` returned nothing although
+  LLDP was demonstrably running: the LLDP OIDs were not in the device's view at
+  all. What is not in the view does not exist as far as SNMP is concerned. On
+  VRP:
 
       snmp-agent mib-view include iso-view iso
       snmp-agent community read <community> mib-view iso-view
 
-  Steht jetzt im Huawei-Kasten und als eigene Zeile in beiden
-  Troubleshooting-Tabellen. Huawei-spezifisch ist daran nichts — jedes Gerät
-  mit eingeschränkter SNMP-View verhält sich so. Es ist dieselbe Fehlerklasse
-  wie das 3-Stunden-Discovery-Intervall aus 5.1.0: eine Ursache, die niemand
-  sieht, weil sie wie ein kaputtes Feature aussieht.
+  This is now in the Huawei box and as a row of its own in both troubleshooting
+  tables. Nothing about it is Huawei-specific — any device with a restricted
+  SNMP view behaves this way. It is the same class of failure as the three-hour
+  discovery interval from 5.1.0: a cause nobody sees, because it looks like a
+  broken feature.
 
 ### Added
 
-- **`tools/nt-lldp-probe.sh` — ein Kommando statt drei Vermutungen.** Der nackte
-  `snmpwalk` steht seit jeher in der Anleitung und ist eine Zeile lang. Das
-  Problem war nie der Aufruf, sondern die **leere Antwort**: sie kann heißen,
-  dass das Gerät nicht erreichbar ist, dass die SNMP-View die LLDP-MIB verdeckt,
-  oder dass die Tabelle schlicht noch leer ist. Drei völlig verschiedene
-  Ursachen, ein identisches Bild — und die Verwechslung kostet Nachmittage,
-  siehe oben.
+- **`tools/nt-lldp-probe.sh` — one command instead of three guesses.** The bare
+  `snmpwalk` has always been in the guide and is one line long. The problem was
+  never the invocation but the **empty answer**: it can mean the device is
+  unreachable, that the SNMP view hides the LLDP MIB, or that the table is
+  simply still empty. Three completely different causes, one identical picture —
+  and confusing them costs afternoons, see above.
 
-  Das Skript macht deshalb drei Abfragen statt einer, benennt den Fall und
-  druckt einen fertigen Bericht. Es **liest nur** und **sendet nichts
-  irgendwohin**; die einzige Verbindung geht an die IP, die der Aufrufer
-  übergibt. Die Community wird per Umgebungsvariable oder verdeckter Eingabe
-  entgegengenommen, nie als Argument — Argumente stehen in der History und sind
-  für jeden sichtbar, der `ps` aufrufen kann. Der Bericht enthält **Anzahlen,
-  keine Nachbarnamen** und nie die Community: es gibt also nichts zu schwärzen.
-  Nachgemessen mit einer `snmpwalk`-Attrappe über alle vier Fälle.
+  The script therefore makes three queries instead of one, names the case and
+  prints a finished report. It **only reads** and **sends nothing anywhere**;
+  the only connection goes to the IP the caller passes in. The community is
+  taken from an environment variable or a hidden prompt, never as an argument —
+  arguments end up in the shell history and are visible to anyone who can run
+  `ps`. The report contains **counts, not neighbour names**, and never the
+  community: there is nothing to redact. Verified against an `snmpwalk` stub
+  across all four cases.
 
-  Liegt in `tools/` und ist damit **nicht im Modul-ZIP** — ein Shell-Skript
-  gehört nicht unter den Web-Root. Geholt wird es per `curl`, wie
-  `topo-change-sender.sh` und die Template-YAMLs auch.
+  It lives in `tools/` and is therefore **not in the module ZIP** — a shell
+  script does not belong under the web root. Fetch it with `curl`, like
+  `topo-change-sender.sh` and the template YAMLs.
 
-- **Eine zweite Issue-Vorlage: „Device report".** Bisher gab es nur „Bug
-  melden", und eine Geräte-Rückmeldung ist kein Fehler — wer bloß bestätigt,
-  dass sein Aruba funktioniert, öffnet dafür ungern ein Bug-Ticket. Die Vorlage
-  fragt genau die Felder ab, die eine Matrix-Zeile brauchen, darunter **Zabbix-
-  und Modulversion getrennt** (die Item-Erfassung hat sich zwischen Releases
-  geändert, und den LLDP-Q-Tab gibt es erst ab 5.1.0). Sie lädt **negative**
-  Ergebnisse ausdrücklich ein: ein „✗ keine abfragbare Nachbartabelle" erspart
-  dem Nächsten denselben Nachmittag. Und sie verlangt vor dem Absenden die
-  Bestätigung, dass keine Community, keine Hostnamen und keine IPs im Text
-  stehen.
+- **A second issue template: "Device report".** Until now there was only "report
+  a bug", and a device report is not a bug — someone who merely confirms that
+  their Aruba works is reluctant to open a bug ticket for it. The template asks
+  for exactly the fields a matrix row needs, including **Zabbix and module
+  version separately** (item collection changed between releases, and the LLDP-Q
+  tab only exists from 5.1.0 on). It explicitly invites **negative** results: a
+  "✗ no queryable neighbour table" saves the next person the same afternoon. And
+  before submitting it asks for confirmation that no community string, host
+  names or IP addresses appear in the text.
 
 ## v5.1.0 — 2026-08-30
 
-### Update von 5.0 — „Scan directory" ist Pflicht
+### Updating from 5.0 — "Scan directory" is mandatory
 
-5.1 bringt drei neue Actions mit: `network.topology.links`,
-`network.topology.positions` und `network.topology.portscan`. Zabbix
-registriert Actions beim **Scannen** des Modulverzeichnisses, nicht beim
-Kopieren der Dateien. Wer die Dateien austauscht und *Administration → General
-→ Modules → Scan directory* auslässt, bekommt eine Karte, die lädt — und
-manuelle Verbindungen sowie die gespeicherte Knotenanordnung, die mit „Unknown
-action" stehenbleiben. Die alte Version lief, die neue nicht, und niemand
-verbindet das mit einem vergessenen Menüpunkt.
+5.1 brings three new actions: `network.topology.links`,
+`network.topology.positions` and `network.topology.portscan`. Zabbix registers
+actions when it **scans** the module directory, not when the files are copied.
+Anyone who swaps the files and skips *Administration → General → Modules → Scan
+directory* gets a map that loads — and manual links plus the saved node layout
+that stall with "Unknown action". The old version worked, the new one does not,
+and nobody connects that to a forgotten menu item.
 
-`nt-install.sh update` vergleicht deshalb die Action-Listen von alter und neuer
-Version und sagt es dazu, wenn welche hinzugekommen sind; bisher wies nur der
-Erstinstallations-Pfad auf „Scan directory" hin. `nt-install.sh check` nennt
-außerdem die installierte Version und die vorhandenen Widgets mit ihren eigenen
-Versionsnummern — die Widgets werden von diesem Skript nicht mitinstalliert und
-bleiben beim Aktualisieren sonst unbemerkt liegen.
+`nt-install.sh update` therefore compares the action lists of the old and new
+version and says so when new ones appeared; until now only the first-install
+path pointed at "Scan directory". `nt-install.sh check` additionally reports the
+installed version and the widgets present with their own version numbers — the
+widgets are not installed by this script and would otherwise be left behind
+unnoticed during an update.
 
-Gespeichertes bleibt: Kartenanordnung und manuelle Kanten liegen serverseitig,
-Pins, Notizen und Presets im `localStorage` des Browsers. Es gibt nichts zu
-migrieren — auch das Revisionsfeld gegen konkurrierendes Speichern ergibt sich
-aus dem Inhalt und wird nirgends abgelegt.
+Saved data stays: map layout and manual edges live on the server, pins, notes
+and presets in the browser's `localStorage`. There is nothing to migrate — even
+the revision field guarding against concurrent writes is derived from the
+content and stored nowhere.
 
-Wer von **4.x** kommt, findet die Umbenennung des Verzeichnisses unter v5.0.0
-weiter unten; `nt-install.sh update` räumt den Altbestand selbst weg.
+Coming from **4.x**? The directory rename is described under v5.0.0 further
+down; `nt-install.sh update` clears the old installation itself.
 
 ### Added
 
-- **Gleichzeitiges Bearbeiten überschreibt nichts mehr.** Beide Ebenen —
-  manuelle Kanten und Kartenanordnung — speichern den *vollständigen* Zustand,
-  nicht ein Delta. Zwei Tabs desselben Benutzers oder zwei Super-Admins:
+- **Concurrent editing no longer overwrites anything.** Both layers — manual
+  edges and map layout — save the *complete* state, not a delta. Two tabs of the
+  same user, or two super admins:
 
-      A lädt, B lädt, A verschiebt einen Knoten und speichert,
-      B verschiebt einen anderen und speichert — A's Änderung ist weg.
+      A loads, B loads, A moves a node and saves,
+      B moves another one and saves — A's change is gone.
 
-  Niemand bekam einen Fehler; der Verlust fiel erst beim nächsten Laden auf und
-  sah dann nach einem Modulfehler aus. Der Client schickt jetzt die Revision
-  mit, auf der seine Änderung beruht, und der Server lehnt ab statt zu
-  überschreiben — mit einem Hinweis und dem aktuellen Stand in der Antwort.
+  Nobody got an error; the loss only surfaced on the next load and then looked
+  like a module bug. The client now sends the revision its change is based on,
+  and the server rejects instead of overwriting — with a message and the current
+  state in the response.
 
-  Die Kennung ergibt sich aus dem Inhalt, es gibt also kein neues gespeichertes
-  Feld und nichts zu migrieren. Vor dem Hashen wird rekursiv sortiert: die
-  *Menge* zählt, nicht die Schreibreihenfolge — sonst meldeten zwei Clients
-  einen Konflikt, die inhaltlich dasselbe gespeichert haben.
+  The identifier is derived from the content, so there is no new stored field
+  and nothing to migrate. Before hashing, the data is sorted recursively: the
+  *set* is what counts, not the write order — otherwise two clients that stored
+  identical content would report a conflict.
 
-- **Gekappte Verbindungen werden gemeldet.** `ManualLinks` begrenzt auf 2000
-  Kanten und brach bisher stillschweigend ab: Wer 2500 speicherte, bekam „ok"
-  und merkte beim nächsten Laden, dass 500 fehlen. Die Positionen melden ihr
-  Kappen seit 5.1; die Kanten tun es jetzt auch. Ebenso gemeldet wird die
-  Grenze von 50 **Ansichten** bei den Positionen — bisher zählte der Wert nur
-  verworfene Knoten und meldete „0 gekappt", während ganze Ansichten wegfielen.
+- **Truncated links are reported.** `ManualLinks` caps at 2000 edges and used to
+  cut off silently: saving 2500 returned "ok", and you noticed on the next load
+  that 500 were missing. Positions have reported their truncation since 5.1; the
+  edges do so now as well. The limit of 50 **views** for positions is reported
+  too — until now the counter only counted discarded nodes and reported
+  "0 truncated" while entire views were dropped.
 
-- **Automatisierter Teil des Clean-Install-Tests** (`tools/clean-install-test/smoke.sh`):
-  Modul paketieren, echtes Zabbix 7.4 hochfahren, Modul hineinmounten und
-  prüfen, ob das Frontend antwortet, ob der Code unter der PHP-Version des
-  Zabbix-Images sauber ist und ob die Assets über den Web-Root kommen. Als
-  CI-Job **manuell** ausgelöst, weil er Docker-in-Docker braucht. Das Aktivieren
-  des Moduls und das Rendern bleiben manuell — Zabbix hat keine API für
-  „Scan directory".
+- **Automated part of the clean-install test**
+  (`tools/clean-install-test/smoke.sh`): package the module, bring up a real
+  Zabbix 7.4, mount the module into it and check that the frontend answers, that
+  the code is clean under the PHP version of the Zabbix image, and that the
+  assets are served from the web root. Triggered **manually** as a CI job,
+  because it needs Docker-in-Docker. Enabling the module and rendering stay
+  manual — Zabbix has no API for "Scan directory".
 
-- **Manuelle Verbindungen liegen jetzt auf dem Server, nicht mehr im
-  `localStorage`.** Bisher waren die handgezogenen Kanten an einen Browser
-  gebunden: weg beim Cache-Leeren, unsichtbar für Kollegen, weg auf dem
-  Zweitrechner. Sie liegen jetzt in **zwei Ebenen**:
+- **Manual links now live on the server, no longer in `localStorage`.** Until
+  now hand-drawn edges were tied to one browser: gone when the cache was
+  cleared, invisible to colleagues, gone on the second machine. They now live in
+  **two layers**:
 
-  | Ebene | Speicher | schreibt | sieht es |
+  | Layer | Storage | Who writes | Who sees it |
   |---|---|---|---|
-  | geteilt | `module.config` | nur Super-Admins | alle |
-  | persönlich | `CProfile` des Users | jeder für sich | nur er selbst |
+  | shared | `module.config` | super admins only | everyone |
+  | personal | the user's `CProfile` | everyone, for themselves | only they |
 
-  Wer die geteilte Karte pflegen darf, pflegt sie auch: ein Super-Admin zeichnet
-  in die geteilte Ebene, alle anderen in ihre persönliche. Beide werden beim
-  Laden zusammengeführt, geteilte Kanten gewinnen bei Dopplung. In der Karte
-  sind sie unterscheidbar — geteilt kräftiger und länger gestrichelt.
+  Whoever may maintain the shared map does maintain it: a super admin draws into
+  the shared layer, everyone else into their personal one. Both are merged on
+  load, and shared edges win on duplicates. They are distinguishable on the map —
+  shared ones are stronger and dashed more widely.
 
-  Die Rechtegrenze ist keine Design-Entscheidung, sondern Zabbix: `CModule`
-  prüft in `update()` hart auf `USER_TYPE_SUPER_ADMIN`. Gelesen wird
-  `module.config` deshalb **nicht** über die API — die verweigert
-  Nicht-Super-Admins auch das Lesen — sondern über den ModuleManager, in dem
-  Zabbix die Config beim Bootstrap ohnehin schon liegen hat.
+  The permission boundary is not a design decision but Zabbix: `CModule` checks
+  hard for `USER_TYPE_SUPER_ADMIN` in `update()`. `module.config` is therefore
+  **not** read through the API — which denies non-super-admins even read access —
+  but through the ModuleManager, where Zabbix already holds the config after
+  bootstrap.
 
-  Vorhandene `localStorage`-Links wandern beim ersten Aufruf einmalig in die
-  persönliche Ebene, sofern serverseitig noch nichts liegt. Der alte Eintrag
-  bleibt als Sicherheitsnetz stehen, wird aber nicht mehr gelesen.
+  Existing `localStorage` links move once into the personal layer on first load,
+  provided nothing is stored server-side yet. The old entry stays as a safety
+  net but is no longer read.
 
-  Kein Host-Tag wie bei `nt:parent`: ein Link darf auf einen **Ghost-Knoten**
-  zeigen — einen per LLDP gemeldeten Nachbarn, den es in Zabbix gar nicht gibt.
-  Ein Tag bräuchte einen Host, den es hier nicht gibt.
+  No host tag as with `nt:parent`: a link may point at a **ghost node** — a
+  neighbour reported over LLDP that does not exist in Zabbix at all. A tag would
+  need a host, and there is none here.
 
-  Geschrieben wird über die neue Action `network.topology.links` (POST, eigener
-  CSRF-Token, Drosselung, `USER_TYPE_ZABBIX_USER` für die persönliche und
-  Super-Admin für die geteilte Ebene). Das Frontend schreibt optimistisch: die
-  Kante erscheint sofort, scheitert der POST, wird zurückgerollt und der Fehler
-  gemeldet — sonst stünde eine Kante auf dem Schirm, die es serverseitig nicht
-  gibt.
+  Writing goes through the new action `network.topology.links` (POST, its own
+  CSRF token, rate limiting, `USER_TYPE_ZABBIX_USER` for the personal layer and
+  super admin for the shared one). The frontend writes optimistically: the edge
+  appears at once, and if the POST fails it is rolled back and the error is
+  reported — otherwise an edge would sit on screen that does not exist on the
+  server.
 
-  `tests/ManualLinksTest.php` deckt die Validierung ab (21 Prüfungen). Zwei
-  Regeln sind dabei leicht zu übersehen: der **Pipe** ist in Node-IDs verboten,
-  weil persönliche Links als `s|t` je einer `CProfile`-Zeile liegen; und das
-  Paar wird **sortiert** abgelegt, weil eine Kante ungerichtet ist und `{a,b}`
-  sonst neben `{b,a}` landet.
+  `tests/ManualLinksTest.php` covers the validation (21 checks). Two rules are
+  easy to overlook: the **pipe** is forbidden in node IDs, because personal links
+  are stored as `s|t`, one per `CProfile` row; and the pair is stored **sorted**,
+  because an edge is undirected and `{a,b}` would otherwise sit next to `{b,a}`.
 
-- **Kennzahlen-Zeile über der Karte.** Sechs Zahlen auf einen Blick: Hosts,
-  OK/Warn/Krit., Kanten und nicht überwachte Nachbarn. Standardmäßig als
-  kompakte Chips (~40 px), im Wallboard-Modus (`?wallboard=1`) als große
-  Kacheln — unter der Zeile liegt kein Scrollbereich, sondern der Graph, und
-  Höhe die oben weggeht fehlt ihm dauerhaft.
+- **A KPI row above the map.** Six numbers at a glance: hosts, OK/warn/crit,
+  edges and unmonitored neighbours. By default as compact chips (~40 px), in
+  wallboard mode (`?wallboard=1`) as large tiles — below the row there is no
+  scroll area but the graph itself, and height taken at the top is missing from
+  it permanently.
 
-  Zwei der Zahlen gab es bisher nirgends: **Kanten** nach Herkunft
-  aufgeschlüsselt (manuell gezogen, aus LLDP/CDP, zu Ghosts) und **Ghosts** —
-  per LLDP gemeldete Nachbarn ohne Host in Zabbix. Alles aus dem Graphen
-  gelesen, kein Backend, keine neue Action.
+  Two of the numbers did not exist anywhere before: **edges** broken down by
+  origin (drawn by hand, from LLDP/CDP, to ghosts) and **ghosts** — neighbours
+  reported over LLDP without a host in Zabbix. All read from the graph, no
+  backend, no new action.
 
-  Nebenbei entfernt: `updateBadge()` in `render-tech.js` wollte seit v4.18.3
-  Zahlen in ein Element `#nt-badge` schreiben, das **in der gesamten Historie
-  nie erzeugt wurde** — die Funktion stieg bei jedem Aufruf in Zeile 2 aus, die
-  Zahlen hat nie jemand gesehen. Mit ihr fällt die einzige unterdrückte
-  `no-unsanitized`-Stelle der Datei weg.
+  Removed along the way: `updateBadge()` in `render-tech.js` had been trying
+  since v4.18.3 to write numbers into an element `#nt-badge` that **was never
+  created anywhere in the entire history** — the function bailed out on line 2 on
+  every call, and nobody ever saw those numbers. With it goes the file's only
+  suppressed `no-unsanitized` site.
 
-- **Zwei neue Dashboard-Widgets.** Damit liefert das Paket fünf:
-  - **NT KPI** — dieselben Kennzahlen als Kachel, wahlweise als Ring
-    (Severity-Verteilung mit der Host-Zahl in der Mitte) oder als Raster.
-  - **NT Items** — ein Item-Muster über alle Hosts der gewählten Gruppen
-    gepivotet: Hosts als Zeilen, passende Keys als Spalten. Festes Muster im
-    Formular statt der interaktiven Auswahl des Haupt-Tabs; auf einer Kachel
-    gibt es diese Interaktion nicht.
+- **Two new dashboard widgets.** That brings the package to five:
+  - **NT KPI** — the same figures as a tile, either as a ring (severity
+    distribution with the host count in the middle) or as a grid.
+  - **NT Items** — one item pattern pivoted across all hosts of the selected
+    groups: hosts as rows, matching keys as columns. A fixed pattern in the form
+    instead of the main tab's interactive selection; on a tile that interaction
+    does not exist.
 
-  Beide bauen mit `createElement`/`textContent` statt `innerHTML` und brauchen
-  deshalb keinen Eintrag in `eslint-suppressions.json`.
+  Both build with `createElement`/`textContent` instead of `innerHTML` and
+  therefore need no entry in `eslint-suppressions.json`.
 
-- **Die Kartenanordnung liegt jetzt auf dem Server — mit einer geteilten
-  Ebene.** Wo die Knoten liegen, lag bisher im `localStorage`: an einen Browser
-  gebunden, weg beim Cache-Leeren, und jeder ordnete sich seine eigene Karte.
+- **The map layout now lives on the server — with a shared layer.** Where the
+  nodes sit used to live in `localStorage`: tied to one browser, gone when the
+  cache was cleared, and everyone arranged their own map.
 
-  Zwei Ebenen wie bei den manuellen Links: ein **Super-Admin** pflegt *die*
-  Karte — die, die alle sehen, die man in ein Ticket verlinkt, die im Wallboard
-  hängt. Jeder andere weicht persönlich davon ab.
+  Two layers as with manual links: a **super admin** maintains *the* map — the
+  one everyone sees, the one you link into a ticket, the one on the wallboard.
+  Everyone else deviates from it personally.
 
-  Der Unterschied zu den Links steckt im Zusammenführen: die persönliche Ebene
-  gewinnt **pro Knoten**, nicht als Ganzes. Wer drei Geräte verschiebt, behält
-  drei eigene Positionen — alles andere folgt weiter der geteilten Karte, auch
-  wenn ein Admin sie später neu ordnet. Gespeichert wird bei Nicht-Admins nur
-  die **Abweichung**; läge dort die volle Anordnung, verdeckte sie die geteilte
-  Ebene für immer.
+  The difference from links is in the merge: the personal layer wins **per
+  node**, not as a whole. Move three devices and you keep three positions of your
+  own — everything else keeps following the shared map, even if an admin
+  rearranges it later. Non-admins only store the **deviation**; if the full
+  layout were stored there it would mask the shared layer forever.
 
-  Positionen hängen an der Gruppenauswahl, deshalb ist der View-Schlüssel Teil
-  der Struktur — mit eigenem Eintrag für die Group-View, die eigene
-  Pseudo-Knoten hat. Vorhandene `localStorage`-Anordnungen wandern beim ersten
-  Aufruf einmalig in die persönliche Ebene, sofern serverseitig für diese
-  Ansicht noch nichts liegt.
+  Positions depend on the group selection, so the view key is part of the
+  structure — with its own entry for the group view, which has pseudo nodes of
+  its own. Existing `localStorage` layouts move once into the personal layer on
+  first load, provided nothing is stored server-side for that view yet.
 
-  Geschrieben wird über die neue Action `network.topology.positions` (POST,
-  eigener CSRF-Token, Drosselung). `tests/NodePositionsTest.php` deckt die
-  Validierung mit 23 Prüfungen ab — der View-Schlüssel wird dabei genauso
-  streng geprüft wie die Knoten-IDs: wäre er frei wählbar, könnte ein Client
-  `module.config` mit beliebigen Schlüsseln vollschreiben.
+  Writing goes through the new action `network.topology.positions` (POST, its own
+  CSRF token, rate limiting). `tests/NodePositionsTest.php` covers the validation
+  with 23 checks — the view key is validated just as strictly as the node IDs: if
+  it were freely choosable, a client could fill `module.config` with arbitrary
+  keys.
 
-  **Pins und Notizen bleiben vorerst im `localStorage`.**
+  **Pins and notes stay in `localStorage` for now.**
 
-- **Aus einem unüberwachten Nachbarn einen Host machen.** Ghost-Knoten haben
-  jetzt ein eigenes Kontextmenü mit Herkunftsangabe (welcher Host sie per
-  LLDP/CDP gemeldet hat) und — für Admins — einem Eintrag, der Zabbix' eigenes
-  Host-Formular **vorbefüllt** öffnet: Name, aktuelle Hostgruppe, Herkunft in
-  der Beschreibung.
+- **Turning an unmonitored neighbour into a host.** Ghost nodes now have a
+  context menu of their own, with provenance (which host reported them over
+  LLDP/CDP) and — for admins — an entry that opens Zabbix's own host form
+  **pre-filled**: name, current host group, provenance in the description.
 
-  Angelegt wird der Host bewusst nicht von uns: keine schreibende Action, keine
-  eigene Rechteprüfung, keine halb angelegten Hosts. Zabbix validiert, legt an
-  und lehnt ab. Bisher fielen Ghosts in den Host-Zweig des Menüs und bekamen
-  Einträge wie „Latest Data", die für einen nicht existierenden Host
-  zwangsläufig ins Leere führen.
+  The host is deliberately not created by us: no writing action, no permission
+  check of our own, no half-created hosts. Zabbix validates, creates and
+  rejects. Until now ghosts fell into the host branch of the menu and got entries
+  such as "Latest data", which inevitably lead nowhere for a host that does not
+  exist.
 
-- **Hersteller, Gerätetyp und MAC unüberwachter Nachbarn.** „Aus einem Ghost
-  einen Host machen" scheitert in der Praxis an einer simplen Frage: *was ist
-  das Ding überhaupt?* Ein Name wie `CNQ6KD51WK` beantwortet sie nicht.
+- **Vendor, device type and MAC of unmonitored neighbours.** "Turn a ghost into a
+  host" fails in practice on a simple question: *what is that thing?* A name like
+  `CNQ6KD51WK` does not answer it.
 
-  Das LLDP-Template erhebt deshalb drei Felder mehr, die die Switches ohnehin
-  melden — System-Beschreibung (`.10`), Capabilities (`.12`) und Chassis-ID
-  (`.5`). Daraus werden im Ghost-Menü Hersteller, Gerätetyp und MAC. Die
-  Capabilities sind eine OCTET-STRING-Bitmap; sie wird defensiv decodiert und
-  liefert im Zweifel lieber nichts als eine falsche Behauptung.
+  The LLDP template therefore collects three more fields that the switches report
+  anyway — system description (`.10`), capabilities (`.12`) and chassis ID
+  (`.5`). From those the ghost menu derives vendor, device type and MAC. The
+  capabilities are an OCTET STRING bitmap; it is decoded defensively and, in
+  doubt, returns nothing rather than a false claim.
 
-  Wer das Template schon gelinkt hat, bekommt die Felder mit der nächsten
-  Discovery. Fehlen sie, ändert sich nichts — alle drei sind optional, und viele
-  Geräte melden nur einen Teil.
+  If you have already linked the template, the fields arrive with the next
+  discovery. If they are missing, nothing changes — all three are optional, and
+  many devices report only some of them.
 
-- **Gerätetyp aus dem Protokoll statt aus einer Herstellerliste.** Gemeldet
-  wurde: Cisco-Switches landen unter „Server / virtualization" statt unter
-  „Switch". Die Ursache war nicht ein fehlender Eintrag, sondern der Ansatz.
-  `deviceType()` rät aus Hostname und Template-Namen, und die Muster waren
-  gegen ausgedachte Namen geschrieben — an einer echten Installation
-  nachgezählt trafen sie **2 von 14** offiziellen Zabbix-Netzwerk-Templates.
-  Auch `mikrotik routeros` ging ins Leere, weil das Template „MikroTik by
-  SNMP" heißt.
+- **Device type from the protocol instead of a vendor list.** Reported: Cisco
+  switches end up under "Server / virtualization" instead of "Switch". The cause
+  was not a missing entry but the approach. `deviceType()` guesses from host name
+  and template names, and the patterns had been written against invented names —
+  counted against a real installation, they matched **2 of 14** official Zabbix
+  network templates. `mikrotik routeros` also missed, because the template is
+  called "MikroTik by SNMP".
 
-  Die Liste zu verlängern wäre die falsche Antwort: allein für Cisco führt
-  Zabbix neun Templates, davon sind zwei (UCS, UCS Manager) Server — ein
-  Muster `cisco` würde die falsch einsortieren. Stattdessen beantwortet das
-  Protokoll die Frage. Die **LLDP-Capabilities** nach IEEE 802.1AB sagen
-  `Bridge`, `Router` oder `WLAN AP`, und zwar herstellerunabhängig; das Modul
-  decodierte sie bereits, aber nur für nicht überwachte Nachbarn.
+  Extending the list would be the wrong answer: for Cisco alone Zabbix ships nine
+  templates, two of which (UCS, UCS Manager) are servers — a `cisco` pattern
+  would misfile those. Instead the protocol answers the question. The **LLDP
+  capabilities** per IEEE 802.1AB say `Bridge`, `Router` or `WLAN AP`, vendor
+  independently; the module already decoded them, but only for unmonitored
+  neighbours.
 
-  Vier Stufen, erste gewinnt:
+  Four stages, first one wins:
 
   | | Signal |
   |---|---|
-  | 1 | `nt:icon`-Tag |
-  | 2 | Name- und Template-Muster (unverändert) |
-  | 3 | LLDP-Capability, die ein Nachbar meldet |
-  | 4 | führt selbst eine Nachbartabelle → Netzwerkgerät |
+  | 1 | `nt:icon` tag |
+  | 2 | name and template patterns (unchanged) |
+  | 3 | LLDP capability a neighbour reports |
+  | 4 | maintains a neighbour table itself → network device |
 
-  Stufe 3 und 4 greifen **nur**, wenn Stufe 2 im `server`-Fallback gelandet
-  ist. Andersherum wäre es riskant: ein Host namens `rtr-core-01` meldet als
-  L3-Switch auch das Bridge-Bit und würde vom Protokoll zum Switch
-  umgestempelt, obwohl der Name die Absicht kennt. So ändert sich an keinem
-  Host etwas, der heute richtig erkannt wird.
+  Stages 3 and 4 only apply **if** stage 2 ended in the `server` fallback. The
+  other way round would be risky: a host named `rtr-core-01` also reports the
+  bridge bit as an L3 switch and would be restamped as a switch by the protocol,
+  although the name knows the intent. This way nothing changes for any host that
+  is correctly detected today.
 
-  `tests/DeviceTypeTest.php` hält die Reihenfolge fest, mit echten
-  Template-Namen aus einer 7.4-Installation statt erfundenen.
+  `tests/DeviceTypeTest.php` pins the order, using real template names from a 7.4
+  installation rather than invented ones.
 
-- **Ein Deinstallations-Skript, das auch die Reste benennt.** `nt-uninstall.sh`
-  entfernt Hauptmodul und Widgets — und zeigt danach, was serverseitig
-  liegenbleibt. Das war nötig, seit die Karte serverseitig gespeichert wird:
-  die **geteilte** Ebene räumt sich selbst ab, weil `module.config` eine Spalte
-  der `module`-Zeile ist und mit ihr stirbt. Die **persönliche** hängt am
-  Benutzerprofil und überlebt jede Deinstallation, ohne dass es jemand merkt.
+- **An uninstall script that also names the leftovers.** `nt-uninstall.sh`
+  removes the main module and the widgets — and then shows what stays behind on
+  the server. That became necessary once the map was stored server-side: the
+  **shared** layer clears itself, because `module.config` is a column of the
+  `module` row and dies with it. The **personal** layer hangs off the user
+  profile and survives any uninstall without anyone noticing.
 
   ```bash
-  ./nt-uninstall.sh --dry-run     # zeigt nur, ändert nichts
-  ./nt-uninstall.sh --purge       # räumt zusätzlich das Benutzerprofil
+  ./nt-uninstall.sh --dry-run     # shows only, changes nothing
+  ./nt-uninstall.sh --purge       # additionally clears the user profile
   ```
 
-  Verzeichnisse werden **verschoben**, nicht gelöscht — nach
-  `/var/backups/nt-uninstall-<datum>/`, mit ausgegebenem Rückhol-Befehl.
-  Angefasst wird nur, wessen `manifest.json` eine `network_topology`-ID trägt;
-  ein fremdes Modul, das zufällig `widget/` heißt, bleibt liegen. Alte
-  `_v6`-Verzeichnisse aus 4.x kommen mit — auch solche, die nach dem
-  Quellordner benannt sind.
+  Directories are **moved**, not deleted — to
+  `/var/backups/nt-uninstall-<date>/`, with the restore command printed. Only
+  things whose `manifest.json` carries a `network_topology` ID are touched; a
+  foreign module that happens to be called `widget/` is left alone. Old `_v6`
+  directories from 4.x are included — even those named after the source folder.
 
-  Host-Tags, Templates, Cron und Monitoring-User bleiben **unberührt**. Das sind
-  selbst angelegte Daten; `nt:parent` beschreibt die Infrastruktur des Nutzers,
-  nicht das Modul. Das Skript zählt sie auf und gibt das SQL aus, ausführen muss
-  es jemand selbst.
+  Host tags, templates, cron and monitoring users stay **untouched**. Those are
+  data you created yourself; `nt:parent` describes the user's infrastructure, not
+  the module. The script lists them and prints the SQL, but running it is up to
+  you.
 
-- **Dienste-Probe auf Klick.** Im Kontextmenü eines Hosts liegt ein Eintrag, der
-  eine feste Liste von 11 Ports prüft (SSH, Telnet, HTTP/S, SNMP, SMB, LPD, RDP,
-  Proxmox, HTTP-alt, JetDirect) und *offen* / *abgewiesen* / *Zeitüberschreitung*
-  unterscheidet — die drei Zustände sind verschiedene Aussagen, „abgewiesen"
-  heißt: da ist ein Gerät, nur nicht dieser Dienst.
+- **Service probe on click.** The host context menu has an entry that checks a
+  fixed list of 11 ports (SSH, Telnet, HTTP/S, SNMP, SMB, LPD, RDP, Proxmox,
+  HTTP-alt, JetDirect) and distinguishes *open* / *refused* / *timeout* — the
+  three states are different statements, and "refused" means: there is a device,
+  just not this service.
 
-  Bewusst eng gehalten: läuft nur auf Klick und nie von selbst, die Portliste
-  steht im Server-Code und ist vom Client nicht wählbar, der Client schickt
-  **nur eine hostid** — die Adresse löst der Server über die Zabbix-API auf,
-  damit die Rechte des Benutzers greifen —, es braucht mindestens
-  Zabbix-Admin, und es ist auf 5 Aufrufe pro Minute und Benutzer gedrosselt.
-  0,4 s je Port, also 4,4 s im schlechtesten Fall.
+  Deliberately kept narrow: it runs on click only and never by itself, the port
+  list lives in server code and cannot be chosen by the client, the client sends
+  **only a hostid** — the server resolves the address through the Zabbix API so
+  that the user's permissions apply —, it requires at least Zabbix Admin, and it
+  is limited to 5 calls per minute per user. 0.4 s per port, so 4.4 s in the
+  worst case.
 
-  Gedacht als „was ist diese Kiste", nicht als Scanner.
+  Meant as "what is this box", not as a scanner.
 
 ### Changed
-- **Die Widgets folgen jetzt Zabbix' eigenem Update-Zyklus.** Alle liefen mit
-  eigenem `setInterval` (30/30/60 s), während die Basisklasse `CWidget`
-  parallel periodisch die View-Action rief und den Widget-Körper durch frisches
-  View-HTML ersetzte — den „Loading…"-Platzhalter, den der eigene Timer erst
-  bis zu 60 s später überschrieb. Die Widget-Kacheln fielen dadurch regelmäßig
-  auf „Loading…" zurück.
 
-  Sie überschreiben jetzt `promiseUpdate()`. Damit gilt die
-  Refresh-Einstellung des Dashboards statt drei fest verdrahteter Zahlen, und
-  bei inaktiver Seite pausiert der Zyklus von selbst.
+- **The widgets now follow Zabbix's own update cycle.** All of them ran their own
+  `setInterval` (30/30/60 s), while the `CWidget` base class periodically called
+  the view action in parallel and replaced the widget body with fresh view
+  HTML — the "Loading…" placeholder, which their own timer only overwrote up to
+  60 s later. The widget tiles therefore fell back to "Loading…" regularly.
 
-- **Versionssprung bei den drei bestehenden Widgets** — NT Topology auf 3.1.0,
-  NT Health Score und NT Table auf 2.1.0. Ihr JavaScript wurde um 266 Zeilen
-  umgebaut (Update-Zyklus, geteilter Datenzugriff), die Versionsnummer war
-  dabei stehengeblieben. Wer aktualisiert hätte, sähe in der Modulliste
-  dieselbe Nummer bei anderem Verhalten und könnte installiert nicht von
-  veraltet unterscheiden.
+  They now override `promiseUpdate()`. With that the dashboard's refresh setting
+  applies instead of three hard-wired numbers, and the cycle pauses by itself
+  when the page is inactive.
 
-- **Einheitliche Namen.** Im Dashboard-Menü heißen die Widgets durchgehend
-  `NT …` (Zabbix sortiert alphabetisch — ohne gemeinsames Präfix standen sie an
-  drei Stellen der Liste). In der Modulliste tragen alle eine englische
-  Beschreibung in gleicher Form; das Graph-Widget hieß dort nur „— Widget" und
-  heißt jetzt „— Topology Widget". Nur Anzeigetexte: die Widget-IDs bleiben,
-  bestehende Kacheln behalten ihren gespeicherten Titel.
+- **Version bump for the three existing widgets** — NT Topology to 3.1.0, NT
+  Health Score and NT Table to 2.1.0. Their JavaScript was rewritten by 266 lines
+  (update cycle, shared data access) while the version number stayed put. Anyone
+  updating would see the same number in the module list with different behaviour
+  and could not tell installed from outdated.
+
+- **Consistent names.** In the dashboard menu the widgets are all called `NT …`
+  (Zabbix sorts alphabetically — without a common prefix they sat in three
+  different places in the list). In the module list they all carry an English
+  description in the same shape; the graph widget was only called "— Widget"
+  there and is now "— Topology Widget". Display text only: the widget IDs stay,
+  and existing tiles keep their stored title.
 
 ### Fixed
 
-- **Die geteilte Ebene ging ungefiltert an jeden Benutzer.** Die Topologie
-  kommt aus der Zabbix-API und ist rechtegefiltert; die geteilte Karte liegt in
-  `module.config` und kannte keine Rechte. Sichtbar wurde davon nichts — das
-  Frontend zeichnet eine Kante nur zwischen vorhandenen Knoten — aber im
-  ausgelieferten JSON standen Host-IDs aus fremden Gruppen, Gruppen-IDs in den
-  Ansichts-Schlüsseln und per LLDP annoncierte Gerätenamen aus Netzteilen ohne
-  Zugriff. Wird jetzt gegen die sichtbaren Hosts und Gruppen gefiltert.
+- **The shared layer went to every user unfiltered.** The topology comes from the
+  Zabbix API and is permission-filtered; the shared map lives in `module.config`
+  and knew no permissions. Nothing of it was visible — the frontend only draws an
+  edge between nodes that exist — but the delivered JSON contained host IDs from
+  foreign groups, group IDs in the view keys, and device names announced over
+  LLDP from network segments the user has no access to. It is now filtered
+  against the visible hosts and groups.
 
-- **Ohne APCu wurde überhaupt nicht gedrosselt.** Das Rate-Limit begann mit
-  „kein APCu → durchlassen". Für die lesenden Actions vertretbar, für den
-  Portscan nicht: er arbeitet synchron, elf Ports mal Timeout blockieren einen
-  PHP-Worker mehrere Sekunden, und das Limit von 5 pro 60 s existierte ohne
-  APCu schlicht nicht — während INSTALL.md APCu ausdrücklich als optional
-  führt. Fällt jetzt auf ein gleitendes Fenster in der Session zurück.
+- **Without APCu there was no rate limiting at all.** The rate limit started with
+  "no APCu → let it through". Defensible for the reading actions, not for the
+  port scan: it works synchronously, eleven ports times timeout block a PHP
+  worker for several seconds, and the limit of 5 per 60 s simply did not exist
+  without APCu — while INSTALL.md explicitly lists APCu as optional. It now falls
+  back to a sliding window in the session.
 
-- **Fehlermeldungen gingen ungeprüft an den Client.** Die Actions für Kanten
-  und Positionen reichten jede Exception-Meldung durch; DB-, Schema- und
-  TypeError-Texte können Pfade, Klassen- und Spaltennamen enthalten. Jetzt wie
-  bei den Wartungsfenstern: nur Zabbix-API-Meldungen gehen raus, der Rest ins
-  Serverlog. Dabei auch `catch (Throwable)` statt `catch (Exception)` — ein
-  TypeError wurde vorher gar nicht gefangen.
+- **Error messages went to the client unchecked.** The actions for edges and
+  positions passed every exception message through; database, schema and
+  TypeError texts can contain paths, class and column names. Now as with the
+  maintenance windows: only Zabbix API messages go out, the rest into the server
+  log. Along with it `catch (Throwable)` instead of `catch (Exception)` — a
+  TypeError was not caught at all before.
 
-- **Der Diagnose-Ringpuffer verlor Einträge unter Last.** Lesen, anhängen,
-  zurückschreiben ist nicht atomar; zwei gleichzeitige Requests überschrieben
-  sich. Jetzt ein echter Ringpuffer über atomar vergebene laufende Nummern.
+- **The diagnostics ring buffer lost entries under load.** Read, append, write
+  back is not atomic; two concurrent requests overwrote each other. It is now a
+  real ring buffer over atomically assigned sequence numbers.
 
-- **Die CI lief 32 Commits lang gar nicht.** Eine explizite `stages`-Liste
-  ersetzt GitLabs Defaults — der `parity`-Job kam mit `stage: test` dazu, `test`
-  stand aber nicht in der Liste. GitLab überspringt so einen Job nicht, es weist
-  die *gesamte* Pipeline ab. Nichts wurde rot, deshalb fiel es niemandem auf.
-  Ein neues Gate (`npm run ci:pipeline`) fängt das künftig **lokal** ab — in der
-  Pipeline wäre es zu spät, weil eine ungültige CI-Datei keinen Job mehr starten
-  lässt.
+- **CI did not run at all for 32 commits.** An explicit `stages` list replaces
+  GitLab's defaults — the `parity` job was added with `stage: test`, but `test`
+  was not in the list. GitLab does not skip such a job, it rejects the *entire*
+  pipeline. Nothing turned red, which is why nobody noticed. A new gate
+  (`npm run ci:pipeline`) catches this **locally** in future — in the pipeline it
+  would be too late, because an invalid CI file cannot start a job any more.
 
-- **Sicherheitsdokumentation beschrieb ein überholtes Modell.** `SECURITY.md`
-  sprach von „der einzigen schreibenden Action" — es sind vier (Wartung, Kanten,
-  Positionen, Portscan) — und von drei Widget-Modulen, es sind fünf.
-  `INSTALL.md` empfahl für RHEL `chown -R apache:apache`, während dieselbe Datei
-  drei Absätze vorher `root:root` vorgibt, damit ein kompromittierter
-  PHP-Prozess den Modulcode nicht umschreiben kann.
+- **The security documentation described an outdated model.** `SECURITY.md` spoke
+  of "the only writing action" — there are four (maintenance, edges, positions,
+  port scan) — and of three widget modules, where there are five. `INSTALL.md`
+  recommended `chown -R apache:apache` for RHEL, while three paragraphs earlier
+  the same file prescribes `root:root` so that a compromised PHP process cannot
+  rewrite the module code.
 
-- **Port 161 hieß in der Portliste „SNMP".** SNMP läuft real über UDP; ein
-  TCP-Timeout dort sagt nichts über SNMP aus. Der Code wusste das seit jeher,
-  der Nutzer sah nur „SNMP: timeout". Heißt jetzt „SNMP/TCP".
-- **Die Kennzahlen zählten Ghosts als Hosts — und meldeten trotzdem „0 Ghosts".**
-  Bei eingeschaltetem Ghost-Toggle bekam die Zählung das bereits angereicherte
-  Knoten-Array. Daraus folgte beides auf einmal: `injectGhostNodes` überspringt
-  jede ID, die es schon kennt, also blieb die Differenz null — ausgerechnet
-  dann, wenn die Ghosts sichtbar auf der Karte lagen. Und ein Ghost hat
-  `severity 0`, lief also durch die Severity-Schleife als **OK** mit. Auf einer
-  Karte mit 11 Geräten und einem Ghost stand „12 Hosts, 4 OK" bei drei grünen
-  Knoten.
+- **Port 161 was labelled "SNMP" in the port list.** SNMP actually runs over UDP;
+  a TCP timeout there says nothing about SNMP. The code had always known that,
+  the user only saw "SNMP: timeout". It is now called "SNMP/TCP".
 
-  Beide Zahlen korrigierten sich nach 30 Sekunden von selbst, weil der
-  Refresh-Pfad die rohen Backend-Knoten übergibt — die unangenehmste Sorte
-  Fehler: beim Nachsehen ist er weg.
+- **The KPI row counted ghosts as hosts — and still reported "0 ghosts".** With
+  the ghost toggle on, the count received the already enriched node array. Both
+  followed from that at once: `injectGhostNodes` skips every ID it already knows,
+  so the difference stayed zero — precisely when the ghosts were visibly on the
+  map. And a ghost has `severity 0`, so it went through the severity loop as
+  **OK**. On a map with 11 devices and one ghost the row read "12 hosts, 4 OK"
+  next to three green nodes.
 
-  Die Zählung filtert jetzt `_isGhost` und die Internet-Wolke heraus, bevor
-  irgendetwas gezählt wird — auch für die Zahl „Hosts" selbst. Der erste Anlauf
-  hatte nur die Severity-Aufteilung umgestellt, weshalb die Zeile sichtbar nicht
-  mehr aufging: „14 Hosts, 11 OK" und sonst nichts.
+  Both numbers corrected themselves after 30 seconds, because the refresh path
+  passes the raw backend nodes — the most unpleasant kind of bug: by the time you
+  look, it is gone.
 
-  Dazu bekommen alle vier Aufrufer dieselbe Menge, nämlich die rohe Hostliste
-  aus dem Backend. Der Render-Pfad war der einzige, der die um Gruppen-Aggregate,
-  Internet-Wolke und Ghosts angereicherte Fassung reichte; im Gruppen-View
-  sprang die Zahl beim Ziehen einer Kante von „3 Hosts" auf „47 Hosts", ohne
-  dass sich ein Host geändert hätte. Das KPI-**Widget** war nie betroffen; es
-  bekommt die Backend-Daten direkt und leitet die Ghosts eigenständig ab.
+  The count now filters out `_isGhost` and the internet cloud before anything is
+  counted — including for the "hosts" figure itself. The first attempt had only
+  changed the severity split, which is why the row visibly stopped adding up:
+  "14 hosts, 11 OK" and nothing else.
 
-- **Port-zu-Port-Beschriftungen waren seit jeher tot.** Das README bewirbt, dass
-  jede Kante auf LLDP/SNMP-Switches den lokalen **und** den entfernten Port
-  trägt. Sie tat es nie: die Item-Suche fragte die Port-OIDs überhaupt nicht ab,
-  `lldpRemPortId` und `lldpRemPortDesc` standen nicht in der Schlüsselliste. Die
-  Labels fielen still auf Host-zu-Host zurück — still, weil fehlende Ports
-  aussehen wie „dieses Gerät meldet keine".
+  On top of that, all four callers now get the same set, namely the raw host list
+  from the backend. The render path was the only one passing the version enriched
+  with group aggregates, internet cloud and ghosts; in the group view the number
+  jumped from "3 hosts" to "47 hosts" while an edge was being dragged, without a
+  single host having changed. The KPI **widget** was never affected; it gets the
+  backend data directly and derives the ghosts itself.
 
-  Nachgemessen an einem Switch: von 9 auf 19 geholte Items. Auf zwei
-  SNMP-Switches gegengeprüft, die sich gegenseitig sehen — die Kante zwischen
-  ihnen trägt jetzt an beiden Enden den Port.
+- **Port-to-port labels had been dead all along.** The README advertises that on
+  LLDP/SNMP switches every edge carries the local **and** the remote port. It
+  never did: the item lookup did not query the port OIDs at all, `lldpRemPortId`
+  and `lldpRemPortDesc` were not in the key list. The labels fell back silently
+  to host-to-host — silently, because missing ports look like "this device does
+  not report any".
 
-  Auch die Weathermap hängt daran: ohne Port-Zuordnung konnte sie nicht nach
-  *gemessener* Auslastung des betroffenen Interfaces färben, sondern nur nach
-  einer Schätzung auf Knotenebene.
+  Measured against a switch: from 9 to 19 items fetched. Cross-checked on two
+  SNMP switches that see each other — the edge between them now carries the port
+  at both ends.
 
-- **Der Super-Admin sah seine eigene geteilte Karte nicht.** Beim Umzug der
-  Anordnung auf den Server wanderten vorhandene `localStorage`-Positionen in die
-  **persönliche** Ebene — auch beim Super-Admin. Dessen persönliche Ebene
-  verdeckte danach die geteilte, die er selbst pflegte: er ordnete die Karte für
-  alle, sah aber weiter seinen alten Stand. Die Migration schreibt nun in die
-  Ebene, die zur Rolle passt, und wer geteilt speichert, löscht dabei seinen
-  persönlichen Eintrag für diese Ansicht.
+  The weathermap depends on this too: without a port mapping it could not colour
+  by the *measured* utilization of the interface concerned, only by an estimate
+  at node level.
 
-- **Zwei der drei mitgelieferten Templates ließen sich nicht importieren.**
-  `nt_health_score_template.yaml` und `nt_topology_change_template.yaml`
-  hatten unter `template_groups` kein `uuid`, das Zabbix 7.0 dort verlangt.
-  Der Import brach ab mit
+- **The super admin could not see their own shared map.** When the layout moved
+  to the server, existing `localStorage` positions migrated into the **personal**
+  layer — for the super admin as well. Their personal layer then masked the
+  shared one they were maintaining themselves: they arranged the map for
+  everyone but kept seeing their own old state. The migration now writes into the
+  layer that matches the role, and saving to the shared layer deletes the
+  personal entry for that view.
+
+- **Two of the three shipped templates could not be imported.**
+  `nt_health_score_template.yaml` and `nt_topology_change_template.yaml` had no
+  `uuid` under `template_groups`, which Zabbix 7.0 requires there. The import
+  aborted with
 
   ```
   Invalid tag "/zabbix_export/template_groups/template_group(1)":
   the tag "uuid" is missing.
   ```
 
-  Beide werden in `INSTALL.md` als Schritt 4 zum Import empfohlen — es hat
-  also jeder gesehen, der der Anleitung gefolgt ist.
+  Both are recommended for import as step 4 in `INSTALL.md` — so everyone who
+  followed the guide saw it.
 
-  Dahinter lagen zwei weitere Fehler, die erst der jeweils nächste
-  Import-Versuch zeigte. **Die falsche Gruppe:** die ergänzte `uuid` war aus
-  dem funktionierenden dritten Template abgeschrieben — sie gehört aber zu
-  `Templates/Network devices`, nicht zu `Templates`. Zwei verschiedene
-  Gruppennamen trugen damit dieselbe `uuid`. **Und fünf `uuid`s, die keine
-  waren:** von Hand getippte Muster wie `8a2b3c4d5e6f47081920a1b2c3d4e5f6` —
-  32 Hex-Zeichen, aber kein UUIDv4. Zabbix prüft Version und Variante:
+  Behind that were two further errors, each revealed only by the next import
+  attempt. **The wrong group:** the added `uuid` had been copied from the working
+  third template — but it belongs to `Templates/Network devices`, not to
+  `Templates`. Two different group names therefore carried the same `uuid`. **And
+  five `uuid`s that were not:** hand-typed patterns such as
+  `8a2b3c4d5e6f47081920a1b2c3d4e5f6` — 32 hex characters, but not a UUIDv4.
+  Zabbix checks version and variant:
 
   ```
   Invalid parameter "/2/uuid": UUIDv4 is expected.
   ```
 
-  Die richtigen Gruppenwerte stehen in der Tabelle `hstgrp` und sind auf jeder
-  Installation gleich: `Templates` ist
-  `79f31eeab03146229b1e019097fad672`, `Templates/Network devices` ist
-  `7df96b18c230490a9a0a9e2307226338`. Die fünf getippten `uuid`s sind durch
-  erzeugte ersetzt. Das LLDP-Template war nie betroffen — dort ist jede `uuid`
-  echt erzeugt, deshalb ging ausgerechnet das immer durch.
+  The correct group values are in the `hstgrp` table and are the same on every
+  installation: `Templates` is `79f31eeab03146229b1e019097fad672`,
+  `Templates/Network devices` is `7df96b18c230490a9a0a9e2307226338`. The five
+  typed `uuid`s were replaced with generated ones. The LLDP template was never
+  affected — every `uuid` there is genuinely generated, which is why that one of
+  all things always went through.
 
-  Der neue CI-Job `templates` prüft vier Regeln: `uuid` vorhanden, Name →
-  `uuid` eindeutig, `uuid` → Name eindeutig, und **jedes** `uuid` der Datei ein
-  echtes UUIDv4. Die letzte Regel gilt nicht nur für Gruppen — die fünf
-  kaputten steckten in Items und Triggern.
+  The new CI job `templates` checks four rules: `uuid` present, name → `uuid`
+  unique, `uuid` → name unique, and **every** `uuid` in the file a real UUIDv4.
+  The last rule is not restricted to groups — the five broken ones were in items
+  and triggers.
 
-  Alle drei Templates sind auf einer 7.0-Instanz importiert worden; das
-  LLDP-Template läuft an zwei SNMP-Switches.
+  All three templates have been imported on a 7.0 instance; the LLDP template
+  runs against two SNMP switches.
 
-- **Ein Gate über die Zwei-Ebenen-Logik.** Was verschiedene Benutzer auf
-  derselben Karte sehen, war bisher nur von Hand nachvollzogen. `npm run
-  ci:layers` prüft es mit gestellten `NT_CONFIG`-Daten:
+- **A gate over the two-layer logic.** What different users see on the same map
+  had only ever been reasoned through by hand. `npm run ci:layers` checks it with
+  fabricated `NT_CONFIG` data:
 
-  - Ein Benutzer ohne eigene Positionen sieht genau die geteilte Karte.
-  - **Persönlich gewinnt pro Knoten**, nicht als Ganzes — der Rest folgt weiter
-    der geteilten Ebene.
-  - Eine Abweichung in einer Ansicht berührt andere Ansichten nicht.
-  - Super-Admins schreiben geteilt, alle anderen persönlich.
-  - Bei den manuellen Links gewinnt **geteilt**, auch bei umgekehrter
-    Richtung — eine Kante ist ungerichtet und darf nicht doppelt erscheinen.
+  - A user without positions of their own sees exactly the shared map.
+  - **Personal wins per node**, not as a whole — the rest keeps following the
+    shared layer.
+  - A deviation in one view does not touch other views.
+  - Super admins write shared, everyone else personal.
+  - For manual links **shared** wins, in the reversed direction too — an edge is
+    undirected and must not appear twice.
 
-  Jedes Szenario läuft in einem eigenen Prozess: `storage.js` liest die
-  Konfiguration in IIFEs beim Import, ein zweiter Import mit anderen Daten
-  bekäme den alten Stand. Das ist zugleich die ehrlichste Nachstellung von
-  „ein anderer Benutzer lädt die Seite".
+  Each scenario runs in its own process: `storage.js` reads the configuration in
+  IIFEs at import time, and a second import with different data would get the old
+  state. That is also the most honest reproduction of "another user loads the
+  page".
 
-  **Nicht abgedeckt** bleibt der Weg Server → Datenbank → Rechteprüfung; dafür
-  braucht es zwei angemeldete Benutzer in einem Browser.
+  **Not covered** is the path server → database → permission check; that needs
+  two logged-in users in a browser.
 
-- **Ein Gate über den Paketinhalt.** `npm run ci:package` simuliert, was im
-  Modul-ZIP landen würde, und weist zurück, was dort nicht hingehört:
-  Shell-Skripte, `tools/`, `templates/`, `tests/`, Source-Maps, das Repository
-  selbst. Umgekehrt prüft es, dass die Pflichtdateien **da** sind — fehlt das
-  Bundle oder Cytoscape, ist das Paket kaputt, und das fällt sonst erst beim
-  Installieren auf.
+- **A gate over the package contents.** `npm run ci:package` simulates what would
+  end up in the module ZIP and rejects what does not belong there: shell scripts,
+  `tools/`, `templates/`, `tests/`, source maps, the repository itself.
+  Conversely it checks that the mandatory files **are** there — without the
+  bundle or Cytoscape the package is broken, and that otherwise only shows up
+  during installation.
 
-  Die Ausschlussmuster liest das Gate **aus `deploy.sh`**, statt sie zu
-  wiederholen. Eine zweite Liste wäre eine zweite Stelle, die ausschert — und
-  dann prüft das Gate etwas anderes, als der Installer baut. Genau so ist
-  `nt-uninstall.sh` ins Paket gerutscht: die Liste nannte nur die damals
-  bekannten Skripte beim Namen, und aufgefallen ist es nur, weil jemand
-  nachgesehen hat.
+  The gate reads the exclusion patterns **from `deploy.sh`** rather than
+  repeating them. A second list would be a second place to drift — and then the
+  gate checks something other than what the installer builds. That is exactly how
+  `nt-uninstall.sh` slipped into the package: the list only named the scripts
+  known at the time, and it was noticed only because somebody looked.
 
-- **Das mitgelieferte Dashboard war auf keiner unterstützten Version
-  importierbar.** `dashboards/nt-overview.yaml` trug `version: '7.0'`, und
-  `dashboards/README.md` beschrieb einen Weg „Dashboards → Import". Beides ging
-  nicht: **eigenständige Dashboards kennt der Zabbix-Import erst ab 8.0.** Gegen
-  die Validatoren von 7.0, 7.2 und 7.4 nachgemessen, alle drei antworten
+- **The shipped dashboard could not be imported on any supported version.**
+  `dashboards/nt-overview.yaml` carried `version: '7.0'`, and
+  `dashboards/README.md` described a "Dashboards → Import" route. Neither works:
+  **standalone dashboards are only importable from Zabbix 8.0 on.** Measured
+  against the validators of 7.0, 7.2 and 7.4, all three answer
 
   ```
   Invalid tag "/": unexpected tag "dashboards".
   ```
 
-  und in der UI dieser Versionen gibt es für Dashboards weder Import- noch
-  Export-Knopf. Aufgefallen beim Testen gegen Zabbix 8, wo der Import
-  tatsächlich funktioniert — dort störte dann noch das `uuid`, das Zabbix auf
-  Dashboard-Ebene nicht kennt.
+  and in the UI of those versions there is neither an import nor an export button
+  for dashboards. Noticed while testing against Zabbix 8, where the import does
+  work — there the `uuid` was then in the way, which Zabbix does not know at
+  dashboard level.
 
-  Die Datei ist jetzt eine gültige 8.0-Fassung, mit **allen fünf Widgets**
-  statt der bisherigen drei (KPI und Items fehlten seit ihrer Einführung), und
-  ohne vorbelegte Hostgruppe — sonst verwiese sie nach dem Import auf
-  Gruppen-IDs, die es auf der Zielinstallation nicht gibt. Von Zabbix' eigenem
-  Import-Validator angenommen. `README.md` daneben sagt jetzt, dass 7.0 und 7.4
-  das Dashboard von Hand nachbauen müssen, und liefert die Geometrie dafür.
+  The file is now a valid 8.0 version, with **all five widgets** instead of the
+  previous three (KPI and Items had been missing since they were introduced), and
+  without a pre-set host group — otherwise it would refer after import to group
+  IDs that do not exist on the target installation. Accepted by Zabbix's own
+  import validator. The `README.md` beside it now says that 7.0 and 7.4 have to
+  rebuild the dashboard by hand, and supplies the geometry for it.
 
-- **Das Gate `ci:templates` schlug auf Kommentare an.** Eine Zeile wie
-  `# Kein uuid: der Validator weist es ab` las es als ungültige `uuid` —
-  gefunden, als genau dieser Satz in die Dashboard-Datei kam. Kommentare werden
-  jetzt vor der Prüfung entfernt. Ein Gate, das an Prosa scheitert, gewöhnt
-  einem das Hinsehen ab.
+- **The `ci:templates` gate tripped over comments.** A line such as
+  `# No uuid: the validator rejects it` was read as an invalid `uuid` — found
+  when exactly that sentence went into the dashboard file. Comments are now
+  stripped before the check. A gate that fails on prose teaches you to stop
+  looking.
 
-- **Das README nannte weiterhin nur einen Modulpfad.** Genau der Fehler, den
-  ein Nutzer gemeldet hatte — behoben war er nur in `INSTALL.md`, die
-  Kurzfassung im README blieb bei `/usr/share/zabbix/ui/modules`. Wer die
-  Startseite liest statt die Anleitung, landete wieder vor einem Pfad, den es
-  bei ihm nicht gibt. Beide Layouts stehen jetzt auch dort, mit dem
-  `find`-Einzeiler.
+- **The README still named only one module path.** Precisely the error a user had
+  reported — it had only been fixed in `INSTALL.md`, while the short version in
+  the README stayed at `/usr/share/zabbix/ui/modules`. Anyone reading the landing
+  page instead of the guide ended up in front of a path that does not exist on
+  their system. Both layouts are now there as well, with the `find` one-liner.
 
-  Dazu fehlten `nt-install.sh` und `nt-uninstall.sh` im README komplett, obwohl
-  der Installer den Pfad selbst erkennt und auf RHEL den SELinux-Kontext setzt
-  — also genau die zwei Fallen, an denen die Handinstallation scheitert. Und
-  die Warnung vor `git clone` steht jetzt ebenfalls auf der Startseite, nicht
-  nur in der Anleitung.
+  On top of that, `nt-install.sh` and `nt-uninstall.sh` were missing from the
+  README entirely, even though the installer detects the path itself and sets the
+  SELinux context on RHEL — that is, exactly the two traps a manual installation
+  falls into. And the warning about `git clone` is now on the landing page too,
+  not only in the guide.
 
-- **Das README beschrieb inhaltlich noch 4.x.** Die Versionsnummer im Badge
-  stimmte, der Funktionsumfang darunter nicht: Kennzahlen-Zeile, Ghost-Knoten,
-  Gerätetyp aus dem Protokoll und die Dienste-Probe kamen dort **null Mal** vor
-  — also genau die Dinge, die den Sprung ausmachen. Wer vom Forum oder von
-  zabfox.de kam, las eine Startseite, die den halben Umfang verschwieg.
-  Ergänzt in beiden Sprachen, inklusive der Highlights-Zeile ganz oben.
+- **The README still described 4.x in substance.** The version number in the
+  badge was right, the feature set below it was not: the KPI row, ghost nodes,
+  device type from the protocol and the service probe appeared **zero times** —
+  that is, precisely the things that make up the jump. Anyone arriving from the
+  forum or from zabfox.de read a landing page that omitted half the scope. Added
+  in both languages, including the highlights line at the very top.
 
-- **Die LLDP-Capabilities wurden bei der Hälfte der Geräte falsch gelesen.**
-  Aufgefallen erst, als nach dem Proxy-Ausfall wieder echte Werte flossen. Das
-  Feld kommt in **zwei Formen** an, je nach Template:
-
-  ```
-  HP Instant On   "20 00", "28 00"                rohe Hex-Bytes
-  TP-Link         "Bridge", "WLAN Access Point"   von einer Value-Map aufgelöst
-  ```
-
-  Der Decoder kannte nur Hex. Aus `Bridge` blieben nach dem Filtern die
-  Hex-Ziffern `B`, `d`, `e`, daraus `0xBD`, daraus **fünf Fähigkeiten, die nie
-  gemeldet wurden** — und aus einem Switch wurde ein Access Point. Der
-  Kommentar versprach „im Zweifel lieber nichts"; das stimmte nicht, das
-  Ergebnis war selbstbewusst falsch. Betroffen war auch die Ghost-Anzeige, die
-  diese Liste seit `bc5da3f` einblendet.
-
-  Unterschieden wird jetzt an den Zeichen: nur Hex-Ziffern und Leerraum → Hex,
-  sonst Text. Kein Fähigkeitsname besteht ausschließlich aus Hex-Ziffern, die
-  Trennung ist also eindeutig. `tests/DeviceTypeTest.php` prüft beide Formen
-  mit den echten Werten beider Switches.
-
-- **Der CI-Job `shellcheck` war seit Langem rot — unbemerkt.** Er scheitert
-  auch an *Info*-Meldungen, und fünf Stellen in `nt-install.sh` trugen das
-  Muster `A && B || C` (SC2015). Das steckt schon in v4.38.3, jede Pipeline
-  seitdem war rot, und weil das lokale `npm run ci:shellcheck` ohne
-  installiertes `shellcheck` schlicht nichts sagt, fiel es nie auf. Die fünf
-  Stellen sind jetzt echte `if`-Konstrukte — nicht nur der Meldung wegen: bei
-  `A && B || C` läuft `C` auch dann, wenn `A` wahr war und `B` fehlschlug.
-
-  `nt-uninstall.sh` stand gar nicht im Gate; es ist ergänzt, in `package.json`
-  und in `.gitlab-ci.yml`. Alle vier Skripte laufen jetzt mit Exit 0 durch,
-  verifiziert mit shellcheck 0.10.0.
-
-- **Die 5000-Knoten-Grenze bei den Positionen kürzte stillschweigend.** Wer eine
-  Karte mit mehr Knoten anordnete, bekam einen Teil gespeichert und keinen
-  Hinweis darauf — beim nächsten Laden fehlten Positionen ohne erkennbaren
-  Grund. Das sieht nach Datenverlust aus, nicht nach einer Grenze. Die Action
-  gibt jetzt zurück, wie viele Knoten sie verworfen hat, und die Karte meldet
-  es. Aufgefallen bei der Vorbereitung eines Lasttests: eine stille Kürzung
-  hätte dort Messwerte erzeugt, die niemand hätte deuten können.
-
-- **Die Vendor-Matrix führte MikroTik als „funktioniert" — ohne Beleg.**
-  Belegt war nur, dass das Modul nach `discovery.neighbor`-Items sucht und sie
-  verarbeitet. Ob RouterOS die Nachbartabelle über normales SNMP herausgibt,
-  hat nie jemand an einem Gerät geprüft; es gibt weder Test noch Fixture. Die
-  Zeile steht jetzt als **ungeprüft** da, mit einem konkreten `snmpwalk`, mit
-  dem jeder RouterOS-Betreiber die Frage in fünf Minuten klären kann.
-
-- **Die Installationsanleitung setzte ein Verzeichnis-Layout voraus, das nicht
-  überall gilt.** Ein Nutzer meldete, bei ihm fehle der Ordner `ui`. Pakete aus
-  dem Zabbix-Repo legen das Frontend nach `/usr/share/zabbix` — **ohne** `ui`;
-  andere Installationen haben `/usr/share/zabbix/ui`. `nt-install.sh` und
-  `deploy.sh` erkennen beides seit jeher, aber wer der Anleitung von Hand
-  folgte, stand vor einem Pfad, den es bei ihm nicht gibt. Beide Layouts sind
-  jetzt genannt, mit einem `find`-Einzeiler zum Nachsehen.
-
-- **Die Anleitung riet nicht vom `git clone` ab — jetzt tut sie es, mit Grund.**
-  Der Weg stand als gleichwertige Variante B daneben. Er legt aber das
-  **gesamte Repository** unter den Web-Root, und Zabbix' nginx-Konfiguration
-  sperrt dort nur `/\.ht`, nicht `.git`. An einer Testinstallation
-  nachgemessen:
+- **LLDP capabilities were read wrongly on half the devices.** Only noticed once
+  real values flowed again after the proxy outage. The field arrives in **two
+  shapes**, depending on the template:
 
   ```
-  /modules/<verzeichnis>/.git/HEAD                    HTTP 200
-  /modules/<verzeichnis>/.git/index                   HTTP 200
-  /modules/<verzeichnis>/tools/topo-change-sender.sh  HTTP 200
+  HP Instant On   "20 00", "28 00"                raw hex bytes
+  TP-Link         "Bridge", "WLAN Access Point"   resolved by a value map
   ```
 
-  Das Repository ist öffentlich, es entweicht zunächst nichts Geheimes. Aber
-  `tools/` enthält das Sender-Skript, das Zugangsdaten aus Umgebungsvariablen
-  liest — trägt sie jemand in die Datei ein, stehen sie im Netz. Genau dafür
-  gibt es die Ausschlussliste im Release-ZIP. Die Variante ist aus der
-  Anleitung entfernt und durch eine Warnung samt Aufräum-Befehl ersetzt.
+  The decoder only knew hex. Filtering `Bridge` left the hex digits `B`, `d`,
+  `e`, from which came `0xBD`, from which came **five capabilities that were
+  never reported** — and a switch turned into an access point. The comment
+  promised "in doubt, rather nothing"; that was not true, the result was
+  confidently wrong. The ghost display, which has shown this list since `bc5da3f`,
+  was affected too.
 
-- **`unzip` steht jetzt bei den Voraussetzungen**, ebenfalls nach einer
-  Nutzermeldung: Minimal-Installationen bringen es nicht mit.
+  The two are now told apart by their characters: hex digits and whitespace only
+  → hex, otherwise text. No capability name consists solely of hex digits, so the
+  split is unambiguous. `tests/DeviceTypeTest.php` checks both shapes with the
+  real values from both switches.
 
-- **Die Anleitung empfahl `www-data` als Eigentümer.** Der Webserver muss die
-  Moduldateien nur **lesen**. Gibt man ihm den Besitz, kann ein kompromittierter
-  PHP-Prozess den Modulcode überschreiben. `root:root` genügt und steht jetzt
-  allein da.
+- **The `shellcheck` CI job had been red for a long time — unnoticed.** It fails
+  on *info* diagnostics too, and five places in `nt-install.sh` carried the
+  pattern `A && B || C` (SC2015). That is already in v4.38.3, every pipeline
+  since then was red, and because the local `npm run ci:shellcheck` simply says
+  nothing without `shellcheck` installed, it never came up. The five places are
+  now real `if` constructs — not merely for the diagnostic: with `A && B || C`,
+  `C` also runs when `A` was true and `B` failed.
 
-- **Vier Ansichten sprachen Deutsch, egal welche Sprache eingestellt war.**
-  Gemeldet von einem Nutzer auf einer englischen Oberfläche: *„Most is in
-  English, but some is in German."* Er hatte nichts übersehen — die
-  Übersetzung war unvollständig, und `i18n.js` sagt das im eigenen
-  Kopfkommentar: nicht migrierte Module behalten fest verdrahtetes Deutsch.
+  `nt-uninstall.sh` was not in the gate at all; it has been added, in
+  `package.json` and in `.gitlab-ci.yml`. All four scripts now pass with exit 0,
+  verified with shellcheck 0.10.0.
 
-  Betroffen waren die Tabs **Compliance, Diag, Geo und LLDP-Q** mit zusammen
-  23 Zeichenketten, darunter die komplette Beschriftung der
-  Compliance-Prüfungen (`Agent ohne TLS`, `Inventory aus`, `Stale
-  Krit-Problem`, `Wartung ohne Kommentar` …), die auch im Audit-Report aus
-  `export.js` erscheint. Alle laufen jetzt über `t()`, 25 neue Schlüssel in
-  `de.js` und `en.js`.
+- **The 5000-node limit on positions truncated silently.** Arranging a map with
+  more nodes than that got you part of it saved and no indication — on the next
+  load, positions were missing for no visible reason. That looks like data loss,
+  not like a limit. The action now returns how many nodes it discarded, and the
+  map reports it. Noticed while preparing a load test: a silent truncation would
+  have produced measurements there that nobody could have interpreted.
 
-  Beim Geo-Hinweis steht das Markup weiterhin im Code und nur die Textteile
-  kommen aus der Übersetzung — eine i18n-Datei, die HTML trägt, wäre der
-  falsche Weg, und der Satzbau unterscheidet sich zwischen den Sprachen
-  ohnehin.
+- **The vendor matrix listed MikroTik as "works" — without evidence.** All that
+  was established was that the module looks for `discovery.neighbor` items and
+  processes them. Whether RouterOS serves the neighbour table over ordinary SNMP
+  had never been checked on a device; there is neither a test nor a fixture. The
+  row now reads **unverified**, with a concrete `snmpwalk` that lets any RouterOS
+  operator settle the question in five minutes.
 
-- **`nt-install.sh` brach auf der gesamten RHEL-Familie ab.** Die Erkennung des
-  php-fpm-Dienstes lief in eine SIGPIPE-Falle:
+- **The installation guide assumed a directory layout that does not hold
+  everywhere.** A user reported that the `ui` folder was missing on their system.
+  Packages from the Zabbix repository put the frontend into `/usr/share/zabbix` —
+  **without** `ui`; other installations have `/usr/share/zabbix/ui`.
+  `nt-install.sh` and `deploy.sh` have always detected both, but anyone following
+  the guide by hand faced a path that does not exist for them. Both layouts are
+  now named, with a `find` one-liner to check.
+
+- **The guide did not advise against `git clone` — now it does, with a reason.**
+  The route stood beside the others as an equivalent variant B. But it puts the
+  **entire repository** under the web root, and Zabbix's nginx configuration only
+  blocks `/\.ht` there, not `.git`. Measured on a test installation:
+
+  ```
+  /modules/<directory>/.git/HEAD                      HTTP 200
+  /modules/<directory>/.git/index                     HTTP 200
+  /modules/<directory>/tools/topo-change-sender.sh    HTTP 200
+  ```
+
+  The repository is public, so nothing secret escapes at first. But `tools/`
+  contains the sender script, which reads credentials from environment variables
+  — put them into the file and they are on the internet. That is exactly what the
+  exclusion list in the release ZIP is for. The variant has been removed from the
+  guide and replaced by a warning plus a clean-up command.
+
+- **`unzip` is now listed under the prerequisites**, likewise after a user
+  report: minimal installations do not ship it.
+
+- **The guide recommended `www-data` as the owner.** The web server only needs to
+  **read** the module files. Give it ownership and a compromised PHP process can
+  overwrite the module code. `root:root` is enough and now stands alone.
+
+- **Four views spoke German regardless of the configured language.** Reported by
+  a user on an English UI: *"Most is in English, but some is in German."* They
+  had not missed anything — the translation was incomplete, and `i18n.js` says so
+  in its own header comment: modules not yet migrated keep hard-wired German.
+
+  Affected were the **Compliance, Diag, Geo and LLDP-Q** tabs with 23 strings
+  between them, including the complete labelling of the compliance checks (`Agent
+  without TLS`, `Inventory off`, `Stale crit problem`, `Maintenance without
+  comment` …), which also appears in the audit report from `export.js`. They all
+  go through `t()` now, with 25 new keys in `de.js` and `en.js`.
+
+  For the geo notice the markup stays in the code and only the text parts come
+  from the translation — an i18n file carrying HTML would be the wrong route, and
+  sentence structure differs between languages anyway.
+
+- **`nt-install.sh` aborted across the whole RHEL family.** Detection of the
+  php-fpm service ran into a SIGPIPE trap:
 
   ```bash
   systemctl list-units … | grep -q 'php-fpm\.service'
   ```
 
-  `grep -q` beendet sich beim ersten Treffer und schließt die Pipe, `systemctl`
-  endet daraufhin mit 141 — und weil im Skript `set -o pipefail` steht, gilt die
-  ganze Pipeline als fehlgeschlagen, **obwohl der Treffer da war**. Auf Rocky 9
-  nachgemessen: ohne `pipefail` Exit 0, mit `pipefail` Exit 141.
+  `grep -q` exits on the first match and closes the pipe, `systemctl` then ends
+  with 141 — and because the script sets `set -o pipefail`, the whole pipeline
+  counts as failed **even though the match was there**. Measured on Rocky 9:
+  without `pipefail` exit 0, with `pipefail` exit 141.
 
-  Auf Debian fiel das nie auf, weil dort der erste Zweig greift
-  (`php8.2-fpm.service`). Auf RHEL heißt die Unit schlicht `php-fpm.service`,
-  also kann **nur** der zweite Zweig treffen — und der war der kaputte. Der
-  Installer meldete „kein php-fpm-Service gefunden" auf einer Maschine, auf der
-  php-fpm lief, und brach ab, bevor er überhaupt zum `restorecon` kam.
+  On Debian this never showed, because the first branch matches there
+  (`php8.2-fpm.service`). On RHEL the unit is simply called `php-fpm.service`, so
+  **only** the second branch can match — and that was the broken one. The
+  installer reported "no php-fpm service found" on a machine where php-fpm was
+  running, and aborted before it ever reached `restorecon`.
 
-  Die Unit-Liste wird jetzt einmal in eine Variable geholt und ohne Pipe
-  ausgewertet.
+  The unit list is now fetched once into a variable and evaluated without a pipe.
 
-- **Dieselbe Falle in der Zip-Slip-Prüfung — dort mit Fail-open.** Der Schutz
-  gegen absolute und `../`-Pfade im Archiv lautete
-  `unzip -Z1 … | grep -qE …` direkt in der Bedingung. Findet `grep` einen
-  unsicheren Pfad, beendet es sich sofort, `unzip` läuft in SIGPIPE, `pipefail`
-  macht die Bedingung **falsch** — und ausgerechnet das Archiv *mit* den
-  unsicheren Pfaden wäre durchgerutscht. Ob es passiert, hängt daran, ob `unzip`
-  beim Beenden von `grep` noch schreibt: bei kleinen Archiven meist nicht, bei
-  großen schon. Eine Sicherheitsprüfung, die mal greift und mal nicht.
+- **The same trap in the zip-slip check — fail-open there.** The protection
+  against absolute and `../` paths in the archive read
+  `unzip -Z1 … | grep -qE …` directly in the condition. If `grep` finds an unsafe
+  path it exits immediately, `unzip` runs into SIGPIPE, `pipefail` makes the
+  condition **false** — and the archive *with* the unsafe paths, of all things,
+  would have slipped through. Whether it happens depends on whether `unzip` is
+  still writing when `grep` exits: usually not for small archives, yes for large
+  ones. A security check that sometimes works and sometimes does not.
 
-- **Der Installer verlangte Zabbix 7.4, obwohl er das Hauptmodul installiert.**
-  Das läuft auf 7.0 LTS; nur die Widgets brauchen 7.4, und die installiert
-  `nt-install.sh` gar nicht. Auf einer 7.0-LTS warnte der Check vor genau der
-  Kombination, die die Dokumentation empfiehlt.
+- **The installer demanded Zabbix 7.4 although it installs the main module.**
+  That runs on 7.0 LTS; only the widgets need 7.4, and `nt-install.sh` does not
+  install those at all. On a 7.0 LTS the check warned about exactly the
+  combination the documentation recommends.
 
-  **Nachgefahren auf einer echten Rocky 9.8 mit SELinux im Enforcing-Modus**
-  (Proxmox-VM, nicht Container — im Container gibt es kein SELinux, und der
-  Installer würde `restorecon` überspringen und scheinbar grün durchlaufen).
-  Der Vorher-Nachher-Beweis aus dem echten php-fpm-Prozess heraus:
+  **Reproduced on a real Rocky 9.8 with SELinux in enforcing mode** (Proxmox VM,
+  not a container — there is no SELinux in a container, and the installer would
+  skip `restorecon` and appear to pass). The before/after proof from inside the
+  real php-fpm process:
 
   ```
   user_tmp_t  →  Failed to open stream: Permission denied
-  usr_t       →  gelesen, 2704 Byte
+  usr_t       →  read, 2704 bytes
   ```
 
-- **Schritt 4 der Installation war auf dem dokumentierten Weg nicht
-  ausführbar.** `INSTALL.md` verwies auf `templates/…` und
-  `tools/topo-change-sender.sh`, `LLDP-SETUP.md` nannte das LLDP-Template
-  „mitgeliefert". Keine dieser vier Dateien liegt im Modul-ZIP — `deploy.sh`
-  schließt `tools` und `templates` aus. Wer über das ZIP installierte, hatte
-  relative Pfade ins Leere und keinen Hinweis, woher die Dateien kommen.
+- **Step 4 of the installation was not executable along the documented route.**
+  `INSTALL.md` referred to `templates/…` and `tools/topo-change-sender.sh`, and
+  `LLDP-SETUP.md` called the LLDP template "shipped". None of those four files is
+  in the module ZIP — `deploy.sh` excludes `tools` and `templates`. Anyone
+  installing from the ZIP had relative paths pointing nowhere and no hint where
+  the files come from.
 
-  Der Ausschluss bleibt und ist richtig: das Modulverzeichnis liegt unter dem
-  Web-Root und ist öffentlich abrufbar — dort lag schon einmal eine 1 MB große
-  Source-Map. Ein Sender-Skript und Template-YAMLs braucht die Laufzeit nicht.
-  Stattdessen nennen beide Dokumente die Dateien ohne Verzeichnispräfix,
-  erklären in einem Kasten, warum sie nicht im Paket sind, und geben
-  `curl`-Zeilen auf das Repository. Der Ausschluss in `deploy.sh` trägt jetzt
-  einen Kommentar, der auf Schritt 4 verweist.
+  The exclusion stays and is correct: the module directory sits under the web
+  root and is publicly retrievable — a 1 MB source map once lived there. The
+  runtime does not need a sender script and template YAMLs. Instead both
+  documents now name the files without a directory prefix, explain in a box why
+  they are not in the package, and give `curl` lines against the repository. The
+  exclusion in `deploy.sh` now carries a comment pointing at step 4.
 
-- **Beide Installer setzen den SELinux-Kontext jetzt selbst.** `nt-install.sh`
-  und `deploy.sh` entpacken nach `/tmp` und schieben das Ergebnis per `cp -a`
-  bzw. `mv` an seinen Platz — beide **erhalten** den Kontext. Dateien aus
-  `/tmp` tragen `user_tmp_t`, php-fpm läuft als `httpd_t` und darf das nicht
-  lesen. Das Modul lag damit auf RHEL/Rocky/Alma mit korrekten Rechten und
-  korrektem Owner am richtigen Platz — und erschien trotzdem nicht in der UI.
-  Beide rufen nun `restorecon -R` auf, sofern vorhanden und SELinux aktiv;
-  auf Debian/Ubuntu ist der Aufruf ein stiller No-Op und niemals fatal.
-  `INSTALL.md` weist in beiden Sprachen darauf hin, dass der Handgriff nur
-  noch beim Entpacken von Hand nötig ist.
+- **Both installers now set the SELinux context themselves.** `nt-install.sh` and
+  `deploy.sh` unpack into `/tmp` and move the result into place with `cp -a` or
+  `mv` — both **preserve** the context. Files from `/tmp` carry `user_tmp_t`,
+  php-fpm runs as `httpd_t` and may not read that. The module therefore sat on
+  RHEL/Rocky/Alma with correct permissions and correct owner in the right
+  place — and still did not appear in the UI. Both now call `restorecon -R` when
+  it is available and SELinux is active; on Debian/Ubuntu the call is a silent
+  no-op and never fatal. `INSTALL.md` points out in both languages that the
+  manual step is now only needed when unpacking by hand.
 
-- **Ein High-Problem zählte als „Warn".** Die Severity-Eimer der Kennzahlen
-  warfen alles zwischen OK und Disaster in einen Topf — ein Host mit **High**
-  erschien unter „Warn", während die Toolbar eine Zeile darüber getrennte
-  Pillen für Warn, Avg und High zeigt und der Knoten im Graphen rot leuchtet.
-  Jetzt: `ok` = Normal, `warn` = Info bis Average, `krit` = High und Disaster.
+- **A High problem counted as "Warn".** The severity buckets of the KPI row threw
+  everything between OK and Disaster into one pot — a host with **High** appeared
+  under "Warn", while the toolbar one line above shows separate pills for Warn,
+  Avg and High and the node glows red in the graph. Now: `ok` = Normal, `warn` =
+  Info through Average, `crit` = High and Disaster.
 
-- **„0 Ghosts" war eine Behauptung, keine Messung.** Ghost-Knoten kommen nur in
-  den Graphen, wenn der Toolbar-Toggle an ist (Standard: aus) — gezählt wurde
-  aber aus dem Graphen. Bei ausgeschaltetem Toggle stand dort null, unabhängig
-  davon wie viele es gab, und das ausgerechnet bei der Kennzahl, die zu etwas
-  auffordern soll. Gezählt wird jetzt aus derselben Quelle, aus der auch
-  injiziert wird; ist der Toggle aus, steht „ausgeblendet" daneben.
+- **"0 ghosts" was a claim, not a measurement.** Ghost nodes only enter the graph
+  when the toolbar toggle is on (default: off) — but the count was taken from the
+  graph. With the toggle off it read zero regardless of how many there were, and
+  that on the very figure meant to prompt an action. The count now comes from the
+  same source the injection uses; with the toggle off, "hidden" is shown beside
+  it.
 
-- **Deutsche Zeichenketten in einer englischen Oberfläche.** Der Knopf unter der
-  Hostgruppen-Auswahl rief `_('Auswahl leeren')` — die *Ausgangs*-Zeichenkette
-  war deutsch, und Zabbix' gettext übersetzt gegen englische Quelltexte, reicht
-  einen deutschen also unverändert durch. Ebenso trug das Health-Widget als
-  einziges noch deutsche Beschriftungen (Score-Labels, Kopfzeile, Legende), und
-  die Kopfzeile schrieb „1 Gruppen" — Singular und Plural waren nicht
-  unterschieden. Beides behoben; das Paket ist jetzt durchgängig englisch.
+- **German strings in an English UI.** The button below the host group selector
+  called `_('Auswahl leeren')` — the *source* string was German, and Zabbix's
+  gettext translates against English source text, so it passes a German one
+  through unchanged. Likewise the health widget was the only one still carrying
+  German labels (score labels, header, legend), and the header wrote "1 Gruppen"
+  — singular and plural were not distinguished. Both fixed; the package is now
+  English throughout.
 
-- **Prozentspalte im Items-Widget sprang.** Die Rundung schnitt die abschließende
-  Null ab, wodurch „6%" neben „5.9%" stand. Feste Nachkommastelle.
+- **The percentage column in the Items widget jumped.** Rounding cut the trailing
+  zero, so "6%" stood next to "5.9%". Fixed decimal place.
 
-- **Eine Firewall und ein Videorecorder wurden als WLAN-Accesspoint gezeichnet.**
-  In der Typ-Heuristik standen `unifi` und `omada` in der Liste für „wireless" —
-  das sind aber **Produktlinien, keine Geräteklassen**: UniFi umfasst Gateways,
-  Switches, Kameras, Recorder und Accesspoints. Dazu wird „wireless" vor
-  „camera" geprüft, weshalb der breite Herstellername sogar das spezifische
-  `nvr` schlug. Gematcht wird gegen Hostname **plus** Template-Namen, und beide
-  Geräte hingen am UniFi-Template — sie trugen den Herstellernamen also
-  implizit mit sich.
+- **A firewall and a video recorder were drawn as wireless access points.** The
+  type heuristic had `unifi` and `omada` in the "wireless" list — but those are
+  **product lines, not device classes**: UniFi covers gateways, switches,
+  cameras, recorders and access points. On top of that "wireless" is checked
+  before "camera", so the broad vendor name even beat the specific `nvr`.
+  Matching runs against host name **plus** template names, and both devices were
+  linked to the UniFi template — so they carried the vendor name implicitly.
 
-  Der Herstellername entscheidet jetzt nichts mehr; erkannt werden Modellreihen:
-  UDM/USG/UXG → Firewall, USW → Switch, UAP/U6/U7 und die Omada-EAP-Reihe →
-  Accesspoint. Wo nichts passt, bleibt es beim Server-Default — ehrlicher als
-  eine geratene Klasse, und wem das nicht passt, der setzt `nt:icon`.
+  The vendor name now decides nothing; model ranges are recognised instead:
+  UDM/USG/UXG → firewall, USW → switch, UAP/U6/U7 and the Omada EAP range →
+  access point. Where nothing matches it stays at the server default — more
+  honest than a guessed class, and anyone who disagrees sets `nt:icon`.
 
-  Diese kurzen Kürzel werden an Wortgrenzen gebunden statt als Teilstring
-  gesucht: `udm` steckt in „cloudmail", `uxg` in „luxgate", und „firewall" wird
-  als Erstes geprüft — ein Mailserver wäre sonst eine Firewall geworden. Aus
-  demselben Grund muss hinter `unifi ap` eine Wortgrenze stehen: ohne sie passt
-  auch „UniFi API", und der Recorder hinge wieder als WAP im Netz. **Nach dem
-  Update können sich Icons ändern** — an den Daten ändert das nichts.
+  These short abbreviations are bound to word boundaries rather than searched as
+  substrings: `udm` occurs in "cloudmail", `uxg` in "luxgate", and "firewall" is
+  checked first — a mail server would otherwise have become a firewall. For the
+  same reason `unifi ap` must be followed by a word boundary: without it "UniFi
+  API" matches too, and the recorder would hang in the network as a WAP again.
+  **Icons may change after the update** — that changes nothing about the data.
 
-- **Der Kantenzähler blieb nach jeder Änderung bis zu 30 Sekunden stehen.** Wer
-  im Stern-Modus eine Kante zog oder alle Links löschte, sah es sofort im
-  Graphen — die Zeile daneben erst beim nächsten Refresh. Aufgefallen auf einem
-  Screenshot: drei sichtbare Kanten, daneben „0 Edges". Wer das sieht, hält die
-  Zahl für kaputt, nicht für veraltet.
+- **The edge counter stalled for up to 30 seconds after every change.** Drawing
+  an edge in star mode or deleting all links showed up in the graph at once — in
+  the row beside it only on the next refresh. Noticed on a screenshot: three
+  visible edges, "0 edges" next to them. Anyone seeing that assumes the number is
+  broken, not stale.
 
-  Beim ersten Laden stand die Zahl aus demselben Grund auf null, weil sie vor
-  dem Einfügen der gespeicherten Kanten gezogen wurde. Auch der Rückrollweg
-  zählt jetzt neu: lehnt der Server eine Kante ab, verschwindet sie aus dem
-  Graphen — und die Zeile behauptete sie bis zum nächsten Refresh weiter. Eine
-  Zahl, die einen gescheiterten Speichervorgang bestätigt, ist schlimmer als
-  eine veraltete.
+  On first load the number read zero for the same reason, because it was taken
+  before the stored edges were inserted. The rollback path now recounts too: if
+  the server rejects an edge it disappears from the graph — and the row kept
+  claiming it until the next refresh. A number confirming a failed save is worse
+  than a stale one.
 
-- **„PDF (print)" öffnete kein Fenster mehr.** `window.open()` stand hinter dem
-  Aufbau des Reports, und der rendert die ganze Karte per `cy.png()` — bei einer
-  größeren Topologie hunderte Millisekunden. Danach ist das Zeitfenster der
-  Benutzeraktion zu, der Popup-Blocker greift, `window.open()` liefert `null`,
-  und das umgebende `if (w) { … }` verschluckte genau das: Klick, nichts
-  passiert, keine Meldung. Das Fenster geht jetzt synchron im Klick auf, der
-  teure Teil kommt danach — und blockiertes Popup, fehlende Karte und
-  gescheiterter Report sagen es jeweils.
+- **"PDF (print)" stopped opening a window.** `window.open()` sat behind the
+  construction of the report, and that renders the whole map through `cy.png()` —
+  hundreds of milliseconds on a larger topology. By then the user-gesture window
+  has closed, the popup blocker kicks in, `window.open()` returns `null`, and the
+  surrounding `if (w) { … }` swallowed exactly that: click, nothing happens, no
+  message. The window now opens synchronously within the click, and the expensive
+  part comes afterwards — with distinct messages for a blocked popup, a missing
+  map and a failed report.
 
-  Gedruckt wird erst, wenn der eingebettete Kartenschnappschuss geladen ist;
-  vorher stand dort ein fester Timeout, der bei großen Karten ein leeres Bild
-  druckte. Der Audit-Report hatte davon nur die Hälfte abbekommen — beide teilen
-  sich jetzt dieselbe Routine, samt Freigabe der Blob-URL nach dem Download.
+  Printing now waits until the embedded map snapshot has loaded; before that
+  there was a fixed timeout, which printed an empty image on large maps. The
+  audit report had only received half of this — both now share the same routine,
+  including releasing the blob URL after the download.
 
-- **Der LLDP-Q-Tab meldete „0 %" in Rot, wenn es nichts zu bewerten gab.** Ohne
-  LLDP-Items ist die Match-Quote nicht null, sondern undefiniert. Die rote Null
-  sah aus wie ein Messergebnis und ließ das Modul kaputt aussehen, während die
-  Ursache davor liegt: das mitgelieferte Template ist nicht gelinkt, oder die
-  Discovery lief noch nicht. Meldet kein Host Nachbarn, steht dort jetzt genau
-  das — mit dem Weg zum Nachsehen — statt einer Kennzahl.
+- **The LLDP-Q tab reported "0 %" in red when there was nothing to assess.**
+  Without LLDP items the match rate is not zero but undefined. The red zero
+  looked like a measurement and made the module look broken, while the cause lies
+  upstream: the shipped template is not linked, or discovery has not run yet. If
+  no host reports neighbours, that is exactly what it now says — with the way to
+  check — instead of a figure.
 
-- **Das Export-Menü lief rechts aus dem Fenster.** Der Knopf sitzt am rechten
-  Ende der Werkzeugleiste, das Menü klappte nach rechts auf: „PDF (pri…", „Save
-  HT…" und „Audit rep…" waren abgeschnitten und nicht anklickbar. Es klappt
-  jetzt rechtsbündig auf.
+- **The export menu ran off the right edge of the window.** The button sits at
+  the right end of the toolbar and the menu opened to the right: "PDF (pri…",
+  "Save HT…" and "Audit rep…" were cut off and not clickable. It now opens
+  right-aligned.
 
 ### Performance
-- **Response-Cache für `network.topology.data`.** Die Action ist der teuerste
-  Endpoint des Moduls (Host + Trigger + Problem + Item + gebatchte Lastvalues +
-  LLDP) und war als einzige von sieben cachenden Actions **ohne**
-  Response-Cache — in `NtCache` lag dort nur die Topologie-Baseline. 15 s TTL,
-  deutlich unter jedem Refresh-Intervall.
 
-  Zwei Dinge bleiben bewusst außerhalb des Caches. **`topo_changes`** beruht auf
-  einem Diff gegen die letzte Abfrage; aus dem Cache bedient, liefe der Diff nur
-  noch bei Cache-Misses und dieselbe „neue Verbindung" würde für die Dauer der
-  TTL wiederholt gemeldet. **`requested_count`** hängt am ungekürzten
-  Eingabewert, der nicht im Cache-Schlüssel steckt.
+- **Response cache for `network.topology.data`.** The action is the module's most
+  expensive endpoint (host + trigger + problem + item + batched last values +
+  LLDP) and was the only one of seven caching actions **without** a response
+  cache — `NtCache` held only the topology baseline for it. 15 s TTL, well below
+  any refresh interval.
 
-- **Mehrere Widgets auf einem Dashboard holen die Daten nur noch einmal.**
-  Vorher fragte jedes `network.topology.data` einzeln ab — dieselbe Action,
-  dieselben Hostgruppen. Ein geteilter Zugriff mit Request-Coalescing und 15 s
-  TTL bündelt das. Auf einem Dashboard mit vier NT-Widgets sind es damit
-  nachweislich **eine** Datenabfrage pro Runde statt vier.
+  Two things stay outside the cache on purpose. **`topo_changes`** is based on a
+  diff against the previous query; served from the cache, the diff would only run
+  on cache misses and the same "new link" would be reported repeatedly for the
+  duration of the TTL. **`requested_count`** depends on the untruncated input
+  value, which is not part of the cache key.
 
-### Intern
+- **Several widgets on one dashboard fetch the data only once.** Previously each
+  queried `network.topology.data` separately — same action, same host groups. A
+  shared accessor with request coalescing and a 15 s TTL bundles that. On a
+  dashboard with four NT widgets that is demonstrably **one** data request per
+  round instead of four.
 
-- **Dokumentation englisch zuerst.** Zwei Rückmeldungen nannten den hohen
-  Deutsch-Anteil. `LLDP-SETUP.md` — die Datei, auf die Nutzer mit fehlenden
-  Kanten verwiesen werden — gab es nur auf Deutsch; sie ist jetzt englisch, das
-  Original steht als `LLDP-SETUP.de.md` daneben. Im README steht der englische
-  Abschnitt vor dem deutschen.
+### Internal
 
-- **„Execute now" stand in keiner Doku-Datei**, und die Default-Intervalle
-  nirgends — nur die Makro-Namen. Wer das LLDP-Template linkt und die Karte neu
-  lädt, wartet unwissentlich bis zu drei Stunden auf etwas, das aussieht wie ein
-  kaputtes Feature. Das war eine Doku-Lücke mit Bug-Wirkung und der gemeinsame
-  Nenner zweier Fehlermeldungen.
+- **Documentation English first.** Two pieces of feedback mentioned the high
+  proportion of German. `LLDP-SETUP.md` — the file users with missing edges are
+  pointed at — existed only in German; it is now English, with the original
+  alongside it as `LLDP-SETUP.de.md`. In the README the English section comes
+  before the German one.
 
-- **Huawei** als *ungeprüft* in der Vendor-Matrix, mit dem `snmpwalk` daneben
-  und der Erklärung, warum das offizielle VRP-Template nicht reicht: das Modul
-  spricht kein SNMP, es liest Items.
+- **"Execute now" appeared in no documentation file**, and the default intervals
+  nowhere — only the macro names. Anyone linking the LLDP template and reloading
+  the map waits, without knowing it, up to three hours for something that looks
+  like a broken feature. That was a documentation gap with the effect of a bug,
+  and the common denominator of two error reports.
 
-- **Der direkte Zugriff auf die History-Tabellen ist dokumentiert.** Die
-  Lastvalue-Abfrage setzt SQL-History voraus; mit Elasticsearch als
-  History-Speicher zeigt die Karte Knoten ohne Metriken.
+- **Huawei** listed as *unverified* in the vendor matrix, with the `snmpwalk`
+  beside it and an explanation of why the official VRP template is not enough:
+  the module does not speak SNMP, it reads items.
 
-- `npm audit fix` — `brace-expansion` (high) über eslint → minimatch.
-- **Gate gegen Drift in den beiden bewussten Duplikaten.** Die Widget-Module
-  können den Code des Hauptmoduls nicht importieren — Zabbix' jsLoader kennt
-  keine ES-Module —, deshalb steht zweimal dasselbe da. Bisher stand die Bitte,
-  das synchron zu halten, als Kommentar in den Dateien; `npm run ci:parity`
-  macht daraus eine Prüfung. Bewacht werden die Gewichte und Schwellen der
-  Health-Score-Formel (Hauptmodul gegen Widget) und der geteilte Datenzugriff
-  über vier Widget-Dateien. Findet die Extraktion nichts, ist das ein Fehler
-  und kein Durchlauf.
+- **Direct access to the history tables is documented.** The last-value query
+  assumes SQL history; with Elasticsearch as history backend the map shows nodes
+  without metrics.
+
+- `npm audit fix` — `brace-expansion` (high) through eslint → minimatch.
+
+- **A gate against drift in the two deliberate duplicates.** The widget modules
+  cannot import the main module's code — Zabbix's jsLoader knows no ES modules —
+  so the same thing exists twice. Until now the request to keep them in sync was
+  a comment in the files; `npm run ci:parity` turns it into a check. It guards the
+  weights and thresholds of the health score formula (main module against widget)
+  and the shared data accessor across four widget files. If the extraction finds
+  nothing, that is a failure and not a pass.
 
 ## v5.0.0 — 2026-08-08
 
-### ⚠️ Breaking — der `_v6`-Suffix entfällt
+### ⚠️ Breaking — the `_v6` suffix is gone
 
-Das Modul hieß intern seit jeher `network_topology_v6`; die „v6" war eine
-Entwicklungsnummer aus der Zeit vor dem ersten Release und hatte nie etwas mit
-der Zabbix- oder der Modulversion zu tun. Sie führte regelmäßig zu der Annahme,
-das Modul sei an Zabbix 6 gebunden — das Gegenteil stimmt, es läuft auf 7.0 LTS
-und 7.4. Der Suffix verschwindet daher restlos aus allen Bezeichnern.
+Internally the module had always been called `network_topology_v6`; the "v6" was
+a development number from before the first release and never had anything to do
+with the Zabbix or the module version. It regularly led people to assume the
+module was tied to Zabbix 6 — the opposite is true, it runs on 7.0 LTS and 7.4.
+The suffix therefore disappears completely from every identifier.
 
-*The `_v6` suffix is gone. It was a pre-release development number, never a
-Zabbix-version marker, and it kept being read as „requires Zabbix 6". Migration
-steps below.*
-
-| | vorher | jetzt |
+| | before | now |
 |---|---|---|
-| Verzeichnis | `network_topology_v6` | `network_topology` |
-| Modul-ID | `network_topology_v6` | `network_topology` |
-| PHP-Namespace | `Modules\NetworkTopologyV6` | `Modules\NetworkTopology` |
+| Directory | `network_topology_v6` | `network_topology` |
+| Module ID | `network_topology_v6` | `network_topology` |
+| PHP namespace | `Modules\NetworkTopologyV6` | `Modules\NetworkTopology` |
 | Actions | `network.topology.v6.*` | `network.topology.*` |
-| Widget-IDs | `network_topology_v6_*_widget` | `network_topology_*_widget` |
+| Widget IDs | `network_topology_v6_*_widget` | `network_topology_*_widget` |
 
-**Es gibt bewusst keine Kompatibilitäts-Aliase.** Die alten Action-Namen sind
-weg, nicht deprecated.
+**There are deliberately no compatibility aliases.** The old action names are
+gone, not deprecated.
 
-### Migration von 4.x
+### Migrating from 4.x
 
-1. **Altes Verzeichnis entfernen**, sonst registriert Zabbix beide Module und
-   der Menüeintrag erscheint doppelt:
+1. **Remove the old directory**, otherwise Zabbix registers both modules and the
+   menu entry appears twice:
    ```bash
    cd /usr/share/zabbix/ui/modules
    sudo rm -rf network_topology_v6 network_topology_v6_widget \
                network_topology_v6_health_widget network_topology_v6_table_widget
    ```
-2. Neue ZIPs entpacken (siehe `INSTALL.md`), dann
-   **Administration → General → Modules → Scan directory** und die Module auf
-   *Enabled* setzen. Die alten Einträge verschwinden dabei von selbst.
-3. **Dashboards nachziehen.** Die drei Widget-IDs stehen in `widget.type`; mit
-   dem Umbenennen kennt Zabbix den alten Typ nicht mehr und blendet die Kacheln
-   aus. Sie müssen einmalig neu hinzugefügt und konfiguriert werden. Betroffen
-   ist nur die Kachel, nicht das Dashboard.
-4. **Lesezeichen aktualisieren** — die Ansicht liegt jetzt unter
+2. Unpack the new ZIPs (see `INSTALL.md`), then
+   **Administration → General → Modules → Scan directory** and set the modules to
+   *Enabled*. The old entries disappear by themselves in the process.
+3. **Update the dashboards.** The three widget IDs are stored in `widget.type`;
+   after the rename Zabbix no longer knows the old type and hides the tiles. They
+   have to be added and configured once. Only the tile is affected, not the
+   dashboard.
+4. **Update bookmarks** — the view now lives at
    `zabbix.php?action=network.topology.view`.
 
-#### Optional: Dashboards per SQL erhalten
+#### Optional: keep the dashboards, via SQL
 
-Wer die Kacheln nicht neu bestücken will, kann die Bezeichner stattdessen in
-der Datenbank umschreiben. Das ist genau das, was „Scan directory" plus ein
-manueller Neuaufbau täte — nur ohne Klickarbeit. **Vorher Backup ziehen**, und
-erst ausführen, wenn die neuen Verzeichnisse schon auf der Platte liegen:
+If you would rather not rebuild the tiles, you can rewrite the identifiers in the
+database instead. That is exactly what "Scan directory" plus a manual rebuild
+would do — only without the clicking. **Take a backup first**, and only run it
+once the new directories are already on disk:
 
 ```sql
 BEGIN;
@@ -1125,88 +1081,170 @@ UPDATE widget SET type = 'network_topology_table_widget'
 COMMIT;
 ```
 
-`UPDATE` statt `DELETE`+`INSERT` ist Absicht: es erhält die `moduleid`, an der
-`role_rule.value_moduleid` per Fremdschlüssel mit `ON DELETE CASCADE` hängt —
-ein Löschen würde rollenbasierte Modulrechte stillschweigend mit entfernen.
-Danach php-fpm neu laden.
+`UPDATE` rather than `DELETE`+`INSERT` is deliberate: it preserves the
+`moduleid`, to which `role_rule.value_moduleid` is tied by a foreign key with
+`ON DELETE CASCADE` — deleting would silently remove role-based module
+permissions along with it. Reload php-fpm afterwards.
 
-**Auf diesem Weg entfallen die Schritte 2 und 3 oben.** Weil die Zeilen
-umbenannt statt ersetzt werden, bleibt `status` erhalten — die Module sind
-danach weiterhin aktiviert, „Scan directory" und das Neu-Aktivieren sind nicht
-nötig, und die Dashboard-Kacheln stehen an ihrem Platz. Wer neu hinzugekommene
-Widgets nutzen will, braucht „Scan directory" trotzdem einmal: die kennt Zabbix
-noch nicht.
+**This route makes steps 2 and 3 above unnecessary.** Because the rows are
+renamed rather than replaced, `status` is preserved — the modules stay enabled,
+"Scan directory" and re-enabling are not needed, and the dashboard tiles stay
+where they are. If you want to use widgets added since, you still need "Scan
+directory" once: Zabbix does not know those yet.
 
-Nachgefahren auf zwei unabhängigen Installationen — der Projekt-Demo und einer
-zweiten Instanz auf PostgreSQL. Beide Male: sieben Zeilen geändert, alle Module
-weiter aktiviert, alle Kacheln erhalten.
+Reproduced on two independent installations — the project demo and a second
+instance on PostgreSQL. Both times: seven rows changed, all modules still
+enabled, all tiles preserved.
 
-**Erhalten bleibt alles Nutzerseitige:** Knotenpositionen, Pins, Notizen,
-manuelle Links, Filter-Presets und sämtliche Toolbar-Einstellungen. Die
-localStorage-Schlüssel tragen ein User-Präfix (`u<id>_`) und waren nie an den
-Modulnamen gebunden. Host-Tags (`nt:parent`) sind ohnehin unberührt.
+**Everything user-side is preserved:** node positions, pins, notes, manual links,
+filter presets and all toolbar settings. The localStorage keys carry a user
+prefix (`u<id>_`) and were never tied to the module name. Host tags (`nt:parent`)
+are untouched anyway.
 
 ### Changed
-- Widget-Versionen ziehen wegen der geänderten IDs je einen Major nach:
-  Topologie-Graph `2.0.0 → 3.0.0`, Health-Score `1.0.1 → 2.0.0`,
-  Tabelle `1.0.0 → 2.0.0`.
-- Release-Assets heißen entsprechend `network_topology.zip`,
+
+- Widget versions each gain a major because of the changed IDs: topology graph
+  `2.0.0 → 3.0.0`, health score `1.0.1 → 2.0.0`, table `1.0.0 → 2.0.0`.
+- Release assets are named accordingly: `network_topology.zip`,
   `network_topology_widget.zip`, `network_topology_health_widget.zip`,
   `network_topology_table_widget.zip`.
 
 ## v4.38.3 — 2026-07-27
 
 ### Fixed
-- **Dashboard-Widgets blieben je nach Timing auf „Loading…" stehen.** Zwei unabhängige Ursachen, beide im Widget-Frontend:
-  1. `data-groupids` kommt in Zabbix 7.4 **leer** am Client an — die Feldwerte stehen dort nur in `this._fields`. Der Fallback darauf existierte bisher nur im `else`-Zweig (Canvas bei `onStart` noch nicht da). Existierte der Canvas schon, gewann das leere Attribut und das Widget fetchte **nie**. Welches der drei Widgets es traf, entschied allein das Timing. Der Fallback greift jetzt in beiden Zweigen.
-  2. Das Cytoscape-Layout lief, während die Widget-Fläche im Dashboard noch **0 px** groß war. `cose`/`cola` können dann nicht verteilen und legen **alle** Knoten auf `{0,0}`; das nachgelagerte `fit()` zoomt daraufhin auf eine entartete Bounding-Box (Zoom 4) — der Graph ist geladen, aber unsichtbar. Ein `resize()`+`fit()` allein heilt das nicht, weil die Positionen bereits feststehen. Das Layout läuft jetzt per `ResizeObserver` erneut, sobald der Container echte Größe hat (dieselbe Lösung wie in `render-tech.js` des Hauptmoduls); der Observer wird in `_destroyCy()` mit abgeräumt.
-- **Dark-Mode-Button war nicht übersetzbar**: `tabs.js` setzte „Light"/„Dark" hart, obwohl die i18n-Keys `toolbar.light`/`toolbar.dark` in beiden Sprachdateien existierten.
+
+- **Dashboard widgets stayed on "Loading…" depending on timing.** Two independent
+  causes, both in the widget frontend:
+  1. `data-groupids` arrives at the client **empty** in Zabbix 7.4 — the field
+     values are only in `this._fields` there. The fallback to those existed only
+     in the `else` branch (canvas not yet present at `onStart`). If the canvas did
+     exist, the empty attribute won and the widget **never** fetched. Which of the
+     three widgets was hit was decided purely by timing. The fallback now applies
+     in both branches.
+  2. The Cytoscape layout ran while the widget area in the dashboard was still
+     **0 px**. `cose`/`cola` then cannot distribute and put **all** nodes at
+     `{0,0}`; the subsequent `fit()` zooms onto a degenerate bounding box (zoom 4)
+     — the graph is loaded but invisible. A `resize()`+`fit()` alone does not heal
+     that, because the positions are already fixed. The layout now runs again
+     through a `ResizeObserver` as soon as the container has a real size (the same
+     solution as in the main module's `render-tech.js`); the observer is cleaned up
+     in `_destroyCy()`.
+- **The dark-mode button was not translatable**: `tabs.js` hard-coded
+  "Light"/"Dark" although the i18n keys `toolbar.light`/`toolbar.dark` existed in
+  both language files.
 
 ### Removed
-- Toter Code: `assets/js/modules/dom-safe.js` (nie importiert, nicht im Bundle), der ungenutzte Export `hasSnapshot()` aus `diff-mode.js` und 7 CSS-Regeln für `.nt-lbl`/`.nt-node` (beide Klassen werden von keinem JS/PHP je gesetzt — Icons gehen als Data-URI an Cytoscape).
+
+- Dead code: `assets/js/modules/dom-safe.js` (never imported, not in the bundle),
+  the unused export `hasSnapshot()` from `diff-mode.js` and 7 CSS rules for
+  `.nt-lbl`/`.nt-node` (neither class is ever set by any JS or PHP — icons go to
+  Cytoscape as data URIs).
 
 ### Added
-- **`CONTRIBUTING.md`** (DE/EN): Entwicklungs-Setup und vor allem die drei Dinge, die die CI hart erzwingt (mitcommittetes Bundle, XSS-Gates, ESLint-Baseline).
-- **GitHub-Issue-Vorlage** als Formular — fragt Modul-/Zabbix-/PHP-Version und bei fehlenden Kanten den SNMP-Vendor ab.
+
+- **`CONTRIBUTING.md`**: development setup and above all the three things CI
+  enforces hard (the bundle committed alongside, the XSS gates, the ESLint
+  baseline).
+- **GitHub issue template** as a form — asks for module, Zabbix and PHP version,
+  and for the SNMP vendor when edges are missing.
 
 ### Changed
-- **README ist jetzt zweisprachig (DE/EN)** und ohne Demo-Verweise; Architektur-, Screenshot- und Lizenzabschnitte werden gemeinsam genutzt statt doppelt geführt.
-- **Changelog beginnt beim ersten öffentlichen Release** — die Entwicklungshistorie davor ist nicht Teil dieses Repos.
+
+- **The README is now bilingual** and free of demo references; the architecture,
+  screenshot and licence sections are shared rather than kept twice.
+- **The changelog begins at the first public release** — the development history
+  before that is not part of this repository.
 
 ## v4.38.2 — 2026-07-27
 
-Härtungs-Runde vor der Veröffentlichung (externes Security-Review + Repo-Audit).
+Hardening round before publication (external security review + repository audit).
 
 ### Security
-- **`deploy.sh`: Root-Code-Execution über vorhersagbaren `/tmp`-Pfad geschlossen** (High). Die Zips wurden auf dem Zielserver unter festen Namen (`/tmp/network_topology_v6.zip`) abgelegt. Ein beliebiger unprivilegierter User dort konnte den Pfad vorab als **Symlink** anlegen; `scp` folgt ihm (`O_CREAT|O_TRUNC`), womit der Angreifer die Datei kontrolliert, die Sekunden später von `sudo unzip` als **root** entpackt wird — ohne Zip-Slip-Filter also beliebige Dateien außerhalb des Modulverzeichnisses. Lokales **und** entferntes Arbeitsverzeichnis sind jetzt `mktemp -d` mit `umask 077`; der EXIT-Trap räumt beide ab (die Remote-Zips blieben vorher dauerhaft liegen). Der SSH-Control-Socket liegt ebenfalls im 0700-Tempdir statt unter einem aus dem Servernamen ableitbaren `/tmp`-Pfad.
-- **Die drei Widget-Module liefen durch kein einziges CI-Gate.** `eslint.config.mjs`, `tools/check-xss.sh` und `package.json` kannten nur `assets/js/**` — ausgerechnet die Dateien, die ihr HTML per String-Konkatenation bauen, wurden nie geprüft. Beide Gates decken jetzt `widget*/assets/js/**` mit ab (verifiziert: ein absichtlich eingebauter unescapter Sink lässt beide rot werden, die bestehende Baseline unterdrückt ihn nicht).
-- **Unescapter `innerHTML`-Sink im Topology-Widget** (`widget/assets/js/widget.class.js`, `_showMsg`): die Fehlermeldung wurde roh in HTML konkateniert — der einzige Bruch der Escaping-Konvention in allen drei Widgets, entstanden genau in der Gate-Blindstelle. Baut die Nachricht jetzt über `textContent`, ist damit per Konstruktion kein HTML-Sink mehr.
-- ESLint erkennt `this._esc()` der Widgets als Escape-Methode (`escape.methods` um `_esc` erweitert); die 8 dadurch neu sichtbaren, **inhaltlich geprüften** Bestands-Sinks sind in `eslint-suppressions.json` gebaselined — wie die ~100 im Hauptmodul.
+
+- **`deploy.sh`: root code execution through a predictable `/tmp` path closed**
+  (high). The ZIPs were placed on the target server under fixed names
+  (`/tmp/network_topology_v6.zip`). Any unprivileged user there could create the
+  path in advance as a **symlink**; `scp` follows it (`O_CREAT|O_TRUNC`), which
+  gives the attacker control of the file that `sudo unzip` extracts as **root**
+  seconds later — without a zip-slip filter, therefore arbitrary files outside
+  the module directory. The local **and** remote working directories are now
+  `mktemp -d` with `umask 077`; the EXIT trap cleans up both (the remote ZIPs used
+  to stay behind permanently). The SSH control socket likewise lives in the 0700
+  temp directory rather than under a `/tmp` path derivable from the server name.
+- **The three widget modules passed through not a single CI gate.**
+  `eslint.config.mjs`, `tools/check-xss.sh` and `package.json` only knew
+  `assets/js/**` — the very files that build their HTML by string concatenation
+  were never checked. Both gates now cover `widget*/assets/js/**` as well
+  (verified: a deliberately introduced unescaped sink turns both red, and the
+  existing baseline does not suppress it).
+- **Unescaped `innerHTML` sink in the topology widget**
+  (`widget/assets/js/widget.class.js`, `_showMsg`): the error message was
+  concatenated raw into HTML — the only break of the escaping convention across
+  all three widgets, and it arose precisely in the gates' blind spot. It now
+  builds the message through `textContent` and is therefore no longer an HTML
+  sink by construction.
+- ESLint recognises the widgets' `this._esc()` as an escaping method
+  (`escape.methods` extended by `_esc`); the 8 pre-existing sinks made visible by
+  that, **each reviewed on its merits**, are baselined in
+  `eslint-suppressions.json` — like the ~100 in the main module.
 
 ### Changed
-- **Reale Infrastruktur-Referenzen entfernt**: eigene Host-/Netzdaten in CHANGELOG, Tests und Code-Kommentaren durch generische Platzhalter ersetzt (`192.0.2.x` nach RFC 5737, `example.com`, `SW-CORE-01`). Betrifft keine Funktionalität — Device-Type-Keywords wie `truenas`/`pve` in `HostMetadata.php` sind funktionaler Code und bleiben.
-- **Versions-Konsistenz**: `manifest.json`, `package.json`, `package-lock.json`, README-Badge und CHANGELOG liefen bis zu vier Releases auseinander und sind jetzt synchron.
+
+- **Real infrastructure references removed**: own host and network data in the
+  changelog, tests and code comments replaced with generic placeholders
+  (`192.0.2.x` per RFC 5737, `example.com`, `SW-CORE-01`). No functional impact —
+  device-type keywords such as `truenas`/`pve` in `HostMetadata.php` are
+  functional code and stay.
+- **Version consistency**: `manifest.json`, `package.json`, `package-lock.json`,
+  the README badge and the changelog had drifted apart by up to four releases and
+  are now in sync.
 
 ### Added
-- **`SECURITY.md`** (DE/EN): Meldeweg für Sicherheitslücken, Reaktionszeit, Geltungsbereich und das dokumentierte Sicherheitsmodell.
-- **README**: Link-Zeile (Projektseite, Demo, Repo, Changelog, Installation) und Abschnitt „Feedback & Mitmachen". **INSTALL**: Clone-URL und Release-ZIP verweisen auf das öffentliche Repository.
-- `.gitignore` deckt `.claude/`, `*.log` und `.env` ab.
+
+- **`SECURITY.md`**: reporting channel for vulnerabilities, response time, scope
+  and the documented security model.
+- **README**: link row (project page, demo, repository, changelog, installation)
+  and a "Feedback & contributing" section. **INSTALL**: clone URL and release ZIP
+  point at the public repository.
+- `.gitignore` covers `.claude/`, `*.log` and `.env`.
 
 ## v4.38.1 — 2026-07-27
 
 ### Fixed
-- **i18n-Lücke in der Items-Pivot**: ~15 Strings waren hart auf Deutsch codiert und blieben im EN-Modus deutsch — der Fehler-/Empty-State (inkl. der vier Erklär-Zeilen), „Alles leer", der Gruppen-Separator „Ohne Gruppe", Anomalie-Tooltips, „In Latest Data öffnen", Pattern-Label + -Placeholder. Alle laufen jetzt über `t()`, neue Keys in `i18n/{de,en}.js`. Dass es ein Versehen war zeigt `— Custom-Pattern —`: derselbe String lief an zwei Stellen bereits über `t('items.custom_pattern')`, an einer dritten hart-codiert.
+
+- **i18n gap in the items pivot**: about 15 strings were hard-coded in German and
+  stayed German in EN mode — the error and empty states (including the four
+  explanatory lines), "everything empty", the group separator "no group", anomaly
+  tooltips, "open in Latest data", the pattern label and placeholder. They all go
+  through `t()` now, with new keys in `i18n/{de,en}.js`. That it was an oversight
+  is shown by `— custom pattern —`: the same string already went through
+  `t('items.custom_pattern')` in two places and was hard-coded in a third.
 
 ### Added
-- `fmtVal` formatiert jetzt auch die Zabbix-Unit **`Bps`** (Byte/s → B/s, KB/s, MB/s, GB/s). Bisher fiel sie auf die rohe Zahlenausgabe zurück (`bps` = Bit/s war bereits abgedeckt).
-- **README**: Tabelle, welche **Linux-Templates** für die Items-Pivot-Presets nötig sind (`Linux by Zabbix agent` für Disks/Block-IO/CPU/Memory/Netz, `ICMP Ping` für Ping) — plus der Hinweis, dass SNMP-Switches/Windows andere Keys liefern und dort das Custom-Pattern bzw. die „Discovered"-Liste zu nutzen ist. Ohne passendes Template bleibt die Pivot leer, was bisher wie ein Fehler wirkte.
+
+- `fmtVal` now also formats the Zabbix unit **`Bps`** (bytes/s → B/s, KB/s, MB/s,
+  GB/s). Until now it fell back to raw numeric output (`bps` = bits/s was already
+  covered).
+- **README**: a table of which **Linux templates** the items-pivot presets need
+  (`Linux by Zabbix agent` for disks/block IO/CPU/memory/network, `ICMP Ping` for
+  ping) — plus the note that SNMP switches and Windows deliver different keys and
+  that the custom pattern or the "discovered" list should be used there. Without a
+  matching template the pivot stays empty, which until now looked like a fault.
 
 ## v4.38.0 — 2026-07-27
 
 ### Added
-- **Drittes Dashboard-Widget „NT Table"** (`network_topology_v6_table_widget`): die Tabellen-Ansicht (Nagios-/Icinga-Style Hostliste) als Dashboard-Kachel — **Status** (Severity/Offline/Stale), **Host**, **CPU**, **Mem**, **Ping**, **Traffic** (↓/↑), **offene Probleme**. Sortierung Offline → Severity → Name; konfigurierbar: Hostgroups, Hide-offline, Only-problems, Max-rows. Nutzt dieselbe `network.topology.v6.data`-Action wie der Haupt-Tab (kein zweites Backend), ES5-jsLoader-Stil (Zabbix 7.4) wie die bestehenden Widgets. `deploy.sh` liefert die Widgets jetzt zu dritt aus (`widgets`/`all`-Modus).
+
+- **A third dashboard widget, "NT Table"** (`network_topology_v6_table_widget`):
+  the table view (Nagios/Icinga-style host list) as a dashboard tile — **status**
+  (severity/offline/stale), **host**, **CPU**, **mem**, **ping**, **traffic**
+  (↓/↑), **open problems**. Sorted offline → severity → name; configurable: host
+  groups, hide offline, only problems, max rows. It uses the same
+  `network.topology.v6.data` action as the main tab (no second backend) and the
+  ES5 jsLoader style (Zabbix 7.4) like the existing widgets. `deploy.sh` now ships
+  three widgets (`widgets`/`all` mode).
 
 ---
 
-*Die Entwicklungshistorie vor dem ersten öffentlichen Release ist nicht Bestandteil dieses Changelogs.*
-*Development history prior to the first public release is not part of this changelog.*
+*Development history prior to the first public release is not part of this
+changelog.*

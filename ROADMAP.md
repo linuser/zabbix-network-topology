@@ -297,6 +297,40 @@ Standard-MIB, IPsec je nach Gerät `IPSEC-FLOW-MONITOR-MIB` oder Herstellereigen
 OpenVPN meist gar kein SNMP. In der Praxis liefe es auf Zabbix-Items je
 Plattform hinaus und nicht auf eine gemeinsame Quelle.
 
+### Einstellbare Traffic-Schwellen
+
+Aus [Issue #9](https://github.com/linuser/zabbix-network-topology/issues/9)
+(christos-diamantis). Die absolute Kantenfarbe hat feste Stufen in
+`traffic.js`: unter 1 Mb/s blau, unter 10 Mb/s orange, darüber rot. Auf einem
+10G-Campus-Link ist das falsch kalibriert — 10 Mb/s sind dort 0,1 % und stehen
+trotzdem in Rot.
+
+**Nicht Teil des Fixes in 5.2.0.** Dort werden die drei gemeldeten Fehler
+behoben (Legende zeigt die tatsächlich benutzte Skala, gleiche Schwellen in
+Tooltip und Kante, Label über `text-opacity` statt Leerstring). Einstellbare
+Schwellen sind etwas anderes: sie brauchen einen Ort, an dem eine Installation
+ihre Werte ablegt. `module.config` böte sich an — dieselbe Ebene wie die
+geteilten Positionen, also auch dieselbe Frage nach Rechten und Revision.
+
+Die naheliegende Alternative wäre, gar keine absoluten Stufen mehr anzubieten
+und immer prozentual zu färben. Dagegen spricht `capBps`: die Kapazität kommt
+aus `ifSpeed` beider Endpunkte und fehlt öfter, als man denkt.
+
+### Network Insights als Widget
+
+Deine Einordnung aus dem Feature-Block: **eher ein Widget als ein Tab.** Eine
+Kachel, die die Karte nicht zeichnet, sondern über sie berichtet — was sich
+seit gestern geändert hat, welche Kante am meisten Last trägt, wo LLDP-Nachbarn
+verschwunden sind.
+
+Das passt zum Dashboard, nicht zur Vollbildkarte, und es ist der einzige
+Vorschlag aus der Sammlung, der **keinen** neuen Datenpfad braucht: alles, was
+er anzeigen würde, liegt schon in `NetworkTopologyData`.
+
+Zu beachten: Widgets sind **ES5** und können den Code des Hauptmoduls nicht
+importieren. Was hier an Auswertung entsteht, entsteht ein zweites Mal — und
+`ci:parity` will dann wissen, welche Stelle die Vorlage ist.
+
 ### PoE je Port
 
 `pethPsePortActualPower` aus der POWER-ETHERNET-MIB. Kleines, klar umrissenes
