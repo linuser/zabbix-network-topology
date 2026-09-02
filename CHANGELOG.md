@@ -2,7 +2,24 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
-## v5.2.0 — unreleased
+## v5.2.0 — 2026-09-02
+
+### Updating from 5.1 — nothing to do
+
+No migration. Everything new here is client logic, documentation, or additive
+on the server: no changed field, no data to move, no re-enabling. Map layouts,
+manual links, pins, notes and presets all stay where they are.
+
+5.2 does add one action, `network.topology.scales`, and 5.1.0 made a point of
+"Scan directory" for exactly that reason. Measured on Zabbix 7.4 for this
+release: the action answered immediately after a plain file swap, with no
+rescan and no service restart — the module directory was replaced and the very
+next request routed it. If *View → Color scales* nevertheless reports an
+unknown action on your installation, *Administration → General → Modules →
+Scan directory* settles it.
+
+Coming from **4.x**? The directory rename is described under v5.0.0 further
+down.
 
 ### Thanks
 
@@ -77,6 +94,65 @@ Thank you.
   asked for exactly this in the "Expected" part of his report: a 10G campus link
   should not be red at 10 Mb/s.
 
+- **The map speaks the same search language as the table.** Until now the map
+  had a plain `indexOf` over the display name while the table next to it
+  understood fields, negation, quotes and parentheses — the same question,
+  answered differently depending on which tab you were on. `query.js` was
+  already there; the map now uses it:
+
+      192.0.2.43              a bare word matches name and IP
+      type:switch             field search (host, label, ip, iftype, proxy, group)
+      -type:server            negation
+      group:"core sites"      quoted values
+      (host:fw OR host:core)  parentheses
+
+  Non-matching nodes are dimmed rather than removed, so the shape of the
+  topology stays readable while you search.
+
+- **The active tab is part of the link.** `?nt_tab=geo` opens the geo view
+  directly; switching tabs rewrites the URL through `replaceState`, so the
+  address bar always describes what is on screen. Together with the host group
+  parameters, a link now carries the whole view — the thing you paste into a
+  ticket.
+
+  Both the URL parameter and the remembered tab in `localStorage` are checked
+  against the tabs the user is actually allowed to see; see the corresponding
+  entry under *Fixed*.
+
+- **Save the layout as a file.** *Export → Layout (JSON)* writes the current
+  arrangement, pins, notes and manual links to a file. Presets already collect
+  the same state, but they live in `localStorage`: no second browser, no second
+  machine, and certainly no way from one Zabbix installation to the next. The
+  export closes that gap — it only reads and cannot break anything.
+
+  There is deliberately **no import counterpart yet**. It was built and taken
+  out again, because the apply path is written for complete states from the
+  running map while a file is an arbitrary partial one; a shared map would need
+  a decision first — replace or merge. The head of `layout-file.js` states what
+  has to be settled before it comes back.
+
+
+### Changed
+
+- **Documentation leads with English.** `INSTALL.md` and `SECURITY.md` now put
+  the English section first, as the README already did — and this changelog is
+  English throughout, all eight releases of it. It was the last piece of
+  user-facing documentation still written in German only, linked from the
+  README, from INSTALL and from every release. Comments in the code stay
+  German; that is a deliberate choice and `ci:i18n` only reads string literals.
+
+  Two code quotations stay German on purpose: `_('Auswahl leeren')` and
+  "1 Gruppen" are the defects the surrounding paragraphs are about, and
+  translating them would hide what went wrong.
+
+### Removed
+
+- **The dark mode toggle.** It produced a second set of colours that nobody
+  maintained: the severity palette, the group hulls and the legend each drifted
+  from the light version, and several views never followed the switch at all.
+  Rather than fix a mode that was half-built, the button is gone. The remaining
+  branches on `nt-dark` in the render modules do nothing and will follow.
+
 ### Fixed
 
 - **Blank map as soon as the selection spans two or more primary groups.**
@@ -104,6 +180,75 @@ Thank you.
   the weathermap mode set an *empty* label, which Cytoscape treats as "remove
   the bypass": the traffic label came back and the edge looked as if the mode
   were off. It now reads "0.2%".
+
+
+- **Concurrent-edit detection had never once fired.** 5.1.0 introduced it —
+  server side, client side, a test, an error message in two languages — and it
+  was inert from the day it shipped: the page never put the revisions into the
+  DOM, so `storage.js` sent an empty `base`, and `Revision::matches('')`
+  returns `true` by design (the escape hatch for old clients). Every write was
+  therefore accepted. Two tabs of the same user overwrote each other exactly as
+  before, and the release notes said the opposite.
+
+- **On a conflict the server's answer was thrown away.** The server rejects the
+  write and sends its current state along — the comment in
+  `NetworkTopologyLinks.php` even says why: "the client can start over from
+  this". The client took only the revision and dropped the rest, with two
+  consequences. The map kept showing the rejected arrangement while the message
+  said "not saved", so the user had to believe it against their own screen. And
+  because the revision *was* adopted, the next save matched again and pushed
+  the stale local state over the other person's work — the detection did not
+  prevent the overwrite, it deferred it by one save.
+
+  For positions that reaches further than the visible view, because every write
+  sends **all** views: edit view "4" and you still ship view "7" in the state
+  you loaded. A second super admin working there loses their change on your
+  next save. `storage.js` now adopts what the server sent, and the map is moved
+  back onto it — a nudge, not a re-render, because a render would save again
+  through `layoutstop`. Pinned nodes are briefly unlocked: measured against the
+  bundled Cytoscape, `position()` does not move a locked node.
+
+  Verified with two tabs on a live instance: tab B, which never knew about tab
+  A's arrangement, snapped onto it; the server was unchanged; and the next save
+  from B kept A's four nodes and added only its own.
+
+- **Two saves in quick succession produced a conflict out of nothing.** Both
+  write paths built their request body before sending, so two saves inside one
+  response time carried the same base revision — the second was rejected
+  although nobody else had done anything. Two clicks on *Fit* were enough. The
+  requests are now serialised per layer and read base and payload at send time.
+
+  The *Fit* button also no longer saves at all. It carried a `savePositions()`
+  with the comment "save again to be safe", and it could not save anything:
+  `fit()` changes zoom and pan and does not touch node positions — measured
+  against the library rather than assumed. What it did was one pointless round
+  trip per click.
+
+- **A preset could delete the stored map.** There are two ways into the
+  position layer — read from the map, or handed over ready-made — and they
+  carried the two-layer logic separately. The second had drifted: no
+  `internet_*` filter, no rounding, and no guard against an arrangement in
+  which everything sits at the origin. That last one is the one that bites: such
+  a preset overwrote real saved positions. Both paths now share one function.
+
+- **`proxy:` always produced an empty map.** `NodeBuilder` supplies
+  `proxy_name` and `proxy_group_name` with every host, but the Cytoscape node
+  was built from a fixed selection of fields that did not include them. The
+  search compared against a single space, matched nothing, and dimmed every
+  host — no error, no message, an empty map, while the same query worked in the
+  table. The same omission left the detail panel's "via &lt;proxy&gt;" line
+  permanently blank.
+
+  The placeholder was corrected in the same breath: it promised "Search name,
+  IP, type", but a bare word deliberately matches name and IP only. Anyone
+  typing `switch` got an empty map for a second reason.
+
+- **The tab URL parameter bypassed the permission check.** `?nt_tab=diag`
+  opened a view for which the user had no button, and `switchTab` additionally
+  wrote it into their `localStorage` — so every later visit landed there again.
+  The server refused the data, so nothing leaked; what broke was usability, and
+  it had no way out. `tabs.js` now holds one list for the buttons, the
+  permissions and the URL check, and the remembered tab is validated as well.
 
 ## v5.1.2 — 2026-09-01
 
