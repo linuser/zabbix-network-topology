@@ -129,9 +129,12 @@ final class LldpEdgeBuilder {
                 // (Regression). Cleanup nur als Fallback fuer Vendor-Suffixe.
                 $neighbor_full = trim((string) $neighbor_full);
                 if ($neighbor_full === '') continue;
+                $match_kind = '';
                 $rhid = $name_map[strtolower($neighbor_full)] ?? null;
+                if ($rhid) $match_kind = 'exact';
                 if (!$rhid && isset($ip_map[$neighbor_full])) {
                     $rhid = $ip_map[$neighbor_full];
+                    $match_kind = 'ip';
                 }
 
                 $neighbor_raw = $rhid ? $neighbor_full : $cleanNeighbor($neighbor_full);
@@ -141,18 +144,23 @@ final class LldpEdgeBuilder {
                 // 1. Exakter Match gegen cleaned host/visiblename/lowercase
                 if (!$rhid) {
                     $rhid = $name_map[$lldp_val] ?? null;
+                    if ($rhid) $match_kind = 'exact_clean';
                 }
 
                 // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
                 if (!$rhid && isset($ip_map[$neighbor_raw])) {
                     $rhid = $ip_map[$neighbor_raw];
+                    $match_kind = 'ip';
                 }
 
                 // 2b. reverse-DNS-Pattern wie "ip-10-0-0-5" oder "host-10-0-0-5"
                 //     → extrahiere die IP und versuche IP-Match
                 if (!$rhid && preg_match('/(?:^|[-_])(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})/', $lldp_val, $mm)) {
                     $extracted_ip = str_replace('-', '.', $mm[1]);
-                    if (isset($ip_map[$extracted_ip])) $rhid = $ip_map[$extracted_ip];
+                    if (isset($ip_map[$extracted_ip])) {
+                        $rhid = $ip_map[$extracted_ip];
+                        $match_kind = 'ip_derived';
+                    }
                 }
 
                 // 3. Short-Hostname (O(1)-Lookup via Map) — unique vs ambiguous tracken
@@ -162,6 +170,7 @@ final class LldpEdgeBuilder {
                     $candidates = $short_name_map[$lldp_short] ?? [];
                     if (count($candidates) === 1) {
                         $rhid = array_key_first($candidates);
+                        $match_kind = 'short';
                     } elseif (count($candidates) > 1) {
                         // Ambiguous: Short-Name matched mehrere Hosts → fuer
                         // Quality-Tab merken, aber nicht als Edge anlegen
@@ -332,6 +341,7 @@ final class LldpEdgeBuilder {
                                 // Schleife: daraus faellt die Unterscheidung
                                 // "beidseitig bestaetigt" gegen "einseitig".
                                 'reporters' => [(string) $rid => true],
+                                'match' => $match_kind,
                                 'ports' => $ports,
                                 'port_metrics' => $my_metrics !== null ? [(string) $rid => $my_metrics] : []];
                 } else {
@@ -343,6 +353,13 @@ final class LldpEdgeBuilder {
                     // zweites Mal gemeldet wird — er hat es nur nie
                     // aufgeschrieben. Genau hier entsteht die Bestaetigung.
                     $edges[$eidx]['reporters'][(string) $rid] = true;
+                    // Beste Match-Art gewinnt, nicht die erste: melden beide
+                    // Seiten, hat womoeglich nur eine den Namen exakt getroffen
+                    // — und dann ist die Kante so sicher wie ihr BESTER Beleg,
+                    // nicht so unsicher wie ihr schlechtester.
+                    if (self::matchRank($match_kind) > self::matchRank($edges[$eidx]['match'] ?? '')) {
+                        $edges[$eidx]['match'] = $match_kind;
+                    }
                     if (!isset($edges[$eidx]['src'][$src])) {
                         $edges[$eidx]['src'][$src] = true;
                     }
@@ -378,6 +395,7 @@ final class LldpEdgeBuilder {
                 $_e['reporters'] = array_keys($_e['reporters']);
                 sort($_e['reporters']);
                 $_e['confirmed'] = count($_e['reporters']) >= 2;
+                $_e['confidence'] = self::confidence($_e);
             }
         }
         unset($_e);
@@ -392,6 +410,84 @@ final class LldpEdgeBuilder {
     }
 
     /** Port-Label auf 24 Zeichen kappen (einheitlich fuer lokalen + Remote-Port). */
+    /**
+     * Rang einer Match-Art. Hoeher = besserer Beleg.
+     * Nur fuer den Vergleich beim Merge; die Punkte stehen in confidence().
+     */
+    private static function matchRank(string $kind): int {
+        switch ($kind) {
+            case 'exact':       return 5;
+            case 'ip':          return 4;
+            case 'exact_clean': return 3;
+            case 'ip_derived':  return 2;
+            case 'short':       return 1;
+            default:            return 0;
+        }
+    }
+
+    /**
+     * Wie sicher ist diese Kante? 0-100.
+     *
+     * WARUM DAS UEBERHAUPT NOETIG IST
+     * -------------------------------
+     * Auf der Karte sah bisher jede Kante gleich sicher aus. Tatsaechlich
+     * beruht die eine darauf, dass zwei Geraete einander unabhaengig melden
+     * und der Name exakt auf einen Host passt — die andere darauf, dass ein
+     * einzelner Switch einen Namen nannte, den wir nach Abschneiden der Domain
+     * auf genau einen Host zurueckfuehren konnten.
+     *
+     * Der Score ist zudem die VORBEDINGUNG fuer eine Normalisierung von
+     * Port-IDs. Die erzeugt zwangslaeufig Fehltreffer, und eine falsche Kante
+     * ist schlimmer als eine fehlende, weil sie wie eine Messung aussieht. Mit
+     * einer Sicherheitsangabe daneben wird aus dem Risiko eine Auskunft.
+     *
+     * WARUM DIESE SKALA UND NICHT DIE VORGESCHLAGENE
+     * ----------------------------------------------
+     * Der urspruengliche Vorschlag stuetzt sich auf Chassis-ID und Management-
+     * Adresse. Beide werden NICHT erhoben (lldpRemChassisIdSubtype und
+     * lldpRemManAddr fehlen in allen Templates) — eine Skala, die sich auf
+     * nicht vorhandene Daten beruft, waere eine erfundene Zahl. Bewertet wird
+     * deshalb, was wirklich vorliegt: WIE der Name getroffen hat, ob BEIDE
+     * Seiten es melden, und wie viel Beiwerk (Protokolle, Ports) dazukommt.
+     *
+     * Die Grundpunkte spiegeln die Reihenfolge des Abgleichs oben:
+     *
+     *   exact        60  der gemeldete Name IST der Hostname
+     *   ip           50  der Nachbar nannte eine IP, die zu einem Host gehoert
+     *   exact_clean  50  exakt, aber erst nach Abschneiden eines Zusatzes
+     *   ip_derived   35  IP aus einem Namensmuster ("ip-10-0-0-5") GERATEN
+     *   short        30  nur der Kurzname, in DIESER Auswahl eindeutig
+     *
+     * Der groesste Zuschlag ist die beidseitige Bestaetigung: zwei Geraete, die
+     * unabhaengig voneinander dasselbe sagen, wiegen mehr als jede Feinheit des
+     * Namensabgleichs.
+     */
+    private static function confidence(array $e): int {
+        $basis = [
+            'exact'       => 60,
+            'ip'          => 50,
+            'exact_clean' => 50,
+            'ip_derived'  => 35,
+            'short'       => 30,
+        ];
+        $score = $basis[$e['match'] ?? ''] ?? 25;
+
+        if (!empty($e['confirmed'])) {
+            $score += 30;
+        }
+        // Zwei Protokolle sahen dieselbe Verbindung.
+        if (isset($e['src']) && is_array($e['src']) && count($e['src']) >= 2) {
+            $score += 10;
+        }
+        // Ports an BEIDEN Enden bekannt — spricht dafuer, dass die Zuordnung
+        // nicht nur ueber den Namen laeuft.
+        if (isset($e['ports']) && is_array($e['ports']) && count($e['ports']) >= 2) {
+            $score += 10;
+        }
+
+        return max(0, min(100, $score));
+    }
+
     private static function capLabel(string $s): string {
         return strlen($s) > 24 ? substr($s, 0, 24) : $s;
     }

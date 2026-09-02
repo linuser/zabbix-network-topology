@@ -156,6 +156,15 @@ export function showEdgeDetail(panel, ed) {
                 name ? t('edge.onesided.tip_named', { host: name }) : t('edge.onesided.tip')));
         }
     }
+    // Sicherheit der Zuordnung. Die Farbe folgt derselben Logik wie ueberall
+    // sonst im Modul: gruen heisst nicht "gut", sondern "belegt".
+    if (!istManuell && !istGhost && typeof d.confidence === 'number') {
+        const c = d.confidence;
+        const col = c >= 80 ? '#16a34a' : (c >= 50 ? '#f59e0b' : '#c2410c');
+        const wie = d.matchKind ? t('edge.match.' + d.matchKind) : '';
+        srcRow.appendChild(pill(c + '%', col,
+            wie ? t('edge.confidence.tip', { how: wie }) : t('edge.confidence.tip_plain')));
+    }
     panel.appendChild(srcRow);
 
     // ── Ports ───────────────────────────────────────────────────────────────

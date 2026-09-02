@@ -369,6 +369,13 @@ export function buildEdgeElements(edges, nodes) {
                     // LLDP auf der Gegenseite aus, seltener eine Fehlzuordnung.
                     confirmed: e.confirmed === true,
                     reporters: e.reporters || [],
+                    // Wie sicher diese Kante ist (0-100) und WORAUF sie beruht.
+                    // Bis 5.3 sah auf der Karte jede Verbindung gleich sicher
+                    // aus, obwohl die eine von zwei Geraeten unabhaengig
+                    // bestaetigt wird und die andere auf einem gekuerzten Namen
+                    // beruht.
+                    confidence: (typeof e.confidence === 'number') ? e.confidence : null,
+                    matchKind: e.match || '',
                     // Interface-Health-Aggregat fuer Edge-Styling + Tooltip.
                     // downRatio (worst-case beider Endpunkte) steuert das
                     // Edge-Coloring — der Roh-Count wuerde bei einem Switch

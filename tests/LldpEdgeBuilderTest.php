@@ -228,6 +228,52 @@ check('unbekannter Uplink -> unmatched',    count($rU2['unmatched']),  1);
 // zeigt. Seit Label und Index verschieden sein koennen, ist die eigentliche
 // Gefahr, dass die Metrik STILL verschwindet — sie wird nach Index gesucht.
 
+// ── Confidence ─────────────────────────────────────────────────────────────
+//
+// Auf der Karte sah bisher jede Kante gleich sicher aus. Der Score sagt, worauf
+// sie beruht — und ist die Vorbedingung fuer eine Port-Normalisierung, die ohne
+// ihn Falschkanten erzeugen wuerde, die wie Messungen aussehen.
+
+echo "\nConfidence\n";
+
+$hC = ['a' => ['host' => 'sw-a',  'name' => 'Switch A'],
+       'b' => ['host' => 'sw-b',  'name' => 'Switch B'],
+       'c' => ['host' => 'sw-c.example.local', 'name' => 'Switch C']];
+
+$conf = static function (array $raw, array $ports = []) use ($hC) {
+    $r = LldpEdgeBuilder::build($hC, $raw, $ports);
+    $e = $r['edges'][0] ?? [];
+    return [$e['confidence'] ?? null, $e['match'] ?? null];
+};
+
+// Exakter Name, nur eine Seite meldet.
+[$s1, $m1] = $conf([['hostid'=>'a','key_'=>'lldpRemSysName','lastvalue'=>'sw-b','src'=>'lldp']]);
+check('exakter Name, einseitig',        [$m1, $s1], ['exact', 60]);
+
+// Derselbe Fall, aber BEIDE melden einander -> +30.
+[$s2, $m2] = $conf([
+    ['hostid'=>'a','key_'=>'lldpRemSysName','lastvalue'=>'sw-b','src'=>'lldp'],
+    ['hostid'=>'b','key_'=>'lldpRemSysName','lastvalue'=>'sw-a','src'=>'lldp'],
+]);
+check('exakter Name, beidseitig',       [$m2, $s2], ['exact', 90]);
+
+// Zwei Protokolle sehen dieselbe Verbindung -> +10.
+[$s3] = $conf([
+    ['hostid'=>'a','key_'=>'lldpRemSysName','lastvalue'=>'sw-b','src'=>'lldp'],
+    ['hostid'=>'b','key_'=>'lldpRemSysName','lastvalue'=>'sw-a','src'=>'lldp'],
+    ['hostid'=>'a','key_'=>'cdpCacheDeviceId','lastvalue'=>'sw-b','src'=>'cdp'],
+]);
+check('beidseitig + zwei Protokolle',   $s3, 100);
+
+// Nur der Kurzname traf: "sw-c" gegen den Host "sw-c.example.local".
+[$s4, $m4] = $conf([['hostid'=>'a','key_'=>'lldpRemSysName','lastvalue'=>'sw-c','src'=>'lldp']]);
+check('nur Kurzname -> match short',    $m4, 'short');
+check('nur Kurzname -> niedriger Wert', $s4, 30);
+
+// Der Kurzname-Fall ist der schwaechste und muss deutlich unter dem exakten
+// liegen — sonst traegt der Score nichts bei.
+check('Kurzname deutlich unter exakt',  $s4 < $s1 - 20, true);
+
 echo "\nPortname und Metrik-Zuordnung\n";
 
 $hN = ['sw' => ['host' => 'sw-n', 'name' => 'Switch N'],
