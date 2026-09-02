@@ -200,6 +200,42 @@ export function loadPositions() {
     return out;
 }
 
+// Ein Konflikt ist kein gewoehnlicher Fehler. Er hat eine eigene Meldung und
+// einen eigenen Weg zurueck, deshalb traegt er eine Markierung: die generischen
+// Fehlerkanaele (_onPosError, der Toast in manual-links.js) ueberspringen ihn.
+// Vorher standen bei jedem Konflikt ZWEI Meldungen uebereinander, die dasselbe
+// sagten — die Konfliktmeldung und "konnte nicht gespeichert werden".
+function _conflictError(d) {
+    const e = new Error((d && d.error) || 'conflict');
+    e.conflict = true;
+    return e;
+}
+
+// Konflikte melden sich ueber _onConflict; der generische Toast entfaellt.
+function _reportPosError(e) {
+    if (e && e.conflict) return;
+    if (_onPosError) _onPosError(e);
+}
+
+// Den Stand uebernehmen, den der Server im Konflikt MITSCHICKT
+// (NetworkTopologyPositions.php:129). Ihn zu verwerfen war der eigentliche
+// Fehler, und er wog schwerer als die stehengebliebene Karte:
+//
+//   Der abgelehnte Schreibvorgang blieb im Speicher stehen, waehrend _rev auf
+//   die NEUE Server-Revision gesetzt wurde. Damit passte die Basis beim
+//   naechsten Speichern wieder — und der veraltete lokale Stand ging als
+//   gueltig durch, ueber die fremde Aenderung hinweg. Die Konflikterkennung
+//   hat das Ueberschreiben also nicht verhindert, nur um einen
+//   Speichervorgang verschoben.
+//
+// Array-Pruefung, weil PHP eine leere Map als [] kodiert, nicht als {}.
+function _adoptPositions(scope, views) {
+    const clean = (views && typeof views === 'object' && !Array.isArray(views))
+        ? views : {};
+    if (scope === SCOPE_SHARED) _posShared = clean;
+    else                        _posPersonal = clean;
+}
+
 function _persistPositions(scope, views) {
     const cfg  = _cfg();
     const url  = cfg.positions_url || 'zabbix.php?action=network.topology.positions';
@@ -220,9 +256,10 @@ function _persistPositions(scope, views) {
     .then(function(d) {
         // Siehe _persist: zwischenzeitlich hat jemand anderes geschrieben.
         if (d && d.conflict) {
+            _adoptPositions(scope, d.positions);
             _rev[_revKey('positions', scope)] = d.revision || '';
             if (typeof _onConflict === 'function') _onConflict('positions', d);
-            throw new Error(d.error || 'conflict');
+            throw _conflictError(d);
         }
         if (!d || d.error) throw new Error((d && d.error) || 'unknown');
         if (typeof d.revision === 'string') {
@@ -264,7 +301,7 @@ export function savePositions(cyInst) {
         // Der Super-Admin pflegt die Karte: seine Anordnung IST sie, komplett.
         _posShared[view] = pos;
         _persistPositions(SCOPE_SHARED, _posShared)
-            .catch(function(e) { if (_onPosError) _onPosError(e); });
+            .catch(_reportPosError);
 
         // Eine eigene Abweichung fuer diese Ansicht loesen wir dabei auf.
         // Sonst gewinnt sie pro Knoten weiter — und der Admin saehe seine
@@ -274,7 +311,7 @@ export function savePositions(cyInst) {
         if (_posPersonal[view]) {
             delete _posPersonal[view];
             _persistPositions(SCOPE_PERSONAL, _posPersonal)
-                .catch(function(e) { if (_onPosError) _onPosError(e); });
+                .catch(_reportPosError);
         }
         return;
     }
@@ -295,7 +332,7 @@ export function savePositions(cyInst) {
     else delete _posPersonal[view];
 
     _persistPositions(SCOPE_PERSONAL, _posPersonal)
-        .catch(function(e) { if (_onPosError) _onPosError(e); });
+        .catch(_reportPosError);
 }
 
 /**
@@ -337,11 +374,11 @@ export function setPositions(pos, groupView) {
     if (scope === SCOPE_SHARED) {
         _posShared[view] = pos;
         _persistPositions(SCOPE_SHARED, _posShared)
-            .catch(function(e) { if (_onPosError) _onPosError(e); });
+            .catch(_reportPosError);
         if (_posPersonal[view]) {
             delete _posPersonal[view];
             _persistPositions(SCOPE_PERSONAL, _posPersonal)
-                .catch(function(e) { if (_onPosError) _onPosError(e); });
+                .catch(_reportPosError);
         }
         return;
     }
@@ -358,7 +395,7 @@ export function setPositions(pos, groupView) {
     else delete _posPersonal[view];
 
     _persistPositions(SCOPE_PERSONAL, _posPersonal)
-        .catch(function(e) { if (_onPosError) _onPosError(e); });
+        .catch(_reportPosError);
 }
 
 /** Setzt die eigene Ebene fuer die aktuelle Ansicht zurueck. */
@@ -369,7 +406,7 @@ export function clearPositions() {
 
     delete store[view];
     _persistPositions(scope, store)
-        .catch(function(e) { if (_onPosError) _onPosError(e); });
+        .catch(_reportPosError);
 }
 
 // Fehlerkanal wie bei den Links — storage.js soll nichts ueber Toasts wissen.
@@ -515,9 +552,10 @@ function _persist(scope, links) {
         // schickt den aktuellen Stand mit — damit setzt der Client neu auf,
         // statt eine weitere Runde zu drehen.
         if (d && d.conflict) {
+            _adoptLinks(scope, d.links);
             _rev[_revKey('links', scope)] = d.revision || '';
             if (typeof _onConflict === 'function') _onConflict('links', d);
-            throw new Error(d.error || 'conflict');
+            throw _conflictError(d);
         }
         if (!d || d.error) throw new Error((d && d.error) || 'unknown');
         if (typeof d.revision === 'string') {
@@ -535,9 +573,29 @@ function _persist(scope, links) {
     });
 }
 
+// Gegenstueck zu _adoptPositions: der Konfliktzweig schickt den aktuellen
+// Stand mit (NetworkTopologyLinks.php:139), und der Kommentar dort versprach
+// schon immer, der Client setze damit neu auf. Bis hierher tat er es nicht.
+function _adoptLinks(scope, links) {
+    const clean = Array.isArray(links)
+        ? links.filter(function(l) { return l && l.s && l.t; })
+               .map(function(l) { return { s: String(l.s), t: String(l.t) }; })
+        : [];
+    if (scope === SCOPE_SHARED) _linksShared = clean;
+    else                        _linksPersonal = clean;
+}
+
 function _rollback(scope, snapshot, err) {
-    if (scope === SCOPE_SHARED) _linksShared = snapshot;
-    else                        _linksPersonal = snapshot;
+    // Bei einem Konflikt steht der SERVER-Stand schon im Speicher (_adoptLinks).
+    // Den lokalen Schnappschuss darueberzulegen waere ein Rueckschritt: er ist
+    // genau der veraltete Stand, dessentwegen der Server abgelehnt hat.
+    if (!(err && err.conflict)) {
+        if (scope === SCOPE_SHARED) _linksShared = snapshot;
+        else                        _linksPersonal = snapshot;
+    }
+    // Der Kanal feuert in BEIDEN Faellen: manual-links.js zeichnet darin die
+    // Kanten aus dem Speicher neu — bei einem Konflikt also die des Servers.
+    // Nur der generische Toast entfaellt dort.
     if (typeof _onLinkError === 'function') _onLinkError(err);
 }
 

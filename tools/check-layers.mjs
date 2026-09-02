@@ -37,7 +37,7 @@ const MOD = new URL('../assets/js/modules/storage.js', import.meta.url).href;
  * anderer Konfiguration bekaeme also den alten Stand. Ein Kindprozess ist der
  * ehrlichste Weg, "ein anderer Benutzer laedt die Seite" nachzustellen.
  */
-function scenario(name, cfg, body) {
+function scenario(name, cfg, body, setup) {
     const dir  = mkdtempSync(join(tmpdir(), 'nt-layers-'));
     const file = join(dir, 'run.mjs');
     writeFileSync(file, `
@@ -51,6 +51,12 @@ function scenario(name, cfg, body) {
         globalThis.NT_CONFIG = ${JSON.stringify(cfg)};
         globalThis.fetch = () => Promise.resolve({ json: () => Promise.resolve({ ok: true }) });
         globalThis.document = { addEventListener() {} };
+
+        // Vor dem Import, nicht danach: storage.js liest NT_CONFIG in IIFEs beim
+        // Laden, und ein Szenario, das den fetch-Stub austauscht, muss das tun,
+        // bevor die erste Serverfahrt moeglich ist.
+        ${setup || ''}
+
         const S = await import(${JSON.stringify(MOD)});
         const out = await (async () => { ${body} })();
         console.log(JSON.stringify(out));
@@ -157,6 +163,82 @@ check('umgekehrte Richtung zaehlt als dieselbe Kante',
         manual_links: { shared: [{ s: 'a', t: 'b' }], personal: [{ s: 'b', t: 'a' }] }
     }, 'return S.loadLinks();'),
     [{ s: 'a', t: 'b', scope: 'shared' }]);
+
+console.log('\n== Konflikt: was der Server mitschickt, gilt ==\n');
+
+// WARUM DAS HIER STEHT
+// --------------------
+// Der Server lehnt ab, wenn die Basis-Revision nicht mehr passt, und schickt
+// seinen aktuellen Stand mit. Der Client hat ihn eine Zeit lang weggeworfen und
+// nur die Revision uebernommen — mit zwei Folgen, die beide erst im Betrieb
+// auffallen: die Karte zeigte weiter die abgelehnte Anordnung, und der naechste
+// Speichervorgang ging mit der NEUEN Revision durch und schrieb den veralteten
+// lokalen Stand darueber. Die Erkennung verhinderte das Ueberschreiben also
+// nicht, sie verschob es um einen Speichervorgang.
+
+// Eine Cytoscape-Attrappe: savePositions() braucht nur nodes().forEach mit
+// id() und position().
+const CY = (pos) => `{
+    nodes: () => ({ forEach: (f) => Object.keys(${JSON.stringify(pos)}).forEach(
+        (id) => f({ id: () => id, position: () => (${JSON.stringify(pos)})[id] })) })
+}`;
+
+// Der Stub antwortet EINMAL mit einem Konflikt und merkt sich alle Bodies.
+const KONFLIKT = (payload) => `
+    globalThis.__posted = [];
+    let erste = true;
+    globalThis.fetch = (url, opt) => {
+        globalThis.__posted.push(String((opt && opt.body) || ''));
+        const d = erste
+            ? Object.assign({ conflict: true, error: 'x', revision: 'r2' }, ${JSON.stringify(payload)})
+            : { ok: true, revision: 'r3' };
+        erste = false;
+        return Promise.resolve({ json: () => Promise.resolve(d) });
+    };
+`;
+
+check('Positions-Konflikt: der Serverstand ersetzt den abgelehnten',
+    scenario('k', {
+        ...base, is_super_admin: true, user_id: 1,
+        revisions: { positions_shared: 'r1' }
+    },
+    `S.savePositions(${CY({ h1: { x: 77, y: 77 } })});
+     await new Promise((r) => setTimeout(r, 30));
+     return S.loadPositions();`,
+    KONFLIKT({ positions: { [VIEW]: { h1: { x: 1, y: 1 }, h9: { x: 9, y: 9 } } } })),
+    { h1: { x: 1, y: 1 }, h9: { x: 9, y: 9 } });
+
+// Der teurere Teil: _persistPositions schickt ALLE Ansichten, nicht nur die
+// aktive. Ohne Uebernahme traegt der Client die fremde Ansicht '7' gar nicht
+// und loescht sie beim naechsten Speichern mit.
+check('fremde Ansicht ueberlebt den naechsten Speichervorgang',
+    scenario('l', {
+        ...base, is_super_admin: true, user_id: 1,
+        revisions: { positions_shared: 'r1' }
+    },
+    `S.savePositions(${CY({ h1: { x: 77, y: 77 } })});
+     await new Promise((r) => setTimeout(r, 30));
+     S.savePositions(${CY({ h1: { x: 55, y: 55 } })});
+     await new Promise((r) => setTimeout(r, 30));
+     const letzte = new URLSearchParams(globalThis.__posted.pop());
+     return Object.keys(JSON.parse(letzte.get('positions'))).sort();`,
+    KONFLIKT({ positions: {
+        [VIEW]: { h1: { x: 1, y: 1 } },
+        '7':    { x1: { x: 5, y: 5 } }
+    } })),
+    ['4', '7']);
+
+check('Links-Konflikt: Serverstand statt lokalem Schnappschuss',
+    scenario('m', {
+        ...base, is_super_admin: false, user_id: 5,
+        manual_links: { shared: [], personal: [{ s: 'a', t: 'b' }] },
+        revisions: { links_personal: 'r1' }
+    },
+    `S.addLink('c', 'd');
+     await new Promise((r) => setTimeout(r, 30));
+     return S.loadLinks();`,
+    KONFLIKT({ links: [{ s: 'x', t: 'y' }] })),
+    [{ s: 'x', t: 'y', scope: 'personal' }]);
 
 console.log('');
 if (failures) {

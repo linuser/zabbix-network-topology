@@ -21,8 +21,18 @@ import { refreshKpi } from './kpi.js';
 // hier — sonst haette der Nutzer eine Kante vor sich, die es serverseitig nicht
 // gibt, und wuerde es erst beim naechsten Laden merken. Der Umweg ueber einen
 // Handler haelt storage.js frei von Toast- und Uebersetzungswissen.
+//
+// Bei einem KONFLIKT ist der Speicher nicht auf den lokalen Vorzustand
+// zurueckgerollt, sondern auf den Stand, den der Server mitgeschickt hat. Das
+// Neuzeichnen unten zeigt also nicht "wie es vorher war", sondern was gerade
+// gilt — einschliesslich der fremden Aenderung, die den Konflikt ausgeloest hat.
 setLinkErrorHandler(function(err) {
-    toast(t('links.save_failed', { err: (err && err.message) || '?' }), 'error', 6000);
+    // Ein Konflikt hat seine eigene Meldung (conflict.links, gesetzt im
+    // Hauptmodul) und kommt hier NUR wegen des Neuzeichnens vorbei. Ohne diese
+    // Ausnahme standen zwei Toasts uebereinander, die dasselbe sagten.
+    if (!(err && err.conflict)) {
+        toast(t('links.save_failed', { err: (err && err.message) || '?' }), 'error', 6000);
+    }
     if (window._ntCy) {
         window._ntCy.edges('[id^="ml_"]').remove();
         applyManualLinks(window._ntCy);

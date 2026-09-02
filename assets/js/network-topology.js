@@ -17,7 +17,7 @@ import { t } from './modules/i18n.js';
 import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
 import { destroyGroupHulls } from './modules/group-hulls.js';
-import { NT_TAB_KEY, loadLastGroups, saveLastGroups,
+import { NT_TAB_KEY, loadLastGroups, saveLastGroups, loadPositions,
          setPositionErrorHandler, setPositionTruncatedHandler,
          setLinkTruncatedHandler, setConflictHandler } from './modules/storage.js';
 
@@ -30,16 +30,52 @@ setPositionErrorHandler(function(err) {
     toast(t('positions.save_failed', { err: (err && err.message) || '?' }), 'error', 6000);
 });
 
+// Jemand anderes hat dieselbe Ebene zwischenzeitlich geaendert. Der Server hat
+// NICHT geschrieben und schickt seinen aktuellen Stand mit; storage.js hat ihn
+// beim Eintreffen uebernommen. Was fehlte, war der sichtbare Teil: die Karte
+// zeigte weiter die abgelehnte Anordnung, waehrend die Meldung "nicht
+// gespeichert" sagte. Der Nutzer musste ihr gegen den eigenen Bildschirm
+// glauben — und die einzige Anweisung war "neu laden".
+//
+// Die Kanten macht manual-links.js schon selbst neu (ueber den Fehlerkanal);
+// fuer die Positionen gab es keinen solchen Weg zurueck.
+setConflictHandler(function(kind) {
+    if (kind !== 'links') restoreSavedPositions();
+    toast(t(kind === 'links' ? 'conflict.links' : 'conflict.positions'), 'warn', 12000);
+});
+
+// Holt die Karte auf den Stand, den storage.js gerade vom Server uebernommen
+// hat. Bewusst nur ein Zurechtruecken, kein Re-Render: ein Render wuerde ueber
+// layoutstop gleich wieder speichern und damit die naechste Runde ausloesen.
+//
+// Nur bewegen, was der Server auch kennt — ein frisch dazugekommener Host hat
+// dort keine Position und bliebe sonst auf 0,0 liegen. Gepinnte Knoten sind
+// gesperrt (n.lock()); ohne das kurze Entsperren ignoriert Cytoscape das
+// Setzen und ausgerechnet die festgehaltenen Knoten blieben falsch stehen.
+function restoreSavedPositions() {
+    const cy = window._ntCy;
+    if (!cy || typeof cy.nodes !== 'function') return;
+
+    let pos;
+    try { pos = loadPositions(); } catch (e) { return; }
+    if (!pos || !Object.keys(pos).length) return;
+
+    cy.batch(function() {
+        cy.nodes('[!isGroup]').forEach(function(n) {
+            const p = pos[String(n.id())];
+            if (!p || typeof p.x !== 'number' || typeof p.y !== 'number') return;
+            const war = n.locked();
+            if (war) n.unlock();
+            n.position({ x: p.x, y: p.y });
+            if (war) n.lock();
+        });
+    });
+}
+
 // Die Karte hat mehr Knoten, als serverseitig pro Ansicht gespeichert werden.
 // Ein Teil ist gesichert, der Rest nicht — das muss sichtbar sein, sonst
 // fehlen beim naechsten Laden Positionen ohne erkennbaren Grund und es sieht
 // nach Datenverlust aus statt nach einer Grenze.
-// Jemand anderes hat dieselbe Ebene zwischenzeitlich geaendert. Der Server
-// hat nicht geschrieben — der Nutzer muss das erfahren UND neu laden, sonst
-// arbeitet er auf einem Stand weiter, den es nicht mehr gibt.
-setConflictHandler(function(kind) {
-    toast(t(kind === 'links' ? 'conflict.links' : 'conflict.positions'), 'warn', 12000);
-});
 setLinkTruncatedHandler(function(n) {
     toast(t('links.truncated', { n: n }), 'warn', 8000);
 });
