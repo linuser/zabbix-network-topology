@@ -139,6 +139,23 @@ export function showEdgeDetail(panel, ed) {
         if (quellen.indexOf('cdp')  >= 0) srcRow.appendChild(pill('CDP',  '#16a34a', ''));
     }
     if (!srcRow.childNodes.length) srcRow.appendChild(el('span', 'color:#94a3b8', '—'));
+
+    // Beidseitig bestaetigt oder nur von einer Seite gesehen. Das ist die
+    // ehrlichste Auskunft, die diese Karte ueber eine Kante geben kann: bis
+    // hierher sah jede Verbindung gleich sicher aus, obwohl die eine von
+    // beiden Enden bestaetigt wird und die andere auf einer einzigen Meldung
+    // beruht. Bei manuellen und Ghost-Kanten sagt das nichts — dort weggelassen.
+    if (!istManuell && !istGhost && Array.isArray(d.reporters) && d.reporters.length) {
+        if (d.confirmed) {
+            srcRow.appendChild(pill('\u2713 ' + t('edge.confirmed'), '#16a34a',
+                t('edge.confirmed.tip')));
+        } else {
+            const wer = ed.cy().getElementById(String(d.reporters[0]));
+            const name = (wer && wer.length && wer.data('label')) || '';
+            srcRow.appendChild(pill('\u2192 ' + t('edge.onesided'), '#f59e0b',
+                name ? t('edge.onesided.tip_named', { host: name }) : t('edge.onesided.tip')));
+        }
+    }
     panel.appendChild(srcRow);
 
     // ── Ports ───────────────────────────────────────────────────────────────

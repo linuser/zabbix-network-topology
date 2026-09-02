@@ -291,6 +291,11 @@ final class LldpEdgeBuilder {
                     $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
                                 'to' => $rhid, 'iface' => $item['key_'],
                                 'src' => [$src => true],
+                                // WER die Kante gemeldet hat, nicht nur DASS sie
+                                // gemeldet wurde. Siehe den Kommentar am Ende der
+                                // Schleife: daraus faellt die Unterscheidung
+                                // "beidseitig bestaetigt" gegen "einseitig".
+                                'reporters' => [(string) $rid => true],
                                 'ports' => $ports,
                                 'port_metrics' => $my_metrics !== null ? [(string) $rid => $my_metrics] : []];
                 } else {
@@ -298,6 +303,10 @@ final class LldpEdgeBuilder {
                     // ergaenzen, wenn jetzt CDP oder die Gegenseite dieselbe
                     // Verbindung meldet (merge-Logik, first-wins pro Feld).
                     $eidx = $seen_edges[$edge_key];
+                    // Dieser Zweig WUSSTE schon immer, dass die Kante ein
+                    // zweites Mal gemeldet wird — er hat es nur nie
+                    // aufgeschrieben. Genau hier entsteht die Bestaetigung.
+                    $edges[$eidx]['reporters'][(string) $rid] = true;
                     if (!isset($edges[$eidx]['src'][$src])) {
                         $edges[$eidx]['src'][$src] = true;
                     }
@@ -314,10 +323,25 @@ final class LldpEdgeBuilder {
             }
         }
         // src-Map zu sortierter Liste konvertieren fuers Frontend ("lldp", "cdp")
+        //
+        // Dasselbe fuer reporters — und daraus 'confirmed'. Eine Kante gilt als
+        // beidseitig bestaetigt, wenn BEIDE Endpunkte einander gemeldet haben.
+        //
+        // ACHTUNG, die naheliegende Abkuerzung ist falsch: count(ports) === 2
+        // beweist das NICHT. Ein einzelner Melder traegt beide Ports ein — den
+        // eigenen lokalen (lldpRemLocalPortNum) und den vom Nachbarn gelernten
+        // (lldpRemPortId/-Desc). Zwei Port-Eintraege sind also kein Beleg fuer
+        // zwei Melder, und wer danach ginge, meldete praktisch jede Kante als
+        // bestaetigt. Deshalb das explizite Set.
         foreach ($edges as &$_e) {
             if (isset($_e['src']) && is_array($_e['src'])) {
                 $_e['src'] = array_keys($_e['src']);
                 sort($_e['src']);
+            }
+            if (isset($_e['reporters']) && is_array($_e['reporters'])) {
+                $_e['reporters'] = array_keys($_e['reporters']);
+                sort($_e['reporters']);
+                $_e['confirmed'] = count($_e['reporters']) >= 2;
             }
         }
         unset($_e);

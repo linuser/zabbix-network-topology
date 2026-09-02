@@ -209,6 +209,57 @@ $rU2 = LldpEdgeBuilder::build($hU,
 check('unbekannter Uplink -> keine Kante',  count($rU2['edges']),      0);
 check('unbekannter Uplink -> unmatched',    count($rU2['unmatched']),  1);
 
+// ── Beidseitige Bestaetigung ────────────────────────────────────────────────
+//
+// Der Kern: eine Kante ist bestaetigt, wenn BEIDE Endpunkte einander melden.
+// Der dritte Fall ist der wichtige — er sichert die Falle ab, die beim Bauen
+// fast zugeschnappt waere.
+
+echo "\nBeidseitige Bestaetigung\n";
+
+$hB = [
+    'a' => ['host' => 'sw-a', 'name' => 'Switch A'],
+    'b' => ['host' => 'sw-b', 'name' => 'Switch B'],
+    'c' => ['host' => 'sw-c', 'name' => 'Switch C'],
+];
+
+// a und b melden EINANDER -> bestaetigt. a meldet c, c schweigt -> einseitig.
+$rB = LldpEdgeBuilder::build($hB, [
+    ['hostid' => 'a', 'key_' => 'lldpRemSysName', 'lastvalue' => 'sw-b', 'src' => 'lldp'],
+    ['hostid' => 'b', 'key_' => 'lldpRemSysName', 'lastvalue' => 'sw-a', 'src' => 'lldp'],
+    ['hostid' => 'a', 'key_' => 'lldpRemSysName', 'lastvalue' => 'sw-c', 'src' => 'lldp'],
+]);
+
+$eAB = findEdge($rB['edges'], 'a', 'b') ?? [];
+$eAC = findEdge($rB['edges'], 'a', 'c') ?? [];
+
+check('beide melden einander -> confirmed',      $eAB['confirmed'] ?? null,  true);
+check('beide melden einander -> 2 reporters',    count($eAB['reporters'] ?? []), 2);
+check('nur eine Seite meldet -> nicht confirmed', $eAC['confirmed'] ?? null,  false);
+check('nur eine Seite meldet -> 1 reporter',     count($eAC['reporters'] ?? []), 1);
+check('einseitige Kante nennt den Melder',       $eAC['reporters'][0] ?? null, 'a');
+
+// DIE FALLE, um die es geht:
+//
+// Ein EINZELNER Melder traegt ZWEI Ports ein — seinen eigenen lokalen und den
+// vom Nachbarn gelernten. Wer Bestaetigung an count(ports) === 2 festmacht,
+// meldet diese Kante faelschlich als beidseitig bestaetigt. Genau das prueft
+// der folgende Fall: zwei Ports, aber nur ein Melder.
+$hP = [
+    'x' => ['host' => 'sw-x', 'name' => 'Switch X'],
+    'y' => ['host' => 'sw-y', 'name' => 'Switch Y'],
+];
+$rP = LldpEdgeBuilder::build(
+    $hP,
+    [['hostid' => 'x', 'key_' => 'lldpRemSysName[7]', 'lastvalue' => 'sw-y', 'src' => 'lldp']],
+    ['x' => ['7' => ['desc' => 'GigabitEthernet1/0/2']]]
+);
+$eXY = findEdge($rP['edges'], 'x', 'y') ?? [];
+
+check('ein Melder, aber ZWEI Ports eingetragen', count($eXY['ports'] ?? []),     2);
+check('trotzdem NICHT confirmed',                $eXY['confirmed'] ?? null,      false);
+check('trotzdem nur EIN reporter',               count($eXY['reporters'] ?? []), 1);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

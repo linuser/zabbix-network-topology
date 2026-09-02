@@ -355,6 +355,12 @@ export function buildEdgeElements(edges, nodes) {
                     // Discovery-Quelle(n): ['lldp'], ['cdp'], oder ['cdp','lldp']
                     // wenn die Verbindung von beiden Protokollen gemeldet wurde
                     src: e.src || [],
+                    // WER die Kante gemeldet hat. Melden beide Endpunkte
+                    // einander, ist sie beidseitig bestaetigt; sieht nur eine
+                    // Seite den Nachbarn, ist das ein Diagnosehinweis — meist
+                    // LLDP auf der Gegenseite aus, seltener eine Fehlzuordnung.
+                    confirmed: e.confirmed === true,
+                    reporters: e.reporters || [],
                     // Interface-Health-Aggregat fuer Edge-Styling + Tooltip.
                     // downRatio (worst-case beider Endpunkte) steuert das
                     // Edge-Coloring — der Roh-Count wuerde bei einem Switch
