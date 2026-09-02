@@ -18,6 +18,7 @@
 
 import { esc, mkTabTheme } from './utils.js';
 import { t } from './i18n.js';
+import { showDeviceReport } from './device-report.js';
 
 const COL_GOOD = '#16a34a';
 const COL_WARN = '#f59e0b';
@@ -213,7 +214,18 @@ export function renderLldpQuality(wrap) {
         + '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:16px">'
         + t('lldpq.intro')
         + '</div>';
+    // Knopf fuer den Geraetebericht. Er steht hier und nicht im Export-Menue,
+    // weil genau dieser Tab die Zahlen zeigt, um die es geht — wer die
+    // Match-Quote gerade ansieht, ist der, dessen Meldung der Matrix nuetzt.
+    const berichtBtn = document.createElement('button');
+    berichtBtn.textContent = t('devreport.button');
+    berichtBtn.title = t('devreport.button.tip');
+    berichtBtn.style.cssText = 'margin:0 0 14px;padding:5px 12px;border-radius:6px;'
+        + 'border:1px solid #cbd5e1;background:#fff;color:#334155;font-size:12px;cursor:pointer';
+    berichtBtn.addEventListener('click', showDeviceReport);
+
     root.appendChild(head);
+    root.appendChild(berichtBtn);
 
     const data = window._ntLastData || {};
     const perHost = data.lldp_quality || [];
