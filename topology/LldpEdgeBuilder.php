@@ -47,7 +47,7 @@ final class LldpEdgeBuilder {
      */
     public static function build(array $hosts, array $lldp_raw,
             array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
-            array $lldp_meta = []): array {
+            array $lldp_meta = [], array $port_errors = [], array $port_discards = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         $name_map = [];
         $ip_map   = [];
@@ -268,12 +268,31 @@ final class LldpEdgeBuilder {
                 // §3b Per-Link-Traffic am lokalen Port des Reporters. Setzt
                 // lldpRemLocalPortNum == ifIndex voraus (auf Aruba/ProCurve 1:1);
                 // passt es nicht, gibt es schlicht keinen Treffer → keine Metrik.
+                // Nicht mehr nur an $port_traffic gebunden: Errors und Discards
+                // koennen vorliegen, wo kein Traffic-Item existiert, und
+                // umgekehrt. Frueher fiel dann alles weg, weil der Traffic den
+                // Einstieg bildete.
                 $my_metrics = null;
-                if ($port !== '' && isset($port_traffic[$rid][$port])) {
-                    $pt = $port_traffic[$rid][$port];
-                    $my_metrics = ['in' => round($pt['in']), 'out' => round($pt['out'])];
+                if ($port !== '') {
+                    if (isset($port_traffic[$rid][$port])) {
+                        $pt = $port_traffic[$rid][$port];
+                        $my_metrics = ['in' => round($pt['in']), 'out' => round($pt['out'])];
+                    }
                     if (isset($port_speed[$rid][$port]) && $port_speed[$rid][$port] > 0) {
+                        $my_metrics ??= [];
                         $my_metrics['speed'] = round($port_speed[$rid][$port]);
+                    }
+                    // Errors/Discards AN DIESEM PORT — nicht die Host-Summe.
+                    // Der Unterschied ist der ganze Punkt: ein Switch mit einem
+                    // defekten Uplink traegt sonst an jeder seiner Kanten
+                    // dieselbe Fehlerrate.
+                    if (isset($port_errors[$rid][$port])) {
+                        $my_metrics ??= [];
+                        $my_metrics['errors'] = round((float) $port_errors[$rid][$port], 3);
+                    }
+                    if (isset($port_discards[$rid][$port])) {
+                        $my_metrics ??= [];
+                        $my_metrics['discards'] = round((float) $port_discards[$rid][$port], 3);
                     }
                 }
 

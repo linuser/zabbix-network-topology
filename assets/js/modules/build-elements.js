@@ -335,6 +335,7 @@ export function buildEdgeElements(edges, nodes) {
         // perLink steuert, dass traffic.js NICHT durch 2 teilt (kein Doppelzaehlen).
         const pm = (e.port_metrics && (e.port_metrics[src] || e.port_metrics[tgt])) || null;
         let perLink = false, eIn = tIn, eOut = tOut, eCap = capBps, tLbl = tLabel;
+        let portErr = null, portDrop = null;
         if (pm) {
             perLink = true;
             // in/out konsistent aus Sicht des SRC-Knotens: pm ist nach Reporter-
@@ -344,6 +345,13 @@ export function buildEdgeElements(edges, nodes) {
             eIn  = (fromSrc ? pm.in  : pm.out) || 0;
             eOut = (fromSrc ? pm.out : pm.in)  || 0;
             if (pm.speed) eCap = pm.speed;
+            // Errors/Discards AN DIESEM PORT. Die Felder ifaceErr/ifaceDrop
+            // weiter unten sind etwas anderes: ein Host-Aggregat ueber ALLE
+            // Interfaces beider Endpunkte, gebaut fuer die Kantenfaerbung.
+            // Fuer eine Portansicht sagt es nichts — ein Switch mit einem
+            // defekten Uplink traegt es sonst an jeder seiner Kanten.
+            if (pm.errors   !== undefined) portErr  = pm.errors;
+            if (pm.discards !== undefined) portDrop = pm.discards;
             tLbl = (srcDead >= 5 || tgtDead >= 5) ? '⚠ No Connection'
                  : (eIn || eOut) ? '↓' + fmt(eIn) + '\n↑' + fmt(eOut) : '';
         }
@@ -369,7 +377,8 @@ export function buildEdgeElements(edges, nodes) {
                     ifaceDownRatio: downRatio,
                     // Link-Kapazitaet in bps (0 = unbekannt) fuer Weathermap;
                     // perLink=true → echte Port-Metrik statt Node-Schaetzung
-                    capBps: eCap, perLink: perLink }
+                    capBps: eCap, perLink: perLink,
+                    portErr: portErr, portDrop: portDrop }
         });
     });
     return elements;

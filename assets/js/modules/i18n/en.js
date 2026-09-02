@@ -388,7 +388,7 @@ export default {
     // Kanten-Detailpanel (edge-detail.js)
     'edge.sec.ports': 'Ports',
     'edge.sec.traffic': 'Traffic',
-    'edge.sec.health': 'Interface health',
+    'edge.sec.health': 'Both hosts (all interfaces)',
     'edge.src.manual': 'manual link',
     'edge.src.manual.tip': 'Drawn by hand, not reported by a device.',
     'edge.src.ghost': 'unmonitored',
@@ -425,6 +425,8 @@ export default {
     'edge.onesided.tip': 'Only one end reports this neighbour. Usually LLDP is off on the other side; less often the match is wrong.',
     'edge.onesided.tip_named': 'Only {host} reports this neighbour \u2014 the other end does not. Usually LLDP is off there; less often the match is wrong.',
     'topo.moved': 'Link moved: {a} \u2194 {b} \u2014 {host} now on {to} (was {from})',
+    'edge.sec.port_health': 'This port',
+    'edge.health.hostwide': 'Summed over every interface of both hosts \u2014 not this link. It drives the edge color; for this port see above.',
     'legend.groups': 'GROUPS',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

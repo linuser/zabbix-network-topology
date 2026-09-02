@@ -211,16 +211,45 @@ export function showEdgeDetail(panel, ed) {
     }
 
     // ── Interface-Zustand ───────────────────────────────────────────────────
-    // Der Tooltip zeigt davon nur das Aggregat, das die Faerbung steuert. Hier
-    // stehen die Einzelwerte samt Schwelle — sonst bleibt "orange" eine
-    // Behauptung, die der Nutzer nicht nachrechnen kann.
+    //
+    // ZWEI EBENEN, und sie auseinanderzuhalten ist der Punkt. Die erste
+    // Fassung dieses Panels zeigte ifaceErr/ifaceDrop unter der Ueberschrift
+    // "Interface health", als beschrieben sie DIESEN Link. Sie tun es nicht:
+    // es ist ein Host-Aggregat ueber ALLE Interfaces beider Endpunkte, gebaut
+    // fuer die Kantenfaerbung. Ein Switch mit einem einzigen defekten Uplink
+    // trug damit an jeder seiner Kanten dieselbe Fehlerrate — dieselbe Sorte
+    // Halbwahrheit wie die geschaetzte Traffic-Zahl darueber.
+    //
+    // portErr/portDrop sind die Werte am tatsaechlichen Port. Liegen sie vor,
+    // stehen sie oben und das Aggregat darunter, ausdruecklich als
+    // "hostweit" beschriftet.
     const down  = d.ifaceDown || 0;
     const ratio = d.ifaceDownRatio || 0;
     const errs  = d.ifaceErr || 0;
     const drops = d.ifaceDrop || 0;
+    const pErr  = (d.portErr  === null || d.portErr  === undefined) ? null : d.portErr;
+    const pDrop = (d.portDrop === null || d.portDrop === undefined) ? null : d.portDrop;
+
+    if (pErr !== null || pDrop !== null) {
+        section(panel, t('edge.sec.port_health'));
+        [[t('edge.errors'), pErr, ERR_THRESHOLD], [t('edge.discards'), pDrop, DROP_THRESHOLD]]
+            .forEach(function(m) {
+                if (m[1] === null) return;
+                const v = el('span');
+                v.appendChild(el('b', 'color:' + (m[1] > m[2] ? '#c2410c' : '#475569'), m[1].toFixed(2)));
+                v.appendChild(document.createTextNode(' '));
+                v.appendChild(el('span', 'color:#94a3b8', t('edge.threshold', { n: m[2] })));
+                row(panel, m[0], null, v);
+            });
+    }
 
     if (down || errs || drops) {
         section(panel, t('edge.sec.health'));
+        // Ohne diese Zeile liest sich das Aggregat wie eine Aussage ueber den
+        // Link. Sie steht bewusst VOR den Zahlen.
+        panel.appendChild(el('div',
+            'font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:4px',
+            t('edge.health.hostwide')));
         if (down) {
             const v = el('span');
             v.appendChild(el('b', '', String(down)));

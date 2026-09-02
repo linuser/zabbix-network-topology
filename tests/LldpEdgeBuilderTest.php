@@ -215,6 +215,49 @@ check('unbekannter Uplink -> unmatched',    count($rU2['unmatched']),  1);
 // Der dritte Fall ist der wichtige — er sichert die Falle ab, die beim Bauen
 // fast zugeschnappt waere.
 
+// ── Errors/Discards am PORT, nicht als Host-Summe ──────────────────────────
+//
+// Die Werte wurden schon immer erhoben, aber nur pro Host aufsummiert. Damit
+// trug jede Kante eines Switches dieselbe Fehlerrate — auch die, an denen
+// nichts war. Der Unterschied ist der ganze Punkt der Portansicht.
+
+echo "\nPort-Errors und -Discards\n";
+
+$hE = ['sw' => ['host' => 'sw-e', 'name' => 'Switch E'],
+       'ap' => ['host' => 'ap-e', 'name' => 'AP E']];
+
+$rE = LldpEdgeBuilder::build(
+    $hE,
+    [['hostid' => 'sw', 'key_' => 'lldpRemSysName[9]', 'lastvalue' => 'ap-e', 'src' => 'lldp']],
+    ['sw' => ['9' => ['desc' => 'Gi1/0/9']]],
+    ['sw' => ['9' => ['in' => 1.0e6, 'out' => 2.0e6]]],
+    ['sw' => ['9' => 1.0e9]],
+    [],
+    ['sw' => ['9' => 2.5, '10' => 99.0]],     // Port 10 ist eine ANDERE Kante
+    ['sw' => ['9' => 0.5]]
+);
+$eE = findEdge($rE['edges'], 'sw', 'ap') ?? [];
+$mE = $eE['port_metrics']['sw'] ?? [];
+
+check('Errors am richtigen Port',        $mE['errors'] ?? null,   2.5);
+check('Discards am richtigen Port',      $mE['discards'] ?? null, 0.5);
+check('Fremder Port faerbt nicht ab',    ($mE['errors'] ?? null) === 99.0, false);
+check('Traffic weiterhin dabei',         $mE['in'] ?? null,       1000000.0);
+
+// Errors ohne Traffic-Item: frueher fiel alles weg, weil der Traffic den
+// Einstieg in den Metrik-Block bildete.
+$rE2 = LldpEdgeBuilder::build(
+    $hE,
+    [['hostid' => 'sw', 'key_' => 'lldpRemSysName[9]', 'lastvalue' => 'ap-e', 'src' => 'lldp']],
+    ['sw' => ['9' => ['desc' => 'Gi1/0/9']]],
+    [], [], [],
+    ['sw' => ['9' => 4.0]],
+    []
+);
+$mE2 = (findEdge($rE2['edges'], 'sw', 'ap') ?? [])['port_metrics']['sw'] ?? [];
+check('Errors auch ohne Traffic-Item',   $mE2['errors'] ?? null,  4.0);
+check('kein erfundener Traffic',         isset($mE2['in']),       false);
+
 echo "\nBeidseitige Bestaetigung\n";
 
 $hB = [

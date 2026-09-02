@@ -65,6 +65,15 @@ final class MetricExtractor {
         // bestehende Knoten-Metrik unveraendert bleibt.
         $port_traffic   = [];   // hid => [ifIndex => ['in'=>bps, 'out'=>bps]]
         $port_speed     = [];   // hid => [ifIndex => bps]
+        // Errors/Discards PRO Interface — zusaetzlich zur Host-Summe unten.
+        //
+        // Die Werte wurden schon immer erhoben, aber nur aufsummiert. Damit
+        // trug eine Kante am Ende die Host-Zahl ("worst case beider
+        // Endpunkte"), und die sagt ueber DIESEN Link nichts: ein Switch mit
+        // einem einzigen defekten Uplink faerbte so jede seiner Kanten. Fuer
+        // die Faerbung ist das Aggregat richtig, fuer eine Portansicht nicht.
+        $port_errors    = [];   // hid => [ifIndex => errors/s]
+        $port_discards  = [];   // hid => [ifIndex => discards/s]
         $lldp_ports     = [];   // hid => [snmpindex => ['id'=>?, 'desc'=>?]]
         $lldp_meta      = [];   // hid => [snmpindex => ['desc'|'caps'|'chassis']]
         $host_cpu       = [];
@@ -132,10 +141,18 @@ final class MetricExtractor {
                   || preg_match('/net\.if\.(?:in|out)\[[^\]]*,errors\]/', $key)) {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
                 $host_iface[$hid]['errors'] += (float) $val;
+                $ifx_e = self::ifIndexOf($key);
+                if ($ifx_e !== '') {
+                    $port_errors[$hid][$ifx_e] = ($port_errors[$hid][$ifx_e] ?? 0.0) + (float) $val;
+                }
             } elseif (strpos($key, 'ifInDiscards') !== false || strpos($key, 'ifOutDiscards') !== false
                   || preg_match('/net\.if\.(?:in|out)\[[^\]]*,dropped\]/', $key)) {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
                 $host_iface[$hid]['discards'] += (float) $val;
+                $ifx_d = self::ifIndexOf($key);
+                if ($ifx_d !== '') {
+                    $port_discards[$hid][$ifx_d] = ($port_discards[$hid][$ifx_d] ?? 0.0) + (float) $val;
+                }
             } elseif (strpos($key, 'ifHighSpeed') !== false) {
                 // ifHighSpeed = Mbps (highSpeedBps normalisiert Mbps→bps; das
                 // Zabbix-Standard-Template liefert teils schon bps → Heuristik dort).
@@ -416,6 +433,8 @@ final class MetricExtractor {
             // Traffic/-Speed nach ifIndex + Remote-Port je LLDP/CDP-SNMPINDEX.
             'port_traffic' => $port_traffic,
             'port_speed'   => $port_speed,
+            'port_errors'   => $port_errors,
+            'port_discards' => $port_discards,
             'lldp_ports'   => $lldp_ports,
             'lldp_meta'    => $lldp_meta,
         ];
@@ -428,6 +447,31 @@ final class MetricExtractor {
      *
      * @return float bps, oder 0.0 bei nicht-positivem Wert.
      */
+    /**
+     * ifIndex aus einem Error-/Discard-Schluessel ziehen — oder '', wenn er
+     * sich nicht bestimmen laesst.
+     *
+     * Zwei Formen kommen vor, beide im selben Indexraum wie beim Traffic
+     * (ifIndex), damit sich Port-Metrik und LLDP-Port spaeter treffen:
+     *
+     *   ifInErrors[3]                       klassisch
+     *   net.if.in.errors[ifInErrors.3]      Zabbix-7-SNMP-Templates
+     *   net.if.in[ifHCInOctets.3,errors]    Variante mit Suffix im Parameter
+     *
+     * Findet sich keiner, bleibt es bei der Host-Summe. Ein GERATENER Index
+     * waere schlimmer als keiner: die Zahl landete an der falschen Kante und
+     * saehe dort aus wie eine Messung.
+     */
+    private static function ifIndexOf(string $key): string {
+        if (preg_match('/(?:In|Out)(?:Errors|Discards)[.\[](\d+)/', $key, $m)) {
+            return $m[1];
+        }
+        if (preg_match('/net\.if\.(?:in|out)\[[^\],]*[.\[](\d+)[^\],]*,\s*(?:errors|dropped)\]/', $key, $m)) {
+            return $m[1];
+        }
+        return '';
+    }
+
     private static function highSpeedBps($val): float {
         $sp = (float) $val;
         if ($sp <= 0) return 0.0;

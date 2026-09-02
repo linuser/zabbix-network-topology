@@ -393,7 +393,7 @@ export default {
     // Kanten-Detailpanel (edge-detail.js)
     'edge.sec.ports': 'Ports',
     'edge.sec.traffic': 'Traffic',
-    'edge.sec.health': 'Interface-Zustand',
+    'edge.sec.health': 'Beide Hosts (alle Interfaces)',
     'edge.src.manual': 'manuelle Kante',
     'edge.src.manual.tip': 'Von Hand gezogen, nicht von einem Ger\u00e4t gemeldet.',
     'edge.src.ghost': 'nicht \u00fcberwacht',
@@ -430,6 +430,8 @@ export default {
     'edge.onesided.tip': 'Nur ein Ende meldet diesen Nachbarn. Meist ist LLDP auf der Gegenseite aus; seltener stimmt die Zuordnung nicht.',
     'edge.onesided.tip_named': 'Nur {host} meldet diesen Nachbarn, die Gegenseite nicht. Meist ist dort LLDP aus; seltener stimmt die Zuordnung nicht.',
     'topo.moved': 'Verbindung umgesteckt: {a} \u2194 {b} \u2014 {host} jetzt an {to} (vorher {from})',
+    'edge.sec.port_health': 'Dieser Port',
+    'edge.health.hostwide': 'Summiert \u00fcber alle Interfaces beider Hosts \u2014 nicht \u00fcber diese Verbindung. Steuert die Kantenfarbe; f\u00fcr diesen Port siehe oben.',
     'legend.groups': 'GRUPPEN',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

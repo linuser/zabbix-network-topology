@@ -399,7 +399,8 @@ class NetworkTopologyData extends NetworkTopologyController {
         // Kanten Port-Labels (beide Enden) und Per-Link-Auslastung tragen.
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
-                              $metrics['lldp_meta'] ?? []);
+                              $metrics['lldp_meta'] ?? [],
+                              $metrics['port_errors'] ?? [], $metrics['port_discards'] ?? []);
         $edges          = $lldp['edges'];
         $lldp_quality   = $lldp['quality'];
         $lldp_unmatched = $lldp['unmatched'];
