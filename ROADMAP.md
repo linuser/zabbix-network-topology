@@ -410,6 +410,82 @@ zwangslaeufig Fehltreffer, und **eine falsche Kante ist schlimmer als eine
 fehlende** — sie sieht aus wie eine Messung. Mit einem Score daneben wird aus
 dem Risiko eine Auskunft. Deshalb: Score zuerst, Normalisierung danach.
 
+#### Port-Move-Erkennung — der naechste greifbare Schritt
+
+„Gleiches Geraet, anderer Port": `AP-07` haengt jetzt an `Gi1/0/22` statt an
+`Gi1/0/18`. Heute **unsichtbar**, und zwar aus einem konkreten Grund.
+
+Der Baseline-Diff in `NetworkTopologyData.php:625` schluesselt auf das
+Host-PAAR und merkt sich nur die Labels:
+
+    $current["idA|idB"] = [labelA, labelB];
+
+Wandert ein Geraet auf einen anderen Port desselben Switches, bleibt das Paar
+gleich — also weder `added` noch `removed`, also **keine Meldung**. Genau der
+Fall, der betrieblich am interessantesten ist, faellt durchs Raster.
+
+**Der Umbau ist klein:** die Ports in den Baseline-Wert aufnehmen und beim
+Vergleich eine dritte Kategorie `moved` fuehren. Die Baseline liegt ohnehin
+schon sieben Tage in `NtCache`. Damit entsteht die Zeile, die im Vorschlag
+steht:
+
+    00:42  AP-07 moved
+           SW01 Gi1/0/18 -> SW01 Gi1/0/22
+
+Gehoert zusammen gebaut mit „Topology-Diff auf der Karte hervorheben" und der
+Alterung: dreimal derselbe Diff, dreimal dieselbe offene Frage, wie lange etwas
+sichtbar bleibt.
+
+#### MIB-Auto-Erkennung — gehoert nicht ins Modul
+
+Vorgeschlagen war, Standard-LLDP-MIB, Cisco-, Aruba/HPE- und Extreme-Varianten
+automatisch zu erkennen. Das trifft die falsche Schicht: **das Modul spricht
+kein SNMP.** `LldpEdgeBuilder` liest `$item['lastvalue']` und `$item['key_']`,
+niemals eine OID. Welche MIB abgefragt wird, entscheidet das Template.
+
+Damit ist die Abstraktion, um die es geht, bereits da: ein Hersteller-Template
+muss nur Items mit derselben Schluesselform erzeugen, und das Modul sieht
+keinen Unterschied. Der eigentliche Wunsch heisst also **„mehr Templates"**,
+nicht „MIB-Erkennung im Modul" — und PR #5 ist der Praezedenzfall dafuer, wie
+so etwas aussieht.
+
+#### Hostname-Reconciliation
+
+Zweigeteilt. Der FQDN-/Kurznamen-Teil (`sw01` ↔ `sw01.domain.local`) ist
+**fertig**, siehe oben. Der Management-IP-Teil braucht `lldpRemManAddr`, das
+nicht erhoben wird — dieselbe Vorbedingung wie beim Chassis-Subtype.
+
+**Einwand gegen das „automatisch lernen":** eine gelernte Zuordnung, die falsch
+ist, ist klebrig — sie ueberlebt die Korrektur der Ursache und niemand sieht
+mehr, woher sie kam. Mit einem Confidence-Score braucht es das Lernen gar
+nicht: statt zu speichern, DASS zugeordnet wurde, wird festgehalten, WIE. Das
+ist nachvollziehbar und selbstheilend.
+
+#### Neighbor Inventory Cache — erst messen
+
+Nur verarbeiten, wenn sich LLDP wirklich geaendert hat. Die Bausteine liegen
+vor: Response-Cache mit 15 s TTL und die `topo_baseline` seit 5.1.0.
+
+**Bevor hier jemand baut, gehoert gemessen**, woran die Zeit wirklich haengt.
+Der Verdacht ist, dass es die Zabbix-API-Aufrufe sind (Host, Trigger, Problem,
+Item, Lastvalues, LLDP) und nicht das Kantenbauen — dann brauecht ein
+Inventory-Cache genau nichts. Klassischer Fall fuer „Nachmessen, nicht neu
+bauen".
+
+#### Vendor Debug Profile
+
+Einen unbekannten LLDP-Datensatz exportieren, um neue Hersteller leichter zu
+ergaenzen. Liegt nah am Geraetebericht (5.3), unterscheidet sich aber in dem
+Punkt, auf den es ankommt: der Bericht zeigt **Anzahlen**, ein Debug-Profil
+braucht die **Werte** — und genau die sind Nachbarnamen aus dem Netz des
+Nutzers.
+
+**Vorschlag fuer den Ausweg:** nicht die Werte exportieren, sondern ihre
+**Form**. Schluesselname, Laenge, Zeichenklassen-Muster mit maskierten Ziffern
+und Buchstaben, erkannter Subtype. Das beantwortet „dieser Hersteller schreibt
+eine MAC in die PortId" vollstaendig, ohne einen einzigen Namen preiszugeben —
+und bleibt damit im selben Rahmen wie der Geraetebericht und die Issue-Vorlage.
+
 #### Alterung / stale neighbors
 
 Verschwindet ein Nachbar, ihn nicht sofort loeschen, sondern fuer eine
