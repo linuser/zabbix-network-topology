@@ -19,6 +19,13 @@ let _startId = null;
 let _active  = false;
 
 export function getPathStart() { return _startId; }
+
+// Der berechnete Pfad, in Leserichtung Start -> Ziel. _findPath baut ihn vom
+// ZIEL rueckwaerts ueber die parent-Pointer auf; fuer eine Liste muss er
+// andersherum stehen. Bis 5.3 wurde er nur zum Einfaerben benutzt und danach
+// weggeworfen — die Zwischenschritte waren also da, nur nie zu sehen.
+let _lastPath = null;
+export function getLastPath() { return _lastPath; }
 export function isPathActive() { return _active; }
 
 export function setPathStart(id) { _startId = id ? String(id) : null; }
@@ -71,6 +78,13 @@ export function applyPathHighlight(cy, fromId, toId) {
     const path = _findPath(cy, sId, tId);
     if (!path) return false;
 
+    // Umdrehen: nachher verbindet edgeIds[i] die Knoten nodeIds[i] und
+    // nodeIds[i+1] — die Reihenfolge, in der man einen Pfad liest.
+    _lastPath = {
+        nodeIds: path.nodeIds.slice().reverse(),
+        edgeIds: path.edgeIds.slice().reverse()
+    };
+
     // Cytoscape-Collection aus den ID-Listen bauen
     const nodeSel = path.nodeIds.map(function(id) { return '#' + CSS.escape(id); }).join(',');
     const edgeSel = path.edgeIds.map(function(id) { return '#' + CSS.escape(id); }).join(',');
@@ -89,6 +103,7 @@ function clearPathHighlight(cy) {
     if (!cy) return;
     cy.elements().removeClass('nt-path-dim nt-path-edge nt-path-node');
     _active = false;
+    _lastPath = null;
 }
 
 // Komplettes Reset: Pfad ausblenden UND Start-Marker loeschen.

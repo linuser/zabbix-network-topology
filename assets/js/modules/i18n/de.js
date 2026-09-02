@@ -384,6 +384,12 @@ export default {
     'sev.offline': 'Offline',
     'sev.offline.tip': 'Nur offline Hosts anzeigen',
     'sev.reset.tip': 'Filter zurücksetzen',
+    // Pfad als Liste (path-list.js)
+    'path.title': 'Pfad',
+    'path.hops': '{n} Hops',
+    'path.est': 'gesch.',
+    'path.no_data': 'keine Verbindungsdaten',
+    'path.link_trouble': 'Diese Verbindung meldet Ports down, Fehler oder Verworfene \u2014 anklicken f\u00fcr die Zahlen.',
     // Kanten-Detailpanel (edge-detail.js)
     'edge.sec.ports': 'Ports',
     'edge.sec.traffic': 'Traffic',

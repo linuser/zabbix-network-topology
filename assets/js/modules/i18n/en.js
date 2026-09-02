@@ -379,6 +379,12 @@ export default {
     'sev.offline': 'Offline',
     'sev.offline.tip': 'Show only offline hosts',
     'sev.reset.tip': 'Reset filter',
+    // Pfad als Liste (path-list.js)
+    'path.title': 'Path',
+    'path.hops': '{n} hops',
+    'path.est': 'est.',
+    'path.no_data': 'no link data',
+    'path.link_trouble': 'This link reports ports down, errors or discards \u2014 open it for the numbers.',
     // Kanten-Detailpanel (edge-detail.js)
     'edge.sec.ports': 'Ports',
     'edge.sec.traffic': 'Traffic',

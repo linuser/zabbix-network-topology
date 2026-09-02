@@ -146,7 +146,24 @@ lässt sich Punkt 2 nicht sinnvoll beheben, nur verschieben.
 Die ausgebaute Prüfung (`sanitizeLayout`, ~90 Zeilen mit den serverseitigen
 Mustern und Grenzen) steht in der Git-Historie. Sie war **nicht** das Problem.
 
-### 7. Pfad als Liste, nicht nur als Hervorhebung
+### 7. Pfad als Liste — **erledigt**
+
+`path-list.js` (5.3): der berechnete Pfad steht nach "Path to here" als Liste
+im Detail-Panel, in Leserichtung Start → Ziel, mit Ports, Auslastung und einem
+Warnzeichen an jedem Link, der Ports down, Fehler oder Verworfene meldet.
+
+Die Zwischenschritte lagen die ganze Zeit vor — `_findPath` rekonstruiert sie
+ueber parent-Pointer —, sie wurden nur zum Einfaerben benutzt und danach
+verworfen. Neu ist `getLastPath()`, das sie in Leserichtung behaelt.
+
+**Die offene Frage war, was "Zustand je Link" heisst.** Beantwortet wie im
+Kanten-Panel, damit beide dasselbe sagen: Ports, Auslastung aus derselben
+Stufentabelle, und ob die Zahl gemessen oder geschaetzt ist.
+
+**Weiter offen:** der *implizite* Start ("Pfad zu diesem Host", ohne A zu
+waehlen). Der braucht eine Festlegung, was der Ausgangspunkt ist; `whatif.js`
+und `root-cause.js` benutzen dafuer schon eine Uplink-Referenz.
+
 
 Der Pfad wird berechnet und auf der Karte markiert (siehe Tabelle oben). Was
 fehlt, ist die **textuelle Hop-Liste** mit Zustand je Link:

@@ -15,6 +15,7 @@ import { NT_GROUP_VIEW_KEY, savePinned, saveNote } from './storage.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import { getPathStart, isPathActive, setPathStart,
          applyPathHighlight, clearPathState } from './path-highlight.js';
+import { showPathList } from './path-list.js';
 import { resetHighlight } from './highlight.js';
 import { toast } from './toast.js';
 import { isSimulated, isSimActive, simulatedCount,
@@ -433,7 +434,13 @@ export function showCtx(cx, cy2, d) {
             if (!ok) {
                 toast(t('ctx.path_none'), 'warn');
                 clearPathState(cy);
+                return;
             }
+            // Der Pfad steht jetzt auch als Liste im Detail-Panel. Bei drei
+            // Hops liest man ihn noch von der Karte ab, bei sieben quer ueber
+            // eine grosse Karte nicht mehr — und kopieren kann man eine Farbe
+            // ohnehin nicht.
+            showPathList(document.getElementById('nt-detail'), cy);
         }));
         _ctx.appendChild(_ctxRow(t('ctx.path_reset'), '#64748b', function() {
             clearPathState(window._ntCy);
