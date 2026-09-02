@@ -8,7 +8,8 @@
 //   < 10 Mb/s     → orange
 //   ≥ 10 Mb/s     → rot dick
 //
-// startEdgeAnimation() markiert Edges zu Disaster-Hosts als "dead-edge" und
+// startEdgeAnimation() markiert Edges zu Disaster-Hosts als "dead-edge",
+// laesst diese Hosts pulsieren und
 // startet eine setInterval-Schleife, die line-dash-offset auf allen lebenden
 // Edges animiert — das erzeugt die wandernden Punkte in der Karte.
 
@@ -221,14 +222,53 @@ export function applyTrafficHeatmap(cy) {
     });
 }
 
-export function startEdgeAnimation(cy, nodes) {
-    // Edges zu disaster-severity-Hosts als dead markieren
-    const deadIds = {};
-    nodes.forEach(function(n) { if ((n.severity || 0) >= 5) deadIds[String(n.id)] = true; });
-    cy.edges().forEach(function(e) {
-        if (deadIds[e.source().id()] || deadIds[e.target().id()]) e.addClass('dead-edge');
+/**
+ * Disaster-Zustand auf Knoten und Kanten anwenden — und zurueckgeben, wer
+ * betroffen ist.
+ *
+ * ALS EIGENE FUNKTION, NICHT ALS CLOSURE IN DER ANIMATIONSSCHLEIFE.
+ * Genau hier sass der Fehler, und in einer setInterval-Closure ist er nicht
+ * pruefbar: Chrome drosselt Timer in Hintergrund-Tabs auf einmal pro Minute,
+ * eine laufende Animation laesst sich dort also gar nicht beobachten. So ist
+ * die Logik ein direkter Aufruf und damit nachmessbar — die Animation bleibt
+ * das Duenne obendrauf.
+ *
+ * @returns Cytoscape-Collection der Disaster-Knoten
+ */
+export function markDisasterState(c) {
+    const tote = c.nodes('[!isGroup]').filter(function(n) {
+        return (n.data('severity') || 0) >= 5;
+    });
+    const ids = {};
+    tote.forEach(function(n) { ids[n.id()] = true; });
+    c.edges().forEach(function(e) {
+        if (ids[e.source().id()] || ids[e.target().id()]) e.addClass('dead-edge');
         else e.removeClass('dead-edge');
     });
+    // Wer nicht mehr Disaster ist, verliert seine Glorie — sonst bleibt sie
+    // stehen, wenn sich ein Problem aufloest.
+    c.nodes('[!isGroup]').not(tote).style('underlay-opacity', 0);
+    return tote;
+}
+
+export function startEdgeAnimation(cy) {
+    // Disaster-Zustand NEU BEWERTEN, nicht einmalig festhalten.
+    //
+    // Vorher wurde die Liste der Disaster-Hosts genau einmal bestimmt — beim
+    // Render — und der Auto-Refresh ruft diese Funktion nicht erneut auf. Er
+    // schreibt nur node.data('severity'). Damit war die dead-edge-Markierung
+    // zwischen zwei Renders veraltet: eine Kante zu einem gerade ausgefallenen
+    // Host animierte munter weiter, und eine zu einem genesenen blieb tot. Das
+    // ist so lange drin, wie es den Refresh gibt, und niemandem aufgefallen —
+    // weil ein Refresh selten mit einem Ausfall zusammenfaellt und der naechste
+    // Render es wieder geradezieht.
+    //
+    // Jetzt einmal pro Sekunde neu bewertet (jeder 20. Tick), nicht bei jedem
+    // Tick: die Bewertung laeuft ueber alle Knoten, 50 ms waeren dafuer zu oft.
+    // Eine Sekunde Verzug bei einem Ausfall merkt niemand.
+    const bewerte = markDisasterState;
+
+    let deadNodes = bewerte(cy);
 
     // Lebende Edges animieren — "fließende Punkte" via line-dash-offset.
     // Defenses: cy.destroyed()-Check, document.hidden-Guard (kein Render
@@ -245,7 +285,31 @@ export function startEdgeAnimation(cy, nodes) {
         }
         if (document.hidden) return;   // CPU sparen wenn Tab unsichtbar
         offset = (offset + 1) % 22;
+        if (offset % 20 === 0) deadNodes = bewerte(c);
+
         c.edges().filter(function(e) { return !e.hasClass('dead-edge'); })
             .style('line-dash-offset', -offset);
+
+        // Disaster-Knoten pulsieren lassen.
+        //
+        // Die Projektseite verspricht "faerbt den Ring rot und pulst" — rot
+        // stimmte, gepulst hat nie etwas: kein pulse, kein blink, keine
+        // Keyframes ausser dem Lade-Spinner. Eine Zusage auf der Startseite,
+        // die der Code nicht einloest, ist derselbe Fehler wie eine Legende,
+        // die die falsche Skala erklaert.
+        //
+        // Warum underlay und nicht CSS: Cytoscape zeichnet Knoten auf ein
+        // Canvas, CSS-Animationen greifen dort nicht. underlay ist die
+        // vorgesehene Glorie hinter dem Knoten und wird im Modul bereits
+        // benutzt (Klick-Blitz in render-tech.js). Auf einem pulsierenden
+        // Knoten ueberschreibt der Puls den Blitz — hinnehmbar, der Puls sagt
+        // mehr.
+        if (deadNodes.length) {
+            const t = (Math.sin(offset / 22 * Math.PI * 2) + 1) / 2;   // 0..1
+            deadNodes.style('underlay-color', '#dc2626');
+            deadNodes.style('underlay-padding', 5 + t * 7);
+            deadNodes.style('underlay-opacity', 0.18 + t * 0.32);
+        }
     }, 50);
 }
+

@@ -503,7 +503,9 @@ export function render(wrap, nodes, edges, dataUrl) {
         }
     });
 
-    startEdgeAnimation(cy, nodes);
+    // nodes wird nicht mehr uebergeben: die Funktion liest die Severity live
+    // aus node.data(), damit der Auto-Refresh nicht an ihr vorbeilaeuft.
+    startEdgeAnimation(cy);
     setTimeout(function() { applyTrafficHeatmap(cy); applyPortLabels(cy); }, 1800);
 
     setupMinimap(cy, wrap);
