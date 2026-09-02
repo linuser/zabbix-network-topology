@@ -617,7 +617,13 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         // Dieselbe Suchsprache wie in der Tabelle, statt eines indexOf auf den
         // Anzeigenamen. Damit kann die Karte, was die Tabelle laengst konnte:
         //
-        //   192.168.20.43           bare Token -> Name UND IP
+        //   192.168.20.43           blosses Wort -> Name UND IP, sonst nichts.
+        //                           Typ, Gruppe und Proxy NUR mit Feldnamen —
+        //                           query.js' _any traegt bewusst nur host+ip.
+        //                           Der Platzhalter sagt deshalb "Name oder IP"
+        //                           und nicht mehr: er versprach vorher Typ-
+        //                           Suche, und wer 'switch' tippte, sah eine
+        //                           leere Karte.
         //   type:switch             Feldsuche (host, label, ip, type, iftype,
         //                           proxy, group)
         //   -type:server            Negation

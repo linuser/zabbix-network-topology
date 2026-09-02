@@ -243,7 +243,7 @@ export default {
     'conflict.links':     'Die Verbindungen wurden zwischenzeitlich anderswo ge\u00e4ndert. Deine \u00c4nderung wurde NICHT gespeichert \u2014 bitte die Seite neu laden.',
     'conflict.positions': 'Die Kartenanordnung wurde zwischenzeitlich anderswo ge\u00e4ndert. Deine \u00c4nderung wurde NICHT gespeichert \u2014 bitte die Seite neu laden.',
     'positions.save_failed': 'Anordnung konnte nicht gespeichert werden: {err}',
-    'toolbar.search': 'Name, IP, Typ suchen\u2026',
+    'toolbar.search': 'Name oder IP suchen\u2026',
     'toolbar.search.tip': 'Name und IP direkt, oder nach Feld: type:switch, group:\"core sites\", -type:server, (host:fw OR host:core)',
     'export.report.meta': '{date} &nbsp;|&nbsp; {hosts} Hosts &nbsp;|&nbsp; {links} Links',
     'export.audit.noproxy': 'Server (kein Proxy)',

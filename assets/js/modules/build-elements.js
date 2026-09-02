@@ -168,6 +168,17 @@ export function buildNodeElements(nodes, perfMode) {
             link_speed: n.link_speed || 0,
             type: n.type, host: n.host, ip: n.ip, iftype: n.iftype,
             groups: n.groups, _primaryGroup: n._primaryGroup,
+            // Proxy-Felder durchreichen. Sie fehlten hier, und das schlug an
+            // ZWEI Stellen durch, die beide aus n.data() lesen:
+            //   - detail-panel.js baut daraus die "via <Proxy>"-Zeile; sie war
+            //     dauerhaft leer
+            //   - die Kartensuche fragt ueber nodeToQueryFields() danach.
+            //     'proxy:core' verglich gegen einen einzelnen Leerraum, traf
+            //     also nichts und dimmte JEDEN Host — eine leere Karte ohne
+            //     Fehlermeldung, waehrend dieselbe Abfrage in der Tabelle
+            //     funktionierte (die bekommt den Backend-Knoten direkt).
+            proxy_name: n.proxy_name || '',
+            proxy_group_name: n.proxy_group_name || '',
             problems: n.problems || 0,
             acknowledged: !!n.acknowledged,
             maintenance:  !!n.maintenance,
