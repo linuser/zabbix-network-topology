@@ -2,34 +2,6 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
-## Unreleased
-
-### Fixed
-
-- **The color guide explained the wrong scale.** It always showed the
-  weathermap gradient — even with weathermap mode off, where edges are colored
-  by *absolute* traffic. A 1.9 Mb/s edge on a 1G link is orange there (the
-  1–10 Mb/s tier) and, read against the gradient, looked like ~50%
-  utilization. The guide now shows the tiers of the active mode with the real
-  edge colors and thresholds; the weathermap toggle updates it.
-
-  Fixed along the way: the tooltip turned the percentage orange from 40%, the
-  edge only from 55% — both now read the same table. And below 1% utilization
-  the weathermap mode set an *empty* label, which Cytoscape treats as "remove
-  the bypass": the traffic label came back and the edge looked as if the mode
-  were off. It now reads "0.2%".
-
-### Added
-
-- **Configurable color scales (Super admin).** *View → Color scales* opens an
-  editor for both edge scales — thresholds and colors per tier, add/remove
-  tiers, live preview in the map, "Reset to defaults". Stored in
-  `module.config` (new action `network.topology.scales`, CSRF-protected, Super
-  admins only), applies to all users; a hand-edited entry in the DB falls back
-  to the defaults when invalid. `ColorScales::sanitize()` has its own test —
-  colors end up as CSS values in Cytoscape styles and the legend, hence strict
-  six-digit hex.
-
 ## v5.2.0 — unreleased
 
 ### Added
@@ -58,6 +30,17 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   host. "Open hop view" in the context menu leads from the focus into the
   server-side scoped view.
 
+
+
+- **Configurable color scales (Super admin).** *View → Color scales* opens an
+  editor for both edge scales — thresholds and colors per tier, add/remove
+  tiers, live preview in the map, "Reset to defaults". Stored in
+  `module.config` (new action `network.topology.scales`, CSRF-protected, Super
+  admins only), applies to all users; a hand-edited entry in the DB falls back
+  to the defaults when invalid. `ColorScales::sanitize()` has its own test —
+  colors end up as CSS values in Cytoscape styles and the legend, hence strict
+  six-digit hex.
+
 ### Fixed
 
 - **Blank map as soon as the selection spans two or more primary groups.**
@@ -72,6 +55,21 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   fitting unpositioned nodes, and the cluster preset seeds a
   deterministic scatter — no layout failure can make the map invisible
   any more.
+
+
+
+- **The color guide explained the wrong scale.** It always showed the
+  weathermap gradient — even with weathermap mode off, where edges are colored
+  by *absolute* traffic. A 1.9 Mb/s edge on a 1G link is orange there (the
+  1–10 Mb/s tier) and, read against the gradient, looked like ~50%
+  utilization. The guide now shows the tiers of the active mode with the real
+  edge colors and thresholds; the weathermap toggle updates it.
+
+  Fixed along the way: the tooltip turned the percentage orange from 40%, the
+  edge only from 55% — both now read the same table. And below 1% utilization
+  the weathermap mode set an *empty* label, which Cytoscape treats as "remove
+  the bypass": the traffic label came back and the edge looked as if the mode
+  were off. It now reads "0.2%".
 
 ## v5.1.2 — 2026-09-01
 
