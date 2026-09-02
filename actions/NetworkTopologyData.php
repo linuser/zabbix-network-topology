@@ -400,7 +400,8 @@ class NetworkTopologyData extends NetworkTopologyController {
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
                               $metrics['lldp_meta'] ?? [],
-                              $metrics['port_errors'] ?? [], $metrics['port_discards'] ?? []);
+                              $metrics['port_errors'] ?? [], $metrics['port_discards'] ?? [],
+                              $metrics['port_names'] ?? []);
         $edges          = $lldp['edges'];
         $lldp_quality   = $lldp['quality'];
         $lldp_unmatched = $lldp['unmatched'];

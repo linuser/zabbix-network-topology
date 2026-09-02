@@ -74,6 +74,20 @@ final class MetricExtractor {
         // die Faerbung ist das Aggregat richtig, fuer eine Portansicht nicht.
         $port_errors    = [];   // hid => [ifIndex => errors/s]
         $port_discards  = [];   // hid => [ifIndex => discards/s]
+        // Interface-NAME je ifIndex, sofern das Template ihn liefert.
+        //
+        // Ohne ihn zeigt die Kante am eigenen Ende eine nackte Zahl ("9") und
+        // am Nachbar-Ende einen Namen ("Gi1/0/8") — der Nachbar meldet seinen
+        // Port ueber LLDP als Text, das eigene Ende kennt nur den ifIndex, mit
+        // dem die Metrik korreliert wird. Asymmetrisch und fuer den Leser
+        // unbrauchbar.
+        //
+        // Reihenfolge: ifName ("Gi1/0/9") vor ifDescr ("GigabitEthernet1/0/9")
+        // vor ifAlias (frei vergebene Beschreibung). ifAlias ist zuletzt, weil
+        // er oft leer ist oder etwas ganz anderes sagt ("Uplink Rechenzentrum")
+        // — als Portbezeichnung taugt er nur, wenn nichts anderes da ist.
+        $port_names     = [];   // hid => [ifIndex => name]
+        $port_name_rank = [];   // hid => [ifIndex => Rang der Quelle]
         $lldp_ports     = [];   // hid => [snmpindex => ['id'=>?, 'desc'=>?]]
         $lldp_meta      = [];   // hid => [snmpindex => ['desc'|'caps'|'chassis']]
         $host_cpu       = [];
@@ -122,6 +136,26 @@ final class MetricExtractor {
                 } elseif (preg_match('/ifSpeed[.\[](\d+)/', $key, $sm)) {
                     $sp = (float) $val;
                     if ($sp > 0 && !isset($port_speed[$hid][$sm[1]])) $port_speed[$hid][$sm[1]] = $sp;
+                }
+            }
+
+            // Interface-Namen einsammeln. Eigener Block VOR den Health-Branches,
+            // weil ifAlias/ifName/ifDescr sonst im generischen net.if-Zweig
+            // haengenblieben.
+            if (strpos($key, 'ifName') !== false || strpos($key, 'ifDescr') !== false
+                    || strpos($key, 'ifAlias') !== false) {
+                $rang = (strpos($key, 'ifName') !== false) ? 1
+                      : ((strpos($key, 'ifDescr') !== false) ? 2 : 3);
+                if (preg_match('/if(?:Name|Descr|Alias)[.\[](\d+)/', $key, $nm)) {
+                    $ifx  = $nm[1];
+                    $name = trim((string) $val);
+                    // Leere Werte nicht uebernehmen: ein leerer ifAlias wuerde
+                    // sonst einen vorhandenen ifName verdraengen.
+                    if ($name !== ''
+                            && (!isset($port_name_rank[$hid][$ifx]) || $rang < $port_name_rank[$hid][$ifx])) {
+                        $port_names[$hid][$ifx]     = self::capName($name);
+                        $port_name_rank[$hid][$ifx] = $rang;
+                    }
                 }
             }
 
@@ -435,6 +469,7 @@ final class MetricExtractor {
             'port_speed'   => $port_speed,
             'port_errors'   => $port_errors,
             'port_discards' => $port_discards,
+            'port_names'    => $port_names,
             'lldp_ports'   => $lldp_ports,
             'lldp_meta'    => $lldp_meta,
         ];
@@ -462,6 +497,12 @@ final class MetricExtractor {
      * waere schlimmer als keiner: die Zahl landete an der falschen Kante und
      * saehe dort aus wie eine Messung.
      */
+    /** Portname kappen — er landet im DOM und kommt aus fremder Hand. */
+    private static function capName(string $v): string {
+        $v = preg_replace('/\s+/', ' ', $v);
+        return mb_substr($v, 0, 40);
+    }
+
     private static function ifIndexOf(string $key): string {
         if (preg_match('/(?:In|Out)(?:Errors|Discards)[.\[](\d+)/', $key, $m)) {
             return $m[1];

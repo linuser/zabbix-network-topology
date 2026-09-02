@@ -47,7 +47,8 @@ final class LldpEdgeBuilder {
      */
     public static function build(array $hosts, array $lldp_raw,
             array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
-            array $lldp_meta = [], array $port_errors = [], array $port_discards = []): array {
+            array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
+            array $port_names = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         $name_map = [];
         $ip_map   = [];
@@ -238,8 +239,9 @@ final class LldpEdgeBuilder {
                 // ist cdpCacheIfIndex.devIndex (2-teilig, erster Teil = ifIndex).
                 // Beide muessen auf den ifIndex zeigen, sonst verfehlt die
                 // Traffic-Korrelation (port_traffic ist nach ifIndex gekeyt).
-                $idx  = '';
-                $port = '';
+                $idx      = '';
+                $port     = '';
+                $port_idx = '';
                 if (strpos($item['key_'], '[') !== false) {
                     $idx  = HostMetadata::ifaceParam($item['key_']);
                     $port = $idx;
@@ -247,6 +249,15 @@ final class LldpEdgeBuilder {
                         $port = $pm[1];            // LLDP: Mitte = lokaler Port
                     } elseif (preg_match('/^(\d+)\.\d+$/', $idx, $pm)) {
                         $port = $pm[1];            // CDP: erster Teil = ifIndex
+                    }
+                    // Der ifIndex ist die Korrelationsgroesse — als ANZEIGE
+                    // taugt eine nackte "9" nichts, waehrend das Nachbar-Ende
+                    // "Gi1/0/8" zeigt. Liefert das Template einen
+                    // Interface-Namen, gewinnt der; sonst bleibt es beim Index.
+                    // $port_idx behaelt den Index fuer die Metrik-Zuordnung.
+                    $port_idx = $port;
+                    if ($port !== '' && isset($port_names[$rid][$port]) && $port_names[$rid][$port] !== '') {
+                        $port = $port_names[$rid][$port];
                     }
                     $port = self::capLabel($port);
                 }
@@ -272,27 +283,33 @@ final class LldpEdgeBuilder {
                 // koennen vorliegen, wo kein Traffic-Item existiert, und
                 // umgekehrt. Frueher fiel dann alles weg, weil der Traffic den
                 // Einstieg bildete.
+                // ACHTUNG: ab hier der INDEX, nicht das Label. Seit der Port
+                // einen Namen tragen kann, sind die beiden verschieden — und
+                // port_traffic/-speed/-errors sind nach ifIndex gekeyt. Mit dem
+                // Label gesucht faende man nichts mehr, und zwar still: es gaebe
+                // schlicht keine Per-Link-Metrik mehr.
+                $pidx = $port_idx ?? $port;
                 $my_metrics = null;
-                if ($port !== '') {
-                    if (isset($port_traffic[$rid][$port])) {
-                        $pt = $port_traffic[$rid][$port];
+                if ($pidx !== '') {
+                    if (isset($port_traffic[$rid][$pidx])) {
+                        $pt = $port_traffic[$rid][$pidx];
                         $my_metrics = ['in' => round($pt['in']), 'out' => round($pt['out'])];
                     }
-                    if (isset($port_speed[$rid][$port]) && $port_speed[$rid][$port] > 0) {
+                    if (isset($port_speed[$rid][$pidx]) && $port_speed[$rid][$pidx] > 0) {
                         $my_metrics ??= [];
-                        $my_metrics['speed'] = round($port_speed[$rid][$port]);
+                        $my_metrics['speed'] = round($port_speed[$rid][$pidx]);
                     }
                     // Errors/Discards AN DIESEM PORT — nicht die Host-Summe.
                     // Der Unterschied ist der ganze Punkt: ein Switch mit einem
                     // defekten Uplink traegt sonst an jeder seiner Kanten
                     // dieselbe Fehlerrate.
-                    if (isset($port_errors[$rid][$port])) {
+                    if (isset($port_errors[$rid][$pidx])) {
                         $my_metrics ??= [];
-                        $my_metrics['errors'] = round((float) $port_errors[$rid][$port], 3);
+                        $my_metrics['errors'] = round((float) $port_errors[$rid][$pidx], 3);
                     }
-                    if (isset($port_discards[$rid][$port])) {
+                    if (isset($port_discards[$rid][$pidx])) {
                         $my_metrics ??= [];
-                        $my_metrics['discards'] = round((float) $port_discards[$rid][$port], 3);
+                        $my_metrics['discards'] = round((float) $port_discards[$rid][$pidx], 3);
                     }
                 }
 

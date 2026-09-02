@@ -221,6 +221,41 @@ check('unbekannter Uplink -> unmatched',    count($rU2['unmatched']),  1);
 // trug jede Kante eines Switches dieselbe Fehlerrate — auch die, an denen
 // nichts war. Der Unterschied ist der ganze Punkt der Portansicht.
 
+// ── Portname statt nackter ifIndex ─────────────────────────────────────────
+//
+// Der ifIndex ist die Korrelationsgroesse fuer die Metrik, taugt aber nicht als
+// Anzeige: das eigene Ende zeigte "9", waehrend das Nachbar-Ende "Gi1/0/8"
+// zeigt. Seit Label und Index verschieden sein koennen, ist die eigentliche
+// Gefahr, dass die Metrik STILL verschwindet — sie wird nach Index gesucht.
+
+echo "\nPortname und Metrik-Zuordnung\n";
+
+$hN = ['sw' => ['host' => 'sw-n', 'name' => 'Switch N'],
+       'ap' => ['host' => 'ap-n', 'name' => 'AP N']];
+$rawN   = [['hostid' => 'sw', 'key_' => 'lldpRemSysName[9]', 'lastvalue' => 'ap-n', 'src' => 'lldp']];
+$portsN = ['sw' => ['9' => ['desc' => 'eth2']]];
+$trafN  = ['sw' => ['9' => ['in' => 3.0e6, 'out' => 1.0e6]]];
+
+// Mit Namen: Label wird der Name, Metrik findet trotzdem ueber den Index.
+$rN = LldpEdgeBuilder::build($hN, $rawN, $portsN, $trafN, [], [], [], [],
+                             ['sw' => ['9' => 'Gi1/0/9']]);
+$eN = findEdge($rN['edges'], 'sw', 'ap') ?? [];
+check('Portname statt ifIndex als Label',   $eN['ports']['sw'] ?? null,             'Gi1/0/9');
+check('Metrik trotz Namen gefunden',        ($eN['port_metrics']['sw']['in'] ?? null), 3000000.0);
+check('Nachbar-Port unveraendert',          $eN['ports']['ap'] ?? null,             'eth2');
+
+// Ohne Namen: Verhalten wie bisher — Index als Label, Metrik da.
+$rN2 = LldpEdgeBuilder::build($hN, $rawN, $portsN, $trafN);
+$eN2 = findEdge($rN2['edges'], 'sw', 'ap') ?? [];
+check('ohne Namen bleibt der Index',        $eN2['ports']['sw'] ?? null,              '9');
+check('ohne Namen Metrik unveraendert',     ($eN2['port_metrics']['sw']['in'] ?? null), 3000000.0);
+
+// Leerer Name darf den Index nicht verdraengen.
+$rN3 = LldpEdgeBuilder::build($hN, $rawN, $portsN, $trafN, [], [], [], [],
+                              ['sw' => ['9' => '']]);
+$eN3 = findEdge($rN3['edges'], 'sw', 'ap') ?? [];
+check('leerer Name -> Index bleibt',        $eN3['ports']['sw'] ?? null,              '9');
+
 echo "\nPort-Errors und -Discards\n";
 
 $hE = ['sw' => ['host' => 'sw-e', 'name' => 'Switch E'],
