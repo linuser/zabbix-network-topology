@@ -363,7 +363,7 @@ importieren. Was hier an Auswertung entsteht, entsteht ein zweites Mal — und
 Item — passt am besten als Zeile **in die Interface-Ansicht** (Punkt 1), nicht
 als eigenes Feature.
 
-### BGP/OSPF — physische gegen logische Ansicht
+### Nachbarschaft jenseits von LLDP/CDP (IP, BGP, OSPF, Bridge)
 
 Ein zweiter Graph über denselben Knoten: Nachbarschaften statt Kabel. Datenquelle
 wäre die BGP4-MIB (`bgpPeerState`) beziehungsweise OSPF-MIB.
@@ -371,6 +371,27 @@ wäre die BGP4-MIB (`bgpPeerState`) beziehungsweise OSPF-MIB.
 Der Aufwand steckt nicht im Einsammeln, sondern in der Umschaltung: der ganze
 Renderpfad geht heute davon aus, dass eine Kante ein Kabel ist — Weathermap,
 Pfad-BFS, Root Cause, What-if. Ein zweiter Kantentyp berührt alle vier.
+
+**christos-diamantis hat das am 2026-09-02 als eigenen Backlog-Punkt genannt**
+und dabei breiter gefasst als dieser Eintrag: IP, BGP, OSPF **und Bridge**. Er
+schätzt es selbst als „huge work" ein, will erst nachdenken und sich melden,
+wenn er eine Idee oder ein MVP hat.
+
+**Zwei Dinge, die er wissen sollte, bevor er entwirft:**
+
+1. **Die Naht existiert schon.** Jede Kante trägt `src: ['lldp']` oder
+   `['cdp']` (`build-elements.js`) — eine Vorstellung davon, *woher* sie kommt,
+   ist da, und das Kanten-Panel zeigt sie seit 5.3 an. `src: ['ospf']` wäre die
+   Erweiterung; eine Parallelstruktur daneben wäre der teure Weg.
+2. **Die Gabelung, die früh zu entscheiden ist:** zweiter Graph zum
+   *Umschalten*, oder zusätzliche, *typisierte* Kanten im selben Graphen? Davon
+   hängt ab, ob die vier oben genannten Verbraucher einen Filter bekommen oder
+   eine zweite Codebahn. Spät entschieden wird das teuer.
+
+**Überschneidungen im Blick behalten:** „IP" (ARP/Nachbarn) liegt neben
+[MAC/FDB-Suche](#macfdb-suche--hängt-an-switch-x-port-y), „Bridge" (STP) neben
+der VLAN-Ansicht. Drei Einträge, ein Thema — wer hier anfängt, sollte alle drei
+gelesen haben.
 
 ### Standortansicht für MSPs
 
