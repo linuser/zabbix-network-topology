@@ -342,6 +342,98 @@ sich still. Die Einsätze sind klein — eine Handvoll Zahlen gegen eine ganze
 Kartenanordnung —, aber es ist eine Ausnahme von einer Regel, die der Rest
 einhält.
 
+### LLDP-Qualitaet: Confidence, Einseitigkeit, Alterung
+
+Ein Vorschlagspaket von christos-diamantis (2026-09-02). Es ist gross, aber
+nicht gleichmaessig — ein Teil ist bereits gebaut, ein Teil braucht neue Items,
+und ein Teil ist erstaunlich nah dran. Sortiert nach dem, was nachgesehen
+wurde, nicht nach der Reihenfolge im Vorschlag.
+
+#### Schon vorhanden — nicht neu bauen
+
+- **FQDN-/Kurznamen-Abgleich.** `sw01.example.local` ↔ `sw01` funktioniert
+  seit jeher: `LldpEdgeBuilder` normalisiert Gross-/Kleinschreibung, schneidet
+  an Leerzeichen und Klammern ab, entfernt die FQDN-Wurzel und vergleicht
+  zusaetzlich den Kurznamen. Der Kopfkommentar der Datei sagt es ausdruecklich.
+- **Capabilities zur Typbestimmung.** Seit 5.1.0. Vierstufig, erste gewinnt:
+  `nt:icon`-Tag, Namens-/Template-Muster, LLDP-Capability, „fuehrt selbst eine
+  Nachbartabelle". Stufe 3 greift **nur**, wenn Stufe 2 im server-Fallback
+  gelandet ist — sonst wuerde ein L3-Switch namens `rtr-core-01` vom
+  Bridge-Bit zum Switch umgestempelt.
+- **Merge ueber Protokolle.** Meldet die Gegenseite oder CDP dieselbe Kante,
+  ergaenzt der Merge-Zweig Quellen, Ports und Metrik (first-wins je Feld). Die
+  gemeinsame Struktur, die der Vorschlag unter „Multi-Protocol Neighbor Fusion"
+  fordert, existiert im Kern also — sie heisst `src` und traegt heute
+  `['lldp','cdp']`.
+
+#### Braucht zuerst neue Items — das ordnet die Liste um
+
+`lldpRemChassisIdSubtype` und `lldpRemManAddr` werden **nicht erhoben**.
+Nachgesehen: null Treffer in `topology/`, `actions/` und den Templates.
+
+Das ist der Knackpunkt bei zwei Vorschlaegen. **Chassis-ID normalisieren** ohne
+den Subtype ist Raten — erst der Subtype sagt, ob dort eine MAC, eine
+Netzadresse, ein Interface-Name oder eine lokale ID steht. Und die
+**Management Address** ist ohne ihr Item schlicht nicht da.
+
+Beides heisst: Template-Aenderung, also Re-Import bei jedem Nutzer. Das ist
+machbar (5.1.1 hat genau das getan), aber es ist kein Nachmittag, und es
+gehoert vor die darauf aufbauenden Ideen.
+
+#### Der staerkste Punkt, und er ist EIN Feld entfernt
+
+**Beidseitig bestaetigte Kanten.** Der Merge-Zweig weiss bereits, dass eine
+Kante ein zweites Mal gemeldet wurde — er schreibt es nur nicht auf. Ein
+`reporters`-Set an der Kante, im Merge gesetzt, und die Unterscheidung steht:
+
+    ✓ bestaetigt     beide Seiten melden einander
+    → einseitig      nur eine Seite sieht den Nachbarn
+    ✎ manuell        von Hand gezogen
+
+**Die naheliegende Abkuerzung waere falsch**, und das ist der Grund, warum es
+hier steht statt einfach gebaut zu werden: `count(ports) === 2` beweist es
+NICHT. Ein einzelner Melder traegt beide Ports ein — seinen lokalen und den
+vom Nachbarn gelernten. Zwei Eintraege sind also kein Beleg fuer zwei Melder.
+Es braucht das explizite Set.
+
+Darstellung ist da: das Kanten-Panel (5.3) zeigt schon die Herkunft, die
+Legende hat eine Zeile fuer Kanten, und `ci:layers` kann so etwas pruefen.
+
+#### Confidence-Score
+
+Aufbauend auf dem Vorigen. Die Rohsignale liegen vor: `matched`, `ambiguous`
+mit Kandidatenliste, `unmatched`, dazu Ports und kuenftig `reporters`.
+
+**Wichtiger als die Skala ist, wofuer sie da ist:** Eine Normalisierungsschicht
+fuer Port-IDs (`Gi1/0/1` ↔ `GigabitEthernet1/0/1` ↔ `1/0/1`) erzeugt
+zwangslaeufig Fehltreffer, und **eine falsche Kante ist schlimmer als eine
+fehlende** — sie sieht aus wie eine Messung. Mit einem Score daneben wird aus
+dem Risiko eine Auskunft. Deshalb: Score zuerst, Normalisierung danach.
+
+#### Alterung / stale neighbors
+
+Verschwindet ein Nachbar, ihn nicht sofort loeschen, sondern fuer eine
+konfigurierbare Zeit als `stale` fuehren. Loest ein echtes Aergernis: die
+Topologie springt bei kurzen LLDP-Aussetzern.
+
+Beruehrt `topo_changes`, das heute schon berechnet und **nur als Toast**
+gemeldet wird — siehe „Topology-Diff auf der Karte hervorheben". Die beiden
+gehoeren zusammen gedacht; getrennt gebaut ergaeben sie zwei Halbloesungen.
+
+#### LLDP-MED, VLAN, LAG
+
+VLAN/PVID, Aggregation, Auto-Negotiation, MTU, und LLDP-MED fuer Telefone
+(Voice-VLAN, Geraetekategorie, Standort). Fachlich das Reizvollste im Paket.
+
+Trotzdem zuletzt: es sind durchweg **neue SNMP-Items**, also mehr Polling und
+wieder ein Template-Re-Import — und LLDP-MED bedient eine andere Zielgruppe
+(VoIP) als der Rest der Karte. Hoher Aufwand, schmalerer Nutzen als die vier
+Punkte darueber, die mit vorhandenen Daten auskommen.
+
+**Reihenfolge, die ich vorschlagen wuerde:** Einseitigkeit → Confidence →
+Alterung (mit dem Topology-Diff) → Chassis-Subtype und Management-Address →
+Port-Normalisierung → LLDP-MED.
+
 ### Dokumentationsdrift gegen NetBox
 
 Die Integrations-Makros für NetBox gibt es schon (`{$NT.INT.NETBOX.URL}`), sie
