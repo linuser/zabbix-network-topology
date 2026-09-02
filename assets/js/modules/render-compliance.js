@@ -160,7 +160,7 @@ export function renderCompliance(wrap) {
     const tableBox = document.createElement('div');
     root.appendChild(aggBox);
     root.appendChild(tableBox);
-    aggBox.innerHTML = '<div style="color:' + theme.subSoft + ';padding:20px">Laedt...</div>';
+    aggBox.innerHTML = '<div style="color:' + theme.subSoft + ';padding:20px">' + t('common.loading') + '</div>';
 
     wrap.appendChild(root);
 
@@ -168,7 +168,7 @@ export function renderCompliance(wrap) {
     const groupids = (cfg && cfg.selected_groupids) || [];
     if (!groupids.length) {
         aggBox.innerHTML = '<div style="color:' + theme.subSoft + ';padding:20px">'
-            + 'Bitte Host groups oben waehlen.</div>';
+            + t('compliance.select_groups') + '</div>';
         return;
     }
 

@@ -502,4 +502,19 @@ export default {
     'lldpq.more_distinct': '\u2026 and {n} more distinct',
     'lldpq.intro': 'How reliably can Zabbix map LLDP/CDP neighbours onto known hosts? A match rate &lt; 90% usually means: the neighbours exist in the real world but not in Zabbix, or the naming conventions differ.',
     'positions.truncated': 'Too many nodes: {n} positions were not saved. The server stores up to 5000 nodes per view \u2014 narrow down the host groups.',
+
+    // --- Backfilled: strings that used to sit inline in the code -----------
+    'geo.provider.stamen_warning': 'Stamen tiles have needed a Stadia Maps account since 2023. Without a domain allowlist you get auth-warning tiles. Free account: https://stadiamaps.com/',
+    'geo.maintenance': '\u{1F527} Maintenance',
+    'geo.toast.dismiss': 'Click to dismiss',
+    'compliance.select_groups': 'Select host groups above.',
+    'diag.title': 'Diagnostics',
+    'diag.intro': 'Backend calls of the last hour from the APCu ring buffer (super admins only). Latency &gt; 1000 ms red, &gt; 500 ms orange.',
+    'common.loading': 'Loading \u2026',
+    'diag.summary': 'Summary',
+    'diag.recent': 'Recent calls',
+    'diag.col.ago': 'Ago',
+    'diag.col.latency': 'Latency',
+    'lldpq.match_rate': 'Match rate',
+    'lldpq.col.reported_by': 'Reported by',
 };

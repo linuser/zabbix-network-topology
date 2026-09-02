@@ -3,9 +3,231 @@
 Änderungen ab dem ersten öffentlichen Release. Versionsschema: MAJOR.MINOR.PATCH.
 *Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.*
 
-## v5.1.1 — unveröffentlicht
+## v5.2.0 — unreleased
+
+### Added
+
+- **A single host plus a hop radius as its own map scope — next to the
+  host groups.** In large environments the full map is unreadable, and the
+  question is rarely "show me group X" but "show me this core switch and
+  what hangs off it". The filter now additionally takes one host plus a
+  hop count (1–6); a selected host wins over the group selection, which
+  stays untouched. The backend resolves the neighbourhood FIRST — a cheap
+  discovery pass fetches only host names/IPs/tags and the neighbour-name
+  items across everything the user is allowed to see, a depth-limited BFS
+  (`topology/HopScope.php`, tested) walks that graph, and only the
+  resulting subset goes through the expensive enrichment. LLDP/CDP,
+  `nt:parent` and manual edges all count as hops; the edge graph is cached
+  per user for 60 s. Host views get their own cache and view keys
+  (`host<id>_h<n>`), so they can never overwrite the stored arrangements
+  of the group views.
+
+- **Focus mode on the loaded map.** Right-click a host → "Focus: 1/2/3
+  hops" filters the already-loaded data BEFORE the Cytoscape build —
+  banner with ±hop and exit, ESC joins the existing mode chain.
+  Deliberately ephemeral: while the focus is active, positions and pins
+  are NOT saved — both layers persist the complete state per view, and a
+  save from the subset would throw away the arrangement of every other
+  host. "Open hop view" in the context menu leads from the focus into the
+  server-side scoped view.
 
 ### Fixed
+
+- **Blank map as soon as the selection spans two or more primary groups.**
+  The bundled Cytoscape miscomputes `cose` with a `boundingBox` and
+  silently writes `y = null` into every node position — nodes without
+  coordinates render nowhere, while the KPI row keeps counting merrily.
+  Reproduced deterministically with a 4-node group; the hop view merely
+  made the bug visible, it hit every multi-group selection. Cose now runs
+  UNBOUNDED per cluster, `fitNodesIntoBox()` scales the result into the
+  box (grid fallback for anything left without finite coordinates), the
+  cluster guards fall back to a real whole-graph layout instead of
+  fitting unpositioned nodes, and the cluster preset seeds a
+  deterministic scatter — no layout failure can make the map invisible
+  any more.
+
+## v5.1.2 — 2026-09-01
+
+### Changed
+
+- **Kein deutscher Text mehr im UI — und ein Gate, das das hält.** 26 Stellen
+  umgestellt: sieben PHP-Meldungen auf `_('English')` (die Konvention stand
+  längst im Code), 13 Stellen im Hauptmodul-JS über `t()` mit zwölf neuen
+  Schlüsseln in `de.js` **und** `en.js`, sechs Widget-Meldungen schlicht auf
+  Englisch — Widgets haben kein `t()`.
+
+  Darunter eine, die es aus dem Modul heraus schaffte: die Beschreibung, die
+  beim Anlegen eines Wartungsfensters in die Zabbix-Datenbank geschrieben wird
+  (`NetworkTopologyMaintenance.php`).
+
+  Neu: **`npm run ci:i18n`** (`tools/check-i18n.mjs`). Es liest String-Literale
+  mit einem eigenen Scanner statt mit grep — beide grep-Wege scheitern an
+  echtem Code: ein `// Toggle "nur Offline-Hosts zeigen"` am Zeilenende ist ein
+  Kommentar und muss ignoriert werden, während `url: 'https://…'` ein `//`
+  **im** String trägt. Kommentare dürfen weiter deutsch sein, das ist so
+  gewollt.
+
+  Drei Lücken der ersten Fassung sind eingebaut und je durch eine Regression
+  geprüft: die Wortliste war case-sensitiv (übersah „Ohne …"), sie kannte keine
+  Substantiv-Endungen (übersah „Zusammenfassung", fiel erst im Browser auf), und
+  sie kannte keine ASCII-Umschrift (übersah dreimal „Laedt…"). `-tum` ist
+  bewusst **nicht** in der Endungsregel: es fängt „Momentum" und „Quantum".
+
+  *No German text reaches the UI any more, and `ci:i18n` keeps it that way.
+  Comments stay German by choice; the gate only reads string literals.*
+
+### Fixed
+
+- **Dashboard-Widgets zählten manuelle Verbindungen nicht mit.** Das Hauptmodul
+  zeigte „4 Edges, 4 manual", das NT-KPI-Widget daneben „0 Edges" — dieselben
+  Daten, verschiedene Zahlen. Grund: manuelle Links kommen über die
+  Seitenkonfiguration des Hauptmoduls (`NetworkTopologyView` → `NT_CONFIG`), und
+  die Kanten entstehen erst im Client. Ein Widget hat keinen solchen
+  View-Controller und konnte sie deshalb prinzipiell nie sehen; der `ml_`-Zähler
+  im KPI-Widget war toter Code.
+
+  `network.topology.data` liefert sie jetzt auf Anforderung mit
+  (`manual_links=1`). Das Flag setzen **nur** die Widgets — das Hauptmodul baut
+  seine Kanten weiter selbst, sonst gäbe es sie doppelt.
+
+  Bewusst **nur die geteilte Ebene**: die persönliche gehört einem einzelnen
+  Benutzer (`CProfile`), und ein Dashboard, dessen Kantenzahl vom Betrachter
+  abhängt, wäre schlimmer als eine zu niedrige.
+
+  *Dashboard widgets did not count manual links: they reach the client only
+  through the main module's page config, which widgets do not have. The data
+  action now returns them on request — shared layer only, and only for widgets.*
+
+- **Topologie-Widget: ein einzelner, aufgeblasener Knoten statt des Graphen**
+  (Widget 3.1.1). Im Konstruktor lief ein Layout mit `animate: true`,
+  und der Layout-Nachlauf startete daneben ein zweites. Beide schreiben
+  Positionen. Der Nachlauf war nach ~30 ms fertig und lieferte ein brauchbares
+  Bild — Sekunden später wurde das animierte Init-Layout fertig und legte alle
+  Knoten wieder auf denselben Punkt. Danach fittet niemand mehr, der Zoom bleibt
+  stehen, und ein Knoten füllt die Kachel; die übrigen liegen exakt dahinter.
+
+  Auf einer frischen 7.4-Instanz mit sechs Hosts protokolliert — zwei
+  `layoutready` im Abstand von 1 ms, dann der Einbruch von 6 Positionen auf 1
+  bei 18,6 s. Der Konstruktor legt jetzt `preset` (bewegt nichts), damit der
+  Nachlauf die einzige Stelle ist, an der je ein Layout läuft.
+
+  Zweitens gilt der Nachlauf erst als erledigt, wenn sein **Ergebnis** taugt.
+  Vorher wurde `done = true` gesetzt, *bevor* das Layout lief — deshalb heilte
+  sich der Zustand nie von selbst. Jetzt wird bis zu fünfmal nachgefasst,
+  solange die Knoten noch deckungsgleich sind.
+
+  *Topology widget showed one oversized node instead of the graph: an animated
+  layout in the constructor raced the follow-up layout and overwrote its result
+  seconds later. The constructor no longer runs a layout, and the follow-up
+  retries until the nodes actually separate.*
+
+  **Nicht zu verwechseln mit [#7]**: das ist ein anderer Fehler, im *Hauptmodul*.
+  Dort schreibt `cose` **mit `boundingBox`** `y = null` in jede Knotenposition,
+  die Leinwand bleibt leer, während die KPI-Leiste weiterzählt. Der Commit, der
+  den Widget-Fehler behebt, verweist versehentlich auf #7 — er ist bereits
+  veröffentlicht und lässt sich nicht mehr umschreiben. #7 bleibt offen und wird
+  von PR #8 adressiert.
+
+[#7]: https://github.com/linuser/zabbix-network-topology/issues/7
+
+## v5.1.1 — 2026-09-01
+
+### Changed
+
+- **Das LLDP-Template pollt per `walk[]` statt mit instanzgenauen GETs.**
+  Der SNMP-Index der `lldpRemTable` ist
+  `lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex` — und `lldpRemTimeMark` ist
+  ein RMON-2-TimeFilter. Auf zwei unabhängigen Geräteklassen macht das die alten
+  Item-Prototypen unbrauchbar: **FortiGate** erhöht den TimeMark bei jedem
+  empfangenen LLDP-PDU, der bei der Discovery gemerkte Index ist Sekunden später
+  ungültig. **MikroTik RouterOS** beantwortet auf diesem Subtree Walks, liefert
+  für exakte GETs aber `noSuchObject` — die Discovery legte also Items an, von
+  denen jedes einzelne dauerhaft unsupported blieb.
+
+  Beides ist unser Entwurfsfehler, nicht ein Gerätefehler: instanzgenaue GETs auf
+  eine TimeFilter-Tabelle sind konstruktionsbedingt fragil. Jetzt gibt es ein
+  `walk[]`-Master-Item über die sechs benötigten Spalten; Discovery und alle
+  sechs Prototypen hängen als **dependent** daran und lesen den Walk-Text. Der
+  Index wird auf `0.Port.RemIndex` normiert, ein Guard verwirft Duplikate
+  (höchster TimeMark gewinnt).
+
+  **Kein Eingriff am Modul nötig** — die Schlüsselform bleibt, `LldpEdgeBuilder`
+  liest den lokalen Port weiterhin aus der Mitte des Index.
+
+  **Beim Update ändern sich die Item-Schlüssel** von
+  `lldpRemSysName[582295907.23.4]` auf `[0.23.4]`. Die Prototypen behalten ihre
+  UUIDs und aktualisieren sich beim Import in place; die bereits *entdeckten*
+  Items laufen in die Lost-Resource-Lifetime und nehmen ihre History mit. Neu
+  entdeckt wird beim nächsten Walk.
+
+  Beigesteuert von **@christos-diamantis**, getestet gegen FortiGate und eine
+  MikroTik CRS326-24S+2Q+
+  ([#3](https://github.com/linuser/zabbix-network-topology/issues/3),
+  [#4](https://github.com/linuser/zabbix-network-topology/issues/4),
+  [PR #5](https://github.com/linuser/zabbix-network-topology/pull/5)).
+
+- **Die MikroTik-Zeile der Vendor-Matrix ist eine Messung.** Sie stand seit ihrer
+  Entstehung auf „ungeprüft", weil nie jemand bestätigt hatte, was RouterOS tut.
+  Jetzt steht dort, was gemessen wurde: Walks ja, exakte GETs nein. Damit hat die
+  Matrix **keine unbelegte Zeile mehr** — Huawei und MikroTik sind innerhalb eines
+  Tages von Behauptungen zu Messungen geworden, beide durch Nutzermeldungen.
+
+- **Auch das LLDP-Template spricht Englisch.** Die restlichen zwölf
+  Beschreibungsblöcke sind übersetzt — Template, Makro, Discovery-Regeln und alle
+  acht Prototypen. In keiner der drei mitgelieferten Vorlagen steht noch deutscher
+  Text.
+
+### Fixed
+
+- **Die Installationsanleitung stellte den schwersten Weg nach vorn.** Schritt 1
+  war 93 Zeilen lang — Verzeichnis-Layouts, Rechte, SELinux, Service-Namen,
+  Installation ohne Internet — während `nt-install.sh`, das genau das alles
+  selbst erledigt, nur in drei Fußnoten vorkam. Wer neu ist, liest also die
+  Handarbeit und erfährt erst danach, dass es sie nicht gebraucht hätte.
+
+  Jetzt stehen vorn vier Befehle mit dem Skript (rund 20 Zeilen inklusive
+  Erklärung), und die Handarbeit steht vollständig darunter in einem
+  aufklappbaren Block. **Nichts davon ist gelöscht** — die 93 Zeilen sind hart
+  erarbeitet, SELinux ist laut eigener Troubleshooting-Tabelle der häufigste
+  Grund für „Modul erscheint nicht". Sie stehen nur nicht mehr im Weg.
+
+  Beide Sprachfassungen. Die verwendeten URLs sind gegengeprüft: die
+  `releases/latest/download`-Adresse liefert 712 KB, das Skript 20 KB.
+
+- **Die mitgelieferten Templates trugen deutsche Beschreibungen.** Nicht in
+  Kommentaren, sondern in `description:`-Feldern — also genau dem Text, den
+  Zabbix nach dem Import in der Oberfläche anzeigt. Wer der inzwischen
+  englischen Anleitung folgte, bekam deutsches Zabbix. `nt_health_score` und
+  `nt_topology_change` sind umgestellt (je vier Beschreibungen, darunter die
+  mehrzeilige Template-Beschreibung).
+
+  `nt_lldp_snmp_template.yaml` mit seinen 27 Stellen folgt, sobald
+  [PR #5](https://github.com/linuser/zabbix-network-topology/pull/5) gemerged
+  ist — der baut dieselbe Datei gerade um, und zwei parallele Umbauten an einer
+  Datei ergeben nur Konflikte.
+
+- **„Modul" wurde als „Widget" gelesen.** Bei Zabbix sind die meisten
+  Community-Module Dashboard-Widgets, und genau so verstand mancher auch dieses
+  — obwohl das Hauptmodul eine **eigene Seite** unter *Monitoring → Network
+  Topology* ist und die fünf Widgets nur optionale Zugabe sind, die ohne das
+  Hauptmodul gar nicht laufen. Das stand bisher erst in Schritt 3 der
+  Installationsanleitung. Jetzt steht es im README im ersten Absatz, in beiden
+  Sprachen, mit einer Tabelle: was erforderlich ist, was optional, und was
+  jeweils vorausgesetzt wird.
+
+- **Der Geo-Tab stürzte ab, sobald kein Host Koordinaten hatte.**
+  `render-geo.js` ruft `esc()` dreimal im Leerzustand auf, importiert es aber
+  nicht aus `utils.js`. esbuild bündelt so etwas klaglos — der freie Name landet
+  im Bundle, und zur Laufzeit kommt `ReferenceError: esc is not defined`. Die
+  Bedingung ist alltäglich: eine Hostgruppe ohne Geokoordinaten reicht.
+  Gefunden hat es **@christos-diamantis** beim Debuggen von etwas ganz anderem.
+
+  Der eigentliche Fund ist aber, dass es durch zwölf Gates gekommen ist: ESLint
+  lief hier nur mit `no-unsanitized`, und `no-undef` war nicht aktiviert. Das ist
+  es jetzt — mit einer ausdrücklichen Liste der 25 Fremd-Globals, die dieses
+  Modul voraussetzt (Browser, Cytoscape, Leaflet, Zabbix' `CWidget`), statt einer
+  neuen Abhängigkeit. Gegengeprüft, dass die Regel den Fehler auch wirklich
+  fängt: Import wieder entfernt → drei Meldungen, Import zurück → sauber.
 
 - **Die Huawei-Zeile der Vendor-Matrix ist jetzt eine Messung.** Sie stand auf
   „ungeprüft", weil kein S5700 zum Gegenchecken da war und es auch keine

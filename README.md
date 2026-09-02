@@ -4,7 +4,7 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 *Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.*
 
 ![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4-red)
-![Version](https://img.shields.io/badge/version-5.1.0-blue)
+![Version](https://img.shields.io/badge/version-5.1.2-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 **[🌐 zabfox.de](https://zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](INSTALL.md)** · **[🤝 Contributing](CONTRIBUTING.md)**
@@ -65,6 +65,19 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 ### What is this?
 
 **Network Topology for Zabbix** is a frontend module for **Zabbix 7.0 LTS and 7.4** that visualises hosts, host groups, problems, traffic, health status and geo data as an **interactive network topology** — instead of seeing hosts as a flat list, you see _how_ they connect (discovered via LLDP/CDP), where it hurts, and what follows from it.
+
+> **This is a page, not a dashboard widget.** The main module adds its own entry
+> under **Monitoring → Network Topology**: a full screen with its own tabs, filters
+> and detail panel. Worth saying plainly, because most community modules for
+> Zabbix are widgets — so "module" tends to be read as "tile on a dashboard".
+>
+> | What | Needed? | Requires |
+> |---|---|---|
+> | **Main module** — the topology page | **required**, this is the product | Zabbix 7.0 LTS or 7.4 |
+> | **Five dashboard widgets** — tiles for existing dashboards | optional extras | Zabbix **7.4**, and the main module installed *and* enabled |
+>
+> The widgets read the main module's data action and load Cytoscape from its
+> assets; without it they show an error. Install the main module first.
 
 Highlights: live graph with severity rings · **port-to-port weathermap** (measured link utilisation) · **key-figure row** above the map · **ghost nodes** for devices reported via LLDP that have no host in Zabbix · what-if failure simulation & root cause · capacity forecast · maintenance straight from the map · health score per host group · geo map · **five dashboard widgets** · wallboard mode · German/English UI.
 
@@ -232,6 +245,20 @@ Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inse
 ### Was ist das?
 
 **Network Topology for Zabbix** ist ein Frontend-Modul für **Zabbix 7.0 LTS und 7.4**, das Hosts, Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es, _wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
+
+> **Das ist eine Seite, kein Dashboard-Widget.** Das Hauptmodul legt einen eigenen
+> Eintrag unter **Monitoring → Network Topology** an: eine vollständige Ansicht mit
+> eigenen Tabs, Filtern und Detail-Panel. Das sei ausdrücklich gesagt, weil die
+> meisten Community-Module für Zabbix Widgets sind — „Modul" wird deshalb leicht
+> als „Kachel auf einem Dashboard" gelesen.
+>
+> | Was | Nötig? | Braucht |
+> |---|---|---|
+> | **Hauptmodul** — die Topologie-Seite | **erforderlich**, das ist das Produkt | Zabbix 7.0 LTS oder 7.4 |
+> | **Fünf Dashboard-Widgets** — Kacheln für bestehende Dashboards | optionale Zugabe | Zabbix **7.4**, dazu das installierte *und* aktivierte Hauptmodul |
+>
+> Die Widgets nutzen die Daten-Action des Hauptmoduls und laden Cytoscape aus
+> dessen Assets; ohne es zeigen sie eine Fehlermeldung. Erst das Hauptmodul.
 
 Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · **Kennzahlen-Zeile** über der Karte · **Ghost-Knoten** für per LLDP gemeldete Geräte ohne Host in Zabbix · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · **fünf Dashboard-Widgets** · Wallboard-Modus · DE/EN.
 

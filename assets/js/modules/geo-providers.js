@@ -41,9 +41,9 @@ export const GEO_PROVIDERS = [
                    + '&copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> '
                    + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 20,
-        warning: 'Stamen-Tiles benötigen seit 2023 einen Stadia-Maps-Account. '
-               + 'Ohne Domain-Whitelist erscheinen Auth-Warning-Tiles. '
-               + 'Kostenloser Account: https://stadiamaps.com/'
+        // Nur der Schluessel: diese Liste wird beim Laden des Moduls
+        // ausgewertet, t() erst zur Anzeige (render-geo.js).
+        warningKey: 'geo.provider.stamen_warning'
     },
     {
         id: 'stamen-terrain',
@@ -54,9 +54,9 @@ export const GEO_PROVIDERS = [
                    + '&copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> '
                    + '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 18,
-        warning: 'Stamen-Tiles benötigen seit 2023 einen Stadia-Maps-Account. '
-               + 'Ohne Domain-Whitelist erscheinen Auth-Warning-Tiles. '
-               + 'Kostenloser Account: https://stadiamaps.com/'
+        // Nur der Schluessel: diese Liste wird beim Laden des Moduls
+        // ausgewertet, t() erst zur Anzeige (render-geo.js).
+        warningKey: 'geo.provider.stamen_warning'
     },
     {
         id: 'usgs-topo',

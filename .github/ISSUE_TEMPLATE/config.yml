@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
-  - name: 🔒 Sicherheitslücke melden
+  - name: 🔒 Report a security issue
     url: https://github.com/linuser/zabbix-network-topology/blob/main/SECURITY.md
-    about: Bitte NICHT als Issue — vertraulich per Mail, siehe SECURITY.md
-  - name: 📡 Keine Kanten im Graphen?
+    about: Please do NOT open an issue — mail it confidentially, see SECURITY.md
+  - name: 📡 No edges in the graph?
     url: https://github.com/linuser/zabbix-network-topology/blob/main/LLDP-SETUP.md
-    about: Vendor-Matrix und SNMP-Setup — deckt die häufigsten Fälle ab
-  - name: 🌐 Projektseite
+    about: Vendor matrix and SNMP setup — covers the most common causes
+  - name: 🌐 Project site
     url: https://zabfox.de
-    about: Überblick und weitere Zabbix-Module
+    about: Overview and further Zabbix modules

@@ -90,7 +90,7 @@ function _buildLog(entries, theme) {
     }).join('');
     return '<table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
-        + ['vor', 'Action', 'Latenz', 'Size', 'Cache', 'Counts'].map(function(h) {
+        + [t('diag.col.ago'), 'Action', t('diag.col.latency'), 'Size', 'Cache', 'Counts'].map(function(h) {
             return '<th style="padding:6px 12px;text-align:left;color:' + theme.sub + ';font-weight:600">' + h + '</th>';
         }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
@@ -112,29 +112,29 @@ export function renderDiag(wrap) {
         + ';height:100%;overflow:auto;font-family:sans-serif';
 
     const head = document.createElement('div');
-    head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">Diagnose</h2>'
+    head.innerHTML = '<h2 style="margin:0 0 6px;font-size:16px">' + t('diag.title') + '</h2>'
         + '<div style="font-size:12px;color:' + theme.sub + ';margin-bottom:18px">'
-        + 'Backend-Aufrufe der letzten Stunde aus APCu-Ring-Buffer (Super-Admin only). '
-        + 'Latenz > 1000 ms rot, > 500 ms orange.</div>';
+        + t('diag.intro')
+        + '</div>';
     root.appendChild(head);
 
     const summaryWrap = document.createElement('div');
     summaryWrap.style.marginBottom = '24px';
     const summaryHead = document.createElement('div');
     summaryHead.innerHTML = '<h3 style="margin:0 0 8px;font-size:13px;color:' + theme.sub
-        + ';text-transform:uppercase;letter-spacing:0.04em">Zusammenfassung</h3>';
+        + ';text-transform:uppercase;letter-spacing:0.04em">' + t('diag.summary') + '</h3>';
     summaryWrap.appendChild(summaryHead);
     const summaryBody = document.createElement('div');
-    summaryBody.innerHTML = '<div style="color:' + theme.subSoft + '">Laedt...</div>';
+    summaryBody.innerHTML = '<div style="color:' + theme.subSoft + '">' + t('common.loading') + '</div>';
     summaryWrap.appendChild(summaryBody);
     root.appendChild(summaryWrap);
 
     const logHead = document.createElement('div');
     logHead.innerHTML = '<h3 style="margin:0 0 8px;font-size:13px;color:' + theme.sub
-        + ';text-transform:uppercase;letter-spacing:0.04em">Letzte Aufrufe</h3>';
+        + ';text-transform:uppercase;letter-spacing:0.04em">' + t('diag.recent') + '</h3>';
     root.appendChild(logHead);
     const logBody = document.createElement('div');
-    logBody.innerHTML = '<div style="color:' + theme.subSoft + '">Laedt...</div>';
+    logBody.innerHTML = '<div style="color:' + theme.subSoft + '">' + t('common.loading') + '</div>';
     root.appendChild(logBody);
 
     wrap.appendChild(root);

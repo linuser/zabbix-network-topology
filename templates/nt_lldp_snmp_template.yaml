@@ -8,143 +8,260 @@ zabbix_export:
       template: 'NT LLDP Neighbors by SNMP'
       name: 'NT LLDP Neighbors by SNMP'
       description: |
-        Entdeckt LLDP- (und optional Cisco-CDP-) Nachbarn per SNMP fuer das
-        "Network Topology for Zabbix"-Frontend-Modul. Das Modul zeichnet aus den
-        Nachbar-System-Namen die Verbindungen (Kanten) — Details in LLDP-SETUP.md.
+        Discovers LLDP (and optionally Cisco CDP) neighbours over SNMP for the
+        "Network Topology for Zabbix" frontend module. The module draws the links
+        (edges) from the neighbour system names - see LLDP-SETUP.md for details.
 
-        Verwendung:
-          - an SNMP-faehige Switches/Router/Firewalls linken
-          - auf dem Geraet LLDP aktivieren (Cisco: CDP ist meist default an)
-          - Naming beachten: der annoncierte SysName muss auf einen ueberwachten
-            Zabbix-Host aufloesen, sonst entsteht keine Kante (siehe LLDP-Q-Tab).
+        Usage:
+          - link it to SNMP-capable switches/routers/firewalls
+          - enable LLDP on the device (Cisco: CDP is usually on by default)
+          - mind the naming: the advertised SysName has to resolve to a
+            monitored Zabbix host, otherwise no edge appears (see the LLDP-Q tab).
 
-        Standards-basiert (IEEE 802.1AB LLDP-MIB); kein externer Collector noetig.
+        Standards-based (IEEE 802.1AB LLDP-MIB); no external collector needed.
       groups:
         - name: Templates/Network devices
       macros:
         - macro: '{$NT.LLDP.INTERVAL}'
           value: 1h
-          description: 'Polling-Intervall der LLDP/CDP-Nachbar-Items.'
+          description: 'Polling interval of the LLDP/CDP neighbour items.'
         - macro: '{$NT.LLDP.DISCOVERY.INTERVAL}'
           value: 3h
-          description: 'Discovery-Intervall der Nachbar-Tabellen (aendert sich selten).'
+          description: 'DEPRECATED since the walk[] rework: LLDP discovery is now a dependent rule on the walk item and follows {$NT.LLDP.INTERVAL}. Only still used by the (Cisco) CDP discovery.'
+      items:
+        - uuid: 084b4a88188c4714abbd5055588aa4ac
+          name: 'LLDP: remote systems table (SNMP walk)'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.0.8802.1.1.2.1.4.1.1.5,1.0.8802.1.1.2.1.4.1.1.7,1.0.8802.1.1.2.1.4.1.1.8,1.0.8802.1.1.2.1.4.1.1.9,1.0.8802.1.1.2.1.4.1.1.10,1.0.8802.1.1.2.1.4.1.1.12]'
+          key: nt.lldp.walk
+          delay: '{$NT.LLDP.INTERVAL}'
+          history: '0'
+          value_type: TEXT
+          description: |
+            One bulk walk over the six needed columns of lldpRemTable
+            (LLDP-MIB, 1.0.8802.1.1.2.1.4.1.1): ChassisId (.5), PortId (.7),
+            PortDesc (.8), SysName (.9), SysDesc (.10), SysCapEnabled (.12).
+
+            WHY A WALK INSTEAD OF PER-INSTANCE GETs: The SNMP index of
+            lldpRemTable is lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex.
+            TimeMark is an RMON-2 TimeFilter - on several implementations
+            (FortiGate: new value on every received PDU; MikroTik RouterOS:
+            exact GETs return noSuchObject, only walks work) instance-exact
+            GETs on this table are unreliable. A walk sidesteps both:
+            discovery and item prototypes hang off this item as DEPENDENT
+            and parse the walk text - not a single instance-exact GET left.
       discovery_rules:
         - uuid: f388b88ad77144c7b94dfd9c1913713a
           name: 'LLDP neighbor discovery'
-          type: SNMP_AGENT
+          type: DEPENDENT
           key: nt.lldp.rem.discovery
-          snmp_oid: 'discovery[{#NT_SYSNAME},1.0.8802.1.1.2.1.4.1.1.9]'
-          delay: '{$NT.LLDP.DISCOVERY.INTERVAL}'
+          delay: '0'
+          master_item:
+            key: nt.lldp.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#NT_SYSNAME}'
+                - 1.0.8802.1.1.2.1.4.1.1.9
+                - '0'
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // The SNMP index of lldpRemTable is
+                  // TimeMark.LocalPort.RemIndex. TimeMark is volatile
+                  // (FortiGate bumps it on every received PDU) and is
+                  // dropped here: {#SNMPINDEX} is normalized to
+                  // 0.Port.RemIndex so item keys stay stable. Port and
+                  // RemIndex additionally go into their own macros - the
+                  // prototypes use them to grab values from the walk text
+                  // with a timemark-agnostic regex.
+                  //
+                  // SEEN GUARD: If an agent returns the same row under two
+                  // TimeMarks within ONE walk (TimeFilter semantics - exactly
+                  // what misbehaves on these devices), the normalization
+                  // would emit two LLD rows with an identical {#SNMPINDEX}.
+                  // So per normalized index only the row with the HIGHEST
+                  // TimeMark is kept (newest state wins). Side note: on such
+                  // duplicates the prototype regexes still extract the FIRST
+                  // matching walk line - TimeMark leads the index and walks
+                  // come back in index order, so that is the OLDEST instance.
+                  // Same neighbor row, at worst a briefly stale value -
+                  // cosmetic, but better documented than rediscovered.
+                  var rows = JSON.parse(value), best = {}, order = [];
+                  for (var i = 0; i < rows.length; i++) {
+                      var r = rows[i];
+                      var m = /^(\d+)\.(\d+)\.(\d+)$/.exec(r['{#SNMPINDEX}'] || '');
+                      if (!m) continue;
+                      var tm = parseInt(m[1], 10);
+                      var idx = '0.' + m[2] + '.' + m[3];
+                      r['{#SNMPINDEX}'] = idx;
+                      r['{#NT_PORT}'] = m[2];
+                      r['{#NT_REMIDX}'] = m[3];
+                      if (!Object.prototype.hasOwnProperty.call(best, idx)) {
+                          order.push(idx);
+                          best[idx] = {tm: tm, row: r};
+                      }
+                      else if (tm > best[idx].tm) {
+                          best[idx] = {tm: tm, row: r};
+                      }
+                  }
+                  var out = [];
+                  for (var j = 0; j < order.length; j++) {
+                      out.push(best[order[j]].row);
+                  }
+                  return JSON.stringify(out);
           description: |
-            LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). Der {#SNMPINDEX}
-            traegt TimeMark.LocalPort.RemIndex — das Modul liest daraus den lokalen
-            Port. Ueber denselben Index holt es:
+            LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). The {#SNMPINDEX}
+            carries TimeMark.LocalPort.RemIndex - the module reads the local port
+            from it. Over the same index it also fetches:
 
-              .7  lldpRemPortId       Remote-Port (Fallback)
-              .8  lldpRemPortDesc     Remote-Port, lesbar → Port-zu-Port-Labels
-              .10 lldpRemSysDesc      Hersteller/Modell im Klartext
-              .12 lldpRemSysCapEnabled  Bridge / Router / AP / Telefon
-              .5  lldpRemChassisId    Basis-MAC, stabile Identitaet
+              .7  lldpRemPortId       remote port (fallback)
+              .8  lldpRemPortDesc     remote port, readable -> port-to-port labels
+              .10 lldpRemSysDesc      vendor/model in plain text
+              .12 lldpRemSysCapEnabled  bridge / router / AP / phone
+              .5  lldpRemChassisId    base MAC, stable identity
 
-            Die letzten drei zahlen vor allem auf NICHT ueberwachte Nachbarn ein:
-            ueber die kennt das Modul sonst nur den Namen.
+            The last three pay off mainly for UNMONITORED neighbours: without
+            them the module knows nothing but their name.
           item_prototypes:
             - uuid: 71e0268303f9471796f291808b05293b
               name: 'LLDP neighbor [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemSysName[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.9.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.9\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
-                SysName des am lokalen Port gesehenen LLDP-Nachbarn. Wird vom
-                Network-Topology-Modul als Kante gezeichnet, wenn der Name auf einen
-                ueberwachten Zabbix-Host aufloest.
+                SysName of the LLDP neighbour seen on the local port. The Network
+                Topology module draws it as an edge when the name resolves to a
+                monitored Zabbix host.
             - uuid: 33e111c96b2e4ab4a5e0047ba739d05f
               name: 'LLDP neighbor port-id [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemPortId[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.7.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.7\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
-                Remote-Port-ID des Nachbarn (lldpRemPortId, OID ...4.1.1.7). Je nach
-                PortIdSubtype ein Interface-Name ("Gi1/0/8") ODER eine MAC-Adresse —
-                deshalb liest das Modul bevorzugt lldpRemPortDesc und faellt nur
-                hierauf zurueck. Gleicher {#SNMPINDEX} wie der SysName → dieselbe
-                Nachbar-Zeile (darueber korreliert das Modul).
+                Remote port id of the neighbour (lldpRemPortId, OID ...4.1.1.7).
+                Depending on PortIdSubtype this is an interface name ("Gi1/0/8") OR
+                a MAC address - which is why the module prefers lldpRemPortDesc and
+                only falls back to this one. Same {#SNMPINDEX} as the SysName, hence
+                the same neighbour row (that is how the module correlates them).
             - uuid: 296934a9b576433095c087dbdeb383e6
               name: 'LLDP neighbor port-desc [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemPortDesc[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.8.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.8\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
-                Menschenlesbare Remote-Port-Beschreibung (lldpRemPortDesc, OID
-                ...4.1.1.8), z.B. "nic0" oder "GigabitEthernet1/0/8". Bevorzugte
-                Quelle fuers Port-zu-Port-Label am Nachbar-Ende.
+                Human-readable remote port description (lldpRemPortDesc, OID
+                ...4.1.1.8), e.g. "nic0" or "GigabitEthernet1/0/8". Preferred source
+                for the port-to-port label at the neighbour's end.
             - uuid: ae103ab500594d00bc368f47749fac2e
               name: 'LLDP neighbor sys-desc [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemSysDesc[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.10.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.10\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
-                Systembeschreibung des Nachbarn (lldpRemSysDesc, OID ...4.1.1.10) —
-                in der Regel Hersteller, Modell und Firmware im Klartext, z.B.
+                System description of the neighbour (lldpRemSysDesc, OID ...4.1.1.10)
+                - usually vendor, model and firmware in plain text, e.g.
                 "Cisco IOS Software, C2960X Software ...".
 
-                Fuer UEBERWACHTE Nachbarn ist das Beiwerk. Der Wert zaehlt bei den
-                NICHT ueberwachten: dort kennt das Modul sonst nur den Namen. Mit
-                der Beschreibung wird aus "da haengt sw-edge-03" ein "da haengt ein
-                Cisco-Switch" — und damit ein Hinweis, welches Template passt.
+                For MONITORED neighbours this is decoration. It earns its keep on the
+                UNMONITORED ones: there the module knows nothing but the name. With
+                the description, "something called sw-edge-03 is attached" turns into
+                "a Cisco switch is attached" - and thus a hint which template fits.
             - uuid: 36a88ecbea114b5e89f55f7aa684f43d
               name: 'LLDP neighbor capabilities [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemSysCapEnabled[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.12.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.12\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
-                Aktivierte Faehigkeiten des Nachbarn (lldpRemSysCapEnabled, OID
-                ...4.1.1.12) als Bitmaske: Repeater, Bridge, WLAN-AP, Router,
-                Telefon, DOCSIS, Station.
+                Enabled capabilities of the neighbour (lldpRemSysCapEnabled, OID
+                ...4.1.1.12) as a bitmask: repeater, bridge, WLAN AP, router,
+                phone, DOCSIS, station.
 
-                Sagt, WAS dort haengt, ohne den Namen deuten zu muessen — ein
-                Access-Point, ein Telefon und ein Switch sehen sonst gleich aus.
-                Das Modul waehlt darueber das Icon fuer nicht ueberwachte Geraete
-                statt des generischen Platzhalters.
+                Says WHAT is attached without having to interpret the name - an
+                access point, a phone and a switch look identical otherwise. The
+                module picks the icon for unmonitored devices from this instead of
+                using the generic placeholder.
             - uuid: e62a93c7791f47aa8f49bb21e7da9136
               name: 'LLDP neighbor chassis-id [{#SNMPINDEX}]: {#NT_SYSNAME}'
-              type: SNMP_AGENT
+              type: DEPENDENT
               key: 'lldpRemChassisId[{#SNMPINDEX}]'
-              snmp_oid: '1.0.8802.1.1.2.1.4.1.1.5.{#SNMPINDEX}'
               value_type: CHAR
-              delay: '{$NT.LLDP.INTERVAL}'
+              delay: '0'
+              master_item:
+                key: nt.lldp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.5\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
               history: 7d
               trends: '0'
               description: |
-                Chassis-ID des Nachbarn (lldpRemChassisId, OID ...4.1.1.5), je nach
-                Subtype meist die Basis-MAC des Geraets.
+                Chassis id of the neighbour (lldpRemChassisId, OID ...4.1.1.5),
+                depending on the subtype usually the device's base MAC.
 
-                Das ist die einzige STABILE Kennung, die LLDP ueber einen nicht
-                ueberwachten Nachbarn liefert. Entdoppelt wird heute ueber den
-                Systemnamen: dasselbe Geraet, von drei Switches gemeldet, wird
-                ueber den Namen zusammengefuehrt — benennt es jemand um, erscheint
-                es als neues Geraet. Ueber die Chassis-ID bleibt die Identitaet
-                erhalten.
+                This is the only STABLE identifier LLDP provides about an
+                unmonitored neighbour. Deduplication today happens over the system
+                name: the same device, reported by three switches, is merged by its
+                name - rename it and it shows up as a new device. Over the chassis
+                id the identity survives.
         - uuid: 8e6fb294701f48d3a41dd38e59d1fbf0
           name: 'CDP neighbor discovery (Cisco)'
           type: SNMP_AGENT
@@ -152,9 +269,9 @@ zabbix_export:
           snmp_oid: 'discovery[{#NT_DEVICEID},1.3.6.1.4.1.9.9.23.1.2.1.1.6]'
           delay: '{$NT.LLDP.DISCOVERY.INTERVAL}'
           description: |
-            CISCO-CDP-MIB cdpCacheDeviceId (1.3.6.1.4.1.9.9.23.1.2.1.1.6). Fuer
-            Cisco-Geraete, die CDP statt/zusaetzlich zu LLDP sprechen. Auf
-            Nicht-Cisco-Geraeten bleibt die Discovery einfach leer (kein Fehler).
+            CISCO-CDP-MIB cdpCacheDeviceId (1.3.6.1.4.1.9.9.23.1.2.1.1.6). For
+            Cisco devices that speak CDP instead of, or in addition to, LLDP. On
+            non-Cisco devices this discovery simply stays empty (not an error).
           item_prototypes:
             - uuid: 7f0e08dfeb4e41a1b9286aa4f26a9e49
               name: 'CDP neighbor [{#SNMPINDEX}]: {#NT_DEVICEID}'
@@ -166,8 +283,8 @@ zabbix_export:
               history: 7d
               trends: '0'
               description: |
-                Device-ID des CDP-Nachbarn (Cisco). Vom Modul wie ein LLDP-Nachbar
-                behandelt (Key enthaelt cdpCacheDeviceId).
+                Device id of the CDP neighbour (Cisco). Treated by the module like
+                an LLDP neighbour (the key contains cdpCacheDeviceId).
             - uuid: d23195fc34e14ebe9a1f0b1c0590221c
               name: 'CDP neighbor port [{#SNMPINDEX}]: {#NT_DEVICEID}'
               type: SNMP_AGENT
@@ -178,6 +295,6 @@ zabbix_export:
               history: 7d
               trends: '0'
               description: |
-                Remote-Port des CDP-Nachbarn (cdpCacheDevicePort, OID ...23.1.2.1.1.7),
-                z.B. "GigabitEthernet0/1". Gleicher {#SNMPINDEX} wie cdpCacheDeviceId →
-                dieselbe Nachbar-Zeile.
+                Remote port of the CDP neighbour (cdpCacheDevicePort, OID
+                ...23.1.2.1.1.7), e.g. "GigabitEthernet0/1". Same {#SNMPINDEX} as
+                cdpCacheDeviceId, hence the same neighbour row.

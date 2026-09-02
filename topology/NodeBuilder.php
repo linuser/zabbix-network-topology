@@ -128,7 +128,7 @@ final class NodeBuilder {
                         'name'  => $key,
                         'value' => null,
                         'units' => '',
-                        'error' => 'Item nicht gefunden'
+                        'error' => _('Item not found')
                     ];
                     continue;
                 }

@@ -50,6 +50,10 @@ if (!window.NtWidgetData) {
             for (var i = 0; i < ids.length; i++) {
                 params.append('groupids[]', ids[i]);
             }
+            // Widgets haben keinen View-Controller und bekommen manuelle
+            // Verbindungen sonst nie zu sehen — das Hauptmodul zaehlte sie mit,
+            // die Widgets nicht. Server liefert nur die GETEILTE Ebene.
+            params.append('manual_links', '1');
 
             var p = fetch('zabbix.php?' + params.toString(), {
                 credentials: 'same-origin',
@@ -219,7 +223,7 @@ class WidgetNetworkTopologyTable extends CWidget {
 
         if (total === 0) {
             root.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
-                + 'height:100%;color:' + this._COL_SUBSOFT + ';font-size:11px">Keine Hosts.</div>';
+                + 'height:100%;color:' + this._COL_SUBSOFT + ';font-size:11px">No hosts.</div>';
             return;
         }
 
@@ -284,6 +288,6 @@ class WidgetNetworkTopologyTable extends CWidget {
         var root = this._target.querySelector('.nt-table-widget-canvas');
         if (!root) return;
         root.innerHTML = '<div style="padding:14px;color:' + this._COL_CRIT + ';font-size:12px">'
-            + 'Table-Widget: Hauptmodul nicht erreichbar (' + this._esc(msg) + ')</div>';
+            + 'Table widget: main module not reachable (' + this._esc(msg) + ')</div>';
     }
 }

@@ -507,4 +507,19 @@ export default {
     'lldpq.more_distinct': '\u2026 und {n} weitere distinct',
     'lldpq.intro': 'Wie zuverl\u00e4ssig kann Zabbix die LLDP-/CDP-Nachbarn auf bekannte Hosts mappen? Match-Quote &lt; 90\u202f% bedeutet meist: Nachbarn existieren in der echten Welt, aber nicht in Zabbix, oder die Naming-Konventionen weichen ab.',
     'positions.truncated': 'Zu viele Knoten: {n} Positionen wurden nicht gespeichert. Serverseitig sind 5000 Knoten je Ansicht m\u00f6glich \u2014 grenze die Hostgruppen enger ein.',
+
+    // --- Nachgezogen: Texte, die frueher direkt im Code standen ------------
+    'geo.provider.stamen_warning': 'Stamen-Tiles ben\u00f6tigen seit 2023 einen Stadia-Maps-Account. Ohne Domain-Whitelist erscheinen Auth-Warning-Tiles. Kostenloser Account: https://stadiamaps.com/',
+    'geo.maintenance': '\u{1F527} Wartung',
+    'geo.toast.dismiss': 'Klicken zum Schlie\u00dfen',
+    'compliance.select_groups': 'Bitte oben Hostgruppen w\u00e4hlen.',
+    'diag.title': 'Diagnose',
+    'diag.intro': 'Backend-Aufrufe der letzten Stunde aus dem APCu-Ringpuffer (nur Super-Admin). Latenz &gt; 1000 ms rot, &gt; 500 ms orange.',
+    'common.loading': 'Lädt \u2026',
+    'diag.summary': 'Zusammenfassung',
+    'diag.recent': 'Letzte Aufrufe',
+    'diag.col.ago': 'vor',
+    'diag.col.latency': 'Latenz',
+    'lldpq.match_rate': 'Match-Quote',
+    'lldpq.col.reported_by': 'Gemeldet von',
 };

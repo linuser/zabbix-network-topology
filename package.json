@@ -1,6 +1,6 @@
 {
   "name": "network-topology-for-zabbix",
-  "version": "5.1.0",
+  "version": "5.1.2",
   "private": true,
   "description": "Build tooling for the Network Topology for Zabbix frontend module (AGPL-3.0).",
   "license": "AGPL-3.0-or-later",
@@ -18,6 +18,7 @@
     "ci:templates": "node tools/check-templates.mjs",
     "ci:package": "node tools/check-package.mjs",
     "ci:layers": "node tools/check-layers.mjs",
+    "ci:i18n": "node tools/check-i18n.mjs",
     "ci:pipeline": "node tools/check-ci.mjs"
   },
   "devDependencies": {
