@@ -424,6 +424,7 @@ export default {
     'edge.onesided': 'one-sided',
     'edge.onesided.tip': 'Only one end reports this neighbour. Usually LLDP is off on the other side; less often the match is wrong.',
     'edge.onesided.tip_named': 'Only {host} reports this neighbour \u2014 the other end does not. Usually LLDP is off there; less often the match is wrong.',
+    'topo.moved': 'Link moved: {a} \u2194 {b} \u2014 {host} now on {to} (was {from})',
     'legend.groups': 'GROUPS',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

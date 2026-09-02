@@ -429,6 +429,7 @@ export default {
     'edge.onesided': 'einseitig',
     'edge.onesided.tip': 'Nur ein Ende meldet diesen Nachbarn. Meist ist LLDP auf der Gegenseite aus; seltener stimmt die Zuordnung nicht.',
     'edge.onesided.tip_named': 'Nur {host} meldet diesen Nachbarn, die Gegenseite nicht. Meist ist dort LLDP aus; seltener stimmt die Zuordnung nicht.',
+    'topo.moved': 'Verbindung umgesteckt: {a} \u2194 {b} \u2014 {host} jetzt an {to} (vorher {from})',
     'legend.groups': 'GRUPPEN',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

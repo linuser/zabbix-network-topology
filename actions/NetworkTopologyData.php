@@ -13,6 +13,7 @@ use Modules\NetworkTopology\Topology\HopScope;
 use Modules\NetworkTopology\Topology\ManualLinks;
 use Modules\NetworkTopology\Topology\NodeBuilder;
 use Modules\NetworkTopology\Topology\ProblemLoader;
+use Modules\NetworkTopology\Topology\TopoDiff;
 use CControllerResponseFatal;
 use API;
 
@@ -616,23 +617,14 @@ class NetworkTopologyData extends NetworkTopologyController {
         // dagegen ergibt topo_changes. User-Scoping, Sortierung der groupids und
         // Schema-Version macht NtCache; ohne APCu ist es ein No-Op und
         // topo_changes bleibt schlicht leer.
-        $topo_changes = ['added' => [], 'removed' => []];
-        $current = [];   // "idA|idB" → [labelA, labelB]
-        foreach ($edges as $e) {
-            if (!empty($e['_isInternetEdge'])) continue;
-            $pair = [(string) $e['from'], (string) $e['to']];
-            sort($pair);
-            $current[$pair[0] . '|' . $pair[1]] = [$host_label($pair[0]), $host_label($pair[1])];
-        }
+        // Der Vergleich selbst liegt in TopoDiff: reine Logik, ohne Zabbix, und
+        // damit testbar. Er kennt jetzt eine dritte Kategorie neben added und
+        // removed — 'moved', wenn dasselbe Paar an einem anderen Port haengt.
+        // Vorher fiel genau dieser Fall durchs Raster, weil der Schluessel nur
+        // aus dem Host-Paar bestand und sich beim Umstecken nicht aendert.
+        $current  = TopoDiff::snapshot($edges, $host_label);
         $baseline = NtCache::get('topo_baseline', $cache_parts);
-        if (is_array($baseline)) {
-            foreach ($current as $k => $lbls) {
-                if (!isset($baseline[$k])) $topo_changes['added'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
-            }
-            foreach ($baseline as $k => $lbls) {
-                if (!isset($current[$k])) $topo_changes['removed'][] = ['a' => $lbls[0], 'b' => $lbls[1]];
-            }
-        }
+        $topo_changes = TopoDiff::compare(is_array($baseline) ? $baseline : null, $current);
         NtCache::set('topo_baseline', $cache_parts, $current, 7 * 86400);
 
         // ── Manuelle Verbindungen, nur fuer Widgets ───────────────────────
