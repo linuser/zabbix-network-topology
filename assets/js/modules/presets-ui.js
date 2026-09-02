@@ -16,7 +16,7 @@ import {
     loadRelevantPresets, savePreset, deletePreset, applyPreset,
     collectCurrentState, loadActivePreset, saveActivePreset
 } from './storage.js';
-import { downloadLayout, importLayoutFile } from './layout-file.js';
+import { downloadLayout } from './layout-file.js';
 import { toast } from './toast.js';
 import { t } from './i18n.js';
 
@@ -179,28 +179,41 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     delBtn.title = t('presets.del.tip');
     delBtn.textContent = '\u{1F5D1}';
 
-    // Datei-Export/-Import. Bewusst NEBEN den Presets und nicht als weiterer
+    // Datei-EXPORT. Bewusst NEBEN den Presets und nicht als weiterer
     // Preset-Eintrag: ein Preset lebt im localStorage dieses Browsers, eine
-    // Datei geht auf ein anderes Geraet oder in ein anderes Zabbix. Das sind
-    // verschiedene Dinge, auch wenn sie denselben Zustand tragen.
+    // Datei geht auf ein anderes Geraet oder in ein anderes Zabbix.
+    //
+    // KEIN Import-Knopf — bewusst, nicht vergessen.
+    //
+    // Der Import war gebaut und ist wieder ausgebaut worden, weil ein
+    // Code-Review drei Defekte fand, die alle dieselbe Wurzel haben: der
+    // Apply-Pfad (applyPreset/setPositions/setLinks) wurde fuer VOLLSTAENDIGE
+    // Zustaende aus der laufenden Karte geschrieben, eine importierte Datei ist
+    // aber ein beliebiger TEILzustand.
+    //
+    //   1. Der Re-Render nach dem Import speichert den live gerenderten Stand
+    //      zurueck (layoutstop -> savePositions). Im Cluster-Modus — dem
+    //      Standard ab zwei Hostgruppen — kommen die importierten Positionen
+    //      gar nicht erst an und werden ~1,4 s spaeter ueberschrieben.
+    //   2. Ein Super-Admin schreibt in die GETEILTE Ebene, und setPositions()
+    //      ersetzt sie komplett. Ein Import mit zwoelf Knoten loescht damit die
+    //      Positionen aller uebrigen Hosts fuer alle Nutzer.
+    //   3. loadLinks() liefert geteilte UND persoenliche Links gemischt, die
+    //      Datei traegt die Ebene nicht mit, und setLinks() schreibt alles in
+    //      defaultLinkScope(). Aus privaten Kanten werden geteilte oder
+    //      umgekehrt.
+    //
+    // Nichts davon ist im Import selbst zu reparieren; es braucht eine
+    // Entscheidung, was "importieren" bei einer geteilten Karte heissen soll —
+    // ersetzen oder zusammenfuehren. Siehe ROADMAP.md.
+    //
+    // Der Export bleibt: er liest nur und kann nichts kaputt machen. Und er
+    // loest bereits die Haelfte des Zwecks, naemlich sichern.
     const dlBtn = document.createElement('button');
     dlBtn.className = 'btn-alt btn-small';
     dlBtn.style.margin = '0';
     dlBtn.title = t('layoutfile.export.tip');
     dlBtn.textContent = '\u2B07';
-
-    const upBtn = document.createElement('button');
-    upBtn.className = 'btn-alt btn-small';
-    upBtn.style.margin = '0';
-    upBtn.title = t('layoutfile.import.tip');
-    upBtn.textContent = '\u2B06';
-
-    // Verstecktes Datei-Feld: ein <input type=file> laesst sich nicht sinnvoll
-    // als Toolbar-Knopf gestalten, also klickt der Knopf es an.
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'application/json,.json';
-    fileInput.style.display = 'none';
 
     dlBtn.addEventListener('click', function() {
         try {
@@ -210,37 +223,6 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
         } catch (e) {
             toast(t('layoutfile.err.export', { err: (e && e.message) || '?' }), 'error', 8000);
         }
-    });
-
-    upBtn.addEventListener('click', function() { fileInput.click(); });
-
-    fileInput.addEventListener('change', function() {
-        const f = fileInput.files && fileInput.files[0];
-        // Zuruecksetzen, damit dieselbe Datei zweimal hintereinander waehlbar
-        // bleibt — 'change' feuert sonst beim zweiten Mal nicht.
-        importLayoutFile(f).then(function(st) {
-            fileInput.value = '';
-            // Der Import ist kein Preset: Auswahl auf "keins" stellen, sonst
-            // stuende dort ein Name, unter dem nichts gespeichert ist.
-            _active = null;
-            ddBtn.textContent = ddLabel();
-            updateButtons();
-            // Re-Render wie im Preset-Pfad oben: _renderFn ist render() aus
-            // render-tech.js und braucht (wrap, nodes, edges, url) — ein
-            // Aufruf ohne Argumente bricht an ld.nodes.length.
-            const wrap = document.getElementById('nt-canvas-wrap');
-            const ld   = window._ntLastData || {};
-            _renderFn(wrap, (ld.nodes || []).slice(), (ld.edges || []).slice(), ld.url || '');
-            toast(t('layoutfile.imported', {
-                pos: String(st.positions), links: String(st.links)
-            }), 'info', 6000);
-            if (st.verworfen > 0) {
-                toast(t('layoutfile.discarded', { n: String(st.verworfen) }), 'warn', 8000);
-            }
-        }).catch(function(err) {
-            fileInput.value = '';
-            toast((err && err.message) || t('layoutfile.err.read'), 'error', 8000);
-        });
     });
 
     function updateButtons() {
@@ -324,8 +306,6 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     wrap.appendChild(saveAsBtn);
     wrap.appendChild(delBtn);
     wrap.appendChild(dlBtn);
-    wrap.appendChild(upBtn);
-    wrap.appendChild(fileInput);
     bar.appendChild(wrap);
 
     updateButtons();

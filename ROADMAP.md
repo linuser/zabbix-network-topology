@@ -15,7 +15,7 @@ und schreibt hin, was er gefunden hat.
 | Wunsch | Stand |
 |---|---|
 | **Layout sperren / Knoten fixieren** | **Fertig.** Kontextmenü Pin/Unpin, `node.lock()`, `savePinned()` persistiert, eigenes Knotenbild, `group-cluster-layout.js` filtert `.not(':locked')`. |
-| **Export/Import der Layouts als JSON** | **Fertig seit v5.2-Arbeit** (`layout-file.js`). Zwei Knöpfe neben den Presets, Prüfung beim Einlesen mit denselben Mustern und Grenzen wie serverseitig. |
+| **Export der Layouts als JSON** | **Fertig** (`layout-file.js`). Ein Knopf neben den Presets. **Der Import ist wieder ausgebaut** — siehe unten. |
 | **Konflikterkennung bei gleichzeitigem Bearbeiten** | **Fertig, war aber wirkungslos.** Revisionen, `base`, `Revision::matches()`, Konfliktmeldung — das View-Template reichte `revisions` nur nicht durch. Behoben. |
 | **Pfad zwischen zwei Hosts** | **Fertig** (`path-highlight.js`, 98 Zeilen). Kürzester Pfad per BFS, Auswahl über Kontextmenü „Pfad von hier" / „Pfad zu hier", alles außerhalb gedimmt, Pfadkanten fett-cyan. Eigene BFS-Implementierung mit begründetem Vorbehalt: Cytoscapes `bfs()` lieferte in der minifizierten Fassung `found:null` bei verbundenen Knoten. |
 | **Unmanaged Devices** | **Fertig — heißen „Ghost Nodes"** (`build-elements.js`, §9). LLDP/CDP-Nachbarn, die auf keinen überwachten Host auflösen, aus `lldp_quality[].unmatched`. Mehrere Melder desselben Unbekannten ergeben **einen** Knoten mit mehreren Kanten. Umschalter „👻 Ghost nodes" im Technical-Tab, standardmäßig aus. |
@@ -99,7 +99,42 @@ Empfänger einen anderen Bildschirm trifft, zeigt einen sinnlosen Ausschnitt) un
 ein Anker auf ein einzelnes Problem — dafür gibt es keinen; der Link zeigt
 sinnvoller auf den Host.
 
-### 6. Pfad als Liste, nicht nur als Hervorhebung
+### 6. Layout-Import — neu entwerfen
+
+Der Import war gebaut und ist wieder ausgebaut worden. Der Export bleibt: er
+liest nur und löst bereits die Hälfte des Zwecks.
+
+**Ein Defekt war schlimm und ist behoben:** fehlende Abschnitte in der Datei
+löschten den jeweiligen Bestand, weil `{}` und `[]` truthy sind und die Wächter
+in `applyPreset()` deshalb immer griffen. Eine Datei ohne Links rief
+`setLinks([])` — bei einem Super-Admin **alle manuellen Verbindungen aller
+Nutzer**, mit grüner Erfolgsmeldung. Ausgelöst schon von der minimalen gültigen
+Datei.
+
+**Drei stehen offen, alle mit derselben Wurzel:** der Apply-Pfad
+(`applyPreset`, `setPositions`, `setLinks`) ist für **vollständige** Zustände
+aus der laufenden Karte geschrieben, eine importierte Datei ist aber ein
+beliebiger **Teil**zustand.
+
+1. Der Re-Render speichert den live gerenderten Stand zurück
+   (`layoutstop` → `savePositions`). Im **Cluster-Modus** — Standard ab zwei
+   Hostgruppen — kommen die importierten Positionen gar nicht erst an und
+   werden ~1,4 s später überschrieben.
+2. Ein Super-Admin schreibt in die geteilte Ebene, und `setPositions()` ersetzt
+   sie **komplett**. Zwölf importierte Knoten löschen die Positionen aller
+   übrigen Hosts, für alle Nutzer.
+3. `loadLinks()` mischt geteilte und persönliche Kanten, die Datei trägt die
+   Ebene nicht mit, `setLinks()` schreibt alles in `defaultLinkScope()`. Aus
+   privaten Kanten werden geteilte oder umgekehrt.
+
+**Die eigentliche Frage vor jedem Code:** was heißt „importieren" bei einer
+**geteilten** Karte — ersetzen oder zusammenführen? Solange die offen ist,
+lässt sich Punkt 2 nicht sinnvoll beheben, nur verschieben.
+
+Die ausgebaute Prüfung (`sanitizeLayout`, ~90 Zeilen mit den serverseitigen
+Mustern und Grenzen) steht in der Git-Historie. Sie war **nicht** das Problem.
+
+### 7. Pfad als Liste, nicht nur als Hervorhebung
 
 Der Pfad wird berechnet und auf der Karte markiert (siehe Tabelle oben). Was
 fehlt, ist die **textuelle Hop-Liste** mit Zustand je Link:
