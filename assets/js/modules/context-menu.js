@@ -22,10 +22,15 @@ import { isSimulated, isSimActive, simulatedCount,
 import { isFocusActive, getFocusId, getFocusHops,
          setFocus, clearFocus } from './focus-mode.js';
 import { t } from './i18n.js';
+import { isDark } from './utils.js';
 
+// Attached to <body> like the tooltip → color tokens via .nt-float; the dark
+// class is taken over from #nt-root in _showCtxAt().
 const _ctx = document.createElement('div');
-_ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #ddd;'
-    + 'border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:190px;font-size:13px;overflow:hidden';
+_ctx.className = 'nt-float';
+_ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:var(--nt-surface);'
+    + 'border:1px solid var(--nt-line);color:var(--nt-text-2);'
+    + 'border-radius:6px;box-shadow:var(--nt-shadow);min-width:190px;font-size:13px;overflow:hidden';
 document.body.appendChild(_ctx);
 
 // Menü an (cx,cy) zeigen und in den Viewport clampen — sonst laeuft ein langes
@@ -33,6 +38,7 @@ document.body.appendChild(_ctx);
 // + Scroll fangen ab, wenn das Menue hoeher als der Screen ist. position:fixed
 // → die Koordinaten sind viewport-relativ, also direkt gegen innerWidth/Height.
 function _showCtxAt(cx, cy) {
+    _ctx.classList.toggle('nt-dark', isDark());
     const m = 8;   // Mindestabstand zum Bildrand
     _ctx.style.maxHeight = (window.innerHeight - 2 * m) + 'px';
     _ctx.style.overflowY = 'auto';
@@ -57,8 +63,8 @@ export function setResolveAggregateCallback(fn) { _onResolveAggregate = fn; }
 function _ctxRow(label, color, onClick) {
     const row = document.createElement('div');
     row.textContent = label;
-    row.style.cssText = 'padding:8px 16px;color:' + (color || '#334155') + ';cursor:pointer;white-space:nowrap;';
-    row.addEventListener('mouseenter', function() { row.style.background = '#f8fafc'; });
+    row.style.cssText = 'padding:8px 16px;color:' + (color || 'var(--nt-text-2)') + ';cursor:pointer;white-space:nowrap;';
+    row.addEventListener('mouseenter', function() { row.style.background = 'var(--nt-surface-2)'; });
     row.addEventListener('mouseleave', function() { row.style.background = ''; });
     row.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -180,11 +186,11 @@ export function showCtx(cx, cy2, d) {
     // Menuepunkt, der in "Access denied" laeuft, ist keiner.
     if (d._isGhost) {
         const gh = document.createElement('div');
-        gh.style.cssText = 'padding:8px 12px 6px;font-weight:700;border-bottom:1px solid #f1f5f9;font-size:12px;color:#0f172a';
+        gh.style.cssText = 'padding:8px 12px 6px;font-weight:700;border-bottom:1px solid var(--nt-line-soft);font-size:12px;color:var(--nt-text)';
         gh.textContent = d.label || d.host || String(d.id);
 
         const ghSub = document.createElement('div');
-        ghSub.style.cssText = 'font-size:10px;font-weight:400;color:#64748b;margin-top:2px';
+        ghSub.style.cssText = 'font-size:10px;font-weight:400;color:var(--nt-sub);margin-top:2px';
         const seenBy = (d._ghostSeenBy || []).join(', ');
         const via    = (d._ghostSrc || ['lldp']).join('/').toUpperCase();
         ghSub.textContent = seenBy
@@ -201,7 +207,7 @@ export function showCtx(cx, cy2, d) {
          [d._ghostChassis || '', 'ctx.ghost.chassis']].forEach(function(pair) {
             if (!pair[0]) return;
             const row = document.createElement('div');
-            row.style.cssText = 'font-size:10px;font-weight:400;color:#64748b;margin-top:2px';
+            row.style.cssText = 'font-size:10px;font-weight:400;color:var(--nt-sub);margin-top:2px';
             row.textContent = t(pair[1], { v: pair[0] });
             gh.appendChild(row);
         });
@@ -235,17 +241,17 @@ export function showCtx(cx, cy2, d) {
     // ── Aggregat-Node (Group-View) ──────────────────────────────────────────
     if (d._isAggregate) {
         const header = document.createElement('div');
-        header.style.cssText = 'padding:8px 12px 6px;font-weight:700;border-bottom:1px solid #f1f5f9;font-size:12px;color:#0f172a';
+        header.style.cssText = 'padding:8px 12px 6px;font-weight:700;border-bottom:1px solid var(--nt-line-soft);font-size:12px;color:var(--nt-text)';
         header.textContent = d.label;
         const sub = document.createElement('div');
-        sub.style.cssText = 'font-size:10px;font-weight:400;color:#64748b;margin-top:2px';
+        sub.style.cssText = 'font-size:10px;font-weight:400;color:var(--nt-sub);margin-top:2px';
         sub.textContent = t('ctx.hosts', { n: d._childCount || 0 });
         header.appendChild(sub);
         _ctx.appendChild(header);
 
         if (d._topProblems && d._topProblems.length) {
             const probHdr = document.createElement('div');
-            probHdr.style.cssText = 'padding:6px 12px 2px;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px';
+            probHdr.style.cssText = 'padding:6px 12px 2px;font-size:10px;color:var(--nt-sub);text-transform:uppercase;letter-spacing:0.5px';
             probHdr.textContent = t('ctx.top_problems');
             _ctx.appendChild(probHdr);
             const SEV_LBL_LOC = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
@@ -264,7 +270,7 @@ export function showCtx(cx, cy2, d) {
         }
 
         const sepA = document.createElement('div');
-        sepA.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:6px';
+        sepA.style.cssText = 'border-top:1px solid var(--nt-line-soft);margin-top:6px';
         _ctx.appendChild(sepA);
 
         _ctx.appendChild(_ctxRow(t('ctx.resolve_view'), '#3b82f6', function() {
@@ -300,11 +306,11 @@ export function showCtx(cx, cy2, d) {
     }
 
     const header = document.createElement('div');
-    header.style.cssText = 'padding:8px 12px 6px;font-weight:700;border-bottom:1px solid #f1f5f9;font-size:12px;color:#0f172a';
+    header.style.cssText = 'padding:8px 12px 6px;font-weight:700;border-bottom:1px solid var(--nt-line-soft);font-size:12px;color:var(--nt-text)';
     header.textContent = d.label;
     if (d.ip) {
         const ipEl = document.createElement('div');
-        ipEl.style.cssText = 'font-size:10px;font-weight:400;color:#64748b;font-family:monospace;margin-top:2px';
+        ipEl.style.cssText = 'font-size:10px;font-weight:400;color:var(--nt-sub);font-family:monospace;margin-top:2px';
         ipEl.textContent = '\uD83D\uDD17 ' + d.ip;
         header.appendChild(ipEl);
     }
@@ -312,7 +318,7 @@ export function showCtx(cx, cy2, d) {
 
     if (d.note) {
         const np = document.createElement('div');
-        np.style.cssText = 'padding:0 16px 6px;font-size:10px;color:#64748b;font-style:italic;max-width:220px;'
+        np.style.cssText = 'padding:0 16px 6px;font-size:10px;color:var(--nt-sub);font-style:italic;max-width:220px;'
                          + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
         np.textContent = d.note;
         _ctx.appendChild(np);
@@ -346,9 +352,9 @@ export function showCtx(cx, cy2, d) {
     // Header. Maximal 6 Links (Backend begrenzt das schon).
     if (d.links && d.links.length) {
         const linksHdr = document.createElement('div');
-        linksHdr.style.cssText = 'padding:6px 12px 2px;font-size:10px;color:#64748b;'
+        linksHdr.style.cssText = 'padding:6px 12px 2px;font-size:10px;color:var(--nt-sub);'
             + 'text-transform:uppercase;letter-spacing:0.5px;'
-            + 'border-top:1px solid #f1f5f9;margin-top:4px';
+            + 'border-top:1px solid var(--nt-line-soft);margin-top:4px';
         linksHdr.textContent = t('ctx.ext_links');
         _ctx.appendChild(linksHdr);
         d.links.forEach(function(link) {
@@ -366,7 +372,7 @@ export function showCtx(cx, cy2, d) {
     }
 
     const sep = document.createElement('div');
-    sep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+    sep.style.cssText = 'border-top:1px solid var(--nt-line-soft);margin-top:2px';
     _ctx.appendChild(sep);
 
     // Pin
@@ -407,7 +413,7 @@ export function showCtx(cx, cy2, d) {
     //   - Start gesetzt \u2260 this     \u2192 "Pfad zu hier" + "Pfad-Start zur\u00FCcksetzen"
     //   - kein Start               \u2192 "Pfad von hier starten"
     const pathSep = document.createElement('div');
-    pathSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+    pathSep.style.cssText = 'border-top:1px solid var(--nt-line-soft);margin-top:2px';
     _ctx.appendChild(pathSep);
 
     const startId = getPathStart();
@@ -444,7 +450,7 @@ export function showCtx(cx, cy2, d) {
     // per BFS aus welche Hosts dadurch vom Uplink abgeschnitten waeren.
     // Mehrere Hosts stapelbar (beide Core-Switches gleichzeitig testen).
     const simSep = document.createElement('div');
-    simSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+    simSep.style.cssText = 'border-top:1px solid var(--nt-line-soft);margin-top:2px';
     _ctx.appendChild(simSep);
     _ctx.appendChild(_ctxRow(
         isSimulated(hostId) ? t('whatif.restore') : t('whatif.simulate'),
@@ -497,7 +503,7 @@ export function showCtx(cx, cy2, d) {
     // fuer den Host, Alarme werden unterdrueckt. "darf ich rebooten?" → an.
     if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
         const scanSep = document.createElement('div');
-        scanSep.style.cssText = 'border-top:1px solid #f1f5f9;margin-top:2px';
+        scanSep.style.cssText = 'border-top:1px solid var(--nt-line-soft);margin-top:2px';
         _ctx.appendChild(scanSep);
 
         // Dienste-Probe auf Klick: welche gaengigen Ports antworten. Gedacht

@@ -84,7 +84,7 @@ setPositionTruncatedHandler(function(n) {
 });
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setFocusRenderCallback } from './modules/focus-mode.js';
-import { allowedTabs, setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
+import { allowedTabs, setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar, initDarkMode,
          setGraphToolbarVisible } from './modules/tabs.js';
 import { renderTable, cleanupTable } from './modules/render-table.js';
 import { renderManagement } from './modules/render-mgmt.js';
@@ -320,6 +320,10 @@ function init() {
             window._ntCy.fit(window._ntCy.nodes(), 40);
         }
     });
+
+    // Theme BEFORE toolbar and first render: stored choice, otherwise the
+    // Zabbix theme (tabs.js). After that every render path only reads the class.
+    initDarkMode();
 
     // Basis-Toolbar (Tabs + Dark-Button) initial bauen — idempotent.
     ensureBaseToolbar(wrap);

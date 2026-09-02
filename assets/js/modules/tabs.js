@@ -26,9 +26,31 @@
 //     damit Dark-Mode-Wechsel im Mgmt-Tab funktioniert ohne dass tabs.js direkt
 //     von renderManagement() abhängt (zirkuläre Importe vermeiden).
 
-import { grpColor } from './severity.js';
 import { saveSnapshot, loadSnapshot, clearSnapshot, formatSnapshotAge } from './diff-mode.js';
 import { t } from './i18n.js';
+
+// Zabbix links its theme as assets/styles/<theme>.css — dark-theme and
+// hc-dark are the dark ones. No more knowledge of the Zabbix page is needed;
+// if detection fails (different path, no link) the module stays light.
+export function detectZabbixDark() {
+    const links = document.querySelectorAll('link[rel="stylesheet"][href]');
+    for (let i = 0; i < links.length; i++) {
+        if (/\/(dark-theme|hc-dark)\.css(\?|$)/.test(links[i].getAttribute('href') || '')) return true;
+    }
+    return false;
+}
+
+// Before the first render: the module takes its light/dark mode from the
+// Zabbix theme — nothing else. There is no toggle any more (f768077 removed
+// it: it was never persisted, so a mode that has to be switched on after every
+// load was no mode). Deriving it from Zabbix makes it deterministic instead:
+// the map matches the frontend around it, and it survives reloads because
+// the source of truth is the Zabbix user profile. The 'nt-dark' checks in the
+// render modules become meaningful again through this one line.
+export function initDarkMode() {
+    const root = document.getElementById('nt-root');
+    if (root) root.classList.toggle('nt-dark', detectZabbixDark());
+}
 
 // State-Bridge: Hauptmodul setzt _getActiveTab beim init().
 let _getActiveTab = function() { return 'tech'; };
@@ -335,18 +357,30 @@ function _ensureMenuStyle() {
         + '[data-nt-menu-pop] > div > div > button:hover {'
         + '  background: #e2e8f0 !important;'
         + '}'
-        // Dark-Mode
+        // Dark mode — tokens from network-topology.css so that menu, sub-menu
+        // (layout/cluster options) and tooltip share one palette. The sub-menu
+        // used to be forced light (#f8fafc) even in dark mode.
         + '#nt-root.nt-dark [data-nt-menu-pop] {'
-        + '  background: #1e293b !important;'
-        + '  border-color: #334155 !important;'
+        + '  background: var(--nt-surface) !important;'
+        + '  border-color: var(--nt-line) !important;'
         + '}'
         + '#nt-root.nt-dark [data-nt-menu-pop] > button,'
         + '#nt-root.nt-dark [data-nt-menu-pop] > div {'
-        + '  color: #e2e8f0 !important;'
+        + '  color: var(--nt-text-2) !important;'
         + '}'
         + '#nt-root.nt-dark [data-nt-menu-pop] > button:hover,'
         + '#nt-root.nt-dark [data-nt-menu-pop] > div:hover {'
-        + '  background: #334155 !important;'
+        + '  background: var(--nt-surface-3) !important;'
+        + '}'
+        + '#nt-root.nt-dark [data-nt-menu-pop] > div > div {'
+        + '  background: var(--nt-surface-2) !important;'
+        + '  border-color: var(--nt-line) !important;'
+        + '}'
+        + '#nt-root.nt-dark [data-nt-menu-pop] > div > div > button {'
+        + '  color: var(--nt-text-2) !important;'
+        + '}'
+        + '#nt-root.nt-dark [data-nt-menu-pop] > div > div > button:hover {'
+        + '  background: var(--nt-surface-3) !important;'
         + '}';
     document.head.appendChild(st);
 }

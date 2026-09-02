@@ -38,6 +38,15 @@ function typeInfo(type) {
     return TYPE_INFO[type] || { lbl: t('detail.type.unknown'), icon: '\u2753', col: '#94a3b8' };  // ❓
 }
 
+// Close the panel — and let the color guide return to its place. Every site
+// that hides the panel goes through here (close X, background click in
+// render-tech).
+export function hideDetail(panel) {
+    if (panel) panel.style.display = 'none';
+    const root = document.getElementById('nt-root');
+    if (root) root.classList.remove('nt-detail-open');
+}
+
 export function showDetail(panel, d, cy) {
     const sc = SEV_COL[d.severity || 0] || SEV_COL[0];
 
@@ -57,7 +66,7 @@ export function showDetail(panel, d, cy) {
         return '';
     })();
     const ifaceCell = esc(d.iftype || '\u2014')
-        + (proxyTxt ? '<span style="color:#94a3b8;font-size:11px">' + esc(proxyTxt) + '</span>' : '');
+        + (proxyTxt ? '<span style="color:var(--nt-muted);font-size:11px">' + esc(proxyTxt) + '</span>' : '');
 
     // Offline-Detection: wenn Host laut Zabbix unavailable ist, kennzeichnen
     // wir alle Metriken als STALE (letzter Wert vor Disconnect). Sonst sieht
@@ -93,8 +102,8 @@ export function showDetail(panel, d, cy) {
     // standardisiertes Format quer durch alle Sections.
     const section = function(label) {
         return '<div style="margin-top:10px;padding-top:6px;'
-            + 'border-top:1px solid #f1f5f9;'
-            + 'font-size:10px;color:#94a3b8;font-weight:700;'
+            + 'border-top:1px solid var(--nt-line-soft);'
+            + 'font-size:10px;color:var(--nt-muted);font-weight:700;'
             + 'text-transform:uppercase;letter-spacing:0.06em;'
             + 'margin-bottom:6px">' + label + '</div>';
     };
@@ -109,7 +118,7 @@ export function showDetail(panel, d, cy) {
         : isStale
         ? '<span style="display:inline-flex;align-items:center;gap:4px;'
             + 'padding:3px 10px;border-radius:11px;background:rgba(245,158,11,0.13);'
-            + 'color:#92400e;font-size:12px;font-weight:700">'
+            + 'color:var(--nt-warn-text);font-size:12px;font-weight:700">'
             + '<span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;'
             + 'display:inline-block"></span>STALE</span>'
         : '<span style="display:inline-flex;align-items:center;gap:4px;'
@@ -122,16 +131,16 @@ export function showDetail(panel, d, cy) {
     // Status-Badges (Pinned, Wartung, Acked, Note) als kleine Chips daneben
     const badges = [];
     if (d.pinned)        badges.push('<span style="background:rgba(59,130,246,0.13);color:#3b82f6;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">&#128204; ' + esc(t('detail.badge.pinned')) + '</span>');
-    if (d.maintenance)   badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u{1F527} ' + esc(t('detail.badge.maintenance')) + '</span>');
-    if (d.acknowledged)  badges.push('<span style="background:rgba(34,197,94,0.13);color:#16a34a;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u2714 Acked</span>');
-    if (d.note)          badges.push('<span style="background:rgba(245,158,11,0.13);color:#92400e;font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px" title="' + esc(d.note) + '">&#127991; ' + esc(t('detail.badge.note')) + '</span>');
+    if (d.maintenance)   badges.push('<span style="background:rgba(245,158,11,0.13);color:var(--nt-warn-text);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u{1F527} ' + esc(t('detail.badge.maintenance')) + '</span>');
+    if (d.acknowledged)  badges.push('<span style="background:rgba(34,197,94,0.13);color:var(--nt-ok-text);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px">\u2714 Acked</span>');
+    if (d.note)          badges.push('<span style="background:rgba(245,158,11,0.13);color:var(--nt-warn-text);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px" title="' + esc(d.note) + '">&#127991; ' + esc(t('detail.badge.note')) + '</span>');
 
     // Identitaets-Section (Host, Type, IP, Interface) \u2014 kompakte Key-Value-Liste
     const idRow = function(k, v) {
         return '<div style="display:flex;font-size:12px;line-height:1.4;'
             + 'padding:1px 0">'
-            + '<span style="color:#64748b;min-width:72px;flex-shrink:0">' + k + '</span>'
-            + '<span style="color:#1f2c33;font-weight:500;'
+            + '<span style="color:var(--nt-sub);min-width:72px;flex-shrink:0">' + k + '</span>'
+            + '<span style="color:var(--nt-text-2);font-weight:500;'
             + 'overflow:hidden;text-overflow:ellipsis">' + v + '</span>'
             + '</div>';
     };
@@ -169,7 +178,7 @@ export function showDetail(panel, d, cy) {
     const staleBanner = (isStale && !isOff)
         ? '<div style="background:rgba(245,158,11,0.13);border:1px solid #f59e0b;'
             + 'border-left:4px solid #f59e0b;border-radius:2px;padding:6px 10px;'
-            + 'margin-bottom:8px;color:#92400e;font-size:12px">'
+            + 'margin-bottom:8px;color:var(--nt-warn-text);font-size:12px">'
             + '<div style="font-weight:700">&#9888; STALE &middot; ' + esc(t('detail.stale.last_value', { ago: fmtAgo(d.last_seen) })) + '</div>'
             + '<div style="font-size:11px;margin-top:2px;font-style:italic">'
             + esc(t('detail.stale.hint')) + '</div>'
@@ -183,11 +192,11 @@ export function showDetail(panel, d, cy) {
             + (d.down_since ? ' &middot; ' + fmtAgo(d.down_since) : '')
             + '</div>'
             + (d.down_error
-                ? '<div style="font-size:11px;color:#9c1a25;margin-top:2px;'
+                ? '<div style="font-size:11px;color:var(--nt-crit-text);margin-top:2px;'
                     + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap" '
                     + 'title="' + esc(d.down_error) + '">' + esc(d.down_error) + '</div>'
                 : '')
-            + '<div style="font-size:11px;color:#9c1a25;margin-top:2px;font-style:italic">'
+            + '<div style="font-size:11px;color:var(--nt-crit-text);margin-top:2px;font-style:italic">'
             + esc(t('detail.offline.hint')) + '</div>'
             + '</div>'
         : '';
@@ -225,26 +234,29 @@ export function showDetail(panel, d, cy) {
                 : '')
             + '</svg>'
             + '<div style="font-size:9px;color:' + r.col + ';font-weight:700;margin-top:1px">' + r.lbl + '</div>'
-            + '<div style="font-size:10px;color:#334155;font-weight:600">' + r.val + '</div>'
+            + '<div style="font-size:10px;color:var(--nt-text-2);font-weight:600">' + r.val + '</div>'
             + '</div>';
     });
     ringHtml += '</div>';
 
     panel.style.display = 'block';
+    // The color guide at the bottom left moves out of the panel's way (CSS: .nt-detail-open).
+    const _root = document.getElementById('nt-root');
+    if (_root) _root.classList.add('nt-detail-open');
     // Extra-Items-Block (nt:show-Tags) — bei mehr als 4 Items collapsible
     // mit Summary "X Items anzeigen", verhindert dass das Panel ausufert.
     const _items = d.extra_items || [];
     const _itemsCollapsible = _items.length > 4;
     const _itemsHtml = _items.map(function(it) {
         const val = it.error
-            ? '<span style="color:#94a3b8;font-style:italic">' + esc(it.error) + '</span>'
+            ? '<span style="color:var(--nt-muted);font-style:italic">' + esc(it.error) + '</span>'
             : '<b>' + esc(fmtItemValue(it.value, it.units)) + '</b>';
         return '<div style="display:flex;font-size:11px;line-height:1.45;padding:1px 0">'
-            + '<span style="color:#64748b;flex:1;min-width:0;'
+            + '<span style="color:var(--nt-sub);flex:1;min-width:0;'
             +     'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
             +     'padding-right:10px" title="' + esc(it.name || '') + '">'
             +     esc((it.name || '').substring(0, 40)) + '</span>'
-            + '<span style="color:#1f2c33;font-weight:500;flex-shrink:0">'
+            + '<span style="color:var(--nt-text-2);font-weight:500;flex-shrink:0">'
             +     val + '</span>'
             + '</div>';
     }).join('');
@@ -286,8 +298,8 @@ export function showDetail(panel, d, cy) {
     const actionBar = '<div style="display:flex;gap:4px;margin-bottom:4px">'
         + actions.map(function(a, i) {
             return '<button data-act="' + i + '" title="' + esc(a.title) + '" '
-                + 'style="flex:1;padding:5px;background:#f4f6f7;border:1px solid #dfe4e7;'
-                + 'border-radius:2px;cursor:pointer;font-size:13px;color:#1f2c33;'
+                + 'style="flex:1;padding:5px;background:var(--nt-surface-2);border:1px solid var(--nt-line);'
+                + 'border-radius:2px;cursor:pointer;font-size:13px;color:var(--nt-text-2);'
                 + 'transition:background 0.12s">' + a.lbl + '</button>';
         }).join('')
         + '</div>';
@@ -305,7 +317,7 @@ export function showDetail(panel, d, cy) {
         + 'margin-bottom:8px;gap:6px">'
         + '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'
             + '<span style="font-size:18px;line-height:1;flex-shrink:0">' + ti.icon + '</span>'
-            + '<span style="font-weight:700;font-size:14px;color:#0f172a;'
+            + '<span style="font-weight:700;font-size:14px;color:var(--nt-text);'
             + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(d.label) + '">'
             + esc(d.label) + '</span>'
             + '<span style="display:inline-block;padding:1px 6px;border-radius:9px;'
@@ -314,7 +326,7 @@ export function showDetail(panel, d, cy) {
             + 'flex-shrink:0">' + esc(ti.lbl) + customMark + '</span>'
         + '</div>'
         + '<button id="nt-detail-close" style="background:none;border:none;cursor:pointer;'
-        + 'color:#94a3b8;font-size:18px;line-height:1;padding:0;flex-shrink:0">&#x2715;</button>'
+        + 'color:var(--nt-muted);font-size:18px;line-height:1;padding:0;flex-shrink:0">&#x2715;</button>'
         + '</div>'
         + offlineBanner
         + staleBanner
@@ -325,13 +337,13 @@ export function showDetail(panel, d, cy) {
         + extraBlock
         + (peers
             ? section(esc(t('detail.sec.connections')))
-                + '<div style="font-size:11px;color:#475569;line-height:1.6">' + peers + '</div>'
+                + '<div style="font-size:11px;color:var(--nt-text-2);line-height:1.6">' + peers + '</div>'
             : '');
 
     const cb = document.getElementById('nt-detail-close');
     if (cb) cb.addEventListener('click', function(e) {
         e.stopPropagation();
-        panel.style.display = 'none';
+        hideDetail(panel);
         if (window._ntCy) {
             window._ntCy.nodes('[!isGroup]').forEach(function(n) { n.style('opacity', 1); });
             window._ntCy.edges().forEach(function(ed) { ed.style('opacity', 0.85); });
@@ -340,8 +352,8 @@ export function showDetail(panel, d, cy) {
 
     // Action-Buttons: data-act-Attribut hält den Index in actions[]
     panel.querySelectorAll('button[data-act]').forEach(function(btn) {
-        btn.addEventListener('mouseenter', function() { this.style.background = '#e2e8f0'; });
-        btn.addEventListener('mouseleave', function() { this.style.background = '#f8fafc'; });
+        btn.addEventListener('mouseenter', function() { this.style.background = 'var(--nt-surface-3)'; });
+        btn.addEventListener('mouseleave', function() { this.style.background = 'var(--nt-surface-2)'; });
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             const idx = parseInt(this.dataset.act, 10);

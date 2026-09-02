@@ -2,6 +2,47 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## Unreleased
+
+### Fixed
+
+- **Dark mode was unreadable in the places that matter — and the light map
+  was not safe either.** The hover tooltip, the detail panel, the context menu
+  and the dropdown menus wrote their colors inline as fixed *light-palette*
+  hex values. In dark mode that put slate-grey text on a near-black panel; and
+  the tooltip, which never set a text color at all, inherited it from the
+  Zabbix body — in the Zabbix dark theme almost white on the white tooltip, so
+  CPU, memory and traffic values were invisible even with the map in light
+  mode. All of these now read from one set of color tokens (`--nt-*` in
+  `network-topology.css`) with a light and a dark value; body-attached
+  elements (tooltip, context menu) carry the tokens via `.nt-float`.
+
+- **Node quadrants and icons on the dark canvas.** The device glyph was drawn
+  in dark slate (`#475569`), the quadrant separators in white — on the dark
+  canvas the glyph disappeared and the white lines were the loudest thing on
+  the node. The icon now draws for the theme: light glyph, dark separators,
+  the empty quadrants tinted a bit stronger so the four fields stay readable.
+  The image cache keys on the theme. Edges on the dark canvas get a little
+  more opacity.
+
+- **The host-group filter turned navy in dark mode.** A
+  `body:has(#nt-root.nt-dark)` rule recolored the Zabbix filter form and its
+  multiselect to `#0f172a`/`#1e293b` — in the Zabbix dark theme, which draws
+  its inputs dark already, a blue foreign body above the map. The rule is
+  gone; the filter is Zabbix UI and follows the Zabbix theme.
+
+- **The detail panel covered the color guide.** Both sat in the bottom-left
+  corner. While the panel is open the guide moves to its right.
+
+### Changed
+
+- **The map follows the Zabbix theme.** 5.2.0 removed the dark-mode toggle
+  because it never survived a reload. The `nt-dark` styling it used to switch
+  is now driven by the Zabbix theme instead: with `dark-theme` or `hc-dark`
+  (detected from the theme stylesheet link) the map renders dark, otherwise
+  light. No setting, nothing to remember — the map matches the frontend
+  around it.
+
 ## v5.2.0 — 2026-09-02
 
 ### Updating from 5.1 — nothing to do

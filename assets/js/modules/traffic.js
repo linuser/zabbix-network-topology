@@ -159,6 +159,11 @@ function edgeUtilizationPct(edge) {
 
 export function applyTrafficHeatmap(cy) {
     if (!cy) return;
+    // On the dark canvas the edges look thinner at the same opacity than on
+    // the light one — above all the grey idle/<1% edges. A bit more opacity
+    // there; the colors themselves stay (the scale is the statement).
+    const root = document.getElementById('nt-root');
+    const dark = !!(root && root.classList.contains('nt-dark'));
     cy.edges().forEach(function(edge) {
         if (edge.hasClass('dead-edge')) return;
         // §9 Ghost-Kanten haben keine gemessenen Daten — die Heatmap wuerde ihre
@@ -195,7 +200,8 @@ export function applyTrafficHeatmap(cy) {
         const ifErr  = edge.data('ifaceErr')  || 0;
         const ifDrop = edge.data('ifaceDrop') || 0;
 
-        let w = t.w, col = t.col, dashPat = t.dash ? [4, 8] : [6, 5], op = t.dash ? 0.75 : 0.9;
+        let w = t.w, col = t.col, dashPat = t.dash ? [4, 8] : [6, 5];
+        let op = dark ? (t.dash ? 0.85 : 0.95) : (t.dash ? 0.75 : 0.9);
         if (ifDownRatio >= 0.5) {
             w = Math.max(w, 4); col = '#dc2626'; dashPat = [4, 4]; op = 0.95;
         } else if (ifErr > HEALTH_ERR_THRESHOLD) {
