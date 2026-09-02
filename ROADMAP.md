@@ -436,6 +436,102 @@ Gehoert zusammen gebaut mit „Topology-Diff auf der Karte hervorheben" und der
 Alterung: dreimal derselbe Diff, dreimal dieselbe offene Frage, wie lange etwas
 sichtbar bleibt.
 
+#### Soll gegen Ist — und das Fundament liegt schon
+
+Der wertvollste Vorschlag aus der Sammlung. Eine erwartete Verkabelung
+hinterlegen, gegen die gemessene halten, Abweichungen melden:
+
+    🔴 Topology deviation
+       SW02 expected on Core01
+       actual: SW01 / Gi1/0/47
+
+Fuer Verkabelungsfehler, versehentlich umgesteckte Kabel und Arbeiten von
+Fremdfirmen ist das die nuetzlichste Auskunft, die diese Karte geben koennte.
+
+**Und der Erklaerungsmechanismus existiert bereits:** `nt:parent` ist genau
+das — eine von Hand eingetippte Soll-Beziehung, validiert im `HostTagParser`,
+von `parentEdges()` zu Kanten gemacht. Heute werden diese Kanten mit den
+gemessenen **zusammengefuehrt** (`array_merge` in `NetworkTopologyData:432`).
+Das Feature besteht darin, sie stattdessen zu **vergleichen**.
+
+Damit braucht der MVP weder neue Speicherung noch eine Oberflaeche zum
+Erklaeren:
+
+    erklaert und gemessen        ✓ stimmt ueberein
+    erklaert, nicht gemessen     ⚠ erwartet, aber nicht gesehen
+    gemessen, nicht erklaert     ⚠ da, aber nirgends dokumentiert
+
+**Deckt sich mit der NetBox-Drift** — dort ist die Soll-Quelle extern, hier
+lokal, aber die Auswertung ist dieselbe. Das gehoert als EIN Mechanismus
+gebaut, der mehrere Soll-Quellen kennt, nicht als zwei Vergleiche
+nebeneinander.
+
+Offen: `nt:parent` beschreibt heute Traeger-Beziehungen (VM → Hypervisor), also
+nicht zwangslaeufig Verkabelung, und kennt keinen Port. Fuer „SW02 gehoert an
+Core01 Gi1/0/3" braeuchte es entweder einen Port-Zusatz im Tag oder ein
+zweites Tag.
+
+#### LLDP-Health-Widget und Vollstaendigkeit — fast geschenkt
+
+Zwei Vorschlaege, die dasselbe Material brauchen:
+
+    126 neighbors / 122 confirmed / 3 one-sided / 1 conflict
+    87 % der Switches liefern LLDP
+
+**Alle vier Zahlen liegen inzwischen vor.** `lldp_quality` fuehrt je Host
+`matched`, `unmatched` und `ambiguous` (= der „conflict"-Fall: mehrere
+Kandidaten). `confirmed` und `one-sided` sind seit 5.3 an jeder Kante. Und der
+Geraetebericht rechnet „Hosts reporting neighbours" gegen die Gesamtzahl schon
+aus — das ist die Vollstaendigkeitsquote.
+
+Das ist also **Darstellung, keine Datenbeschaffung**. Als Widget faellt die
+uebliche ES5-Frage an (siehe NT Neighbours); als Zeile im LLDP-Q-Tab waere es
+ein Nachmittag.
+
+#### Stabilitaets-Score — nicht selbst speichern
+
+„98 % der LLDP-Verbindungen seit 30 Tagen unveraendert." Dafuer braucht es
+Historie, und die hat das Modul **nicht**: die Baseline ist ein
+Letzter-Stand-Speicher, wird bei jedem Poll ueberschrieben und lebt sieben Tage
+in APCu.
+
+**Der Ausweg ist, keine Zeitreihe zu bauen — Zabbix ist eine.**
+`tools/topo-change-sender.sh` schiebt Topologie-Aenderungen bereits als Items
+nach Zabbix. Wandert die Zahl der Aenderungen (und kuenftig der Bewegungen)
+dorthin, liefert Zabbix 30-Tage-Auswertung, Trends, Trigger und Graphen ohne
+eine Zeile Speicher-Code im Modul. Ein eigener Verlaufsspeicher neben einer
+Zeitreihen-Datenbank waere schwer zu rechtfertigen.
+
+#### Raw-LLDP-Inspector
+
+Rechtsklick auf eine Kante, alle empfangenen TLVs sehen. Beim Debuggen
+exotischer Geraete zweifellos nuetzlich — nur liegen die Roh-TLVs nicht vor.
+Erhoben werden gezielte OIDs, nicht der Datensatz. Damit dieselbe Vorbedingung
+wie beim Chassis-Subtype: erst Template, dann Anzeige.
+
+Ueberschneidet sich mit dem Vendor Debug Profile; sinnvollerweise dieselbe
+Datenquelle mit zwei Ausgaengen — einer fuer den Blick, einer fuer den Export.
+
+#### LLDP-Test-Bibliothek — passt zur Kultur dieses Projekts
+
+Anonymisierte echte SNMP-Ausgaben von Cisco, Aruba, MikroTik, UniFi, Extreme,
+Brocade, Fortinet als Fixtures. Jeder Parser laeuft dagegen, damit ein Fix fuer
+Aruba nicht Cisco bricht.
+
+**Die Form ist billig:** eine Fixture ist eine Liste von Item-Zeilen
+(`hostid`, `key_`, `lastvalue`, `src`) — genau das, was
+`LldpEdgeBuilderTest` schon von Hand aufbaut. Ein Verzeichnis mit JSON-Dateien
+und eine Schleife darueber, mehr braucht es nicht.
+
+**Teuer ist das Beschaffen**, und genau dafuer gibt es inzwischen zwei Wege:
+den Geraetebericht (5.3) und das geplante Debug-Profil. Damit schliesst sich
+ein Kreis, der bisher offen war: Meldung → Fixture → Regressionstest. Wer ein
+Geraet meldet, macht es dauerhaft testbar, statt eine Zeile in einer Tabelle zu
+aendern.
+
+Von allen Vorschlaegen der mit der laengsten Wirkung — die Vendor-Matrix haelt
+fest, was einmal ging; eine Fixture haelt fest, dass es weiter geht.
+
 #### MIB-Auto-Erkennung — gehoert nicht ins Modul
 
 Vorgeschlagen war, Standard-LLDP-MIB, Cisco-, Aruba/HPE- und Extreme-Varianten
