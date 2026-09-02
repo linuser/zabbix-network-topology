@@ -169,9 +169,19 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     // Fit
     const bReset = mkbtn('nt-btn-reset', t('toolbar.fit'), null);
     bReset.addEventListener('click', function() {
+        // NUR die Ansicht, kein Speichern. Hier stand ein savePositions() mit
+        // dem Kommentar "sicherheitshalber nochmal speichern" — es konnte
+        // nichts speichern: fit() aendert Zoom und Pan, die Knotenpositionen
+        // ruehrt es nicht an (an der Bibliothek nachgemessen). Was es tat, war
+        // eine ueberfluessige Serverfahrt pro Klick ausloesen, und zwei Klicks
+        // schnell hintereinander schickten dieselbe base-Revision: die zweite
+        // Fahrt wurde als Konflikt abgelehnt, obwohl niemand anderes etwas
+        // getan hatte. Die Wettlaufsituation ist in storage.js behoben
+        // (_serial), dieser Aufruf war trotzdem nur Rauschen.
+        //
+        // Wer die Anordnung wirklich aendert, speichert ohnehin: Drag ueber
+        // dragfree, die Layouts ueber ihr layoutstop.
         cy.fit(cy.nodes(), 40);
-        // Positions sicherheitshalber nach kurzer Pause nochmal speichern
-        setTimeout(function() { savePositions(cy); }, 200);
     });
 
     // Layout-Auswahl als Dropdown (Auto / Force / Konzentrisch / Raster / Baum).

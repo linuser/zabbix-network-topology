@@ -200,6 +200,27 @@ export function loadPositions() {
     return out;
 }
 
+// Pro Ebene EINE Serverfahrt gleichzeitig.
+//
+// Ohne das schicken zwei Speichervorgaenge, die dicht aufeinander folgen,
+// DIESELBE base-Revision: die erste aendert sie serverseitig, die zweite kommt
+// mit der veralteten an und wird abgelehnt. Ein Konflikt ohne zweiten
+// Beteiligten — und seit die Karte auf den Serverstand zurueckrueckt, springt
+// sie dabei auch noch. Zwei Klicks auf "Fit" genuegten; jede andere Kombination
+// aus Layout-Knopf, Drag und Auto-Speichern innerhalb der Antwortzeit ebenso.
+//
+// Die naechste Fahrt startet erst, wenn die vorige durch ist, und liest base
+// UND Nutzlast dann frisch — deshalb wird der Body hier drinnen gebaut und
+// nicht davor. Ein Fehler der vorigen Fahrt haelt die naechste nicht auf.
+const _queues = {};
+
+function _serial(key, run) {
+    const vorher = _queues[key] || Promise.resolve();
+    const jetzt  = vorher.catch(function() {}).then(run);
+    _queues[key] = jetzt.catch(function() {});
+    return jetzt;
+}
+
 // Ein Konflikt ist kein gewoehnlicher Fehler. Er hat eine eigene Meldung und
 // einen eigenen Weg zurueck, deshalb traegt er eine Markierung: die generischen
 // Fehlerkanaele (_onPosError, der Toast in manual-links.js) ueberspringen ihn.
@@ -236,7 +257,16 @@ function _adoptPositions(scope, views) {
     else                        _posPersonal = clean;
 }
 
+// Duenner Mantel: die Reihenfolge hier, die Fahrt darunter. Der Body wird erst
+// IN _postPositions gebaut, also mit der Revision und der Nutzlast, die zum
+// Zeitpunkt des Absendens gelten — genau darum geht es beim Serialisieren.
 function _persistPositions(scope, views) {
+    return _serial(_revKey('positions', scope), function() {
+        return _postPositions(scope, views);
+    });
+}
+
+function _postPositions(scope, views) {
     const cfg  = _cfg();
     const url  = cfg.positions_url || 'zabbix.php?action=network.topology.positions';
     const body = new URLSearchParams();
@@ -531,7 +561,15 @@ export function loadLinks() {
 
 // Serverfahrt. Gibt ein Promise zurueck, das die Aufrufer ignorieren duerfen —
 // der Speicher ist zu dem Zeitpunkt schon aktuell.
+// Gleicher Mantel wie bei den Positionen — dieselbe Wettlaufsituation, nur
+// seltener ausgeloest: manuelle Kanten entstehen einzeln per Klick.
 function _persist(scope, links) {
+    return _serial(_revKey('links', scope), function() {
+        return _postLinks(scope, links);
+    });
+}
+
+function _postLinks(scope, links) {
     const cfg = _cfg();
     const url = cfg.links_url || 'zabbix.php?action=network.topology.links';
     const body = new URLSearchParams();

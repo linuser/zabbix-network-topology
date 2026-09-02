@@ -264,6 +264,47 @@ check('Links-Konflikt: Serverstand statt lokalem Schnappschuss',
     KONFLIKT({ links: [{ s: 'x', t: 'y' }] })),
     [{ s: 'x', t: 'y', scope: 'personal' }]);
 
+console.log('\n== Zwei Speichervorgaenge kurz hintereinander ==\n');
+
+// Der Server prueft base gegen die Revision, die er gerade haelt. Liefen zwei
+// Fahrten gleichzeitig, trug die zweite noch die alte Basis — der Server lehnte
+// ab, obwohl niemand anderes etwas getan hatte. Zwei Klicks auf "Fit" reichten,
+// und seit die Karte auf den Serverstand zurueckrueckt, sprang sie dabei auch.
+// Ein Stub-Server, der sich wie der echte verhaelt: base pruefen, 40 ms Antwort.
+const SERVER = `
+    let serverRev = 'r0', n = 0;
+    globalThis.__konflikte = [];
+    globalThis.__fahrten = () => n;
+    globalThis.fetch = (url, opt) => {
+        const p = new URLSearchParams(String(opt.body));
+        const base = p.get('base'), lauf = ++n;
+        return new Promise((res) => setTimeout(() => {
+            if (base !== serverRev) {
+                globalThis.__konflikte.push('Fahrt ' + lauf + ': base=' + base + ' server=' + serverRev);
+                return res({ json: () => Promise.resolve({
+                    conflict: true, error: 'x', revision: serverRev,
+                    positions: { '4': { h1: { x: 10, y: 10 } } } }) });
+            }
+            serverRev = 'r' + lauf;
+            res({ json: () => Promise.resolve({ ok: true, revision: serverRev }) });
+        }, 40));
+    };
+`;
+
+check('zweiter Speichervorgang wartet, statt einen Konflikt zu ernten',
+    scenario('p', {
+        ...base, is_super_admin: true, user_id: 1,
+        positions: { shared: { [VIEW]: { h1: { x: 10, y: 10 } } }, personal: {} },
+        revisions: { positions_shared: 'r0' }
+    },
+    `S.savePositions(${CY({ h1: { x: 42, y: 42 } })});
+     await new Promise((r) => setTimeout(r, 20));
+     S.savePositions(${CY({ h1: { x: 43, y: 43 } })});
+     await new Promise((r) => setTimeout(r, 300));
+     return { fahrten: globalThis.__fahrten(), konflikte: globalThis.__konflikte };`,
+    SERVER),
+    { fahrten: 2, konflikte: [] });
+
 console.log('');
 if (failures) {
     console.log(`check-layers: ${failures} Problem(e).`);
