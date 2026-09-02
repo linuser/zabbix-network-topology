@@ -37,7 +37,7 @@ konfliktfrei zusammenführte). „Alle Gates grün" heißt zwölf, nicht neun.
 Einzelnen Test fahren — kein PHPUnit, kein DB-Zugriff, reines PHP:
 
 ```bash
-php tests/HopScopeTest.php
+php tests/LldpEdgeBuilderTest.php
 ```
 
 `ci:bundle-drift` fehlt in der Kette oben, weil es nach `npm run build` nur
@@ -58,7 +58,7 @@ Drei Schichten, und die Trennung ist der Punkt:
   deshalb testbar. Hier lebt alles Interessante: `LldpEdgeBuilder` (Kanten aus
   SNMP-Nachbartabellen), `NodeBuilder`, `ManualLinks`, `SharedLayerFilter`.
 - **`assets/js/` → ein Bundle.** `network-topology.js` ist nur Orchestrator;
-  der Renderer liegt in `modules/render-*.js` (45 Module). Cytoscape.js für den
+  der Renderer liegt in `modules/render-*.js` (10 davon, 46 Module insgesamt). Cytoscape.js für den
   Graphen, Leaflet für Geo.
 
 ### Zwei-Ebenen-Speicherung
@@ -119,10 +119,11 @@ und vor allem **LLDP/CDP-Nachbarnamen von fremden Geräten** — muss durch `esc
 
 ## Vor dem Push
 
-`ci:pipeline` ist das einzige Gate **ohne** CI-Job — es prüft `.gitlab-ci.yml`
-selbst, und eine kaputte CI-Datei lässt keinen Job mehr laufen. Es muss also
-lokal fahren. Wer ein Gate ergänzt, ergänzt es in `.gitlab-ci.yml` **und**
-`.github/workflows/gates.yml`; `ci:pipeline` fällt sonst.
+`ci:pipeline` hat als einziges Gate **keinen GitLab-Job** — es prüft
+`.gitlab-ci.yml` selbst, und eine kaputte CI-Datei lässt dort keinen Job mehr
+laufen. Auf GitHub läuft es als Schritt in `gates.yml`; lokal gehört es
+trotzdem vor den Push. Wer ein Gate ergänzt, ergänzt es in `.gitlab-ci.yml`
+**und** `.github/workflows/gates.yml`; `ci:pipeline` fällt sonst.
 
 Die Begründung zu jedem Gate — jeweils mit dem Vorfall, der es ausgelöst hat —
 steht in [CONTRIBUTING.md](CONTRIBUTING.md) unter „Was die CI hart erzwingt".

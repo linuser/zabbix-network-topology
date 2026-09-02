@@ -316,10 +316,22 @@ export function savePositions(cyInst) {
  * die geteilte Karte komplett und loesen dabei ihre eigene Abweichung auf, alle
  * anderen speichern nur die Abweichung.
  */
-export function setPositions(pos) {
+export function setPositions(pos, groupView) {
     if (!pos || typeof pos !== 'object') return;
 
-    const view  = posViewKey();
+    // Leere Anordnung NICHT schreiben — dieselbe Ueberlegung wie der
+    // nonZero-Guard in savePositions(): das ist kein Zustand, den jemand
+    // gemeint hat. Ueber diesen Weg kaeme sie aus einem Preset oder einer
+    // Datei und wuerde die gespeicherte Karte loeschen.
+    if (Object.keys(pos).length === 0) return;
+
+    // groupView durchreichen: der Aufrufer weiss, in WELCHER Ansicht die
+    // Positionen erfasst wurden (Presets tragen das als posGrp mit). Ohne
+    // diesen Parameter nahm setPositions() immer die gerade aktive Ansicht —
+    // ein in der Gruppenansicht erfasstes Preset schrieb seine grp_*-IDs dann
+    // in den Host-Schluessel, wo sie zu keinem Knoten passen. Genau die Regel,
+    // die der Kommentar oben bei posKey() beschreibt.
+    const view  = posViewKey(groupView);
     const scope = defaultPositionScope();
 
     if (scope === SCOPE_SHARED) {
@@ -755,7 +767,7 @@ export function applyPreset(preset) {
     // der Server-Umstellung nur noch von der Migration gelesen und war damit
     // wirkungslos (siehe setPositions).
     if (d.positions) {
-        setPositions(d.positions);
+        setPositions(d.positions, d.posGrp === true);
     }
     // Pinned
     if (d.pinned) {

@@ -134,16 +134,35 @@ export function sanitizeLayout(raw) {
         });
     }
 
-    return {
-        data: {
-            positions: positions,
-            posGrp:    d.posGrp === true,
-            pinned:    pinned,
-            notes:     notes,
-            links:     links
-        },
-        stats: stats
-    };
+    // NUR die Abschnitte zurueckgeben, die in der Datei WIRKLICH standen.
+    //
+    // Vorher standen hier immer alle fuenf Schluessel, auch als leere Container.
+    // {} und [] sind in JS truthy, und applyPreset() prueft mit
+    // "if (d.pinned) { ... }" — die Waechter, die einen fehlenden Abschnitt
+    // ueberspringen sollen, griffen also IMMER. Eine Datei ohne Pins loeschte
+    // damit alle Pins, eine ohne Links rief setLinks([]) auf, und das ersetzt
+    // die Ebene und schickt sie zum Server: bei einem Super-Admin alle
+    // manuellen Verbindungen aller Nutzer, mit gruener Erfolgsmeldung.
+    //
+    // Die minimale gueltige Datei {"format":...,"version":1} reichte dafuer,
+    // und jeder Export aus einer Installation ohne Pins/Notizen/Links ebenso.
+    // Gefunden im Code-Review, nicht von mir — mein Test hatte nur den Pfad
+    // geprueft, auf dem alle Abschnitte da sind.
+    const data = { posGrp: d.posGrp === true };
+    if (d.positions && typeof d.positions === 'object' && !Array.isArray(d.positions)) {
+        data.positions = positions;
+    }
+    if (Array.isArray(d.pinned)) {
+        data.pinned = pinned;
+    }
+    if (d.notes && typeof d.notes === 'object' && !Array.isArray(d.notes)) {
+        data.notes = notes;
+    }
+    if (Array.isArray(d.links)) {
+        data.links = links;
+    }
+
+    return { data: data, stats: stats };
 }
 
 /** Baut den Dateiinhalt aus dem aktuellen Zustand. */
