@@ -27,35 +27,23 @@ und schreibt hin, was er gefunden hat.
 
 ## Als Nächstes
 
-### 1. Interface-Ansicht beim Klick auf eine Kante — **Schritt 1 erledigt**
+### 1. Interface-Ansicht — Schritt 2
 
-`edge-detail.js` (5.3): Klick auf eine Kante oeffnet ein bleibendes Panel mit
-Ports beider Enden, Traffic, Auslastung und dem Interface-Zustand
-aufgeschluesselt. **Schritt 2 steht weiter offen** (Errors/Drops/Link-Uptime als
-eigene Items, Sparklines) — unten steht, was dafuer noch fehlt.
+Schritt 1 ist mit `edge-detail.js` (5.3) gebaut: Klick auf eine Kante oeffnet
+ein bleibendes Panel mit Ports, Traffic, Auslastung und Interface-Zustand.
 
-Der Vorbehalt ist beim Bauen nicht verschwunden, sondern **sichtbar geworden**:
-das Panel schreibt an die Zahl, ob sie am Port gemessen oder aus den
-Knotensummen geschaetzt ist, und bei gemeldeten Ports ohne zuordenbare Metrik
-steht daneben warum. Eine Zahl ohne ihre Herkunft ist in dieser Ansicht
-schlimmer als keine.
+**Offen sind die neuen Messwerte:** Errors, Drops und Link-Uptime aus
+`ifInErrors`, `ifOutDiscards`, `ifLastChange` — Standard-OIDs, die praktisch
+jedes Geraet liefert. Dazu Sparklines fuer RX/TX; die Action
+`network.topology.spark` existiert fuer Knoten, ob sie sich auf Port-Items
+umbiegen laesst, ist ungeprueft.
 
+> **Vorbehalt, der beim Bauen nicht verschwunden, sondern sichtbar geworden
+> ist:** die Zuordnung Port → Traffic setzt `lldpRemLocalPortNum == ifIndex`
+> voraus. Das Panel schreibt deshalb an jede Zahl, ob sie am Port gemessen oder
+> aus den Knotensummen geschaetzt ist. Mit eigenen Port-Items faellt der
+> Unterschied noch staerker auf.
 
-**Schritt 1 — nur vorhandene Daten.** Eine Kante trägt bereits `ports` (beide
-Enden) und `port_metrics` mit `in`, `out`, `speed`. Es fehlt allein die
-Interaktion: **einen Klick auf Kanten gibt es heute gar nicht**, nur Knoten
-haben ein Kontextmenü. Ein Panel plus Tap-Handler, kein Template, keine neuen
-Items.
-
-**Schritt 2 — neue Messwerte.** Errors, Drops, Link-Uptime aus `ifInErrors`,
-`ifOutDiscards`, `ifLastChange`. Standard-OIDs, die praktisch jedes Gerät
-liefert. Dazu Sparklines für RX/TX — die Action `network.topology.spark`
-existiert für Knoten, ob sie sich auf Port-Items umbiegen lässt, ist ungeprüft.
-
-> **Vorbehalt, der schon im Code steht:** die Zuordnung Port → Traffic setzt
-> `lldpRemLocalPortNum == ifIndex` voraus. Auf Aruba/ProCurve stimmt das 1:1,
-> sonst gibt es keine Metrik. In einer Ansicht, deren Zweck Portdetails sind,
-> fällt das deutlich stärker auf als im heutigen Beiwerk.
 
 ### 2. Topology-Diff auf der Karte hervorheben
 
@@ -79,39 +67,7 @@ Kombination mit den Widget-Änderungen aber **ungetestet**.
 liegt nur 7.4). Ohne Testinstanz nicht verifizierbar, und ungetestet gehört es
 in kein Release.
 
-### 4. Suche über mehr als den Anzeigenamen — **erledigt**
-
-Die Karte benutzt jetzt dieselbe Suchsprache wie die Tabelle (`query.js`):
-bare Token treffen Name **und** IP, dazu Feldsuche (`type:switch`,
-`group:"core sites"`), Negation, ODER und Klammern. Es war ein Import und ein
-ersetzter Handler — die Sprache lag fertig da und war nur nie angeschlossen.
-
-Die Feld-Strings hängen per `scratch()` am Knoten, weil der Handler bei jedem
-Tastendruck über alle Knoten läuft; ab der Performance-Schwelle (400) wäre das
-sonst spürbar.
-
-Alles Weitere braucht neue Daten: MAC und LLDP-Nachbar (siehe ARP/FDB unten),
-Seriennummer (Inventory `serialno_a`, wird heute nicht geladen), VLAN (siehe
-dort), Zabbix-Host-ID (liegt vor, nur nicht durchsucht).
-
-**Danach: „Locate on topology"** — bei einem Treffer hinspringen statt nur zu
-dimmen. Das Dimmen gibt es schon.
-
-### 5. Teilbare Deep Links — **erledigt**
-
-`?nt_tab=<tab>` steht jetzt im Link und wird bei jedem Wechsel mitgeschrieben.
-Reihenfolge URL vor localStorage; ein fremder Wert fällt zurück statt ins Leere
-zu laufen, und `replaceState` statt `pushState` hält die History sauber.
-
-Damit ist praktisch jede Ansicht teilbar: Hostgruppen, Tabellenfilter, Tab, und
-mit PR #8 auch Host + Hops.
-
-**Weiterhin offen, bewusst:** Zoom und Ausschnitt der Karte (ein Link, der beim
-Empfänger einen anderen Bildschirm trifft, zeigt einen sinnlosen Ausschnitt) und
-ein Anker auf ein einzelnes Problem — dafür gibt es keinen; der Link zeigt
-sinnvoller auf den Host.
-
-### 6. Layout-Import — neu entwerfen
+### 4. Layout-Import — neu entwerfen
 
 Der Import war gebaut und ist wieder ausgebaut worden. Der Export bleibt: er
 liest nur und löst bereits die Hälfte des Zwecks.
@@ -145,42 +101,6 @@ lässt sich Punkt 2 nicht sinnvoll beheben, nur verschieben.
 
 Die ausgebaute Prüfung (`sanitizeLayout`, ~90 Zeilen mit den serverseitigen
 Mustern und Grenzen) steht in der Git-Historie. Sie war **nicht** das Problem.
-
-### 7. Pfad als Liste — **erledigt**
-
-`path-list.js` (5.3): der berechnete Pfad steht nach "Path to here" als Liste
-im Detail-Panel, in Leserichtung Start → Ziel, mit Ports, Auslastung und einem
-Warnzeichen an jedem Link, der Ports down, Fehler oder Verworfene meldet.
-
-Die Zwischenschritte lagen die ganze Zeit vor — `_findPath` rekonstruiert sie
-ueber parent-Pointer —, sie wurden nur zum Einfaerben benutzt und danach
-verworfen. Neu ist `getLastPath()`, das sie in Leserichtung behaelt.
-
-**Die offene Frage war, was "Zustand je Link" heisst.** Beantwortet wie im
-Kanten-Panel, damit beide dasselbe sagen: Ports, Auslastung aus derselben
-Stufentabelle, und ob die Zahl gemessen oder geschaetzt ist.
-
-**Weiter offen:** der *implizite* Start ("Pfad zu diesem Host", ohne A zu
-waehlen). Der braucht eine Festlegung, was der Ausgangspunkt ist; `whatif.js`
-und `root-cause.js` benutzen dafuer schon eine Uplink-Referenz.
-
-
-Der Pfad wird berechnet und auf der Karte markiert (siehe Tabelle oben). Was
-fehlt, ist die **textuelle Hop-Liste** mit Zustand je Link:
-
-```
-Core-SW  →  Distribution-SW  →  Access-SW-03  →  VMware Host  →  VM
-```
-
-Die Zwischenschritte hat der BFS bereits; er rekonstruiert den Pfad über
-Parent-Pointer. Es fehlt die Darstellung und die Frage, was „Zustand" je Link
-heißt — dieselben Portmetriken wie bei der Interface-Ansicht.
-
-Ein *impliziter* Start („Pfad **zu** diesem Host", ohne A zu wählen) bräuchte
-außerdem eine Festlegung, was der Ausgangspunkt ist. `whatif.js` und
-`root-cause.js` benutzen dafür schon eine Uplink-Referenz.
-
----
 
 ## Später
 
@@ -326,285 +246,88 @@ Standard-MIB, IPsec je nach Gerät `IPSEC-FLOW-MONITOR-MIB` oder Herstellereigen
 OpenVPN meist gar kein SNMP. In der Praxis liefe es auf Zabbix-Items je
 Plattform hinaus und nicht auf eine gemeinsame Quelle.
 
-### Einstellbare Traffic-Schwellen — **erledigt**
+### LLDP-Qualitaet — was davon noch offen ist
 
-Kam aus [Issue #9](https://github.com/linuser/zabbix-network-topology/issues/9)
-und ist mit [PR #10](https://github.com/linuser/zabbix-network-topology/pull/10)
-in 5.2.0 drin — beides von christos-diamantis. Ich hatte den Punkt hier
-abgelegt, weil er einen Ort braucht, an dem eine Installation ihre Werte
-hinterlegt; der PR nimmt `module.config` und die neue Action
-`network.topology.scales`, also genau die Ebene, die für die geteilten
-Positionen schon existiert.
+Aus einem groesseren Vorschlagspaket von christos-diamantis. Zwei Punkte sind
+gebaut, mehrere geprueft und verworfen (siehe „Geprueft und verworfen" unten).
+Was bleibt:
 
-Offen geblieben ist dabei eines: die Skalen sind die **einzige** der fünf
-schreibenden Actions ohne Revisionsprüfung. Zwei Super-Admins überschreiben
-sich still. Die Einsätze sind klein — eine Handvoll Zahlen gegen eine ganze
-Kartenanordnung —, aber es ist eine Ausnahme von einer Regel, die der Rest
-einhält.
+**Confidence-Score.** Aufbauend auf `reporters`/`confirmed` (5.3). Die
+Rohsignale liegen vor: `matched`, `ambiguous` mit Kandidatenliste, `unmatched`,
+Ports, Melder. Wichtiger als die Skala ist, wofuer sie da ist — eine
+Normalisierungsschicht fuer Port-IDs (`Gi1/0/1` ↔ `GigabitEthernet1/0/1`)
+erzeugt zwangslaeufig Fehltreffer, und **eine falsche Kante ist schlimmer als
+eine fehlende**, weil sie wie eine Messung aussieht. Mit einem Score daneben
+wird aus dem Risiko eine Auskunft. Also Score zuerst, Normalisierung danach.
 
-### LLDP-Qualitaet: Confidence, Einseitigkeit, Alterung
+**Alterung / stale neighbors.** Verschwundene Nachbarn nicht sofort loeschen,
+sondern befristet als `stale` fuehren — sonst springt die Topologie bei kurzen
+LLDP-Aussetzern. Gehoert mit „Topology-Diff auf der Karte" zusammen gebaut:
+derselbe Diff, dieselbe offene Frage, wie lange etwas sichtbar bleibt.
 
-Ein Vorschlagspaket von christos-diamantis (2026-09-02). Es ist gross, aber
-nicht gleichmaessig — ein Teil ist bereits gebaut, ein Teil braucht neue Items,
-und ein Teil ist erstaunlich nah dran. Sortiert nach dem, was nachgesehen
-wurde, nicht nach der Reihenfolge im Vorschlag.
+**Chassis-Subtype und Management-Address.** `lldpRemChassisIdSubtype` und
+`lldpRemManAddr` werden nicht erhoben — nachgesehen, null Treffer. Ohne den
+Subtype ist jede Chassis-ID-Normalisierung Raten; ohne `lldpRemManAddr` gibt es
+keine Management-IP zum Abgleichen. Beides heisst Template-Aenderung und
+Re-Import bei jedem Nutzer, ist also die Vorbedingung fuer alles, was darauf
+aufbaut.
 
-#### Schon vorhanden — nicht neu bauen
+### Soll gegen Ist — das Fundament liegt schon
 
-- **FQDN-/Kurznamen-Abgleich.** `sw01.example.local` ↔ `sw01` funktioniert
-  seit jeher: `LldpEdgeBuilder` normalisiert Gross-/Kleinschreibung, schneidet
-  an Leerzeichen und Klammern ab, entfernt die FQDN-Wurzel und vergleicht
-  zusaetzlich den Kurznamen. Der Kopfkommentar der Datei sagt es ausdruecklich.
-- **Capabilities zur Typbestimmung.** Seit 5.1.0. Vierstufig, erste gewinnt:
-  `nt:icon`-Tag, Namens-/Template-Muster, LLDP-Capability, „fuehrt selbst eine
-  Nachbartabelle". Stufe 3 greift **nur**, wenn Stufe 2 im server-Fallback
-  gelandet ist — sonst wuerde ein L3-Switch namens `rtr-core-01` vom
-  Bridge-Bit zum Switch umgestempelt.
-- **Merge ueber Protokolle.** Meldet die Gegenseite oder CDP dieselbe Kante,
-  ergaenzt der Merge-Zweig Quellen, Ports und Metrik (first-wins je Feld). Die
-  gemeinsame Struktur, die der Vorschlag unter „Multi-Protocol Neighbor Fusion"
-  fordert, existiert im Kern also — sie heisst `src` und traegt heute
-  `['lldp','cdp']`.
-
-#### Braucht zuerst neue Items — das ordnet die Liste um
-
-`lldpRemChassisIdSubtype` und `lldpRemManAddr` werden **nicht erhoben**.
-Nachgesehen: null Treffer in `topology/`, `actions/` und den Templates.
-
-Das ist der Knackpunkt bei zwei Vorschlaegen. **Chassis-ID normalisieren** ohne
-den Subtype ist Raten — erst der Subtype sagt, ob dort eine MAC, eine
-Netzadresse, ein Interface-Name oder eine lokale ID steht. Und die
-**Management Address** ist ohne ihr Item schlicht nicht da.
-
-Beides heisst: Template-Aenderung, also Re-Import bei jedem Nutzer. Das ist
-machbar (5.1.1 hat genau das getan), aber es ist kein Nachmittag, und es
-gehoert vor die darauf aufbauenden Ideen.
-
-#### Der staerkste Punkt, und er ist EIN Feld entfernt
-
-**Beidseitig bestaetigte Kanten.** Der Merge-Zweig weiss bereits, dass eine
-Kante ein zweites Mal gemeldet wurde — er schreibt es nur nicht auf. Ein
-`reporters`-Set an der Kante, im Merge gesetzt, und die Unterscheidung steht:
-
-    ✓ bestaetigt     beide Seiten melden einander
-    → einseitig      nur eine Seite sieht den Nachbarn
-    ✎ manuell        von Hand gezogen
-
-**Die naheliegende Abkuerzung waere falsch**, und das ist der Grund, warum es
-hier steht statt einfach gebaut zu werden: `count(ports) === 2` beweist es
-NICHT. Ein einzelner Melder traegt beide Ports ein — seinen lokalen und den
-vom Nachbarn gelernten. Zwei Eintraege sind also kein Beleg fuer zwei Melder.
-Es braucht das explizite Set.
-
-Darstellung ist da: das Kanten-Panel (5.3) zeigt schon die Herkunft, die
-Legende hat eine Zeile fuer Kanten, und `ci:layers` kann so etwas pruefen.
-
-#### Confidence-Score
-
-Aufbauend auf dem Vorigen. Die Rohsignale liegen vor: `matched`, `ambiguous`
-mit Kandidatenliste, `unmatched`, dazu Ports und kuenftig `reporters`.
-
-**Wichtiger als die Skala ist, wofuer sie da ist:** Eine Normalisierungsschicht
-fuer Port-IDs (`Gi1/0/1` ↔ `GigabitEthernet1/0/1` ↔ `1/0/1`) erzeugt
-zwangslaeufig Fehltreffer, und **eine falsche Kante ist schlimmer als eine
-fehlende** — sie sieht aus wie eine Messung. Mit einem Score daneben wird aus
-dem Risiko eine Auskunft. Deshalb: Score zuerst, Normalisierung danach.
-
-#### Port-Move-Erkennung — der naechste greifbare Schritt
-
-„Gleiches Geraet, anderer Port": `AP-07` haengt jetzt an `Gi1/0/22` statt an
-`Gi1/0/18`. Heute **unsichtbar**, und zwar aus einem konkreten Grund.
-
-Der Baseline-Diff in `NetworkTopologyData.php:625` schluesselt auf das
-Host-PAAR und merkt sich nur die Labels:
-
-    $current["idA|idB"] = [labelA, labelB];
-
-Wandert ein Geraet auf einen anderen Port desselben Switches, bleibt das Paar
-gleich — also weder `added` noch `removed`, also **keine Meldung**. Genau der
-Fall, der betrieblich am interessantesten ist, faellt durchs Raster.
-
-**Der Umbau ist klein:** die Ports in den Baseline-Wert aufnehmen und beim
-Vergleich eine dritte Kategorie `moved` fuehren. Die Baseline liegt ohnehin
-schon sieben Tage in `NtCache`. Damit entsteht die Zeile, die im Vorschlag
-steht:
-
-    00:42  AP-07 moved
-           SW01 Gi1/0/18 -> SW01 Gi1/0/22
-
-Gehoert zusammen gebaut mit „Topology-Diff auf der Karte hervorheben" und der
-Alterung: dreimal derselbe Diff, dreimal dieselbe offene Frage, wie lange etwas
-sichtbar bleibt.
-
-#### Soll gegen Ist — und das Fundament liegt schon
-
-Der wertvollste Vorschlag aus der Sammlung. Eine erwartete Verkabelung
-hinterlegen, gegen die gemessene halten, Abweichungen melden:
+Eine erwartete Verkabelung gegen die gemessene halten:
 
     🔴 Topology deviation
        SW02 expected on Core01
        actual: SW01 / Gi1/0/47
 
 Fuer Verkabelungsfehler, versehentlich umgesteckte Kabel und Arbeiten von
-Fremdfirmen ist das die nuetzlichste Auskunft, die diese Karte geben koennte.
+Fremdfirmen die nuetzlichste Auskunft, die diese Karte geben koennte.
 
-**Und der Erklaerungsmechanismus existiert bereits:** `nt:parent` ist genau
-das — eine von Hand eingetippte Soll-Beziehung, validiert im `HostTagParser`,
-von `parentEdges()` zu Kanten gemacht. Heute werden diese Kanten mit den
-gemessenen **zusammengefuehrt** (`array_merge` in `NetworkTopologyData:432`).
-Das Feature besteht darin, sie stattdessen zu **vergleichen**.
+**Der Erklaerungsmechanismus existiert bereits:** `nt:parent` ist eine von Hand
+eingetippte Soll-Beziehung, validiert im `HostTagParser`, von `parentEdges()`
+zu Kanten gemacht. Heute werden diese Kanten mit den gemessenen
+**zusammengefuehrt** (`array_merge`, `NetworkTopologyData:432`) — das Feature
+besteht darin, sie stattdessen zu **vergleichen**. Kein neuer Speicher, keine
+Oberflaeche zum Erklaeren:
 
-Damit braucht der MVP weder neue Speicherung noch eine Oberflaeche zum
-Erklaeren:
-
-    erklaert und gemessen        ✓ stimmt ueberein
+    erklaert und gemessen        ✓
     erklaert, nicht gemessen     ⚠ erwartet, aber nicht gesehen
     gemessen, nicht erklaert     ⚠ da, aber nirgends dokumentiert
 
 **Deckt sich mit der NetBox-Drift** — dort ist die Soll-Quelle extern, hier
-lokal, aber die Auswertung ist dieselbe. Das gehoert als EIN Mechanismus
-gebaut, der mehrere Soll-Quellen kennt, nicht als zwei Vergleiche
-nebeneinander.
+lokal, die Auswertung ist dieselbe. Ein Mechanismus mit mehreren Soll-Quellen,
+nicht zwei Vergleiche nebeneinander.
 
-Offen: `nt:parent` beschreibt heute Traeger-Beziehungen (VM → Hypervisor), also
-nicht zwangslaeufig Verkabelung, und kennt keinen Port. Fuer „SW02 gehoert an
-Core01 Gi1/0/3" braeuchte es entweder einen Port-Zusatz im Tag oder ein
-zweites Tag.
+Offen: `nt:parent` beschreibt Traeger-Beziehungen (VM → Hypervisor), also nicht
+zwangslaeufig Verkabelung, und kennt keinen Port.
 
-#### LLDP-Health-Widget und Vollstaendigkeit — fast geschenkt
+### LLDP-Test-Bibliothek
 
-Zwei Vorschlaege, die dasselbe Material brauchen:
+Anonymisierte echte SNMP-Ausgaben verschiedener Hersteller als Fixtures, gegen
+die jeder Parser laeuft — damit ein Fix fuer Aruba nicht Cisco bricht.
+
+**Die Form ist billig:** eine Fixture ist eine Liste von Item-Zeilen (`hostid`,
+`key_`, `lastvalue`, `src`) — genau das, was `LldpEdgeBuilderTest` schon von
+Hand aufbaut. Ein Verzeichnis mit JSON-Dateien und eine Schleife darueber.
+
+**Teuer ist das Beschaffen**, und dafuer gibt es seit 5.3 den Geraetebericht.
+Damit schliesst sich ein Kreis: Meldung → Fixture → Regressionstest. Wer ein
+Geraet meldet, macht es dauerhaft testbar, statt eine Zeile in einer Tabelle zu
+aendern.
+
+### LLDP-Health als Zeile im LLDP-Q-Tab
 
     126 neighbors / 122 confirmed / 3 one-sided / 1 conflict
     87 % der Switches liefern LLDP
 
-**Alle vier Zahlen liegen inzwischen vor.** `lldp_quality` fuehrt je Host
-`matched`, `unmatched` und `ambiguous` (= der „conflict"-Fall: mehrere
-Kandidaten). `confirmed` und `one-sided` sind seit 5.3 an jeder Kante. Und der
-Geraetebericht rechnet „Hosts reporting neighbours" gegen die Gesamtzahl schon
-aus — das ist die Vollstaendigkeitsquote.
+**Alle Zahlen liegen vor.** `lldp_quality` fuehrt je Host `matched`,
+`unmatched` und `ambiguous` (= der „conflict"-Fall), `confirmed`/`one-sided`
+sind seit 5.3 an jeder Kante, und der Geraetebericht rechnet die
+Vollstaendigkeitsquote bereits aus. Darstellung, keine Datenbeschaffung.
 
-Das ist also **Darstellung, keine Datenbeschaffung**. Als Widget faellt die
-uebliche ES5-Frage an (siehe NT Neighbours); als Zeile im LLDP-Q-Tab waere es
-ein Nachmittag.
+Als Zeile im Tab ein Nachmittag. Als eigenes Widget faellt die ES5-Frage an
+(siehe NT Neighbours) — den Aufwand ist es dafuer nicht wert.
 
-#### Stabilitaets-Score — nicht selbst speichern
-
-„98 % der LLDP-Verbindungen seit 30 Tagen unveraendert." Dafuer braucht es
-Historie, und die hat das Modul **nicht**: die Baseline ist ein
-Letzter-Stand-Speicher, wird bei jedem Poll ueberschrieben und lebt sieben Tage
-in APCu.
-
-**Der Ausweg ist, keine Zeitreihe zu bauen — Zabbix ist eine.**
-`tools/topo-change-sender.sh` schiebt Topologie-Aenderungen bereits als Items
-nach Zabbix. Wandert die Zahl der Aenderungen (und kuenftig der Bewegungen)
-dorthin, liefert Zabbix 30-Tage-Auswertung, Trends, Trigger und Graphen ohne
-eine Zeile Speicher-Code im Modul. Ein eigener Verlaufsspeicher neben einer
-Zeitreihen-Datenbank waere schwer zu rechtfertigen.
-
-#### Raw-LLDP-Inspector
-
-Rechtsklick auf eine Kante, alle empfangenen TLVs sehen. Beim Debuggen
-exotischer Geraete zweifellos nuetzlich — nur liegen die Roh-TLVs nicht vor.
-Erhoben werden gezielte OIDs, nicht der Datensatz. Damit dieselbe Vorbedingung
-wie beim Chassis-Subtype: erst Template, dann Anzeige.
-
-Ueberschneidet sich mit dem Vendor Debug Profile; sinnvollerweise dieselbe
-Datenquelle mit zwei Ausgaengen — einer fuer den Blick, einer fuer den Export.
-
-#### LLDP-Test-Bibliothek — passt zur Kultur dieses Projekts
-
-Anonymisierte echte SNMP-Ausgaben von Cisco, Aruba, MikroTik, UniFi, Extreme,
-Brocade, Fortinet als Fixtures. Jeder Parser laeuft dagegen, damit ein Fix fuer
-Aruba nicht Cisco bricht.
-
-**Die Form ist billig:** eine Fixture ist eine Liste von Item-Zeilen
-(`hostid`, `key_`, `lastvalue`, `src`) — genau das, was
-`LldpEdgeBuilderTest` schon von Hand aufbaut. Ein Verzeichnis mit JSON-Dateien
-und eine Schleife darueber, mehr braucht es nicht.
-
-**Teuer ist das Beschaffen**, und genau dafuer gibt es inzwischen zwei Wege:
-den Geraetebericht (5.3) und das geplante Debug-Profil. Damit schliesst sich
-ein Kreis, der bisher offen war: Meldung → Fixture → Regressionstest. Wer ein
-Geraet meldet, macht es dauerhaft testbar, statt eine Zeile in einer Tabelle zu
-aendern.
-
-Von allen Vorschlaegen der mit der laengsten Wirkung — die Vendor-Matrix haelt
-fest, was einmal ging; eine Fixture haelt fest, dass es weiter geht.
-
-#### MIB-Auto-Erkennung — gehoert nicht ins Modul
-
-Vorgeschlagen war, Standard-LLDP-MIB, Cisco-, Aruba/HPE- und Extreme-Varianten
-automatisch zu erkennen. Das trifft die falsche Schicht: **das Modul spricht
-kein SNMP.** `LldpEdgeBuilder` liest `$item['lastvalue']` und `$item['key_']`,
-niemals eine OID. Welche MIB abgefragt wird, entscheidet das Template.
-
-Damit ist die Abstraktion, um die es geht, bereits da: ein Hersteller-Template
-muss nur Items mit derselben Schluesselform erzeugen, und das Modul sieht
-keinen Unterschied. Der eigentliche Wunsch heisst also **„mehr Templates"**,
-nicht „MIB-Erkennung im Modul" — und PR #5 ist der Praezedenzfall dafuer, wie
-so etwas aussieht.
-
-#### Hostname-Reconciliation
-
-Zweigeteilt. Der FQDN-/Kurznamen-Teil (`sw01` ↔ `sw01.domain.local`) ist
-**fertig**, siehe oben. Der Management-IP-Teil braucht `lldpRemManAddr`, das
-nicht erhoben wird — dieselbe Vorbedingung wie beim Chassis-Subtype.
-
-**Einwand gegen das „automatisch lernen":** eine gelernte Zuordnung, die falsch
-ist, ist klebrig — sie ueberlebt die Korrektur der Ursache und niemand sieht
-mehr, woher sie kam. Mit einem Confidence-Score braucht es das Lernen gar
-nicht: statt zu speichern, DASS zugeordnet wurde, wird festgehalten, WIE. Das
-ist nachvollziehbar und selbstheilend.
-
-#### Neighbor Inventory Cache — erst messen
-
-Nur verarbeiten, wenn sich LLDP wirklich geaendert hat. Die Bausteine liegen
-vor: Response-Cache mit 15 s TTL und die `topo_baseline` seit 5.1.0.
-
-**Bevor hier jemand baut, gehoert gemessen**, woran die Zeit wirklich haengt.
-Der Verdacht ist, dass es die Zabbix-API-Aufrufe sind (Host, Trigger, Problem,
-Item, Lastvalues, LLDP) und nicht das Kantenbauen — dann brauecht ein
-Inventory-Cache genau nichts. Klassischer Fall fuer „Nachmessen, nicht neu
-bauen".
-
-#### Vendor Debug Profile
-
-Einen unbekannten LLDP-Datensatz exportieren, um neue Hersteller leichter zu
-ergaenzen. Liegt nah am Geraetebericht (5.3), unterscheidet sich aber in dem
-Punkt, auf den es ankommt: der Bericht zeigt **Anzahlen**, ein Debug-Profil
-braucht die **Werte** — und genau die sind Nachbarnamen aus dem Netz des
-Nutzers.
-
-**Vorschlag fuer den Ausweg:** nicht die Werte exportieren, sondern ihre
-**Form**. Schluesselname, Laenge, Zeichenklassen-Muster mit maskierten Ziffern
-und Buchstaben, erkannter Subtype. Das beantwortet „dieser Hersteller schreibt
-eine MAC in die PortId" vollstaendig, ohne einen einzigen Namen preiszugeben —
-und bleibt damit im selben Rahmen wie der Geraetebericht und die Issue-Vorlage.
-
-#### Alterung / stale neighbors
-
-Verschwindet ein Nachbar, ihn nicht sofort loeschen, sondern fuer eine
-konfigurierbare Zeit als `stale` fuehren. Loest ein echtes Aergernis: die
-Topologie springt bei kurzen LLDP-Aussetzern.
-
-Beruehrt `topo_changes`, das heute schon berechnet und **nur als Toast**
-gemeldet wird — siehe „Topology-Diff auf der Karte hervorheben". Die beiden
-gehoeren zusammen gedacht; getrennt gebaut ergaeben sie zwei Halbloesungen.
-
-#### LLDP-MED, VLAN, LAG
-
-VLAN/PVID, Aggregation, Auto-Negotiation, MTU, und LLDP-MED fuer Telefone
-(Voice-VLAN, Geraetekategorie, Standort). Fachlich das Reizvollste im Paket.
-
-Trotzdem zuletzt: es sind durchweg **neue SNMP-Items**, also mehr Polling und
-wieder ein Template-Re-Import — und LLDP-MED bedient eine andere Zielgruppe
-(VoIP) als der Rest der Karte. Hoher Aufwand, schmalerer Nutzen als die vier
-Punkte darueber, die mit vorhandenen Daten auskommen.
-
-**Reihenfolge, die ich vorschlagen wuerde:** Einseitigkeit → Confidence →
-Alterung (mit dem Topology-Diff) → Chassis-Subtype und Management-Address →
-Port-Normalisierung → LLDP-MED.
 
 ### Dokumentationsdrift gegen NetBox
 
@@ -811,6 +534,24 @@ Zustandsverwaltung, an der gerade die Konflikterkennung gescheitert ist. Erst
 die Revisionslogik im Alltag beobachten.
 
 ---
+
+## Geprueft und verworfen
+
+Vorschlaege, die einzeln geprueft und **nicht** weiterverfolgt werden. Sie
+stehen hier mit dem Grund, damit sie nicht alle paar Monate neu aufkommen — und
+damit sichtbar bleibt, dass sie angesehen und nicht ueberlesen wurden.
+
+| Vorschlag | Warum nicht |
+|---|---|
+| **MIB-Auto-Erkennung** (Cisco-, Aruba-, Extreme-Varianten selbst erkennen) | Falsche Schicht. Das Modul spricht kein SNMP — `LldpEdgeBuilder` liest `lastvalue` und `key_`, nie eine OID. Welche MIB abgefragt wird, entscheidet das Template. Der Wunsch heisst „mehr Templates". |
+| **Hostname-Zuordnung „automatisch lernen"** | Eine gelernte falsche Zuordnung ist klebrig: sie ueberlebt die Korrektur der Ursache und verliert ihre Herkunft. Mit einem Confidence-Score festhalten, WIE zugeordnet wurde, statt DASS. Der FQDN-/Kurznamen-Teil laeuft ohnehin seit jeher. |
+| **Neighbor Inventory Cache** | Erst messen. Response-Cache und Baseline gibt es seit 5.1.0; der Verdacht ist, dass die Zeit an den Zabbix-API-Aufrufen haengt und nicht am Kantenbauen. Dann braeuchte es ihn nicht. |
+| **Stabilitaets-Score ueber 30 Tage** | Nicht selbst speichern. Zabbix IST eine Zeitreihen-Datenbank, und `tools/topo-change-sender.sh` schiebt Aenderungen bereits als Items dorthin — dann liefert Zabbix Auswertung, Trends und Trigger ohne eine Zeile Speicher-Code. |
+| **Port-ID-Normalisierung als eigener Schritt** | Nicht vor dem Confidence-Score. Sie erzeugt zwangslaeufig Fehltreffer, und eine falsche Kante ist schlimmer als eine fehlende — sie sieht aus wie eine Messung. |
+| **Raw-LLDP-Inspector** (alle TLVs je Kante) | Die Roh-TLVs liegen nicht vor; erhoben werden gezielte OIDs. Dieselbe Vorbedingung wie beim Chassis-Subtype, und ueberschneidet sich mit dem Vendor Debug Profile. |
+| **LLDP-MED, VLAN, LAG** (Voice-VLAN, PVID, Aggregation, MTU) | Fachlich reizvoll, aber durchweg neue SNMP-Items: mehr Polling, wieder ein Template-Re-Import, und VoIP ist eine andere Zielgruppe als der Rest der Karte. Steht hinter allem, was mit vorhandenen Daten auskommt. |
+| **Vendor Debug Profile mit Rohwerten** | Nicht in dieser Form: die Werte sind Nachbarnamen aus dem Netz des Nutzers. Falls doch, dann als **Form** statt Wert — Schluesselname, Laenge, maskiertes Zeichenmuster, erkannter Subtype. Das beantwortet „dieser Hersteller schreibt eine MAC in die PortId", ohne einen Namen preiszugeben. |
+
 
 ## Nachmessen, nicht neu bauen
 
