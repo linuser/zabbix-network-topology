@@ -56,7 +56,7 @@ function post(fields) {
 
 export function openColorScalesPanel(wrap, dark) {
     if (!wrap) return;
-    const old = document.getElementById('nt-scales-panel');
+    const old = document.getElementById('nt-scales-overlay');
     if (old) { old.remove(); return; }             // second click closes
 
     const savedCustom = hasCustomScales();
@@ -86,15 +86,29 @@ export function openColorScalesPanel(wrap, dark) {
         return b;
     }
 
-    const panel = el('div', 'position:absolute;top:10px;right:10px;z-index:30;width:360px;'
-        + 'max-height:calc(100% - 20px);overflow:auto;box-sizing:border-box;'
-        + 'background:' + bg + ';color:' + txt + ';border:1px solid ' + bdr + ';border-radius:8px;'
-        + 'box-shadow:0 6px 24px rgba(0,0,0,0.18);font-family:sans-serif;font-size:12px;padding:10px 12px');
-    panel.id = 'nt-scales-panel';
-    panel.appendChild(el('div', 'font-weight:700;font-size:13px;margin-bottom:2px', t('scales.title')));
-    panel.appendChild(el('div', 'color:' + sub + ';font-size:10.5px;margin-bottom:8px;line-height:1.35', t('scales.hint')));
+    // Modal over the canvas: the backdrop sits above every canvas overlay
+    // (detail panel z=50, minimap z=40, refresh badge z=9) but below the
+    // toolbar menus (9000) and toasts (10000). Without it the detail panel
+    // and the minimap painted over the Save/Cancel footer in the corner.
+    // A click on the backdrop cancels, as does Escape.
+    const overlay = el('div', 'position:absolute;inset:0;z-index:500;display:flex;'
+        + 'align-items:flex-start;justify-content:flex-end;padding:10px;box-sizing:border-box;'
+        + 'background:' + (dark ? 'rgba(0,0,0,0.45)' : 'rgba(15,23,42,0.28)'));
+    overlay.id = 'nt-scales-overlay';
 
-    const sections = el('div');
+    // The panel is a column: header, scrolling body, fixed footer — so Save
+    // and Cancel stay visible however many tiers the scales have.
+    const panel = el('div', 'position:relative;display:flex;flex-direction:column;width:360px;'
+        + 'max-width:100%;max-height:100%;box-sizing:border-box;'
+        + 'background:' + bg + ';color:' + txt + ';border:1px solid ' + bdr + ';border-radius:8px;'
+        + 'box-shadow:0 6px 24px rgba(0,0,0,0.25);font-family:sans-serif;font-size:12px');
+    panel.id = 'nt-scales-panel';
+    const head = el('div', 'padding:10px 12px 0;flex:0 0 auto');
+    head.appendChild(el('div', 'font-weight:700;font-size:13px;margin-bottom:2px', t('scales.title')));
+    head.appendChild(el('div', 'color:' + sub + ';font-size:10.5px;margin-bottom:8px;line-height:1.35', t('scales.hint')));
+    panel.appendChild(head);
+
+    const sections = el('div', 'padding:0 12px;overflow:auto;flex:1 1 auto;min-height:0');
     panel.appendChild(sections);
 
     function preview() {
@@ -175,13 +189,15 @@ export function openColorScalesPanel(wrap, dark) {
     renderSections();
 
     // Footer: Reset (server) · Cancel (revert locally) · Save
-    const foot = el('div', 'display:flex;gap:6px;justify-content:flex-end;margin-top:6px;'
-        + 'padding-top:8px;border-top:1px solid ' + bdr);
+    const foot = el('div', 'display:flex;gap:6px;justify-content:flex-end;flex:0 0 auto;'
+        + 'padding:8px 12px 10px;border-top:1px solid ' + bdr);
     let bReset, bCancel, bSave;
     function busy(on) { [bReset, bCancel, bSave].forEach(function(b) { b.disabled = on; }); }
+    function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(false); } }
     function close(keep) {
         if (!keep) { applyColorScales(savedCustom ? saved : null); repaint(); }
-        panel.remove();
+        document.removeEventListener('keydown', onKey, true);
+        overlay.remove();
     }
     function fail(err) {
         busy(false);
@@ -210,5 +226,12 @@ export function openColorScalesPanel(wrap, dark) {
     foot.appendChild(bReset); foot.appendChild(bCancel); foot.appendChild(bSave);
     panel.appendChild(foot);
 
-    wrap.appendChild(panel);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(false); });
+    // Keep map handlers from seeing clicks/wheel inside the modal.
+    ['mousedown', 'mouseup', 'wheel', 'touchstart'].forEach(function(evt) {
+        panel.addEventListener(evt, function(e) { e.stopPropagation(); }, { passive: true });
+    });
+    document.addEventListener('keydown', onKey, true);
+    overlay.appendChild(panel);
+    wrap.appendChild(overlay);
 }
