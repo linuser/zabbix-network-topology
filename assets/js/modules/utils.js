@@ -20,6 +20,14 @@ export function fmt(b) {
     return b.toFixed(0) + ' b/s';
 }
 
+// isDark — is the module in dark mode? The class on #nt-root is the single
+// source of truth (tabs.js sets it). Was copied as a two-liner in seven
+// modules; new call sites use this.
+export function isDark() {
+    const root = document.getElementById('nt-root');
+    return !!(root && root.classList.contains('nt-dark'));
+}
+
 // linkCapacity — Edge-Kapazitaet aus den Max-Link-Speeds beider Endpunkte:
 // Engpass = min der beiden (>0), sonst der einzige bekannte Wert, sonst 0.
 // Genutzt von build-elements (Weathermap) und render-stats (Forecast).

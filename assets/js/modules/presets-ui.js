@@ -64,8 +64,8 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
 
     const ddMenu = document.createElement('div');
     ddMenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-        + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
-        + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:200px;max-width:320px;'
+        + 'background:var(--nt-surface);border:1px solid var(--nt-line);border-radius:6px;'
+        + 'box-shadow:var(--nt-shadow);min-width:200px;max-width:320px;'
         + 'overflow-y:auto;max-height:360px;margin-top:2px';
 
     function ddLabel() {
@@ -86,8 +86,8 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
             const row = document.createElement('div');
             const isActive = presetMatches(p, _active);
             row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;'
-                + 'color:' + (isActive ? '#1d4ed8' : '#334155') + ';'
-                + 'background:' + (isActive ? '#dbeafe' : 'transparent') + ';'
+                + 'color:' + (isActive ? 'var(--nt-active-text)' : 'var(--nt-text-2)') + ';'
+                + 'background:' + (isActive ? 'var(--nt-active-bg)' : 'transparent') + ';'
                 + 'font-weight:' + (isActive ? '600' : '400') + ';'
                 + 'display:flex;align-items:center;gap:6px;white-space:nowrap';
             const icon = p.scope === 'global' ? '\u{1F30D}' : '\u{1F4CC}';
@@ -97,10 +97,10 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
             txt.title = p.name + ' (' + (p.scope === 'global' ? t('presets.scope.global') : t('presets.scope.this')) + ')';
             row.appendChild(txt);
             row.addEventListener('mouseover', function() {
-                if (!isActive) this.style.background = '#f8fafc';
+                if (!isActive) this.style.background = 'var(--nt-surface-2)';
             });
             row.addEventListener('mouseout', function() {
-                this.style.background = isActive ? '#dbeafe' : 'transparent';
+                this.style.background = isActive ? 'var(--nt-active-bg)' : 'transparent';
             });
             row.addEventListener('click', function() {
                 ddMenu.style.display = 'none';

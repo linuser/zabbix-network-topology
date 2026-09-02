@@ -440,12 +440,12 @@ export function setupExportMenu(bar, isFirstRun) {
     // Fenster heraus — im Browser nachgemessen, "PDF (pri…", "Save HT…" und
     // "Audit rep…" waren abgeschnitten und nicht anklickbar.
     expMenu.style.cssText = 'display:none;position:absolute;top:100%;right:0;z-index:9999;'
-        + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
-        + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:150px;overflow:hidden;margin-top:2px';
+        + 'background:var(--nt-surface);border:1px solid var(--nt-line);border-radius:6px;'
+        + 'box-shadow:var(--nt-shadow);min-width:150px;overflow:hidden;margin-top:2px';
 
     function mItem(icon, label, fn) {
         const row = document.createElement('div');
-        row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:#334155;'
+        row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:var(--nt-text-2);'
             + 'white-space:nowrap;display:flex;align-items:center;gap:8px';
         // icon ist bewusst eine statische HTML-Entity (&#128444; usw.) und bleibt.
         // label defensiv escapen — aktuell immer statisch/i18n, aber so ist der

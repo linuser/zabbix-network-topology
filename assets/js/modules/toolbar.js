@@ -218,7 +218,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
 
         const menu = document.createElement('div');
         menu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-            + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
+            + 'background:var(--nt-surface);border:1px solid var(--nt-line);border-radius:6px;'
             + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:160px;overflow:hidden;'
             + 'margin-top:2px';
 
@@ -226,12 +226,12 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             const row = document.createElement('div');
             const isActive = opt.id === _currentLayout;
             row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;'
-                + 'color:' + (isActive ? '#1d4ed8' : '#334155') + ';'
-                + 'background:' + (isActive ? '#dbeafe' : 'transparent') + ';'
+                + 'color:' + (isActive ? 'var(--nt-active-text)' : 'var(--nt-text-2)') + ';'
+                + 'background:' + (isActive ? 'var(--nt-active-bg)' : 'transparent') + ';'
                 + 'white-space:nowrap;font-weight:' + (isActive ? '600' : '400');
             row.textContent = opt.label;
             row.addEventListener('mouseover', function() {
-                if (!isActive) this.style.background = '#f8fafc';
+                if (!isActive) this.style.background = 'var(--nt-surface-2)';
             });
             row.addEventListener('mouseout', function() {
                 if (!isActive) this.style.background = 'transparent';
@@ -291,8 +291,8 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 Array.from(menu.children).forEach(function(child, i) {
                     const o = LAYOUT_OPTIONS[i];
                     const a = o.id === opt.id;
-                    child.style.color      = a ? '#1d4ed8'   : '#334155';
-                    child.style.background = a ? '#dbeafe'   : 'transparent';
+                    child.style.color      = a ? 'var(--nt-active-text)' : 'var(--nt-text-2)';
+                    child.style.background = a ? 'var(--nt-active-bg)' : 'transparent';
                     child.style.fontWeight = a ? '600'       : '400';
                 });
             });
@@ -324,7 +324,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         tapBtn.style.margin = '0';
         const tapMenu = document.createElement('div');
         tapMenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-            + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
+            + 'background:var(--nt-surface);border:1px solid var(--nt-line);border-radius:6px;'
             + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:130px;overflow:hidden;margin-top:2px';
         let _tapMs = loadTapholdMs();
         function tapLabel() { return t('toolbar.taphold', { ms: _tapMs }); }
@@ -334,15 +334,15 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             const row = document.createElement('div');
             const isActive = ms === _tapMs;
             row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;'
-                + 'color:' + (isActive ? '#1d4ed8' : '#334155') + ';'
-                + 'background:' + (isActive ? '#dbeafe' : 'transparent') + ';'
+                + 'color:' + (isActive ? 'var(--nt-active-text)' : 'var(--nt-text-2)') + ';'
+                + 'background:' + (isActive ? 'var(--nt-active-bg)' : 'transparent') + ';'
                 + 'font-weight:' + (isActive ? '600' : '400');
             row.textContent = ms + ' ms' + (ms === 500 ? ' ' + t('toolbar.taphold.default') : '');
             row.addEventListener('mouseover', function() {
-                if (ms !== _tapMs) this.style.background = '#f8fafc';
+                if (ms !== _tapMs) this.style.background = 'var(--nt-surface-2)';
             });
             row.addEventListener('mouseout', function() {
-                this.style.background = ms === _tapMs ? '#dbeafe' : 'transparent';
+                this.style.background = ms === _tapMs ? 'var(--nt-active-bg)' : 'transparent';
             });
             row.addEventListener('click', function() {
                 _tapMs = ms;
@@ -356,8 +356,8 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 Array.from(tapMenu.children).forEach(function(c, i) {
                     const cms = [300, 500, 800][i];
                     const a = cms === _tapMs;
-                    c.style.color      = a ? '#1d4ed8' : '#334155';
-                    c.style.background = a ? '#dbeafe' : 'transparent';
+                    c.style.color      = a ? 'var(--nt-active-text)' : 'var(--nt-text-2)';
+                    c.style.background = a ? 'var(--nt-active-bg)' : 'transparent';
                     c.style.fontWeight = a ? '600' : '400';
                 });
             });
@@ -446,20 +446,20 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         clusterWrap.appendChild(cBtn);
 
         const cMenu = document.createElement('div');
-        cMenu.style.cssText = 'position:absolute;top:100%;left:0;background:#fff;'
-            + 'border:1px solid #e2e8f0;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.08);'
+        cMenu.style.cssText = 'position:absolute;top:100%;left:0;background:var(--nt-surface);'
+            + 'border:1px solid var(--nt-line);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.08);'
             + 'min-width:170px;z-index:300;display:none;margin-top:2px';
         ['auto', 'columns', 'rows', 'off'].forEach(function(opt) {
             const item = document.createElement('div');
             item.textContent = labels[opt];
             item.dataset.mode = opt;
-            item.style.cssText = 'padding:7px 12px;cursor:pointer;font-size:12px;color:#334155';
+            item.style.cssText = 'padding:7px 12px;cursor:pointer;font-size:12px;color:var(--nt-text-2)';
             if (opt === cMode) {
-                item.style.background = '#dbeafe';
+                item.style.background = 'var(--nt-active-bg)';
                 item.style.fontWeight = '600';
             }
             item.addEventListener('mouseenter', function() {
-                if (item.dataset.mode !== cMode) item.style.background = '#f1f5f9';
+                if (item.dataset.mode !== cMode) item.style.background = 'var(--nt-surface-2)';
             });
             item.addEventListener('mouseleave', function() {
                 if (item.dataset.mode !== cMode) item.style.background = '';
@@ -646,8 +646,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         si.type = 'text';
         si.placeholder = t('toolbar.search');
         si.title = t('toolbar.search.tip');
-        si.style.cssText = 'width:140px;height:26px;font-size:12px;margin-left:8px;padding:0 8px;'
-            + 'border:1px solid #e2e8f0;border-radius:4px;outline:none;background:#fff;color:#334155';
+        // Styling lives in network-topology.css (#nt-search-input) — theme-aware.
         // Dieselbe Suchsprache wie in der Tabelle, statt eines indexOf auf den
         // Anzeigenamen. Damit kann die Karte, was die Tabelle laengst konnte:
         //

@@ -12,7 +12,7 @@
 // Geschichte: Diese Datei war einmal 2025 Zeilen. In fünf Refactor-Sessions
 // (v3.6 → v4.0) wurde sie auf eine reine Orchestrierungs-Schicht reduziert.
 
-import { esc, seiteIstDunkel } from './modules/utils.js';
+import { esc } from './modules/utils.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
@@ -84,7 +84,7 @@ setPositionTruncatedHandler(function(n) {
 });
 import { setResolveAggregateCallback } from './modules/context-menu.js';
 import { setFocusRenderCallback } from './modules/focus-mode.js';
-import { allowedTabs, setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar,
+import { allowedTabs, setActiveTabGetter, setMgmtRerenderCallback, ensureBaseToolbar, initDarkMode,
          setGraphToolbarVisible } from './modules/tabs.js';
 import { renderTable, cleanupTable } from './modules/render-table.js';
 import { renderManagement } from './modules/render-mgmt.js';
@@ -301,27 +301,6 @@ function init() {
     // Activate the admin color scales BEFORE the first render — otherwise the
     // first heatmap paints with defaults and the colors jump on the next pass.
     applyColorScales(cfg.color_scales || null);
-    // Dunkelmodus aus Zabbix uebernehmen — VOR dem ersten Render.
-    //
-    // Die Klasse 'nt-dark' auf #nt-root ist die Schaltstelle, die es im Modul
-    // laengst gibt: sechzehn Module fragen sie ab und haben ihre dunklen
-    // Farbwerte fertig daliegen. Sie wurde nur nie gesetzt, seit der eigene
-    // Umschalter entfernt wurde (siehe tabs.js) — die ganze Abstraktion lief
-    // damit dauerhaft gegen false.
-    //
-    // Hier haengt sie jetzt an Zabbix. Kein eigener Schalter, keine zweite
-    // Einstellung, die auseinanderlaufen kann: wer sein Zabbix dunkel stellt,
-    // bekommt die Karte dunkel. Das Modul hat dazu keine eigene Meinung mehr.
-    //
-    // Entschieden wird an der GEMESSENEN Hintergrundfarbe, nicht am Namen des
-    // Themes (siehe seiteIstDunkel). Der Name vom Server ist nur der Rueckfall,
-    // wenn sich nichts messen laesst — er kennt weder das neue dunkle Theme aus
-    // Zabbix 8.0 noch selbst ausgeliefertes Theme-CSS.
-    //
-    // Vor dem ersten Render, nicht danach: sonst zeichnet der erste Durchgang
-    // hell und springt beim naechsten um.
-    const ntRoot = document.getElementById('nt-root');
-    if (ntRoot) ntRoot.classList.toggle('nt-dark', seiteIstDunkel(cfg.dark));
 
     const wrap = document.getElementById('nt-canvas-wrap');
     const spin = document.getElementById('nt-loading');
@@ -342,6 +321,10 @@ function init() {
             window._ntCy.fit(window._ntCy.nodes(), 40);
         }
     });
+
+    // Theme VOR Toolbar und erstem Render: sonst zeichnet der erste Durchgang
+    // hell und springt beim naechsten um.
+    initDarkMode();
 
     // Basis-Toolbar (Tabs) initial bauen — idempotent.
     ensureBaseToolbar(wrap);

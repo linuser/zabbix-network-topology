@@ -9,6 +9,7 @@
 // nächste makeNodeImage() den Cache nicht aus Versehen wiederverwendet.
 
 import { SEV_COL, grpColor } from './severity.js';
+import { isDark } from './utils.js';
 
 export const TYPE_ICON = {
     server:   'M-11,-13 h22 v4 h-22z M-11,-6 h22 v4 h-22z M-11,1 h22 v4 h-22z M-11,8 h22 v4 h-22z M8,-11 a1.5,1.5 0 1,1 0,0.01 M8,-4 a1.5,1.5 0 1,1 0,0.01 M8,3 a1.5,1.5 0 1,1 0,0.01 M8,10 a1.5,1.5 0 1,1 0,0.01',
@@ -66,15 +67,28 @@ export function clearImgCache() {
 }
 
 export function makeNodeImage(d) {
+    // Dark mode draws differently (light glyph, dark separators, empty
+    // quadrants tinted stronger) — so it belongs in the cache key, otherwise
+    // the cache still serves the other theme's image after switching.
+    const dark = isDark();
     const key = [
         d.id, d.severity, d.cpu, d.memory, d.ping,
         d.traffic ? d.traffic.in : 0, d.traffic ? d.traffic.out : 0,
         d._primaryGroup, d.problems || 0,
         d.pinned ? 1 : 0, d.note ? 1 : 0,
         d.acknowledged ? 1 : 0, d.maintenance ? 1 : 0,
-        d.unavailable ? 1 : 0
+        d.unavailable ? 1 : 0, dark ? 'd' : 'l'
     ].join('|');
     if (_imgCache[key]) return _imgCache[key];
+
+    // Colors that depend on the background. Light: dark icon stroke, white
+    // quadrant separators (like the canvas). Dark: light icon stroke,
+    // separators in canvas dark — white lines were the loudest thing on the
+    // whole node there, while the icon (#475569 on #0f1923) was practically
+    // invisible.
+    const glyphStroke = dark ? '#e2e8f0' : '#475569';
+    const sepStroke   = dark ? '#0d1117' : '#ffffff';
+    const haloStroke  = dark ? '#0d1117' : '#ffffff';
 
     // Offline = Host laut Zabbix unavailable. Severity-basiertes "dead" trifft
     // nur bei worst-case Severity 5 (Disaster) zu — das ist nicht dasselbe wie
@@ -96,7 +110,10 @@ export function makeNodeImage(d) {
     let p = '';
     // Bei Offline werden Pie-Segmente massiv gedimmt — die Werte sind stale
     // (letzter Stand vor Disconnect), sollen optisch aber nicht aktiv wirken.
-    const segFillOp  = offline ? '0.08' : '0.12';
+    // The "empty" quadrants are a faint tint (0.12) in light mode. On the dark
+    // canvas that disappears — 0.22 keeps the four fields recognizable without
+    // competing with the filled share (0.85).
+    const segFillOp  = offline ? (dark ? '0.14' : '0.08') : (dark ? '0.22' : '0.12');
     const segValOp   = offline ? '0.30' : '0.85';
     segs.forEach(function(seg, i) {
         const base = i * 90;
@@ -109,7 +126,7 @@ export function makeNodeImage(d) {
            + '" y1="' + (C + RI * Math.sin(a)).toFixed(1)
            + '" x2="' + (C + RO * Math.cos(a)).toFixed(1)
            + '" y2="' + (C + RO * Math.sin(a)).toFixed(1)
-           + '" stroke="white" stroke-width="1.5"/>';
+           + '" stroke="' + sepStroke + '" stroke-width="1.5"/>';
     });
 
     // Severity-Ring bei Offline grau + dashed um klar zu signalisieren dass
@@ -118,7 +135,7 @@ export function makeNodeImage(d) {
     const ringDash   = offline ? ' stroke-dasharray="6,4"' : '';
     const ringOp     = (offline || dead) ? '0.6' : '1';
     p += '<circle cx="' + C + '" cy="' + C + '" r="' + RI
-       + '" fill="' + gc + '" fill-opacity="' + (offline || dead ? '0.08' : '0.15')
+       + '" fill="' + gc + '" fill-opacity="' + (offline || dead ? '0.08' : (dark ? '0.28' : '0.15'))
        + '" stroke="' + ringStroke + '" stroke-width="3" opacity="' + ringOp + '"' + ringDash + '/>';
 
     // Acknowledged-Indikator: dicker grüner Doppel-Außenring um den Severity-Ring.
@@ -153,7 +170,7 @@ export function makeNodeImage(d) {
         // Weisser Halo unter dem roten X — sorgt fuer klare Kanten gegen das
         // darunterliegende Type-Icon.
         p += '<g transform="translate(' + C + ',' + C + ')"'
-           + ' stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity="0.95">'
+           + ' stroke="' + haloStroke + '" stroke-width="7" stroke-linecap="round" opacity="0.95">'
            + '<line x1="-15" y1="-15" x2="15" y2="15"/>'
            + '<line x1="15"  y1="-15" x2="-15" y2="15"/>'
            + '</g>';
@@ -175,7 +192,7 @@ export function makeNodeImage(d) {
     } else {
         const icon = TYPE_ICON[d.type] || TYPE_ICON.server;
         p += '<g transform="translate(' + C + ',' + C
-           + ') scale(0.62)" fill="none" stroke="#475569" stroke-width="1.6"'
+           + ') scale(0.62)" fill="none" stroke="' + glyphStroke + '" stroke-width="1.6"'
            + ' stroke-linecap="round" stroke-linejoin="round"><path d="' + icon + '"/></g>';
     }
 

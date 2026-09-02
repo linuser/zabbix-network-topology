@@ -32,7 +32,7 @@ import { applyPortLabels } from './port-labels.js';
 import { notifyTopoChanges } from './topo-notify.js';
 import { showTip, hideTip, moveTip, showEdgeTip } from './tooltip.js';
 import { showCtx, hideCtx } from './context-menu.js';
-import { showDetail } from './detail-panel.js';
+import { showDetail, hideDetail } from './detail-panel.js';
 import { showEdgeDetail } from './edge-detail.js';
 import { setupLegend, setupBottomLegend } from './legend.js';
 import { setupMinimap, showMinimap } from './minimap.js';
@@ -439,7 +439,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     cy.on('tap', function(e) {
         hideTip();
         if (e.target === cy) {
-            if (pnl) pnl.style.display = 'none';
+            hideDetail(pnl);
             hideCtx();
             resetHighlight(cy);
             clearPathState(cy);

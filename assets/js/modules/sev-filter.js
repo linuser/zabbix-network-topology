@@ -51,7 +51,7 @@ export function buildSevFilter(bar, cy) {
     const wrap = document.createElement('div');
     wrap.id = 'nt-sev-filter';
     wrap.style.cssText = 'display:flex;align-items:center;gap:5px;margin-left:10px;'
-        + 'padding-left:8px;border-left:1px solid #e2e8f0;flex-shrink:0';
+        + 'padding-left:8px;border-left:1px solid var(--nt-line);flex-shrink:0';
 
     [{ sev: 0, col: '#22c55e', lbl: t('sev.ok') },
      { sev: 2, col: '#06b6d4', lbl: t('sev.info') },
@@ -124,7 +124,7 @@ export function buildSevFilter(bar, cy) {
     const clr = document.createElement('button');
     clr.textContent = '\u2715';
     clr.title = t('sev.reset.tip');
-    clr.style.cssText = 'padding:2px 5px;border-radius:10px;border:0.5px solid #e2e8f0;'
+    clr.style.cssText = 'padding:2px 5px;border-radius:10px;border:0.5px solid var(--nt-line);'
         + 'background:transparent;cursor:pointer;font-size:11px;color:#94a3b8';
     clr.addEventListener('click', function() {
         _sevFilter.clear();
