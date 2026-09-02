@@ -14,6 +14,7 @@
 // Map-Screenshot via cy.png() wird oben eingebettet.
 
 import { esc, fmt } from './utils.js';
+import { buildGraphml } from './graphml.js';
 
 // Ein einziger Document-Close-Handler (schliesst das Dropdown bei Aussenklick).
 // Modul-Level, damit setupExportMenu ihn vor dem Neu-Anlegen entfernen kann —
@@ -489,8 +490,8 @@ export function setupExportMenu(bar, isFirstRun) {
 
     /** Blob-Download. Die URL wird freigegeben, sonst haelt sie den Report
      *  (inklusive Karten-PNG) bis zum Verlassen der Seite im Speicher. */
-    function downloadBlob(html, name) {
-        const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    function downloadBlob(html, name, mime) {
+        const url = URL.createObjectURL(new Blob([html], { type: mime || 'text/html' }));
         const a = document.createElement('a');
         a.href = url;
         a.download = name;
@@ -598,6 +599,18 @@ export function setupExportMenu(bar, isFirstRun) {
         .catch(function(e) {
             toast(t('export.failed', { err: (e && e.message) || '?' }), 'error', 8000);
         });
+    });
+
+    // GraphML — der einzige Ausgang, der nicht in einem Bild endet. draw.io,
+    // yEd, Gephi und NetworkX lesen es; ein eigenes draw.io-Format waere ein
+    // zweiter Exporter fuer dasselbe Ziel.
+    mItem('&#128279;', t('export.menu.graphml'), function() {
+        if (!window._ntCy) { toast(t('export.no_map'), 'warn', 6000); return; }
+        const xml = buildGraphml(window._ntCy);
+        if (!xml) { toast(t('export.no_map'), 'warn', 6000); return; }
+        downloadBlob(xml,
+            'network-topology-' + new Date().toISOString().slice(0, 10) + '.graphml',
+            'application/xml');
     });
 
     expBtn.addEventListener('click', function(e) {

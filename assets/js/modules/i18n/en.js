@@ -408,6 +408,7 @@ export default {
     'edge.errors': 'Errors/s',
     'edge.discards': 'Discards/s',
     'edge.threshold': '(warns above {n})',
+    'export.menu.graphml': 'GraphML (draw.io, yEd)',
     'legend.groups': 'GROUPS',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

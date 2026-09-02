@@ -413,6 +413,7 @@ export default {
     'edge.errors': 'Fehler/s',
     'edge.discards': 'Verworfen/s',
     'edge.threshold': '(warnt ab {n})',
+    'export.menu.graphml': 'GraphML (draw.io, yEd)',
     'legend.groups': 'GRUPPEN',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',
