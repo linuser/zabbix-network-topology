@@ -464,6 +464,32 @@ Deshalb gehört zu jedem „ist schon da" ein Test, bevor es als erledigt gilt:
   kritisch. Für Rot-Grün-Schwäche unbrauchbar. Der Compliance-Tab macht es
   bereits richtig (✗ / i / ✓ **zusätzlich** zur Farbe) — der Beleg, dass es im
   Modul geht.
+
+- **Wartung und Offline sind beide ein ✕, unterschieden nur durch die Farbe.**
+  Am 2026-09-02 an einem Knoten auf der Wegwerf-Instanz aufgefallen, nicht
+  gemeldet. Drei Aussagen stehen nebeneinander:
+
+  | | zeigt |
+  |---|---|
+  | `icons.js:217` Kommentar | „Schraubenschlüssel-Glyph (vereinfacht)" |
+  | `icons.js:220` Pfad | `M-5,-5 L5,5 M-5,5 L5,-5` — **ein ✕** |
+  | `icons.js:160` Offline | „Rotes X als klarer Offline-Indikator" |
+  | `legend.js:123` Legende | ein gedimmtes **◐** |
+
+  Die „Vereinfachung" hat den Schraubenschlüssel so weit vereinfacht, dass
+  nichts davon übrig ist. Damit tragen zwei verschiedene Zustände dasselbe
+  Zeichen, und was sie trennt, ist orange gegen rot — ausgerechnet die Paarung,
+  die bei Rot-Grün-Schwäche am ehesten zusammenfällt. Der Punkt darüber ist hier
+  also nicht theoretisch.
+
+  Der ◐ in der Legende kommt auf der Karte überhaupt nicht vor; gemeint war
+  vermutlich „der Knoten ist gedimmt".
+
+  **Dieselbe Fehlerklasse wie Issue #9** — die Legende beschreibt etwas anderes
+  als das, was gezeichnet wird —, nur bei den Knoten statt bei den Kanten. Fix:
+  ein eindeutiges Glyph für Wartung, und die Legende auf das umstellen, was
+  wirklich zu sehen ist (Ring **und** Badge). Danach ist ✕ wieder eindeutig
+  Offline. Bewusst auf das nächste Bündel geschoben, nicht auf eine 5.2.1.
 - **Fullscreen:** Promise-Behandlung und Beschriftung sind repariert; **warum
   Chrome ablehnt**, ist ungeklärt.
 
