@@ -96,6 +96,7 @@ import { renderCompliance } from './modules/render-compliance.js';
 import { renderLldpQuality } from './modules/render-lldp-quality.js';
 import { notifyTopoChanges } from './modules/topo-notify.js';
 import { setupToolbar, setRenderCallback as setToolbarRenderCallback } from './modules/toolbar.js';
+import { applyColorScales } from './modules/traffic.js';
 import { setRenderCallback as setPresetsRenderCallback } from './modules/presets-ui.js';
 import { setHistoryRenderCallback, getHistorySeverities, isHistoryActive, setLiveRefreshHooks } from './modules/history-mode.js';
 
@@ -285,6 +286,9 @@ setLiveRefreshHooks(
 function init() {
     const cfg = window.NT_CONFIG;
     if (!cfg) return;
+    // Activate the admin color scales BEFORE the first render — otherwise the
+    // first heatmap paints with defaults and the colors jump on the next pass.
+    applyColorScales(cfg.color_scales || null);
     const wrap = document.getElementById('nt-canvas-wrap');
     const spin = document.getElementById('nt-loading');
 

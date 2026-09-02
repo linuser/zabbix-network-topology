@@ -24,6 +24,8 @@ import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isSimActive, clearSimulation } from './whatif.js';
 import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
+import { refreshBottomLegend } from './legend.js';
+import { openColorScalesPanel } from './color-scales-ui.js';
 import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
 import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
 import { t } from './i18n.js';
@@ -516,7 +518,19 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         setWeathermapMode(_wmOn);
         _setWmLabel();
         applyTrafficHeatmap(window._ntCy);
+        // The color guide shows the scale of the active mode — keep it in sync.
+        refreshBottomLegend();
     });
+
+    // Color-scales editor: thresholds + colors of both scales, stored in
+    // module.config (applies to everyone). Super admins only — the backend
+    // checks anyway, but a button that can only say "no permission" is noise.
+    if (window.NT_CONFIG && window.NT_CONFIG.is_super_admin) {
+        const bScales = mkbtn('nt-btn-scales', t('toolbar.scales'), function() {
+            openColorScalesPanel(wrap, isDark);
+        });
+        bScales.title = t('toolbar.scales.tip');
+    }
 
     // Performance-Modus: einfache Severity-Punkte statt SVG-Pie-Knoten →
     // fluessiges Rendern bei vielen Hosts. Auto ab ~400 Knoten (render-tech);

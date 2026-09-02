@@ -115,6 +115,7 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - **Item pivot** — any item key pattern as columns
 - **Manual links** between hosts and the **map layout** — stored server-side in two layers: a Super admin curates the map everyone sees, anyone else deviates personally. Notes and pins still live in `localStorage`. Both layers store the *complete* state, so a save that would overwrite someone else's concurrent change is **rejected instead of applied** — you get a notice and reload rather than silently losing the other person's work
 - **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](LLDP-SETUP.md))
+- **Configurable colour scales** — Super admins set the thresholds and colours for both link scales (absolute traffic with weathermap off, utilisation % with it on) under *View → Color scales*; changes preview live, are stored in the module config and apply to all users. The colour guide shows the scale of the active mode and marks a customised one
 
 **Key figures and unmonitored devices**
 
@@ -296,6 +297,7 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - **Item-Pivot** — beliebiges Item-Key-Pattern als Spalten
 - **Manuelle Links** zwischen Hosts und **Kartenanordnung** — serverseitig, in zwei Ebenen: ein Super-Admin pflegt die für alle sichtbare Karte, jeder andere weicht persönlich davon ab. Notizen und Pins liegen weiterhin im `localStorage`. Beide Ebenen speichern den *vollständigen* Zustand; ein Speichern, das die gleichzeitige Änderung eines anderen überschreiben würde, wird deshalb **abgelehnt statt ausgeführt** — mit Hinweis und Neuladen, statt die Arbeit des anderen stillschweigend zu verlieren
 - **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](LLDP-SETUP.md#port-to-port--per-link-weathermap))
+- **Konfigurierbare Farbskalen** — Super-Admins setzen Schwellen und Farben beider Kantenskalen (absoluter Traffic bei Weathermap aus, Auslastung in % bei an) unter *View → Farbskalen…*; Änderungen sind sofort als Vorschau sichtbar, liegen in der Modul-Config und gelten für alle. Der Farbcode zeigt die Skala des aktiven Modus und kennzeichnet eine angepasste
 
 **Kennzahlen und unüberwachte Geräte**
 

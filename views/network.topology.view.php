@@ -242,7 +242,12 @@ window.NT_CONFIG = <?= json_encode([
     'module_version' => (static function() {
         $m = @json_decode((string) @file_get_contents(dirname(__DIR__) . '/manifest.json'), true);
         return is_array($m) && !empty($m['version']) ? (string) $m['version'] : '';
-    })()
+    })(),
+    // Link color scales (absolute traffic / weathermap utilization). Super
+    // admins can override them for everyone; null = frontend defaults.
+    'color_scales'  => $data['color_scales'] ?? null,
+    'scales_csrf'   => \CCsrfTokenHelper::get('network.topology.scales'),
+    'scales_url'    => 'zabbix.php?action=network.topology.scales'
 ], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 // Fallback: groupids aus URL wenn PHP NT_CONFIG nicht liefert
