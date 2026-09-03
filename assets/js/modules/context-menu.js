@@ -25,7 +25,7 @@ import { isFocusActive, getFocusId, getFocusHops,
 import { t } from './i18n.js';
 
 const _ctx = document.createElement('div');
-_ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #ddd;'
+_ctx.style.cssText = 'display:none;position:fixed;z-index:9999;background:var(--nt-c-surface,#fff);border:1px solid var(--nt-c-ddd,#ddd);'
     + 'border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:190px;font-size:13px;overflow:hidden';
 document.body.appendChild(_ctx);
 
@@ -59,7 +59,7 @@ function _ctxRow(label, color, onClick) {
     const row = document.createElement('div');
     row.textContent = label;
     row.style.cssText = 'padding:8px 16px;color:' + (color || '#334155') + ';cursor:pointer;white-space:nowrap;';
-    row.addEventListener('mouseenter', function() { row.style.background = '#f8fafc'; });
+    row.addEventListener('mouseenter', function() { row.style.background = 'var(--nt-c-f8fafc,#f8fafc)'; });
     row.addEventListener('mouseleave', function() { row.style.background = ''; });
     row.addEventListener('click', function(e) {
         e.stopPropagation();

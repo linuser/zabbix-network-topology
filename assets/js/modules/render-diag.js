@@ -72,7 +72,7 @@ function _buildLog(entries, theme) {
         const slowCol = (e.elapsed_ms || 0) > 1000 ? '#dc2626'
                       : (e.elapsed_ms || 0) > 500 ? '#f59e0b' : theme.text;
         const cacheLbl = e.cache_hit
-            ? '<span style="color:#16a34a">HIT</span>'
+            ? '<span style="color:var(--nt-c-16a34a,#16a34a)">HIT</span>'
             : '<span style="color:' + theme.subSoft + '">—</span>';
         const countsStr = e.counts
             ? Object.keys(e.counts).map(function(k) { return k + ':' + e.counts[k]; }).join(', ')
@@ -147,7 +147,7 @@ export function renderDiag(wrap) {
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {
-                summaryBody.innerHTML = '<div style="color:#dc2626">' + esc(data.error) + '</div>';
+                summaryBody.innerHTML = '<div style="color:var(--nt-c-dc2626,#dc2626)">' + esc(data.error) + '</div>';
                 logBody.innerHTML = '';
                 return;
             }
@@ -161,7 +161,7 @@ export function renderDiag(wrap) {
             logBody.innerHTML     = _buildLog(entries, theme);
         })
         .catch(function(e) {
-            summaryBody.innerHTML = '<div style="color:#dc2626">' + esc(t('diag.error', { msg: e.message })) + '</div>';
+            summaryBody.innerHTML = '<div style="color:var(--nt-c-dc2626,#dc2626)">' + esc(t('diag.error', { msg: e.message })) + '</div>';
             logBody.innerHTML = '';
         });
 }

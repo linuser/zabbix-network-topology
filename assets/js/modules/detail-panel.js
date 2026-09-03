@@ -251,7 +251,7 @@ export function showDetail(panel, d, cy) {
     const extraBlock = _items.length > 0
         ? section('Items')
             + (_itemsCollapsible
-                ? '<details><summary style="font-size:11px;color:#0275b8;cursor:pointer;'
+                ? '<details><summary style="font-size:11px;color:var(--nt-c-0275b8,#0275b8);cursor:pointer;'
                     + 'user-select:none;margin-bottom:4px">'
                     + esc(t('detail.items.show', { n: _items.length })) + '</summary>'
                     + _itemsHtml
@@ -286,7 +286,7 @@ export function showDetail(panel, d, cy) {
     const actionBar = '<div style="display:flex;gap:4px;margin-bottom:4px">'
         + actions.map(function(a, i) {
             return '<button data-act="' + i + '" title="' + esc(a.title) + '" '
-                + 'style="flex:1;padding:5px;background:#f4f6f7;border:1px solid #dfe4e7;'
+                + 'style="flex:1;padding:5px;background:var(--nt-c-f4f6f7,#f4f6f7);border:1px solid var(--nt-c-dfe4e7,#dfe4e7);'
                 + 'border-radius:2px;cursor:pointer;font-size:13px;color:var(--nt-c-1f2c33,#1f2c33);'
                 + 'transition:background 0.12s">' + a.lbl + '</button>';
         }).join('')
@@ -340,8 +340,8 @@ export function showDetail(panel, d, cy) {
 
     // Action-Buttons: data-act-Attribut hält den Index in actions[]
     panel.querySelectorAll('button[data-act]').forEach(function(btn) {
-        btn.addEventListener('mouseenter', function() { this.style.background = '#e2e8f0'; });
-        btn.addEventListener('mouseleave', function() { this.style.background = '#f8fafc'; });
+        btn.addEventListener('mouseenter', function() { this.style.background = 'var(--nt-c-e2e8f0,#e2e8f0)'; });
+        btn.addEventListener('mouseleave', function() { this.style.background = 'var(--nt-c-f8fafc,#f8fafc)'; });
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             const idx = parseInt(this.dataset.act, 10);

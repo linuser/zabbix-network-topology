@@ -27,7 +27,7 @@ const COL_BAD  = '#dc2626';
 function _srcBadge(src) {
     const colors = { lldp: '#0891b2', cdp: '#a855f7', other: '#64748b' };
     const c = colors[src] || colors.other;
-    return '<span style="display:inline-block;background:' + c + ';color:#fff;padding:0 5px;'
+    return '<span style="display:inline-block;background:' + c + ';color:var(--nt-c-onaccent,#fff);padding:0 5px;'
         + 'border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em">'
         + esc(src) + '</span>';
 }
@@ -221,7 +221,7 @@ export function renderLldpQuality(wrap) {
     berichtBtn.textContent = t('devreport.button');
     berichtBtn.title = t('devreport.button.tip');
     berichtBtn.style.cssText = 'margin:0 0 14px;padding:5px 12px;border-radius:6px;'
-        + 'border:1px solid #cbd5e1;background:#fff;color:#334155;font-size:12px;cursor:pointer';
+        + 'border:1px solid var(--nt-c-cbd5e1,#cbd5e1);background:var(--nt-c-surface,#fff);color:var(--nt-c-334155,#334155);font-size:12px;cursor:pointer';
     berichtBtn.addEventListener('click', showDeviceReport);
 
     root.appendChild(head);

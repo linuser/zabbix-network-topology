@@ -15,7 +15,7 @@ import { t } from './i18n.js';
 
 const _tip = document.createElement('div');
 _tip.id = 'nt-ring-tip';
-_tip.style.cssText = 'display:none;position:fixed;z-index:99998;background:#fff;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);'
+_tip.style.cssText = 'display:none;position:fixed;z-index:99998;background:var(--nt-c-surface,#fff);border:1px solid var(--nt-c-e2e8f0,#e2e8f0);'
     + 'border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);padding:10px 14px;font-size:12px;'
     + 'font-family:sans-serif;pointer-events:none;min-width:160px;';
 document.body.appendChild(_tip);
@@ -109,7 +109,7 @@ export function showTip(evt, d) {
         if (d.maintenance) pills.push('<span style="display:inline-block;background:var(--nt-c-fef3c7,#fef3c7);color:var(--nt-c-92400e,#92400e);'
             + 'padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">'
             + '\u{1F527} ' + esc(t('tip.maintenance')) + '</span>');
-        if (d.acknowledged) pills.push('<span style="display:inline-block;background:var(--nt-c-dcfce7,#dcfce7);color:#166534;'
+        if (d.acknowledged) pills.push('<span style="display:inline-block;background:var(--nt-c-dcfce7,#dcfce7);color:var(--nt-c-166534,#166534);'
             + 'padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">'
             + '\u2714 Acked</span>');
         const pillLine = pills.length
@@ -219,7 +219,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
         // Discovery-Source-Badge: LLDP/CDP/beides — falls vom Backend gemeldet
         const srcArr = (edgeData.src && edgeData.src.length) ? edgeData.src : [];
         const srcBadge = srcArr.length
-            ? ' <span style="font-size:9px;color:#fff;background:var(--nt-c-64748b,#64748b);border-radius:3px;'
+            ? ' <span style="font-size:9px;color:var(--nt-c-onaccent,#fff);background:var(--nt-c-64748b,#64748b);border-radius:3px;'
                 + 'padding:1px 5px;margin-left:4px;letter-spacing:0.05em;text-transform:uppercase;font-weight:600">'
                 + esc(srcArr.join('+')) + '</span>'
             : '';

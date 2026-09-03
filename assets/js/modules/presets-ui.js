@@ -47,7 +47,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     const wrap = document.createElement('div');
     wrap.id = 'nt-preset-wrap';
     wrap.style.cssText = 'display:inline-flex;align-items:center;gap:2px;margin-left:8px;'
-        + 'padding-left:8px;border-left:1px solid #e2e8f0';
+        + 'padding-left:8px;border-left:1px solid var(--nt-c-e2e8f0,#e2e8f0)';
 
     // Aktives Preset als Tripel {name, scope, scopeKey} — eindeutig identifizierbar
     // auch wenn zwei Presets gleichen Namens (verschiedene Scopes) existieren.
@@ -64,7 +64,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
 
     const ddMenu = document.createElement('div');
     ddMenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-        + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
+        + 'background:var(--nt-c-surface,#fff);border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:200px;max-width:320px;'
         + 'overflow-y:auto;max-height:360px;margin-top:2px';
 
@@ -97,7 +97,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
             txt.title = p.name + ' (' + (p.scope === 'global' ? t('presets.scope.global') : t('presets.scope.this')) + ')';
             row.appendChild(txt);
             row.addEventListener('mouseover', function() {
-                if (!isActive) this.style.background = '#f8fafc';
+                if (!isActive) this.style.background = 'var(--nt-c-f8fafc,#f8fafc)';
             });
             row.addEventListener('mouseout', function() {
                 this.style.background = isActive ? '#dbeafe' : 'transparent';
@@ -121,7 +121,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
 
         function addHeader(label) {
             const h = document.createElement('div');
-            h.style.cssText = 'padding:6px 14px 2px;font-size:10px;color:#94a3b8;'
+            h.style.cssText = 'padding:6px 14px 2px;font-size:10px;color:var(--nt-c-94a3b8,#94a3b8);'
                 + 'text-transform:uppercase;letter-spacing:0.5px';
             h.textContent = label;
             ddMenu.appendChild(h);
@@ -129,7 +129,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
 
         if (groupset.length === 0 && global.length === 0) {
             const empty = document.createElement('div');
-            empty.style.cssText = 'padding:12px 14px;font-size:12px;color:#94a3b8;font-style:italic';
+            empty.style.cssText = 'padding:12px 14px;font-size:12px;color:var(--nt-c-94a3b8,#94a3b8);font-style:italic';
             empty.textContent = t('presets.empty');
             ddMenu.appendChild(empty);
             return;
@@ -256,7 +256,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
         _active = { name: saved.name, scope: saved.scope, scopeKey: saved.scopeKey };
         saveActivePreset(saved.name, saved.scope, saved.scopeKey);
         // Kurzes visuelles Feedback
-        saveBtn.style.background = '#dcfce7';
+        saveBtn.style.background = 'var(--nt-c-dcfce7,#dcfce7)';
         setTimeout(function() { saveBtn.style.background = ''; }, 600);
     });
 

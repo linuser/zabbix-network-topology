@@ -373,7 +373,7 @@ function init() {
             window.location.replace(u.toString());
             return;
         }
-        if (spin) spin.innerHTML = '<span style="color:#64748b">'
+        if (spin) spin.innerHTML = '<span style="color:var(--nt-c-64748b,#64748b)">'
             + esc(t('app.pick_groups')) + '</span>';
         return;
     }
@@ -383,7 +383,7 @@ function init() {
     // (z.B. nach Permission-Entzug) — die würden beim nächsten Page-Load
     // via Auto-Restore wieder zur leeren Karte führen.
 
-    if (spin) spin.innerHTML = '<span style="color:#64748b">' + esc(t('app.loading')) + '</span>';
+    if (spin) spin.innerHTML = '<span style="color:var(--nt-c-64748b,#64748b)">' + esc(t('app.loading')) + '</span>';
 
     // Daten holen und initial rendern
     const params = new URLSearchParams();

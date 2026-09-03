@@ -15,37 +15,37 @@ export function setupLegend(groupNames, nodes) {
     const leg = document.getElementById('nt-legend');
     if (!leg) return;
 
-    let html = '<div style="font-weight:600;color:#475569;margin-bottom:5px;font-size:10px">'
+    let html = '<div style="font-weight:600;color:var(--nt-c-475569,#475569);margin-bottom:5px;font-size:10px">'
         + esc(t('legend.groups')) + '</div>';
     groupNames.forEach(function(name) {
         const col = grpColor(name);
         const cnt = nodes.filter(function(n) { return n._primaryGroup === name; }).length;
         html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
               + '<div style="width:9px;height:9px;border-radius:50%;background:' + col + '"></div>'
-              + '<span style="color:#475569;flex:1;font-size:11px">' + esc(name) + '</span>'
-              + '<span style="color:#94a3b8;font-size:11px">' + cnt + '</span>'
+              + '<span style="color:var(--nt-c-475569,#475569);flex:1;font-size:11px">' + esc(name) + '</span>'
+              + '<span style="color:var(--nt-c-94a3b8,#94a3b8);font-size:11px">' + cnt + '</span>'
               + '</div>';
     });
 
-    html += '<div style="font-weight:600;color:#475569;margin:6px 0 4px;font-size:10px;'
-          + 'border-top:1px solid #f1f5f9;padding-top:5px">' + esc(t('legend.severity')) + '</div>';
+    html += '<div style="font-weight:600;color:var(--nt-c-475569,#475569);margin:6px 0 4px;font-size:10px;'
+          + 'border-top:1px solid var(--nt-c-f1f5f9,#f1f5f9);padding-top:5px">' + esc(t('legend.severity')) + '</div>';
     SEV_LBL.forEach(function(lbl, i) {
         const cnt = nodes.filter(function(n) { return (n.severity || 0) === i; }).length;
         if (!cnt) return;
         html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
               + '<div style="width:9px;height:9px;border-radius:50%;background:' + SEV_COL[i] + '"></div>'
-              + '<span style="color:#475569;flex:1;font-size:11px">' + lbl + '</span>'
-              + '<span style="color:#94a3b8;font-size:11px">' + cnt + '</span>'
+              + '<span style="color:var(--nt-c-475569,#475569);flex:1;font-size:11px">' + lbl + '</span>'
+              + '<span style="color:var(--nt-c-94a3b8,#94a3b8);font-size:11px">' + cnt + '</span>'
               + '</div>';
     });
 
-    html += '<div style="font-weight:600;color:#475569;margin:6px 0 4px;font-size:10px;'
-          + 'border-top:1px solid #f1f5f9;padding-top:5px">' + esc(t('legend.ring')) + '</div>';
+    html += '<div style="font-weight:600;color:var(--nt-c-475569,#475569);margin:6px 0 4px;font-size:10px;'
+          + 'border-top:1px solid var(--nt-c-f1f5f9,#f1f5f9);padding-top:5px">' + esc(t('legend.ring')) + '</div>';
     [[t('legend.ring.cpu'), '#3b82f6'], [t('legend.ring.memory'), '#8b5cf6'],
      [t('legend.ring.traffic'), '#22c55e'], [t('legend.ring.ping'), '#f59e0b']].forEach(function(r) {
         html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
               + '<div style="width:9px;height:9px;border-radius:50%;background:' + r[1] + '"></div>'
-              + '<span style="color:#475569;font-size:11px">' + esc(r[0]) + '</span>'
+              + '<span style="color:var(--nt-c-475569,#475569);font-size:11px">' + esc(r[0]) + '</span>'
               + '</div>';
     });
 
@@ -119,7 +119,7 @@ export function setupBottomLegend(wrap, dark) {
     let r1 = grpTitle(t('legend.guide.nodes'));
     r1 += chip(dot(SEV_COL[0]) + '<b>' + esc(t('legend.guide.optimal')) + '</b>');
     for (let i = 1; i <= 5; i++) r1 += chip(dot(SEV_COL[i]) + esc(SEV_LBL[i]));
-    r1 += chip('<span style="color:#dc2626;font-weight:800;margin-right:4px">✕</span>' + esc(t('legend.guide.offline')));
+    r1 += chip('<span style="color:var(--nt-c-dc2626,#dc2626);font-weight:800;margin-right:4px">✕</span>' + esc(t('legend.guide.offline')));
     // Wartung: der oranger gestrichelte Ring UND das Schluessel-Badge, so wie es
     // auf der Karte aussieht. Hier stand ein gedimmtes ◐ — ein Zeichen, das
     // dort nirgends vorkommt. Gemeint war wohl "der Knoten ist gedimmt";

@@ -61,7 +61,40 @@ const DUNKEL = {
     // Blasse Flaechen (Tailwind-100er) — auf dunkel als dunkler Farbton.
     'dbeafe': '#172554',
     'fef3c7': '#3d2f00',
-    'dcfce7': '#0f2e1a'
+    'dcfce7': '#0f2e1a',
+
+    // Kurzschreibweisen und Farbnamen. Die erste Fassung dieser Zuordnung
+    // verlangte sechsstellige Werte — dadurch blieben genau die groessten
+    // Flaechen hell: der Tooltip-Kasten, das Kontextmenue und die Knoepfe
+    // stehen alle auf background:#fff. Auf der dunklen Karte war das ein
+    // leuchtend weisser Block.
+    'ddd': '#30363d',
+
+    // WEISS BRAUCHT ZWEI TOKEN, nicht eines. Als FLAECHE muss es dunkel
+    // werden. Als TEXT steht es auf einem Akzent, der selbst heller wird
+    // (das gedaempfte Abzeichen im Tooltip faerbt sich von #64748b nach
+    // #b1bac4) — weisse Schrift darauf waere dann unlesbar, also kippt sie
+    // ins Dunkle. Ein einziges --nt-c-fff haette einen der beiden Faelle
+    // zwangslaeufig kaputtgemacht.
+    // Zabbix-eigene Grautoene und die dunklen Textfarben, die auf den
+    // blassen Flaechen oben sitzen. Letztere MUESSEN mit: wenn #dbeafe zu
+    // #172554 wird, ist ein #1e3a8a darauf nicht mehr zu sehen. Eine Farbe
+    // zuzuordnen und die Schrift darauf zu vergessen ist schlimmer, als
+    // beide hell zu lassen.
+    'f4f6f7': '#21262d',
+    'eef2f5': '#21262d',
+    'dfe4e7': '#30363d',
+    'ccc': '#30363d',
+    '999': '#8b949e',
+    '1e293b': '#d8dee4',
+    '166534': '#3fb950',
+    '0275b8': '#58a6ff',
+    '1e3a8a': '#79c0ff',
+    '7f1d1d': '#ff7b72',
+    '7c2d12': '#ffa657',
+
+    'surface': '#161b22',
+    'onaccent': '#161b22'
 };
 
 /**

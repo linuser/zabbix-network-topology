@@ -234,7 +234,7 @@ export function renderStats(wrap, nodes) {
         b.dataset.days = String(r.days);
         if (r.days === DEFAULT_DAYS) {
             b.style.background = theme.accent;
-            b.style.color = '#fff';
+            b.style.color = 'var(--nt-c-surface,#fff)';
             b.style.borderColor = theme.accent;
         }
         rangeBtns.push(b);
@@ -287,7 +287,7 @@ export function renderStats(wrap, nodes) {
             + 'cursor:pointer;font-size:12px;font-family:inherit';
         if (d === _fcDays) {
             b.style.background = theme.accent;
-            b.style.color = '#fff';
+            b.style.color = 'var(--nt-c-surface,#fff)';
             b.style.borderColor = theme.accent;
         }
         b.addEventListener('click', function() {
@@ -352,7 +352,7 @@ export function renderStats(wrap, nodes) {
             .then(function(data) {
                 if (seq !== _seq) return;   // outdated response
                 if (data.error) {
-                    aggHead.innerHTML = '<span style="color:#dc2626">' + esc(t('stats.error', { msg: data.error })) + '</span>';
+                    aggHead.innerHTML = '<span style="color:var(--nt-c-dc2626,#dc2626)">' + esc(t('stats.error', { msg: data.error })) + '</span>';
                     return;
                 }
                 const agg = aggregate(data, hostMeta);
@@ -393,7 +393,7 @@ export function renderStats(wrap, nodes) {
             })
             .catch(function(e) {
                 if (seq !== _seq) return;
-                aggHead.innerHTML = '<span style="color:#dc2626">' + esc(t('stats.error', { msg: e.message })) + '</span>';
+                aggHead.innerHTML = '<span style="color:var(--nt-c-dc2626,#dc2626)">' + esc(t('stats.error', { msg: e.message })) + '</span>';
             });
     }
 
@@ -448,14 +448,14 @@ export function renderStats(wrap, nodes) {
             .then(function(data) {
                 if (seq !== _fcSeq || !fcSlot.isConnected) return;
                 if (data.error) {
-                    fcStatus.innerHTML = '<span style="color:#dc2626">' + esc(data.error) + '</span>';
+                    fcStatus.innerHTML = '<span style="color:var(--nt-c-dc2626,#dc2626)">' + esc(data.error) + '</span>';
                     return;
                 }
                 renderForecast(links, labelOf, data.hosts || {});
             })
             .catch(function(e) {
                 if (seq !== _fcSeq) return;
-                fcStatus.innerHTML = '<span style="color:#dc2626">' + esc(e.message) + '</span>';
+                fcStatus.innerHTML = '<span style="color:var(--nt-c-dc2626,#dc2626)">' + esc(e.message) + '</span>';
             });
     }
 
@@ -540,7 +540,7 @@ export function renderStats(wrap, nodes) {
             return { text: '<span style="color:' + theme.subSoft + '">' + esc(t('fc.eta.stable')) + '</span>' };
         }
         if (eta <= 0.5) {
-            return { text: '<b style="color:#dc2626">' + esc(t('fc.eta.now')) + '</b>' };
+            return { text: '<b style="color:var(--nt-c-dc2626,#dc2626)">' + esc(t('fc.eta.now')) + '</b>' };
         }
         const days = Math.round(eta);
         if (days > 365) {
@@ -556,7 +556,7 @@ export function renderStats(wrap, nodes) {
             return { text: '<span style="color:' + theme.subSoft + '">' + esc(t('fc.eta.stable')) + '</span>' };
         }
         if (eta <= 0.5) {
-            return { text: '<b style="color:#dc2626">' + esc(t('rf.eta.now')) + '</b>' };
+            return { text: '<b style="color:var(--nt-c-dc2626,#dc2626)">' + esc(t('rf.eta.now')) + '</b>' };
         }
         const days = Math.round(eta);
         if (days > 365) {
@@ -594,14 +594,14 @@ export function renderStats(wrap, nodes) {
             .then(function(data) {
                 if (seq !== _rfSeq || !rfSlot.isConnected) return;
                 if (data.error) {
-                    rfStatus.innerHTML = '<span style="color:#dc2626">' + esc(data.error) + '</span>';
+                    rfStatus.innerHTML = '<span style="color:var(--nt-c-dc2626,#dc2626)">' + esc(data.error) + '</span>';
                     return;
                 }
                 renderResourceForecast(data.hosts || {});
             })
             .catch(function(e) {
                 if (seq !== _rfSeq) return;
-                rfStatus.innerHTML = '<span style="color:#dc2626">' + esc(e.message) + '</span>';
+                rfStatus.innerHTML = '<span style="color:var(--nt-c-dc2626,#dc2626)">' + esc(e.message) + '</span>';
             });
     }
 

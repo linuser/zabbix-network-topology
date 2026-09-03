@@ -108,7 +108,7 @@ function buildPopup(node) {
         }
         if (node.acknowledged) {
             row.appendChild(mk('span',
-                'background:var(--nt-c-dcfce7,#dcfce7);color:#166534;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
+                'background:var(--nt-c-dcfce7,#dcfce7);color:var(--nt-c-166534,#166534);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
                 '\u2714 Acked'));
         }
         root.appendChild(row);
@@ -320,7 +320,7 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
     // Provider-Switcher (Dropdown rechts oben über der Karte)
     const switcher = document.createElement('div');
     switcher.style.cssText = 'position:absolute;top:8px;right:8px;z-index:1000;'
-        + 'background:white;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
+        + 'background:var(--nt-c-surface,white);border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
         + 'box-shadow:0 2px 6px rgba(0,0,0,0.12);padding:4px 6px';
     const sel = document.createElement('select');
     sel.style.cssText = 'border:none;outline:none;background:transparent;font-size:12px;cursor:pointer';

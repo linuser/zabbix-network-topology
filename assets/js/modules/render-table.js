@@ -433,7 +433,7 @@ function buildProblemDetailRow(n, colspan, theme) {
             +     ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
             +     esc(p.name || '') + '</span>'
             + (p.acknowledged
-                ? '<span title="' + esc(t('table.prob.acked')) + '" style="color:#16a34a;font-size:11px;'
+                ? '<span title="' + esc(t('table.prob.acked')) + '" style="color:var(--nt-c-16a34a,#16a34a);font-size:11px;'
                     + 'font-weight:700;flex-shrink:0">\u2714</span>'
                 : '')
             + (age
@@ -717,20 +717,20 @@ function _diffBadgeHtml(id) {
     if (!_diff) return '';
     const sid = String(id);
     const base = 'display:inline-block;width:14px;height:14px;line-height:14px;'
-        + 'border-radius:50%;color:#fff;font-size:10px;font-weight:700;'
+        + 'border-radius:50%;color:var(--nt-c-onaccent,#fff);font-size:10px;font-weight:700;'
         + 'text-align:center;margin-right:5px;vertical-align:middle';
     if (_diff.new.has(sid)) {
-        return '<span title="' + esc(t('table.diff.new')) + '" style="' + base + ';background:#06b6d4">+</span>';
+        return '<span title="' + esc(t('table.diff.new')) + '" style="' + base + ';background:var(--nt-c-06b6d4,#06b6d4)">+</span>';
     }
     if (_diff.up.has(sid)) {
         const ch = _diff.sevByHost.get(sid);
         const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : t('table.diff.worse');
-        return '<span title="' + esc(tt) + '" style="' + base + ';background:#dc2626">↑</span>';
+        return '<span title="' + esc(tt) + '" style="' + base + ';background:var(--nt-c-dc2626,#dc2626)">↑</span>';
     }
     if (_diff.down.has(sid)) {
         const ch = _diff.sevByHost.get(sid);
         const tt = ch ? ('Severity: ' + ch.old + ' → ' + ch.now) : t('table.diff.better');
-        return '<span title="' + esc(tt) + '" style="' + base + ';background:#16a34a">↓</span>';
+        return '<span title="' + esc(tt) + '" style="' + base + ';background:var(--nt-c-16a34a,#16a34a)">↓</span>';
     }
     return '';
 }
@@ -791,13 +791,13 @@ function rowHtml(n, baseUrl, theme) {
     const sevCellHtml = isOff
         ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
             + 'border-radius:' + NT_R.pill + ';background:rgba(229,55,66,0.13);'
-            + 'color:#e53742;font-size:11px;font-weight:700">'
+            + 'color:var(--nt-c-e53742,#e53742);font-size:11px;font-weight:700">'
             + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
-            + 'background:#e53742"></span>OFFLINE</span>'
+            + 'background:var(--nt-c-e53742,#e53742)"></span>OFFLINE</span>'
         : isStale
         ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
             + 'border-radius:' + NT_R.pill + ';background:rgba(245,158,11,0.13);'
-            + 'color:#92400e;font-size:11px;font-weight:700"'
+            + 'color:var(--nt-c-92400e,#92400e);font-size:11px;font-weight:700"'
             + ' title="' + esc(t('table.stale_tip', { m: Math.floor(_ageSec / 60) })) + '">'
             + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
             + 'background:#f59e0b"></span>STALE</span>'
@@ -1045,14 +1045,14 @@ export function renderTable(wrap, nodes, edges) {
                 : t('table.count.filtered', { shown: r.visible, total: r.total });
             if (_diff) {
                 const parts = [];
-                if (_diff.new.size)  parts.push('<span style="color:#06b6d4;font-weight:700">+' + _diff.new.size + '</span>');
-                if (_diff.gone.size) parts.push('<span style="color:#94a3b8;font-weight:700">−' + _diff.gone.size + '</span>');
-                if (_diff.up.size)   parts.push('<span style="color:#dc2626;font-weight:700">↑' + _diff.up.size + '</span>');
-                if (_diff.down.size) parts.push('<span style="color:#16a34a;font-weight:700">↓' + _diff.down.size + '</span>');
+                if (_diff.new.size)  parts.push('<span style="color:var(--nt-c-06b6d4,#06b6d4);font-weight:700">+' + _diff.new.size + '</span>');
+                if (_diff.gone.size) parts.push('<span style="color:var(--nt-c-94a3b8,#94a3b8);font-weight:700">−' + _diff.gone.size + '</span>');
+                if (_diff.up.size)   parts.push('<span style="color:var(--nt-c-dc2626,#dc2626);font-weight:700">↑' + _diff.up.size + '</span>');
+                if (_diff.down.size) parts.push('<span style="color:var(--nt-c-16a34a,#16a34a);font-weight:700">↓' + _diff.down.size + '</span>');
                 const diffTxt = parts.length
                     ? ' · ' + esc(t('table.diff.since', { age: formatSnapshotAge(snap) })) + ': ' + parts.join(' ')
                     : ' · ' + esc(t('table.diff.since', { age: formatSnapshotAge(snap) })) + ': ' + esc(t('table.diff.none'));
-                counter.innerHTML = esc(txt) + '<span style="color:#94a3b8">' + diffTxt + '</span>';
+                counter.innerHTML = esc(txt) + '<span style="color:var(--nt-c-94a3b8,#94a3b8)">' + diffTxt + '</span>';
             } else {
                 counter.textContent = txt;
             }

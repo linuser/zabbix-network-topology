@@ -151,25 +151,25 @@ export function showDeviceReport() {
         + 'display:flex;align-items:center;justify-content:center;padding:24px';
 
     const box = document.createElement('div');
-    box.style.cssText = 'background:#fff;border-radius:10px;max-width:760px;width:100%;'
+    box.style.cssText = 'background:var(--nt-c-surface,#fff);border-radius:10px;max-width:760px;width:100%;'
         + 'max-height:100%;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.25);'
         + 'font-family:sans-serif';
 
     const head = document.createElement('div');
-    head.style.cssText = 'padding:14px 18px 8px;font-size:15px;font-weight:600;color:#0f172a';
+    head.style.cssText = 'padding:14px 18px 8px;font-size:15px;font-weight:600;color:var(--nt-c-0f172a,#0f172a)';
     head.textContent = t('devreport.title');
     box.appendChild(head);
 
     const sub = document.createElement('div');
-    sub.style.cssText = 'padding:0 18px 10px;font-size:12px;color:#64748b;line-height:1.5';
+    sub.style.cssText = 'padding:0 18px 10px;font-size:12px;color:var(--nt-c-64748b,#64748b);line-height:1.5';
     sub.textContent = t('devreport.intro');
     box.appendChild(sub);
 
     const ta = document.createElement('textarea');
     ta.readOnly = true;
     ta.style.cssText = 'flex:1;min-height:280px;margin:0 18px;padding:10px;font-family:ui-monospace,'
-        + 'SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;border:1px solid #e2e8f0;'
-        + 'border-radius:6px;resize:vertical;color:#334155';
+        + 'SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);'
+        + 'border-radius:6px;resize:vertical;color:var(--nt-c-334155,#334155)';
     ta.value = txt || t('devreport.nodata');
     box.appendChild(ta);
 

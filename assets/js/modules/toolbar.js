@@ -218,7 +218,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
 
         const menu = document.createElement('div');
         menu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-            + 'background:#fff;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
+            + 'background:var(--nt-c-surface,#fff);border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
             + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:160px;overflow:hidden;'
             + 'margin-top:2px';
 
@@ -231,7 +231,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 + 'white-space:nowrap;font-weight:' + (isActive ? '600' : '400');
             row.textContent = opt.label;
             row.addEventListener('mouseover', function() {
-                if (!isActive) this.style.background = '#f8fafc';
+                if (!isActive) this.style.background = 'var(--nt-c-f8fafc,#f8fafc)';
             });
             row.addEventListener('mouseout', function() {
                 if (!isActive) this.style.background = 'transparent';
@@ -324,7 +324,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         tapBtn.style.margin = '0';
         const tapMenu = document.createElement('div');
         tapMenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-            + 'background:#fff;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
+            + 'background:var(--nt-c-surface,#fff);border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
             + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:130px;overflow:hidden;margin-top:2px';
         let _tapMs = loadTapholdMs();
         function tapLabel() { return t('toolbar.taphold', { ms: _tapMs }); }
@@ -339,7 +339,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 + 'font-weight:' + (isActive ? '600' : '400');
             row.textContent = ms + ' ms' + (ms === 500 ? ' ' + t('toolbar.taphold.default') : '');
             row.addEventListener('mouseover', function() {
-                if (ms !== _tapMs) this.style.background = '#f8fafc';
+                if (ms !== _tapMs) this.style.background = 'var(--nt-c-f8fafc,#f8fafc)';
             });
             row.addEventListener('mouseout', function() {
                 this.style.background = ms === _tapMs ? '#dbeafe' : 'transparent';
@@ -381,7 +381,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         _groupViewOn ? t('toolbar.group.expand') : t('toolbar.group.collapse'), null);
     if (_groupViewOn) {
         bGroup.style.background = '#3b82f6';
-        bGroup.style.color = '#fff';
+        bGroup.style.color = 'var(--nt-c-surface,#fff)';
     }
     bGroup.onclick = function() {
         const nowOn = localStorage.getItem(NT_GROUP_VIEW_KEY) !== '1';
@@ -446,7 +446,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         clusterWrap.appendChild(cBtn);
 
         const cMenu = document.createElement('div');
-        cMenu.style.cssText = 'position:absolute;top:100%;left:0;background:#fff;'
+        cMenu.style.cssText = 'position:absolute;top:100%;left:0;background:var(--nt-c-surface,#fff);'
             + 'border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.08);'
             + 'min-width:170px;z-index:300;display:none;margin-top:2px';
         ['auto', 'columns', 'rows', 'off'].forEach(function(opt) {
@@ -459,7 +459,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 item.style.fontWeight = '600';
             }
             item.addEventListener('mouseenter', function() {
-                if (item.dataset.mode !== cMode) item.style.background = '#f1f5f9';
+                if (item.dataset.mode !== cMode) item.style.background = 'var(--nt-c-f1f5f9,#f1f5f9)';
             });
             item.addEventListener('mouseleave', function() {
                 if (item.dataset.mode !== cMode) item.style.background = '';
@@ -647,7 +647,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         si.placeholder = t('toolbar.search');
         si.title = t('toolbar.search.tip');
         si.style.cssText = 'width:140px;height:26px;font-size:12px;margin-left:8px;padding:0 8px;'
-            + 'border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:4px;outline:none;background:#fff;color:var(--nt-c-334155,#334155)';
+            + 'border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:4px;outline:none;background:var(--nt-c-surface,#fff);color:var(--nt-c-334155,#334155)';
         // Dieselbe Suchsprache wie in der Tabelle, statt eines indexOf auf den
         // Anzeigenamen. Damit kann die Karte, was die Tabelle laengst konnte:
         //

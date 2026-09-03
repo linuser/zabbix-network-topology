@@ -173,7 +173,7 @@ function _showBanner(cy, causes, victims, problems) {
     const banner = document.createElement('div');
     banner.id = 'nt-rc-banner';
     banner.style.cssText = 'position:absolute;top:' + top + 'px;left:50%;transform:translateX(-50%);'
-        + 'z-index:59;background:#7f1d1d;color:#fff;padding:7px 14px;border-radius:6px;'
+        + 'z-index:59;background:var(--nt-c-7f1d1d,#7f1d1d);color:var(--nt-c-onaccent,#fff);padding:7px 14px;border-radius:6px;'
         + 'font-size:12px;font-family:sans-serif;display:flex;align-items:center;gap:12px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.3)';
     const txt = document.createElement('span');
@@ -182,7 +182,7 @@ function _showBanner(cy, causes, victims, problems) {
     const btn = document.createElement('button');
     btn.textContent = t('rc.end');
     btn.style.cssText = 'background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);'
-        + 'color:#fff;border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer;'
+        + 'color:var(--nt-c-onaccent,#fff);border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer;'
         + 'font-family:inherit';
     btn.addEventListener('click', function() { clearRootCause(cy); });
     banner.appendChild(btn);

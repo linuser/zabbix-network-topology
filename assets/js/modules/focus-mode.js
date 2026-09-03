@@ -151,7 +151,7 @@ export function renderFocusBanner(wrap) {
     const banner = document.createElement('div');
     banner.id = 'nt-focus-banner';
     banner.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);'
-        + 'z-index:60;background:#1e3a8a;color:#fff;padding:7px 14px;border-radius:6px;'
+        + 'z-index:60;background:var(--nt-c-1e3a8a,#1e3a8a);color:var(--nt-c-onaccent,#fff);padding:7px 14px;border-radius:6px;'
         + 'font-size:12px;font-family:sans-serif;display:flex;align-items:center;gap:10px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.3)';
 
@@ -165,7 +165,7 @@ export function renderFocusBanner(wrap) {
     banner.appendChild(txt);
 
     const btnCss = 'background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);'
-        + 'color:#fff;border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer;'
+        + 'color:var(--nt-c-onaccent,#fff);border-radius:4px;padding:2px 10px;font-size:11px;cursor:pointer;'
         + 'font-family:inherit';
     [['−', t('focus.minus.tip'), -1], ['+', t('focus.plus.tip'), +1]].forEach(function(def) {
         const b = document.createElement('button');
