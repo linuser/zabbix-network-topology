@@ -16,7 +16,7 @@
 
 import { t } from './i18n.js';
 import { toast } from './toast.js';
-import { fmt } from './utils.js';
+import { el, fmt } from './utils.js';
 import { MAX_SCALE_COLORS, getColorScales, hasCustomScales, normalizeScales,
          applyColorScales, applyTrafficHeatmap } from './traffic.js';
 import { refreshBottomLegend } from './legend.js';
@@ -70,12 +70,6 @@ export function openColorScalesPanel(wrap, dark) {
     const inputCss = 'padding:2px 4px;border:1px solid ' + bdr + ';border-radius:4px;'
         + 'background:' + bg + ';color:' + txt + ';font-size:12px';
 
-    function el(tag, css, text) {
-        const e = document.createElement(tag);
-        if (css) e.style.cssText = css;
-        if (text !== undefined) e.textContent = text;
-        return e;
-    }
     function mkBtn(label, fn, primary) {
         const b = el('button', 'padding:3px 9px;border-radius:4px;cursor:pointer;font-size:11.5px;'
             + 'border:1px solid ' + (primary ? '#0275b8' : bdr) + ';'

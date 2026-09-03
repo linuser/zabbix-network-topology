@@ -1,8 +1,10 @@
 // utils.js — generische Helfer ohne Abhängigkeiten
 //
-// Diese beiden Funktionen werden überall im Code gebraucht (HTML-Escaping,
-// Bandbreiten-Format) und sollten daher in einem eigenen Modul ohne weitere
-// Imports stehen.
+// Was hier steht, wird überall gebraucht (Escaping, Bandbreiten-Format, ein
+// DOM-Element bauen) und hat deshalb ein eigenes Modul ohne weitere Imports.
+// Die Regel dafür ist einfach: kommt ein Helfer in einer zweiten Datei vor,
+// gehört er hierher — sonst driften die Kopien auseinander, und genau das ist
+// bei den Auslastungsstufen schon einmal passiert (siehe tooltip.js).
 
 export function esc(s) {
     return String(s == null ? '' : s)
@@ -103,4 +105,17 @@ export function fmtItemValue(value, units) {
     // String-Wert — kürzen bei Bedarf
     const s = String(value);
     return s.length > 32 ? s.substring(0, 30) + '\u2026' : s;
+}
+
+// Ein Element mit Inline-CSS und Text bauen.
+//
+// Stand dreimal fast gleich im Code (edge-detail, path-list, color-scales-ui).
+// Der Text geht IMMER über textContent — dieser Helfer ist einer der Gründe,
+// warum die neuen Panels ohne innerHTML auskommen, obwohl dort Portnamen und
+// Nachbarnamen von fremden Geräten landen.
+export function el(tag, css, text) {
+    const e = document.createElement(tag);
+    if (css) e.style.cssText = css;
+    if (text !== undefined && text !== null) e.textContent = String(text);
+    return e;
 }

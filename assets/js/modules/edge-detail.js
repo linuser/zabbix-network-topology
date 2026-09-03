@@ -36,21 +36,14 @@
 // Hier dasselbe: Portnamen kommen von FREMDEN Geraeten ueber LLDP/CDP, und
 // ueber textContent gibt es die Escaping-Frage gar nicht erst.
 
-import { fmt } from './utils.js';
+import { el, fmt } from './utils.js';
 import { t } from './i18n.js';
-import { utilizationColor } from './traffic.js';
+import { utilizationColor, utilizationPct } from './traffic.js';
 
 // Schwellen wie in traffic.js — Errors/Discards sind nach Zabbix-Preprocessing
 // 'change per second', 1 Error/s ist bereits viel.
 const ERR_THRESHOLD  = 1;
 const DROP_THRESHOLD = 5;
-
-function el(tag, css, text) {
-    const e = document.createElement(tag);
-    if (css)  e.style.cssText = css;
-    if (text !== undefined && text !== null) e.textContent = String(text);
-    return e;
-}
 
 function section(parent, label) {
     parent.appendChild(el('div',
@@ -220,9 +213,7 @@ export function showEdgeDetail(panel, ed) {
         panel.appendChild(live);
 
         if (cap > 0) {
-            // Dieselbe Rechnung wie in traffic.js: die Knotensumme zaehlt beide
-            // Richtungen, die Per-Link-Metrik ist bereits der Portwert.
-            const pct = Math.min(999, (Math.max(tIn, tOut) / (d.perLink ? 1 : 2) / cap) * 100);
+            const pct = utilizationPct(d);
             const v = el('span');
             v.appendChild(el('b', 'color:' + utilizationColor(pct), pct.toFixed(1) + '%'));
             v.appendChild(document.createTextNode(' '));

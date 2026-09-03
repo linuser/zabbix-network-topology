@@ -10,7 +10,7 @@
 //   _sparkPending — hostid -> true, verhindert parallele Fetches
 
 import { esc, fmt, fmtItemValue } from './utils.js';
-import { utilizationColor } from './traffic.js';
+import { utilizationColor, utilizationPct } from './traffic.js';
 import { t } from './i18n.js';
 
 const _tip = document.createElement('div');
@@ -241,14 +241,14 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                 + '</div>'
             : '';
 
-        // Auslastung wenn Kapazitaet bekannt (Weathermap-Basis). Node-Summen-
-        // Schaetzung → /2; §3-Per-Link-Metrik (perLink) ist schon der Link-Wert.
+        // Auslastung wenn Kapazitaet bekannt (Weathermap-Basis).
         const capBps = edgeData.capBps || 0;
         let utilPart = '';
         if (capBps > 0) {
-            const pct = Math.min(999, (Math.max(tIn, tOut) / (edgeData.perLink ? 1 : 2) / capBps) * 100);
-            // Same tiers as the edge (traffic.js) — this used to turn orange at
-            // 40% while the edge only did so at 55%.
+            // Prozentsatz UND Farbstufe kommen aus traffic.js. Die Farbstufe
+            // war hier schon einmal eine eigene Kopie und lief auseinander —
+            // der Tooltip wurde bei 40 % orange, die Kante erst bei 55 %.
+            const pct = utilizationPct(edgeData);
             const pctCol = utilizationColor(pct);
             utilPart = '<span style="color:#94a3b8">·</span>'
                 + '<span><b style="color:' + pctCol + '">' + pct.toFixed(1) + '%</b>'

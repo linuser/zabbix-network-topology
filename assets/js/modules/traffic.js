@@ -146,16 +146,26 @@ export function formatUtilization(pct) {
     return (pct < 10 ? pct.toFixed(1) : pct.toFixed(0)) + '%';
 }
 
-// Auslastung einer Edge in %. Bei der Node-Summen-Schaetzung ist Traffic die
-// SUMME beider Endpunkte (siehe build-elements) → /2 fuer die Link-Schaetzung.
-// Bei §3-Per-Link-Metrik (perLink) ist trafficIn/Out bereits der echte Port-
-// Wert → NICHT teilen.
-function edgeUtilizationPct(edge) {
-    const cap = edge.data('capBps') || 0;
+// Auslastung einer Edge in %, aus ihrem DATENOBJEKT — null, wenn die
+// Kapazitaet fehlt.
+//
+// Bei der Node-Summen-Schaetzung ist Traffic die SUMME beider Endpunkte (siehe
+// build-elements) → /2 fuer die Link-Schaetzung. Bei §3-Per-Link-Metrik
+// (perLink) ist trafficIn/Out bereits der echte Port-Wert → NICHT teilen.
+//
+// EXPORTIERT, WEIL DIESELBE RECHNUNG VIERMAL IM CODE STAND: hier, im Tooltip,
+// im Kanten-Panel und in der Pfadliste. Bei den FARBSTUFEN ist dieselbe
+// Verdopplung schon einmal auseinandergelaufen — der Tooltip wurde bei 40 %
+// orange, die Kante erst bei 55 %. Das ist der Grund fuer utilizationColor(),
+// und es ist derselbe Grund hier.
+//
+// Nimmt bewusst das Datenobjekt und kein Cytoscape-Element: die drei Aufrufer
+// ausserhalb haben nur die Daten, nicht das Element.
+export function utilizationPct(d) {
+    const cap = (d && d.capBps) || 0;
     if (cap <= 0) return null;
-    const raw = Math.max(edge.data('trafficIn') || 0, edge.data('trafficOut') || 0);
-    const t = edge.data('perLink') ? raw : raw / 2;
-    return Math.min(999, (t / cap) * 100);
+    const raw = Math.max(d.trafficIn || 0, d.trafficOut || 0);
+    return Math.min(999, ((d.perLink ? raw : raw / 2) / cap) * 100);
 }
 
 export function applyTrafficHeatmap(cy) {
@@ -176,7 +186,7 @@ export function applyTrafficHeatmap(cy) {
         // absolute Skala zurueck. Zusaetzlich zeigt das Edge-Label die %.
         let wmPct = null;
         if (_weathermap) {
-            wmPct = edgeUtilizationPct(edge);
+            wmPct = utilizationPct(edge.data());
             if (wmPct !== null) {
                 const u = utilizationTier(wmPct);
                 t = { w: u.w, col: u.col, tcol: u.col, dash: total <= 0 };
@@ -222,6 +232,11 @@ export function applyTrafficHeatmap(cy) {
     });
 }
 
+// IDs der Knoten, denen wir zuletzt eine Puls-Glorie verpasst haben. Ohne
+// dieses Gedaechtnis muesste man zum Aufraeumen ueber ALLE Knoten gehen — und
+// genau das hat fremde Glorien mitgeloescht.
+let _gepulst = [];
+
 /**
  * Disaster-Zustand auf Knoten und Kanten anwenden — und zurueckgeben, wer
  * betroffen ist.
@@ -235,11 +250,6 @@ export function applyTrafficHeatmap(cy) {
  *
  * @returns Cytoscape-Collection der Disaster-Knoten
  */
-// IDs der Knoten, denen wir zuletzt eine Puls-Glorie verpasst haben. Ohne
-// dieses Gedaechtnis muesste man zum Aufraeumen ueber ALLE Knoten gehen — und
-// genau das hat fremde Glorien mitgeloescht.
-let _gepulst = [];
-
 export function markDisasterState(c) {
     const tote = c.nodes('[!isGroup]').filter(function(n) {
         return (n.data('severity') || 0) >= 5;
@@ -292,9 +302,7 @@ export function startEdgeAnimation(cy) {
     // Jetzt einmal pro Sekunde neu bewertet (jeder 20. Tick), nicht bei jedem
     // Tick: die Bewertung laeuft ueber alle Knoten, 50 ms waeren dafuer zu oft.
     // Eine Sekunde Verzug bei einem Ausfall merkt niemand.
-    const bewerte = markDisasterState;
-
-    let deadNodes = bewerte(cy);
+    let deadNodes = markDisasterState(cy);
 
     // Lebende Edges animieren — "fließende Punkte" via line-dash-offset.
     // Defenses: cy.destroyed()-Check, document.hidden-Guard (kein Render
@@ -314,7 +322,7 @@ export function startEdgeAnimation(cy) {
         // % 22 laeuft der Zaehler, deshalb NICHT "% 20 === 0": das trifft 20
         // und 0, also zweimal je Zyklus im Abstand von 100 ms. Ein fester Wert
         // trifft genau einmal pro Umlauf.
-        if (offset === 20) deadNodes = bewerte(c);
+        if (offset === 20) deadNodes = markDisasterState(c);
 
         c.edges().filter(function(e) { return !e.hasClass('dead-edge'); })
             .style('line-dash-offset', -offset);

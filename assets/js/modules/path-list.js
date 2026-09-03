@@ -24,27 +24,10 @@
 // Gebaut mit createElement/textContent wie edge-detail.js — Portnamen kommen
 // von fremden Geraeten, und ueber textContent stellt sich die Frage nicht.
 
-import { fmt } from './utils.js';
+import { el, fmt } from './utils.js';
 import { t } from './i18n.js';
-import { utilizationColor } from './traffic.js';
+import { utilizationColor, utilizationPct } from './traffic.js';
 import { getLastPath } from './path-highlight.js';
-
-function el(tag, css, text) {
-    const e = document.createElement(tag);
-    if (css)  e.style.cssText = css;
-    if (text !== undefined && text !== null) e.textContent = String(text);
-    return e;
-}
-
-/** Auslastung einer Kante in Prozent, oder null wenn die Kapazitaet fehlt. */
-function utilPct(d) {
-    const cap = d.capBps || 0;
-    if (cap <= 0) return null;
-    const peak = Math.max(d.trafficIn || 0, d.trafficOut || 0);
-    // Dieselbe Rechnung wie traffic.js und edge-detail.js: die Knotensumme
-    // zaehlt beide Richtungen, die Per-Link-Metrik ist schon der Portwert.
-    return Math.min(999, (peak / (d.perLink ? 1 : 2) / cap) * 100);
-}
 
 /**
  * Rendert den zuletzt berechneten Pfad ins Detail-Panel.
@@ -112,7 +95,7 @@ export function showPathList(panel, cy) {
             linkRow.appendChild(el('span', 'color:#64748b', (pS || '?') + ' → ' + (pT || '?')));
         }
 
-        const pct = utilPct(d);
+        const pct = utilizationPct(d);
         if (pct !== null) {
             if (linkRow.childNodes.length) linkRow.appendChild(el('span', 'color:#cbd5e1', '·'));
             linkRow.appendChild(el('b', 'color:' + utilizationColor(pct), pct.toFixed(1) + '%'));
