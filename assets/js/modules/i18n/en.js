@@ -443,6 +443,8 @@ export default {
     'legend.guide.link_fresh': 'new link',
     'legend.guide.link_stale': 'no longer reported',
     'whatif.root_all_down': 'Every uplink reference on this map is part of the simulation, so nothing has a path out any more. Everything that hung behind it counts as cut off.',
+    'whatif.banner_unknown': '{n} not assessable',
+    'whatif.unknown_tip': 'These hosts have no discovered links on this map, so they were never reachable from the uplink and the simulation cannot say anything about them. Usually LLDP/CDP is missing there.',
     'legend.groups': 'GROUPS',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

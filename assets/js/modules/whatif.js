@@ -164,10 +164,23 @@ export function recomputeSimulation(cy) {
     const visited = reachable(cy, roots, _simulated);
 
     let cutCount = 0;
+    // Hosts, ueber die sich NICHTS sagen laesst: sie waren schon vor der
+    // Simulation von keiner Referenz aus erreichbar, weil sie gar keine
+    // gezeichnete Verbindung haben. Meist fehlt dort LLDP/CDP.
+    //
+    // Sie nicht mitzuzaehlen ist richtig — sonst wuerde jede Insel jedem
+    // beliebigen simulierten Host angelastet. Sie zu VERSCHWEIGEN ist es
+    // nicht: "6 abgeschnitten" sieht nach einer vollstaendigen Antwort aus,
+    // waehrend vier Hosts ueberhaupt nicht beurteilt wurden. Wer seinen
+    // Switch abschalten will, verlaesst sich dann auf eine Zahl, die seine
+    // NAS gar nicht kannte.
+    let unbekannt = 0;
     cy.nodes('[!isGroup]').forEach(function(n) {
         const id = n.id();
         if (_simulated.has(id)) { n.addClass('nt-sim-dead'); return; }
-        if (baseline[id] && !visited[id]) { n.addClass('nt-sim-cut'); cutCount++; }
+        if (n.data('_isGhost') || n.data('_isInternet')) return;
+        if (!baseline[id]) { unbekannt++; return; }
+        if (!visited[id]) { n.addClass('nt-sim-cut'); cutCount++; }
     });
 
     // Hosting-Containment (nt:parent → hosts-Kante): ein toter oder
@@ -197,7 +210,7 @@ export function recomputeSimulation(cy) {
         }
     }
 
-    _showBanner(cy, cutCount);
+    _showBanner(cy, cutCount, unbekannt);
 }
 
 // ── Banner: laufende Simulation sichtbar machen + Ausstieg anbieten ────────
@@ -206,7 +219,7 @@ function _removeBanner() {
     if (b) b.remove();
 }
 
-function _showBanner(cy, cutCount) {
+function _showBanner(cy, cutCount, unbekannt) {
     _removeBanner();
     const wrap = document.getElementById('nt-canvas-wrap');
     if (!wrap) return;
@@ -217,7 +230,9 @@ function _showBanner(cy, cutCount) {
         + 'font-size:12px;font-family:sans-serif;display:flex;align-items:center;gap:12px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.3)';
     const txt = document.createElement('span');
-    txt.textContent = t('whatif.banner', { failed: _simulated.size, cut: cutCount });
+    txt.textContent = t('whatif.banner', { failed: _simulated.size, cut: cutCount })
+        + (unbekannt ? ' \u00b7 ' + t('whatif.banner_unknown', { n: unbekannt }) : '');
+    if (unbekannt) txt.title = t('whatif.unknown_tip');
     banner.appendChild(txt);
     const btn = document.createElement('button');
     btn.textContent = t('whatif.end');
