@@ -450,6 +450,8 @@ export default {
     'whatif.root_all_down': 'Alle Uplink-Referenzen dieser Karte sind Teil der Simulation \u2014 es gibt keinen Weg mehr nach draussen. Alles, was dahinter hing, gilt als abgeschnitten.',
     'whatif.banner_unknown': '{n} nicht beurteilbar',
     'whatif.unknown_tip': 'Diese Hosts haben auf der Karte keine gefundenen Verbindungen. Sie waren nie vom Uplink aus erreichbar, die Simulation kann \u00fcber sie also nichts sagen. Meist fehlt dort LLDP/CDP.',
+    'whatif.banner_manual': '{n} nur \u00fcber manuelle Kanten',
+    'whatif.manual_tip': 'Diese Hosts w\u00e4ren ebenfalls abgeschnitten, wenn man die von Hand gezogenen Kanten nicht mitz\u00e4hlt. Eine manuelle Kante sagt, dass zwei Hosts zusammenh\u00e4ngen \u2014 aber nicht wie; sie hat keine Ports und keinen Traffic. Steht sie f\u00fcr einen Weg, der physisch \u00fcber das ausgefallene Ger\u00e4t l\u00e4uft, ist die Simulation hier zu optimistisch.',
     'legend.groups': 'GRUPPEN',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

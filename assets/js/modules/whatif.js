@@ -78,7 +78,10 @@ export function highestDegree(cy, excludeSimulated) {
 
 // BFS von den Roots aus; blocked (Set oder null) gilt als tot und
 // blockiert sowohl das Seeding als auch den Weg.
-export function reachable(cy, roots, blocked) {
+/**
+ * @param ohneManuelle  true = von Hand gezogene Kanten NICHT als Weg zaehlen
+ */
+export function reachable(cy, roots, blocked, ohneManuelle) {
     const visited = {};
     const queue = [];
     roots.forEach(function(n) {
@@ -103,6 +106,7 @@ export function reachable(cy, roots, blocked) {
             // Kanten in die andere Richtung (toter Traeger reisst Gaeste mit).
             // Sie zusaetzlich als Weg zu zaehlen war doppelt und falsch.
             if (edge.data('kind') === 'hosts') return;
+            if (ohneManuelle && String(edge.id() || '').indexOf('ml_') === 0) return;
             const s = edge.source().id();
             const t2 = edge.target().id();
             const nbr = (s === cur) ? t2 : s;
@@ -163,6 +167,20 @@ export function recomputeSimulation(cy) {
     }
     const visited = reachable(cy, roots, _simulated);
 
+    // Dasselbe noch einmal OHNE die von Hand gezogenen Kanten.
+    //
+    // Eine manuelle Kante sagt "diese beiden haengen zusammen", aber nicht WIE.
+    // Sie hat keine Ports und keinen Traffic — sie wird gezogen, um ein Bild zu
+    // vervollstaendigen. Die Simulation liest sie trotzdem als Kabel, und dann
+    // ueberlebt ein Host den Ausfall des Switches, ueber den seine Verbindung
+    // in Wirklichkeit laeuft.
+    //
+    // Sie einfach zu ignorieren waere falsch — manche bilden echte Wege ab, die
+    // LLDP nicht sieht. Beides zu rechnen und den UNTERSCHIED zu nennen ist
+    // ehrlich: "diese Hosts haengen nur noch an einer Kante, die du selbst
+    // eingetragen hast." Wer seinen Switch abschalten will, kann das pruefen.
+    const visitedOhne = reachable(cy, roots, _simulated, true);
+
     let cutCount = 0;
     // Hosts, ueber die sich NICHTS sagen laesst: sie waren schon vor der
     // Simulation von keiner Referenz aus erreichbar, weil sie gar keine
@@ -175,12 +193,15 @@ export function recomputeSimulation(cy) {
     // Switch abschalten will, verlaesst sich dann auf eine Zahl, die seine
     // NAS gar nicht kannte.
     let unbekannt = 0;
+    // Ueberlebt nur dank einer von Hand gezogenen Kante.
+    let nurManuell = 0;
     cy.nodes('[!isGroup]').forEach(function(n) {
         const id = n.id();
         if (_simulated.has(id)) { n.addClass('nt-sim-dead'); return; }
         if (n.data('_isGhost') || n.data('_isInternet')) return;
         if (!baseline[id]) { unbekannt++; return; }
-        if (!visited[id]) { n.addClass('nt-sim-cut'); cutCount++; }
+        if (!visited[id]) { n.addClass('nt-sim-cut'); cutCount++; return; }
+        if (!visitedOhne[id]) { nurManuell++; }
     });
 
     // Hosting-Containment (nt:parent → hosts-Kante): ein toter oder
@@ -210,7 +231,7 @@ export function recomputeSimulation(cy) {
         }
     }
 
-    _showBanner(cy, cutCount, unbekannt);
+    _showBanner(cy, cutCount, unbekannt, nurManuell);
 }
 
 // ── Banner: laufende Simulation sichtbar machen + Ausstieg anbieten ────────
@@ -219,7 +240,7 @@ function _removeBanner() {
     if (b) b.remove();
 }
 
-function _showBanner(cy, cutCount, unbekannt) {
+function _showBanner(cy, cutCount, unbekannt, nurManuell) {
     _removeBanner();
     const wrap = document.getElementById('nt-canvas-wrap');
     if (!wrap) return;
@@ -232,7 +253,13 @@ function _showBanner(cy, cutCount, unbekannt) {
     const txt = document.createElement('span');
     txt.textContent = t('whatif.banner', { failed: _simulated.size, cut: cutCount })
         + (unbekannt ? ' \u00b7 ' + t('whatif.banner_unknown', { n: unbekannt }) : '');
-    if (unbekannt) txt.title = t('whatif.unknown_tip');
+    if (nurManuell) {
+        txt.textContent += ' \u00b7 ' + t('whatif.banner_manual', { n: nurManuell });
+    }
+    const tips = [];
+    if (unbekannt)  tips.push(t('whatif.unknown_tip'));
+    if (nurManuell) tips.push(t('whatif.manual_tip'));
+    if (tips.length) txt.title = tips.join('\n\n');
     banner.appendChild(txt);
     const btn = document.createElement('button');
     btn.textContent = t('whatif.end');

@@ -445,6 +445,8 @@ export default {
     'whatif.root_all_down': 'Every uplink reference on this map is part of the simulation, so nothing has a path out any more. Everything that hung behind it counts as cut off.',
     'whatif.banner_unknown': '{n} not assessable',
     'whatif.unknown_tip': 'These hosts have no discovered links on this map, so they were never reachable from the uplink and the simulation cannot say anything about them. Usually LLDP/CDP is missing there.',
+    'whatif.banner_manual': '{n} only via manual links',
+    'whatif.manual_tip': 'These hosts would be cut off too if the hand-drawn links were not counted. A manual link says two hosts are connected, but not how — it has no ports and no traffic. If it stands for a path that physically runs through the failed device, the simulation is too optimistic here.',
     'legend.groups': 'GROUPS',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',
