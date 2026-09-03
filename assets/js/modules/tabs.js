@@ -8,17 +8,21 @@
 // baut den Tab-Wrap nur wenn er fehlt, und hält den aktiven
 // Tab-Zustand synchron.
 //
-// DUNKELMODUS: der Umschalter ist entfernt.
+// DUNKELMODUS: kein eigener Umschalter, das Modul folgt Zabbix.
 //
-// Er schaltete die Klasse 'nt-dark' auf #nt-root und war NIE persistiert —
-// weder localStorage noch Server. Nach jedem Neuladen war die Karte wieder
-// hell, was den Modus zu einer Geste ohne Wirkung machte. Genau deshalb ist er
-// raus, und genau deshalb kann niemand darin feststecken.
+// Es gab hier einmal einen Knopf, der 'nt-dark' auf #nt-root schaltete. Er war
+// NIE persistiert — weder localStorage noch Server —, nach jedem Neuladen war
+// die Karte wieder hell. Deshalb ist er raus.
 //
-// Die Abfragen auf 'nt-dark' in den Render-Modulen bleiben stehen: sie liefern
-// jetzt durchgehend false. Das ist Absicht — die Theme-Abstraktion herauszu-
-// operieren haette jeden Render-Pfad angefasst, ohne dass sich am Bild etwas
-// aendert.
+// Die Abfragen auf 'nt-dark' in den Render-Modulen sind damals absichtlich
+// stehen geblieben, weil das Heraustrennen jeden Render-Pfad angefasst haette,
+// ohne dass sich am Bild etwas aendert. Das hat sich ausgezahlt: die Klasse
+// wird jetzt beim Start aus Zabbix' Benutzer-Theme gesetzt (network-topology.js,
+// gespeist aus NT_CONFIG.dark), und sechzehn Module hatten ihre dunklen
+// Farbwerte bereits fertig liegen.
+//
+// Ein zweiter Schalter neben dem von Zabbix kommt nicht zurueck: das waeren
+// zwei Quellen fuer dieselbe Frage.
 //
 // Cross-Module-Glue:
 //   - getActiveTab(): liefert den aktiven Tab; wird vom Hauptmodul gesetzt

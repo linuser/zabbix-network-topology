@@ -154,6 +154,25 @@ class NetworkTopologyView extends CController {
             'selected_host_name' => $selected_host_name,
             'hops'               => $hops,
             'internet_label'    => trim($this->getInput('internet', '')),
+            // Dunkles Theme: NICHT selbst entscheiden, sondern Zabbix fragen.
+            //
+            // Das Modul hatte einmal einen eigenen Umschalter. Der war nie
+            // persistiert — nach jedem Neuladen war die Karte wieder hell —
+            // und er ist deshalb entfernt worden. Ein zweiter Schalter neben
+            // dem von Zabbix waere derselbe Fehler noch einmal: zwei Quellen
+            // fuer dieselbe Frage, die auseinanderlaufen.
+            //
+            // getUserTheme() loest die Benutzereinstellung UND den Fall
+            // THEME_DEFAULT auf (dann gilt die Systemvorgabe). Von den vier
+            // ausgelieferten Themes sind zwei dunkel; alles andere ist hell,
+            // auch ein spaeter dazukommendes — im Zweifel hell, das ist die
+            // Voreinstellung von Zabbix selbst.
+            //
+            // function_exists(), weil das Modul auch auf 7.0 LTS laeuft und
+            // eine fehlende Hilfsfunktion die Seite sonst mit einem Fatal
+            // beenden wuerde statt nur ohne Dunkelmodus zu starten.
+            'dark'              => function_exists('getUserTheme')
+                && in_array(getUserTheme(CWebUser::$data), ['dark-theme', 'hc-dark'], true),
             'wallboard'         => (int) $this->getInput('wallboard', 0) === 1,
             // Link color scales set by a Super admin (module.config); null =
             // the built-in defaults from traffic.js.

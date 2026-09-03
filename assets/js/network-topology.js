@@ -301,6 +301,24 @@ function init() {
     // Activate the admin color scales BEFORE the first render — otherwise the
     // first heatmap paints with defaults and the colors jump on the next pass.
     applyColorScales(cfg.color_scales || null);
+    // Dunkelmodus aus Zabbix uebernehmen — VOR dem ersten Render.
+    //
+    // Die Klasse 'nt-dark' auf #nt-root ist die Schaltstelle, die es im Modul
+    // laengst gibt: sechzehn Module fragen sie ab und haben ihre dunklen
+    // Farbwerte fertig daliegen. Sie wurde nur nie gesetzt, seit der eigene
+    // Umschalter entfernt wurde (siehe tabs.js) — die ganze Abstraktion lief
+    // damit dauerhaft gegen false.
+    //
+    // Hier haengt sie jetzt an Zabbix' Benutzereinstellung. Kein eigener
+    // Schalter, keine zweite Einstellung, die auseinanderlaufen kann: wer sein
+    // Zabbix dunkel stellt, bekommt die Karte dunkel, und wer es zurueckstellt,
+    // hell. Das Modul hat dazu keine eigene Meinung mehr.
+    //
+    // Vor dem ersten Render, nicht danach: sonst zeichnet der erste Durchgang
+    // hell und springt beim naechsten um.
+    const ntRoot = document.getElementById('nt-root');
+    if (ntRoot) ntRoot.classList.toggle('nt-dark', !!cfg.dark);
+
     const wrap = document.getElementById('nt-canvas-wrap');
     const spin = document.getElementById('nt-loading');
 
@@ -321,7 +339,7 @@ function init() {
         }
     });
 
-    // Basis-Toolbar (Tabs + Dark-Button) initial bauen — idempotent.
+    // Basis-Toolbar (Tabs) initial bauen — idempotent.
     ensureBaseToolbar(wrap);
 
     // Host+hops mode: a selected host replaces the group selection as the

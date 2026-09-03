@@ -280,6 +280,8 @@ window.NT_CONFIG = <?= json_encode([
     // Optionaler Provider-Name für die Internet-Wolke im Hierarchie-Layout.
     // Aus URL-Parameter ?internet=Vodafone gelesen; leer = "Internet" als Default.
     'internet_label' => (string) ($data['internet_label'] ?? ''),
+    // Aus Zabbix' Benutzereinstellung, nicht aus einem eigenen Schalter.
+    'dark'           => (bool) ($data['dark'] ?? false),
     // Wallboard-Mode: ?wallboard=1 → vollflächig, kein Header, Auto-Tab-Wechsel
     'wallboard'  => (bool) ($data['wallboard'] ?? false),
     // User-ID f\u00FCr Multi-User-Trennung der localStorage-Keys.
