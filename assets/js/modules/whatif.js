@@ -89,6 +89,20 @@ export function reachable(cy, roots, blocked) {
     while (queue.length) {
         const cur = queue.shift();
         cy.getElementById(cur).connectedEdges().forEach(function(edge) {
+            // NUR ueber Netzwege laufen.
+            //
+            // connectedEdges() liefert ALLE Kanten, auch die aus nt:parent
+            // (kind='hosts'). Das ist eine TRAEGERbeziehung — "pve betreibt
+            // diese VM" —, kein Kabel. Als Weg benutzt hiess das: faellt ein
+            // Switch aus, gilt der Hypervisor weiter als erreichbar, weil der
+            // BFS ueber eine seiner VMs dorthin zurueckfand. Ein Gast kann
+            // seinem Wirt keine Netzanbindung verschaffen.
+            //
+            // Dass die beiden verschieden sind, weiss diese Datei ohnehin: der
+            // Containment-Block weiter unten propagiert entlang genau dieser
+            // Kanten in die andere Richtung (toter Traeger reisst Gaeste mit).
+            // Sie zusaetzlich als Weg zu zaehlen war doppelt und falsch.
+            if (edge.data('kind') === 'hosts') return;
             const s = edge.source().id();
             const t2 = edge.target().id();
             const nbr = (s === cur) ? t2 : s;
