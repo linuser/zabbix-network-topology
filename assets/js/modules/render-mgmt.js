@@ -244,7 +244,7 @@ export function renderManagement(wrap, nodes, edges) {
             if (n.maintenance) {
                 const mb = document.createElement('span');
                 mb.title = t('mgmt.tile.maintenance');
-                mb.style.cssText = 'background:var(--nt-c-fef3c7,#fef3c7);color:var(--nt-c-92400e,#92400e);border-radius:8px;'
+                mb.style.cssText = 'background:#fef3c7;color:#92400e;border-radius:8px;'
                     + 'font-size:9px;font-weight:600;padding:1px 5px';
                 mb.textContent = '\u{1F527}';
                 topRow.appendChild(mb);
@@ -252,7 +252,7 @@ export function renderManagement(wrap, nodes, edges) {
             if (n.acknowledged) {
                 const ab = document.createElement('span');
                 ab.title = t('mgmt.tile.acked');
-                ab.style.cssText = 'background:var(--nt-c-dcfce7,#dcfce7);color:var(--nt-c-166534,#166534);border-radius:8px;'
+                ab.style.cssText = 'background:#dcfce7;color:#166534;border-radius:8px;'
                     + 'font-size:9px;font-weight:600;padding:1px 5px';
                 ab.textContent = '\u2714';
                 topRow.appendChild(ab);
@@ -260,7 +260,7 @@ export function renderManagement(wrap, nodes, edges) {
 
             if (problems > 0) {
                 const badge = document.createElement('span');
-                badge.style.cssText = 'margin-left:auto;background:#ef4444;color:var(--nt-c-onaccent,#fff);'
+                badge.style.cssText = 'margin-left:auto;background:#ef4444;color:#fff;'
                                     + 'border-radius:10px;font-size:9px;font-weight:700;'
                                     + 'padding:1px 5px;flex-shrink:0';
                 badge.textContent = problems > 99 ? '99+' : String(problems);

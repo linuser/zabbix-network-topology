@@ -70,8 +70,8 @@ function buildReportHtml(opts) {
                 + '<td>' + (n.cpu    != null ? n.cpu    + '%'   : '—') + '</td>'
                 + '<td>' + (n.memory != null ? n.memory + '%'   : '—') + '</td>'
                 + '<td>' + (n.ping > 0       ? n.ping   + ' ms' : '—') + '</td>'
-                + '<td style="color:var(--nt-c-22c55e,#22c55e)">' + fmt(tr.in)  + '</td>'
-                + '<td style="color:var(--nt-c-06b6d4,#06b6d4)">' + fmt(tr.out) + '</td>'
+                + '<td style="color:#22c55e">' + fmt(tr.in)  + '</td>'
+                + '<td style="color:#06b6d4">' + fmt(tr.out) + '</td>'
                 + '</tr>';
         }).join('');
 
@@ -79,14 +79,14 @@ function buildReportHtml(opts) {
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>NT Report</title>'
         + '<style>'
-        + 'body{font-family:sans-serif;margin:20px;color:var(--nt-c-1e293b,#1e293b)}'
-        + 'h1{font-size:18px;border-bottom:2px solid var(--nt-c-3b82f6,#3b82f6);padding-bottom:6px}'
-        + '.meta{font-size:11px;color:var(--nt-c-64748b,#64748b);margin-bottom:16px}'
+        + 'body{font-family:sans-serif;margin:20px;color:#1e293b}'
+        + 'h1{font-size:18px;border-bottom:2px solid #3b82f6;padding-bottom:6px}'
+        + '.meta{font-size:11px;color:#64748b;margin-bottom:16px}'
         + '.map{text-align:center;margin-bottom:20px}'
-        + '.map img{max-width:100%;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px}'
+        + '.map img{max-width:100%;border:1px solid #e2e8f0;border-radius:6px}'
         + 'table{width:100%;border-collapse:collapse;font-size:12px}'
-        + 'th{background:var(--nt-c-f8fafc,#f8fafc);padding:7px 10px;text-align:left;border-bottom:2px solid var(--nt-c-e2e8f0,#e2e8f0);color:var(--nt-c-475569,#475569)}'
-        + 'td{padding:6px 10px;border-bottom:1px solid var(--nt-c-f1f5f9,#f1f5f9)}'
+        + 'th{background:#f8fafc;padding:7px 10px;text-align:left;border-bottom:2px solid #e2e8f0;color:#475569}'
+        + 'td{padding:6px 10px;border-bottom:1px solid #f1f5f9}'
         + '@media print{@page{size:A4 landscape;margin:10mm}}'
         + '</style></head><body>'
         + '<h1>Network Topology &mdash; Report</h1>'
@@ -231,22 +231,22 @@ function buildAuditHtml(complianceData) {
             + '<table><thead>' + th(['#', 'Host', 'IP', 'Severity', 'Status', t('export.audit.col.problems'), 'Acked', 'Proxy']) + '</thead><tbody>'
             + top10.map(function(x, i) {
                 const n = x.n;
-                const status = x.isOff ? '<b style="color:var(--nt-c-dc2626,#dc2626)">OFFLINE</b>'
+                const status = x.isOff ? '<b style="color:#dc2626">OFFLINE</b>'
                              : x.isStl ? '<b style="color:#f59e0b">STALE</b>'
                              : '—';
                 return tr([
-                    { text: '<b>' + (i + 1) + '</b>', style: 'color:var(--nt-c-64748b,#64748b);font-family:monospace' },
+                    { text: '<b>' + (i + 1) + '</b>', style: 'color:#64748b;font-family:monospace' },
                     esc(n.label || n.host || ''),
                     esc(n.ip || '—'),
                     sevPill(n.severity),
                     status,
-                    { text: n.problems || 0, style: (n.problems || 0) > 0 ? 'font-weight:600' : 'color:var(--nt-c-94a3b8,#94a3b8)' },
+                    { text: n.problems || 0, style: (n.problems || 0) > 0 ? 'font-weight:600' : 'color:#94a3b8' },
                     n.acknowledged ? '✔' : '—',
                     esc(n.proxy_name || '—'),
                 ]);
             }).join('')
             + '</tbody></table>'
-            + '<div style="font-size:10px;color:var(--nt-c-94a3b8,#94a3b8);margin-top:4px">'
+            + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
             + t('export.audit.ranking')
             + '</div></section>';
 
@@ -257,10 +257,10 @@ function buildAuditHtml(complianceData) {
             return tr([
                 '<b>' + esc(g.name) + '</b>',
                 g.total,
-                { text: g.offline, style: g.offline > 0 ? 'color:var(--nt-c-dc2626,#dc2626);font-weight:600' : '' },
+                { text: g.offline, style: g.offline > 0 ? 'color:#dc2626;font-weight:600' : '' },
                 { text: g.stale,   style: g.stale   > 0 ? 'color:#f59e0b;font-weight:600' : '' },
-                { text: g.critical,style: g.critical> 0 ? 'color:var(--nt-c-dc2626,#dc2626);font-weight:600' : '' },
-                { text: g.unacked, style: g.unacked > 0 ? 'color:var(--nt-c-f97316,#f97316);font-weight:600' : '' },
+                { text: g.critical,style: g.critical> 0 ? 'color:#dc2626;font-weight:600' : '' },
+                { text: g.unacked, style: g.unacked > 0 ? 'color:#f97316;font-weight:600' : '' },
                 { text: '<b>' + g.score + '</b> ' + scoreLabel(g.score), style: 'color:' + col + ';font-weight:700' },
             ]);
         }).join('')
@@ -330,7 +330,7 @@ function buildAuditHtml(complianceData) {
             return tr([
                 '<b>' + esc(p.name) + '</b>',
                 p.total,
-                { text: p.offline,  style: p.offline  > 0 ? 'color:var(--nt-c-dc2626,#dc2626);font-weight:600' : '' },
+                { text: p.offline,  style: p.offline  > 0 ? 'color:#dc2626;font-weight:600' : '' },
                 p.problems,
             ]);
         }).join('')
@@ -361,32 +361,32 @@ function buildAuditHtml(complianceData) {
                 return tr([
                     '<b>' + esc(c.lbl) + '</b>',
                     { text: '<span style="color:' + colOf(c.level) + ';font-weight:600">' + lvlLbl + '</span>' },
-                    { text: n, style: n > 0 && c.level === 'bad' ? 'color:var(--nt-c-dc2626,#dc2626);font-weight:700' : (n > 0 ? 'font-weight:600' : 'color:var(--nt-c-94a3b8,#94a3b8)') },
-                    { text: pct + '%', style: 'color:var(--nt-c-64748b,#64748b)' },
+                    { text: n, style: n > 0 && c.level === 'bad' ? 'color:#dc2626;font-weight:700' : (n > 0 ? 'font-weight:600' : 'color:#94a3b8') },
+                    { text: pct + '%', style: 'color:#64748b' },
                 ]);
             }).join('')
             + '</tbody></table>'
-            + '<div style="font-size:10px;color:var(--nt-c-94a3b8,#94a3b8);margin-top:4px">'
+            + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
             + t('export.audit.lvl_note') + '</div></section>';
     }
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>NT Audit Report</title>'
         + '<style>'
-        + 'body{font-family:sans-serif;margin:28px;color:var(--nt-c-1e293b,#1e293b);line-height:1.4}'
-        + 'h1{font-size:20px;border-bottom:3px solid var(--nt-c-0275b8,#0275b8);padding-bottom:8px;margin:0 0 4px}'
-        + 'h2{font-size:14px;color:var(--nt-c-0275b8,#0275b8);text-transform:uppercase;letter-spacing:0.05em;'
-        +   'border-bottom:1px solid var(--nt-c-dfe4e7,#dfe4e7);padding-bottom:4px;margin:24px 0 10px}'
-        + 'h3{font-size:12px;color:var(--nt-c-475569,#475569);margin:14px 0 6px}'
-        + '.meta{font-size:11px;color:var(--nt-c-64748b,#64748b);margin-bottom:14px}'
+        + 'body{font-family:sans-serif;margin:28px;color:#1e293b;line-height:1.4}'
+        + 'h1{font-size:20px;border-bottom:3px solid #0275b8;padding-bottom:8px;margin:0 0 4px}'
+        + 'h2{font-size:14px;color:#0275b8;text-transform:uppercase;letter-spacing:0.05em;'
+        +   'border-bottom:1px solid #dfe4e7;padding-bottom:4px;margin:24px 0 10px}'
+        + 'h3{font-size:12px;color:#475569;margin:14px 0 6px}'
+        + '.meta{font-size:11px;color:#64748b;margin-bottom:14px}'
         + 'section{margin-bottom:8px}'
         + 'table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px}'
-        + 'th{background:var(--nt-c-f1f5f9,#f1f5f9);padding:5px 9px;text-align:left;border-bottom:2px solid var(--nt-c-cbd5e1,#cbd5e1);color:var(--nt-c-334155,#334155);font-weight:600}'
-        + 'td{padding:4px 9px;border-bottom:1px solid var(--nt-c-eef2f5,#eef2f5)}'
+        + 'th{background:#f1f5f9;padding:5px 9px;text-align:left;border-bottom:2px solid #cbd5e1;color:#334155;font-weight:600}'
+        + 'td{padding:4px 9px;border-bottom:1px solid #eef2f5}'
         + 'table.summary{width:auto;min-width:280px;font-size:12px}'
-        + 'table.summary th{background:transparent;width:180px;font-weight:500;color:var(--nt-c-64748b,#64748b);'
-        +   'border-bottom:1px solid var(--nt-c-eef2f5,#eef2f5)}'
+        + 'table.summary th{background:transparent;width:180px;font-weight:500;color:#64748b;'
+        +   'border-bottom:1px solid #eef2f5}'
         + 'table.summary td{font-weight:700;font-family:monospace}'
-        + '.bad{color:var(--nt-c-dc2626,#dc2626)}.warn{color:#f59e0b}'
+        + '.bad{color:#dc2626}.warn{color:#f59e0b}'
         + '@media print{@page{size:A4;margin:12mm}h1{page-break-after:avoid}h2{page-break-after:avoid}}'
         + '</style></head><body>'
         + '<h1>Network Topology — Audit Report</h1>'
@@ -408,7 +408,7 @@ export function ntShowExportOverlay(png, printMode) {
     const hint = printMode
         ? t('export.overlay.print')
         : t('export.overlay.png');
-    ov.innerHTML = '<div style="color:var(--nt-c-ccc,#ccc);font-family:sans-serif;font-size:12px;'
+    ov.innerHTML = '<div style="color:#ccc;font-family:sans-serif;font-size:12px;'
         + 'margin-bottom:12px;text-align:center">' + hint + '</div>'
         + '<img src="' + png + '" style="max-width:95vw;max-height:85vh;display:block;'
         + 'border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,0.5)"/>';
@@ -440,18 +440,18 @@ export function setupExportMenu(bar, isFirstRun) {
     // Fenster heraus — im Browser nachgemessen, "PDF (pri…", "Save HT…" und
     // "Audit rep…" waren abgeschnitten und nicht anklickbar.
     expMenu.style.cssText = 'display:none;position:absolute;top:100%;right:0;z-index:9999;'
-        + 'background:var(--nt-c-surface,#fff);border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
+        + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:150px;overflow:hidden;margin-top:2px';
 
     function mItem(icon, label, fn) {
         const row = document.createElement('div');
-        row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:var(--nt-c-334155,#334155);'
+        row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:#334155;'
             + 'white-space:nowrap;display:flex;align-items:center;gap:8px';
         // icon ist bewusst eine statische HTML-Entity (&#128444; usw.) und bleibt.
         // label defensiv escapen — aktuell immer statisch/i18n, aber so ist der
         // Helfer auch gegen ein kuenftiges dynamisches Label sicher.
         row.innerHTML = '<span>' + icon + '</span><span>' + esc(label) + '</span>';
-        row.addEventListener('mouseover', function() { this.style.background = 'var(--nt-c-f8fafc,#f8fafc)'; });
+        row.addEventListener('mouseover', function() { this.style.background = '#f8fafc'; });
         row.addEventListener('mouseout',  function() { this.style.background = ''; });
         row.addEventListener('click', function() { expMenu.style.display = 'none'; fn(); });
         expMenu.appendChild(row);
@@ -573,7 +573,7 @@ export function setupExportMenu(bar, isFirstRun) {
         // (v.a. Firefox bei langsamem Backend). Inhalt kommt async nach.
         const w = window.open();
         if (!w) { toast(t('export.popup_blocked'), 'warn', 8000); return; }
-        w.document.write('<p style="font-family:sans-serif;color:var(--nt-c-64748b,#64748b)">' + t('export.generating') + '</p>');
+        w.document.write('<p style="font-family:sans-serif;color:#64748b">' + t('export.generating') + '</p>');
         _fetchCompliance().then(function(compl) {
             const h = buildAuditHtml(compl);
             // Vorher: stilles w.close(). Ein Fenster, das aufgeht und wieder

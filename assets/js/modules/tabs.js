@@ -100,7 +100,7 @@ export function ensureBaseToolbar(wrap) {
         const tw = document.createElement('div');
         tw.id = 'nt-tab-wrap';
         tw.style.cssText = 'display:flex;gap:2px;margin-right:8px;padding-right:8px;'
-                         + 'border-right:1px solid var(--nt-c-e2e8f0,#e2e8f0);flex-shrink:0';
+                         + 'border-right:1px solid #e2e8f0;flex-shrink:0';
         TABS.forEach(function(item) {
             const b = document.createElement('button');
             b.id = item.id; b.textContent = item.lbl;
@@ -284,7 +284,7 @@ function _ensureMenuStyle() {
         + '  border: 1px solid transparent !important;'
         + '  border-radius: 4px !important;'
         + '  background: transparent !important;'
-        + '  color: var(--nt-c-334155,#334155) !important;'
+        + '  color: #334155 !important;'
         + '  font-size: 12px !important;'
         + '  font-weight: 500 !important;'
         + '  cursor: pointer !important;'
@@ -294,7 +294,7 @@ function _ensureMenuStyle() {
         + '}'
         + '[data-nt-menu-pop] > button:hover,'
         + '[data-nt-menu-pop] > div:hover {'
-        + '  background: var(--nt-c-f1f5f9,#f1f5f9) !important;'
+        + '  background: #f1f5f9 !important;'
         + '}'
         // Inner-Buttons (Layout-Wrap / Cluster-Wrap / Preset-Wrap haben einen
         // primary Button als Trigger + ein eigenes Sub-Menu). Den Trigger so
@@ -316,8 +316,8 @@ function _ensureMenuStyle() {
         // Pop-Wand statt absolute — damit es nicht weit ausserhalb schwebt.
         + '[data-nt-menu-pop] > div > div {'
         + '  position: static !important;'
-        + '  background: var(--nt-c-f8fafc,#f8fafc) !important;'
-        + '  border: 1px solid var(--nt-c-e2e8f0,#e2e8f0) !important;'
+        + '  background: #f8fafc !important;'
+        + '  border: 1px solid #e2e8f0 !important;'
         + '  border-radius: 4px !important;'
         + '  margin-top: 4px !important;'
         + '  padding: 2px !important;'
@@ -337,20 +337,20 @@ function _ensureMenuStyle() {
         + '  cursor: pointer !important;'
         + '}'
         + '[data-nt-menu-pop] > div > div > button:hover {'
-        + '  background: var(--nt-c-e2e8f0,#e2e8f0) !important;'
+        + '  background: #e2e8f0 !important;'
         + '}'
         // Dark-Mode
         + '#nt-root.nt-dark [data-nt-menu-pop] {'
-        + '  background: var(--nt-c-1e293b,#1e293b) !important;'
-        + '  border-color: var(--nt-c-334155,#334155) !important;'
+        + '  background: #1e293b !important;'
+        + '  border-color: #334155 !important;'
         + '}'
         + '#nt-root.nt-dark [data-nt-menu-pop] > button,'
         + '#nt-root.nt-dark [data-nt-menu-pop] > div {'
-        + '  color: var(--nt-c-e2e8f0,#e2e8f0) !important;'
+        + '  color: #e2e8f0 !important;'
         + '}'
         + '#nt-root.nt-dark [data-nt-menu-pop] > button:hover,'
         + '#nt-root.nt-dark [data-nt-menu-pop] > div:hover {'
-        + '  background: var(--nt-c-334155,#334155) !important;'
+        + '  background: #334155 !important;'
         + '}';
     document.head.appendChild(st);
 }
@@ -372,7 +372,7 @@ function _mkMenuShell(id, label) {
     pop.id = id + '-pop';
     pop.dataset.ntMenuPop = '1';
     pop.style.cssText = 'display:none;position:absolute;top:100%;right:0;'
-        + 'background:var(--nt-c-surface,#fff);border:1px solid var(--nt-c-cbd5e1,#cbd5e1);border-radius:6px;'
+        + 'background:#fff;border:1px solid #cbd5e1;border-radius:6px;'
         + 'box-shadow:0 6px 20px rgba(0,0,0,0.14);padding:6px;min-width:170px;'
         + 'z-index:9000;margin-top:4px';
     wrap.appendChild(pop);

@@ -48,15 +48,15 @@ const DROP_THRESHOLD = 5;
 function section(parent, label) {
     parent.appendChild(el('div',
         'font-size:9px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;'
-        + 'color:var(--nt-c-94a3b8,#94a3b8);margin:9px 0 4px;border-top:1px solid var(--nt-c-f1f5f9,#f1f5f9);padding-top:6px', label));
+        + 'color:#94a3b8;margin:9px 0 4px;border-top:1px solid #f1f5f9;padding-top:6px', label));
 }
 
 /** Beschriftete Zeile. `value` ist Text; `valueEl` erlaubt eigene Auszeichnung. */
 function row(parent, label, value, valueEl) {
     const r = el('div', 'display:flex;gap:8px;font-size:11px;margin-bottom:3px');
-    r.appendChild(el('span', 'color:var(--nt-c-94a3b8,#94a3b8);min-width:88px;flex-shrink:0', label));
+    r.appendChild(el('span', 'color:#94a3b8;min-width:88px;flex-shrink:0', label));
     if (valueEl) { valueEl.style.color = valueEl.style.color || '#475569'; r.appendChild(valueEl); }
-    else         { r.appendChild(el('span', 'color:var(--nt-c-475569,#475569)', value)); }
+    else         { r.appendChild(el('span', 'color:#475569', value)); }
     parent.appendChild(r);
 }
 
@@ -71,7 +71,7 @@ function pill(text, col, tip) {
 
 function hint(parent, text) {
     parent.appendChild(el('div',
-        'font-size:10px;color:var(--nt-c-92400e,#92400e);background:rgba(245,158,11,0.10);border-radius:5px;'
+        'font-size:10px;color:#92400e;background:rgba(245,158,11,0.10);border-radius:5px;'
         + 'padding:5px 7px;margin-top:5px;line-height:1.45', text));
 }
 
@@ -101,15 +101,15 @@ export function showEdgeDetail(panel, ed) {
     // ── Kopf ────────────────────────────────────────────────────────────────
     const head = el('div', 'display:flex;align-items:center;gap:7px;margin-bottom:2px');
     const title = el('div',
-        'flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--nt-c-0f172a,#0f172a);'
+        'flex:1;min-width:0;font-size:13px;font-weight:600;color:#0f172a;'
         + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap');
     title.appendChild(el('span', '', sLbl));
-    title.appendChild(el('span', 'color:var(--nt-c-94a3b8,#94a3b8);margin:0 4px', '↔'));
+    title.appendChild(el('span', 'color:#94a3b8;margin:0 4px', '↔'));
     title.appendChild(el('span', '', tLbl));
     head.appendChild(title);
 
     const close = el('button',
-        'background:none;border:none;cursor:pointer;color:var(--nt-c-94a3b8,#94a3b8);font-size:18px;'
+        'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;'
         + 'line-height:1;padding:0;flex-shrink:0', '✕');
     close.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -141,7 +141,7 @@ export function showEdgeDetail(panel, ed) {
         if (quellen.indexOf('lldp') >= 0) srcRow.appendChild(pill('LLDP', '#16a34a', ''));
         if (quellen.indexOf('cdp')  >= 0) srcRow.appendChild(pill('CDP',  '#16a34a', ''));
     }
-    if (!srcRow.childNodes.length) srcRow.appendChild(el('span', 'color:var(--nt-c-94a3b8,#94a3b8)', '—'));
+    if (!srcRow.childNodes.length) srcRow.appendChild(el('span', 'color:#94a3b8', '—'));
 
     // Beidseitig bestaetigt oder nur von einer Seite gesehen. Das ist die
     // ehrlichste Auskunft, die diese Karte ueber eine Kante geben kann: bis
@@ -177,7 +177,7 @@ export function showEdgeDetail(panel, ed) {
         row(panel, sLbl, null, el('b', '', pS || '?'));
         row(panel, tLbl, null, el('b', '', pT || '?'));
     } else {
-        panel.appendChild(el('div', 'font-size:11px;color:var(--nt-c-94a3b8,#94a3b8)',
+        panel.appendChild(el('div', 'font-size:11px;color:#94a3b8',
             (istManuell || istGhost || istStale) ? t('edge.ports.none_kind') : t('edge.ports.none')));
     }
 
@@ -186,7 +186,7 @@ export function showEdgeDetail(panel, ed) {
     // ueber Schreibweisen, und der Leser soll sie kennen. Ein exakter Treffer
     // braucht keine Erklaerung.
     if (d.portMatch === 'normalized') {
-        panel.appendChild(el('div', 'font-size:10px;color:var(--nt-c-94a3b8,#94a3b8);line-height:1.4;margin-top:3px',
+        panel.appendChild(el('div', 'font-size:10px;color:#94a3b8;line-height:1.4;margin-top:3px',
             t('edge.port.normalized')));
     }
 
@@ -196,7 +196,7 @@ export function showEdgeDetail(panel, ed) {
     section(panel, t('edge.sec.traffic'));
 
     if (!tIn && !tOut && !cap) {
-        panel.appendChild(el('div', 'font-size:11px;color:var(--nt-c-94a3b8,#94a3b8)', t('edge.traffic.none')));
+        panel.appendChild(el('div', 'font-size:11px;color:#94a3b8', t('edge.traffic.none')));
     } else {
         const live = el('div',
             'display:flex;gap:12px;font-size:12px;margin-bottom:5px;align-items:center');
@@ -217,10 +217,10 @@ export function showEdgeDetail(panel, ed) {
             const v = el('span');
             v.appendChild(el('b', 'color:' + utilizationColor(pct), pct.toFixed(1) + '%'));
             v.appendChild(document.createTextNode(' '));
-            v.appendChild(el('span', 'color:var(--nt-c-94a3b8,#94a3b8)', t('edge.of', { cap: fmt(cap) })));
+            v.appendChild(el('span', 'color:#94a3b8', t('edge.of', { cap: fmt(cap) })));
             row(panel, t('edge.util'), null, v);
         } else {
-            row(panel, t('edge.util'), null, el('span', 'color:var(--nt-c-94a3b8,#94a3b8)', t('edge.cap.unknown')));
+            row(panel, t('edge.util'), null, el('span', 'color:#94a3b8', t('edge.cap.unknown')));
         }
 
         // Ports gemeldet, aber keine Metrik zugeordnet — genau der Fall, den
@@ -257,7 +257,7 @@ export function showEdgeDetail(panel, ed) {
                 const v = el('span');
                 v.appendChild(el('b', 'color:' + (m[1] > m[2] ? '#c2410c' : '#475569'), m[1].toFixed(2)));
                 v.appendChild(document.createTextNode(' '));
-                v.appendChild(el('span', 'color:var(--nt-c-94a3b8,#94a3b8)', t('edge.threshold', { n: m[2] })));
+                v.appendChild(el('span', 'color:#94a3b8', t('edge.threshold', { n: m[2] })));
                 row(panel, m[0], null, v);
             });
     }
@@ -267,13 +267,13 @@ export function showEdgeDetail(panel, ed) {
         // Ohne diese Zeile liest sich das Aggregat wie eine Aussage ueber den
         // Link. Sie steht bewusst VOR den Zahlen.
         panel.appendChild(el('div',
-            'font-size:10px;color:var(--nt-c-94a3b8,#94a3b8);line-height:1.4;margin-bottom:4px',
+            'font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:4px',
             t('edge.health.hostwide')));
         if (down) {
             const v = el('span');
             v.appendChild(el('b', '', String(down)));
             v.appendChild(document.createTextNode(' '));
-            v.appendChild(el('span', 'color:var(--nt-c-94a3b8,#94a3b8)', '(' + Math.round(ratio * 100) + '%)'));
+            v.appendChild(el('span', 'color:#94a3b8', '(' + Math.round(ratio * 100) + '%)'));
             row(panel, t('edge.down'), null, v);
         }
         [[t('edge.errors'), errs, ERR_THRESHOLD], [t('edge.discards'), drops, DROP_THRESHOLD]]
@@ -282,7 +282,7 @@ export function showEdgeDetail(panel, ed) {
                 const v = el('span');
                 v.appendChild(el('b', 'color:' + (m[1] > m[2] ? '#c2410c' : '#475569'), m[1].toFixed(2)));
                 v.appendChild(document.createTextNode(' '));
-                v.appendChild(el('span', 'color:var(--nt-c-94a3b8,#94a3b8)', t('edge.threshold', { n: m[2] })));
+                v.appendChild(el('span', 'color:#94a3b8', t('edge.threshold', { n: m[2] })));
                 row(panel, m[0], null, v);
             });
     }

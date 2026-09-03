@@ -85,7 +85,7 @@ function _markRefresh(ok) {
         b = document.createElement('div');
         b.id = 'nt-refresh-warn';
         b.style.cssText = 'position:absolute;top:10px;right:12px;z-index:9;'
-            + 'background:var(--nt-c-fef3c7,#fef3c7);color:var(--nt-c-92400e,#92400e);border:1px solid #f59e0b;border-radius:6px;'
+            + 'background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:6px;'
             + 'padding:4px 10px;font:600 11px sans-serif;box-shadow:0 2px 6px rgba(0,0,0,0.12)';
         wrap.appendChild(b);
     }
@@ -100,7 +100,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     const pnl = document.getElementById('nt-detail');
     if (!nodes.length) {
         wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
-                       + 'height:100%;color:var(--nt-c-999,#999)">' + esc(t('tech.no_hosts')) + '</div>';
+                       + 'height:100%;color:#999">' + esc(t('tech.no_hosts')) + '</div>';
         return;
     }
 

@@ -89,33 +89,33 @@ function buildPopup(node) {
     }
 
     const root = mk('div', 'font-family:sans-serif;min-width:200px');
-    root.appendChild(mk('div', 'font-weight:700;color:var(--nt-c-0f172a,#0f172a);margin-bottom:4px',
+    root.appendChild(mk('div', 'font-weight:700;color:#0f172a;margin-bottom:4px',
         node.label || ''));
     if (node.ip) {
-        root.appendChild(mk('div', 'font-size:10px;color:var(--nt-c-64748b,#64748b);font-family:monospace',
+        root.appendChild(mk('div', 'font-size:10px;color:#64748b;font-family:monospace',
             node.ip));
     }
     if (node.location) {
-        root.appendChild(mk('div', 'font-size:10px;color:var(--nt-c-64748b,#64748b);margin-top:2px',
+        root.appendChild(mk('div', 'font-size:10px;color:#64748b;margin-top:2px',
             '\u{1F4CD} ' + node.location));
     }
     if (node.maintenance || node.acknowledged) {
         const row = mk('div', 'margin-top:4px');
         if (node.maintenance) {
             row.appendChild(mk('span',
-                'background:var(--nt-c-fef3c7,#fef3c7);color:var(--nt-c-92400e,#92400e);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
+                'background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
                 t('geo.maintenance')));
         }
         if (node.acknowledged) {
             row.appendChild(mk('span',
-                'background:var(--nt-c-dcfce7,#dcfce7);color:var(--nt-c-166534,#166534);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
+                'background:#dcfce7;color:#166534;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
                 '\u2714 Acked'));
         }
         root.appendChild(row);
     }
 
     const stats = mk('div',
-        'margin-top:6px;padding-top:6px;border-top:1px solid var(--nt-c-f1f5f9,#f1f5f9);font-size:11px;color:var(--nt-c-334155,#334155)');
+        'margin-top:6px;padding-top:6px;border-top:1px solid #f1f5f9;font-size:11px;color:#334155');
     const sevLine = mk('div');
     sevLine.appendChild(mk('span', 'color:' + col + ';font-weight:600', '\u25CF ' + lbl));
     if (node.problems > 0) {
@@ -133,9 +133,9 @@ function buildPopup(node) {
     if (node.ping > 0)       metric('Ping', node.ping + ' ms');
     if (tr.in || tr.out) {
         const r = mk('div'); r.textContent = 'Traffic: ';
-        r.appendChild(mk('span', 'color:var(--nt-c-22c55e,#22c55e)', '\u2193 ' + fmt(tr.in)));
+        r.appendChild(mk('span', 'color:#22c55e', '\u2193 ' + fmt(tr.in)));
         r.appendChild(document.createTextNode(' '));
-        r.appendChild(mk('span', 'color:var(--nt-c-06b6d4,#06b6d4)', '\u2191 ' + fmt(tr.out)));
+        r.appendChild(mk('span', 'color:#06b6d4', '\u2191 ' + fmt(tr.out)));
         stats.appendChild(r);
     }
     root.appendChild(stats);
@@ -150,7 +150,7 @@ function showToast(message) {
     const toast = document.createElement('div');
     toast.id = 'nt-toast';
     toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);'
-        + 'z-index:10001;background:var(--nt-c-fef3c7,#fef3c7);color:var(--nt-c-92400e,#92400e);padding:12px 18px;border-radius:8px;'
+        + 'z-index:10001;background:#fef3c7;color:#92400e;padding:12px 18px;border-radius:8px;'
         + 'font-size:13px;line-height:1.5;max-width:520px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.2);border:1px solid #f59e0b;'
         + 'cursor:pointer;font-family:sans-serif';
@@ -280,9 +280,9 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
     if (geoHosts === 0) {
         const empty = document.createElement('div');
         empty.style.cssText = 'display:flex;flex-direction:column;align-items:center;'
-            + 'justify-content:center;height:100%;color:var(--nt-c-64748b,#64748b);text-align:center;padding:40px';
+            + 'justify-content:center;height:100%;color:#64748b;text-align:center;padding:40px';
         empty.innerHTML = '<div style="font-size:48px;margin-bottom:16px">\u{1F5FA}\uFE0F</div>'
-            + '<div style="font-size:16px;font-weight:600;color:var(--nt-c-334155,#334155);margin-bottom:8px">'
+            + '<div style="font-size:16px;font-weight:600;color:#334155;margin-bottom:8px">'
             + esc(t('geo.empty.title')) + '</div>'
             + '<div style="font-size:13px;max-width:480px;line-height:1.5">'
             // Markup bleibt im Code, nur die Textteile kommen aus der
@@ -310,7 +310,7 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
         const missing = totalHosts - geoHosts;
         const banner = document.createElement('div');
         banner.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);'
-            + 'z-index:1000;background:var(--nt-c-fef3c7,#fef3c7);color:var(--nt-c-92400e,#92400e);padding:6px 14px;border-radius:6px;'
+            + 'z-index:1000;background:#fef3c7;color:#92400e;padding:6px 14px;border-radius:6px;'
             + 'font-size:12px;font-weight:500;box-shadow:0 2px 6px rgba(0,0,0,0.15);'
             + 'border:1px solid #f59e0b';
         banner.textContent = '\u26A0 ' + t('geo.missing_coords', { missing: missing, total: totalHosts });
@@ -320,7 +320,7 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
     // Provider-Switcher (Dropdown rechts oben über der Karte)
     const switcher = document.createElement('div');
     switcher.style.cssText = 'position:absolute;top:8px;right:8px;z-index:1000;'
-        + 'background:var(--nt-c-surface,white);border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
+        + 'background:white;border:1px solid #e2e8f0;border-radius:6px;'
         + 'box-shadow:0 2px 6px rgba(0,0,0,0.12);padding:4px 6px';
     const sel = document.createElement('select');
     sel.style.cssText = 'border:none;outline:none;background:transparent;font-size:12px;cursor:pointer';

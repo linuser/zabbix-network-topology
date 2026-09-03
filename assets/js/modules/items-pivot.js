@@ -612,7 +612,7 @@ export function buildPivotToolbar(onApply, theme) {
     apply.textContent = tr('items.apply');
     apply.style.cssText = 'padding:3px 12px;border:1px solid ' + t.accent
         + ';border-radius:2px;background:' + t.accent
-        + ';color:var(--nt-c-ffffff,#ffffff);cursor:pointer;font-size:12px;font-weight:600;'
+        + ';color:#ffffff;cursor:pointer;font-size:12px;font-weight:600;'
         + 'font-family:inherit;transition:filter 0.12s';
     wrap.appendChild(apply);
 

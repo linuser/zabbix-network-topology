@@ -13,7 +13,6 @@
 // (v3.6 → v4.0) wurde sie auf eine reine Orchestrierungs-Schicht reduziert.
 
 import { esc, seiteIstDunkel } from './modules/utils.js';
-import { installThemeVars } from './modules/theme.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
@@ -321,15 +320,8 @@ function init() {
     //
     // Vor dem ersten Render, nicht danach: sonst zeichnet der erste Durchgang
     // hell und springt beim naechsten um.
-    installThemeVars();
-    const dunkel = seiteIstDunkel(cfg.dark);
-    // Die Klasse MUSS auch auf <html>: Tooltip, Kontextmenue und das
-    // Export-Fenster haengen an document.body und liegen damit ausserhalb von
-    // #nt-root. Ohne die Klasse ganz oben erben sie die Farbvariablen nicht.
-    document.documentElement.classList.toggle('nt-dark', dunkel);
     const ntRoot = document.getElementById('nt-root');
-    // #nt-root behaelt sie zusaetzlich — sechzehn Module fragen genau hier ab.
-    if (ntRoot) ntRoot.classList.toggle('nt-dark', dunkel);
+    if (ntRoot) ntRoot.classList.toggle('nt-dark', seiteIstDunkel(cfg.dark));
 
     const wrap = document.getElementById('nt-canvas-wrap');
     const spin = document.getElementById('nt-loading');
@@ -379,7 +371,7 @@ function init() {
             window.location.replace(u.toString());
             return;
         }
-        if (spin) spin.innerHTML = '<span style="color:var(--nt-c-64748b,#64748b)">'
+        if (spin) spin.innerHTML = '<span style="color:#64748b">'
             + esc(t('app.pick_groups')) + '</span>';
         return;
     }
@@ -389,7 +381,7 @@ function init() {
     // (z.B. nach Permission-Entzug) — die würden beim nächsten Page-Load
     // via Auto-Restore wieder zur leeren Karte führen.
 
-    if (spin) spin.innerHTML = '<span style="color:var(--nt-c-64748b,#64748b)">' + esc(t('app.loading')) + '</span>';
+    if (spin) spin.innerHTML = '<span style="color:#64748b">' + esc(t('app.loading')) + '</span>';
 
     // Daten holen und initial rendern
     const params = new URLSearchParams();
