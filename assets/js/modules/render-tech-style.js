@@ -92,6 +92,14 @@ export function buildCytoscapeStyle(dark) {
             'font-style': 'italic',
             'min-zoomed-font-size': 9,
         }},
+        // Neu aufgetauchte Kante. Bewusst nur eine Glorie (underlay) statt
+        // einer eigenen Linienfarbe: die Kante soll weiter zeigen, was sie
+        // zeigt — Traffic, Auslastung, Zustand —, und zusaetzlich auffallen.
+        // Eine gruene Linie haette die Weathermap-Aussage ueberschrieben.
+        { selector: 'edge[?_isFreshEdge]', style: {
+            'underlay-color': '#16a34a', 'underlay-opacity': 0.22,
+            'underlay-padding': 4,
+        }},
         // Alternde Kante: zuletzt gemeldet, aber gerade nicht. Deutlich
         // schwaecher als eine lebende, aber KRAEFTIGER als eine Ghost-Kante —
         // sie war eben noch echt. Punktiert statt gestrichelt, damit sich die

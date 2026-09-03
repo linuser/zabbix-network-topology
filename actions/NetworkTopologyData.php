@@ -30,6 +30,16 @@ class NetworkTopologyData extends NetworkTopologyController {
      */
     private const STALE_TTL = 900;
 
+    /**
+     * Wie lange eine neu aufgetauchte Kante als "neu" markiert bleibt.
+     *
+     * Kuerzer als STALE_TTL: eine neue Verbindung ist eine erfreuliche
+     * Nachricht, eine verschwundene eine, der man nachgehen muss. Fuenf
+     * Minuten reichen, um sie beim naechsten Blick auf die Karte zu sehen,
+     * ohne dass sie dort tagelang gruen leuchtet.
+     */
+    private const NEW_TTL = 300;
+
     // Schutz vor CSRF-Last-Abuse (Lese-Endpoint, kein CSRF-Token):
     // Cap auf max 100 Gruppen pro Request. Realistisch hat ein User
     // selten >10 Gruppen ausgewaehlt — 100 ist 10x Sicherheits-Puffer
@@ -646,6 +656,18 @@ class NetworkTopologyData extends NetworkTopologyController {
         // ohne diese Frist sprang die Karte bei jedem davon.
         $aged = TopoDiff::ageOut($base_arr, $current, time(), self::STALE_TTL);
         NtCache::set('topo_baseline', $cache_parts, $aged['store'], 7 * 86400);
+
+        // Neu aufgetauchte Kanten markieren — Gegenstueck zur Alterung.
+        $jetzt = time();
+        foreach ($edges as &$_ne) {
+            $pp = [(string) ($_ne['from'] ?? ''), (string) ($_ne['to'] ?? '')];
+            sort($pp);
+            $st = $aged['store'][$pp[0] . '|' . $pp[1]] ?? null;
+            if (is_array($st) && !empty($st['first']) && ($jetzt - (int) $st['first']) <= self::NEW_TTL) {
+                $_ne['fresh'] = true;
+            }
+        }
+        unset($_ne);
 
         // Alternde Kanten zurueck in die Kantenliste — aber NUR, wenn beide
         // Endpunkte noch sichtbare Knoten sind. Sonst haenge eine Kante ins

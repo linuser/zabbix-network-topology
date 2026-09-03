@@ -128,6 +128,13 @@ export function setupBottomLegend(wrap, dark) {
     r2 += chip(line('#22c55e', true)  + esc(t('legend.guide.link_lldp')));
     r2 += chip(line('#3b82f6', false) + esc(t('legend.guide.link_inet')));
     r2 += chip(line('#dc2626', true)  + esc(t('legend.guide.iface_down')));
+    // Neu und alternd gehoeren in die Legende, sonst zeigt die Karte zwei
+    // Zustaende, die dort nicht erklaert sind — genau der Fehler aus Issue #9,
+    // nur andersherum.
+    r2 += chip('<span style="display:inline-block;width:16px;height:7px;border-radius:3px;'
+        + 'margin-right:5px;vertical-align:middle;background:rgba(22,163,74,0.30)"></span>'
+        + esc(t('legend.guide.link_fresh')));
+    r2 += chip(line('#c2a878', true, 2) + esc(t('legend.guide.link_stale')));
 
     // Edge color by traffic — the scale of the ACTIVE mode, with the same
     // tiers and colors as traffic.js. This used to show only the weathermap

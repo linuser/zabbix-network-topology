@@ -131,6 +131,9 @@ export function showEdgeDetail(panel, ed) {
     // Zugehoerigkeitstest ist besser als escapen — so gelangt gar nichts
     // Fremdes in die Ausgabe.
     const srcRow = el('div', 'display:flex;gap:4px;margin-bottom:2px');
+    if (d._isFreshEdge) {
+        srcRow.appendChild(pill(t('edge.src.fresh'), '#16a34a', t('edge.src.fresh.tip')));
+    }
     if (istStale) {
         // Wie lange her, in ganzen Minuten: eine Sekundenangabe suggeriert eine
         // Genauigkeit, die der Poll-Takt nicht hergibt.

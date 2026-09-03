@@ -113,6 +113,15 @@ class TopoDiff {
 
         foreach ($current as $k => $e) {
             $e['seen'] = $now;
+            // Wann diese Kante zum ERSTEN Mal gesehen wurde. Gegenstueck zur
+            // Alterung: so wie eine verschwundene Kante eine Weile stehen
+            // bleibt, ist eine neue eine Weile als neu erkennbar. Beim
+            // Wiederauftauchen wird der Wert bewusst NICHT uebernommen — eine
+            // Kante, die weg war und zurueckkommt, ist wieder neu.
+            $vorher = $baseline[$k] ?? null;
+            $e['first'] = (is_array($vorher) && empty($vorher['stale']) && !empty($vorher['first']))
+                ? (int) $vorher['first']
+                : $now;
             $store[$k] = $e;
         }
 
@@ -153,7 +162,11 @@ class TopoDiff {
 
         foreach ($current as $k => $now) {
             if (!isset($baseline[$k])) {
-                $res['added'][] = ['a' => $now['a'], 'b' => $now['b']];
+                // Der Schluessel traegt die Host-IDs ("idA|idB"). Ohne ihn
+                // liefert der Diff nur Labels, und die Karte kann die
+                // betroffene Kante nicht finden — genau das stand dem
+                // Hervorheben auf der Karte im Weg.
+                $res['added'][] = ['a' => $now['a'], 'b' => $now['b'], 'k' => $k];
                 continue;
             }
 
@@ -175,6 +188,7 @@ class TopoDiff {
                 $res['removed'][] = [
                     'a' => self::label($was, 'a', 0),
                     'b' => self::label($was, 'b', 1),
+                    'k' => $k,
                 ];
             }
         }

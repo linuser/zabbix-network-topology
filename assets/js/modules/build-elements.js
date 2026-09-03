@@ -382,6 +382,10 @@ export function buildEdgeElements(edges, nodes) {
                     // einander, ist sie beidseitig bestaetigt; sieht nur eine
                     // Seite den Nachbarn, ist das ein Diagnosehinweis — meist
                     // LLDP auf der Gegenseite aus, seltener eine Fehlzuordnung.
+                    // Seit kurzem da. Gegenstueck zu _isStaleEdge; wird
+                    // serverseitig gesetzt, weil nur dort bekannt ist, wann
+                    // die Kante zum ersten Mal auftauchte.
+                    _isFreshEdge: e.fresh === true,
                     confirmed: e.confirmed === true,
                     reporters: e.reporters || [],
                     // Wie sicher diese Kante ist (0-100) und WORAUF sie beruht.

@@ -198,6 +198,29 @@ $a5 = TopoDiff::ageOut($altbestand, [], 5000, $T);
 check('ohne Zeitstempel -> nicht alternd',   count($a5['stale']), 0);
 check('ohne Zeitstempel -> nicht behalten',  count($a5['store']), 0);
 
+echo "\nNeu aufgetauchte Kanten\n";
+
+// Gegenstueck zur Alterung: eine neue Kante ist eine Weile als neu erkennbar.
+$n1 = TopoDiff::ageOut(null, $e1, 2000, $T);
+check('erstes Auftauchen -> first gesetzt',  $n1['store']['h1|h2']['first'], 2000);
+
+// Bleibt sie, bleibt auch der erste Zeitpunkt stehen — sonst waere jede Kante
+// bei jedem Poll wieder neu.
+$n2 = TopoDiff::ageOut($n1['store'], $e1, 2500, $T);
+check('bleibt bestehen -> first unveraendert', $n2['store']['h1|h2']['first'], 2000);
+check('bleibt bestehen -> seen erneuert',      $n2['store']['h1|h2']['seen'],  2500);
+
+// War sie weg und kommt zurueck, ist sie WIEDER neu — sonst bliebe eine
+// wiederhergestellte Verbindung unbemerkt.
+$n3 = TopoDiff::ageOut($n1['store'], [],  2100, $T);   // wird alternd
+$n4 = TopoDiff::ageOut($n3['store'], $e1, 2200, $T);   // kommt zurueck
+check('zurueck nach Ausfall -> wieder neu',    $n4['store']['h1|h2']['first'], 2200);
+
+// Der Diff nennt den Schluessel, sonst findet die Karte die Kante nicht.
+$dk = TopoDiff::compare($e1, TopoDiff::snapshot([$edge('h1','h3')], $label));
+check('added traegt den Schluessel',           $dk['added'][0]['k'] ?? null,   'h1|h3');
+check('removed traegt den Schluessel',         $dk['removed'][0]['k'] ?? null, 'h1|h2');
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

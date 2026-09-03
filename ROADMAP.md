@@ -45,19 +45,7 @@ umbiegen laesst, ist ungeprueft.
 > Unterschied noch staerker auf.
 
 
-### 2. Topology-Diff auf der Karte hervorheben
-
-`topo_changes` (added/removed) wird bei jedem Datenabruf gegen eine
-APCu-Baseline berechnet und heute **nur als Toast** gemeldet — Toasts
-verschwinden, die Karte bleibt unmarkiert.
-
-**Offene Entscheidung, von der der Aufwand abhängt:** `added` lässt sich
-hervorheben, die Kante existiert. `removed` existiert **nicht mehr** und müsste
-gezeichnet werden. Bleibt sie bis zum nächsten Poll? Bis zum Wegklicken? Zählt
-sie in der KPI-Leiste? `topo_changes` liefert außerdem nur **Labels**, keine
-IDs — die müssen zurückgemappt werden.
-
-### 3. Zabbix 8
+### 2. Zabbix 8
 
 Branch `feat/zabbix-8`: Guard (`nt-assign-guard.js`), 261 Zeilen Befundtext,
 auf zwei Installationen bestätigt. Merged **konfliktfrei** auf main, ist in
@@ -67,7 +55,7 @@ Kombination mit den Widget-Änderungen aber **ungetestet**.
 liegt nur 7.4). Ohne Testinstanz nicht verifizierbar, und ungetestet gehört es
 in kein Release.
 
-### 4. Layout-Import — neu entwerfen
+### 3. Layout-Import — neu entwerfen
 
 Der Import war gebaut und ist wieder ausgebaut worden. Der Export bleibt: er
 liest nur und löst bereits die Hälfte des Zwecks.
@@ -270,11 +258,12 @@ auf der Karte (gepunktet, gedaempft), das Panel nennt „zuletzt vor N min
 gemeldet". Damit springt die Topologie nicht mehr bei einem einzelnen
 ausgefallenen Discovery-Durchlauf.
 
-**Und die offene Frage beim Topology-Diff ist damit beantwortet:** „eine
-verschwundene Kante existiert nicht mehr — wie lange zeichnet man sie?" Genau
-so lange, wie sie altern darf. Offen bleibt dort nur noch das Hervorheben
-NEUER Kanten; das Verschwinden ist jetzt auf der Karte zu sehen und nicht mehr
-nur im Toast.
+**Und der Topology-Diff ist damit erledigt.** Die offene Frage — „eine
+verschwundene Kante existiert nicht mehr, wie lange zeichnet man sie?" — ist
+beantwortet: so lange, wie sie altern darf. Neue Kanten tragen fuenf Minuten
+lang eine gruene Glorie, verschwundene fuenfzehn Minuten die gepunktete
+Darstellung, und die Legende fuehrt beide. Auch der genannte Blocker ist weg:
+`topo_changes` liefert jetzt den Schluessel mit, nicht nur Labels.
 
 **Chassis-Subtype und Management-Address.** `lldpRemChassisIdSubtype` und
 `lldpRemManAddr` werden nicht erhoben — nachgesehen, null Treffer. Ohne den
