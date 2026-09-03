@@ -221,7 +221,7 @@ export function renderLldpQuality(wrap) {
     berichtBtn.textContent = t('devreport.button');
     berichtBtn.title = t('devreport.button.tip');
     berichtBtn.style.cssText = 'margin:0 0 14px;padding:5px 12px;border-radius:6px;'
-        + 'border:1px solid #cbd5e1;background:#fff;color:#334155;font-size:12px;cursor:pointer';
+        + 'border:1px solid var(--nt-faint,#cbd5e1);background:var(--nt-surface,#fff);color:var(--nt-text-2,#334155);font-size:12px;cursor:pointer';
     berichtBtn.addEventListener('click', showDeviceReport);
 
     root.appendChild(head);

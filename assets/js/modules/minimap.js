@@ -28,7 +28,7 @@ export function setupMinimap(cy, wrap) {
             'position:absolute;bottom:16px;right:16px',
             'width:' + MM_W + 'px;height:' + MM_H + 'px',
             'background:rgba(255,255,255,0.92)',
-            'border:1px solid #e2e8f0',
+            'border:1px solid var(--nt-line,#e2e8f0)',
             'border-radius:8px',
             'box-shadow:0 2px 8px rgba(0,0,0,0.12)',
             'overflow:hidden;cursor:pointer',

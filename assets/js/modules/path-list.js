@@ -42,14 +42,14 @@ export function showPathList(panel, cy) {
 
     const head = el('div', 'display:flex;align-items:center;gap:7px;margin-bottom:6px');
     head.appendChild(el('div',
-        'flex:1;min-width:0;font-size:13px;font-weight:600;color:#0f172a',
+        'flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--nt-text,#0f172a)',
         t('path.title')));
     head.appendChild(el('span',
-        'font-size:10px;color:#94a3b8;flex-shrink:0',
+        'font-size:10px;color:var(--nt-muted,#94a3b8);flex-shrink:0',
         t('path.hops', { n: path.edgeIds.length })));
 
     const close = el('button',
-        'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;'
+        'background:none;border:none;cursor:pointer;color:var(--nt-muted,#94a3b8);font-size:18px;'
         + 'line-height:1;padding:0;flex-shrink:0', '✕');
     close.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -68,7 +68,7 @@ export function showPathList(panel, cy) {
         const nodeRow = el('div', 'display:flex;align-items:center;gap:6px');
         nodeRow.appendChild(el('span',
             'width:7px;height:7px;border-radius:50%;background:#0891b2;flex-shrink:0'));
-        nodeRow.appendChild(el('span', 'color:#0f172a;font-weight:600', lbl));
+        nodeRow.appendChild(el('span', 'color:var(--nt-text,#0f172a);font-weight:600', lbl));
         list.appendChild(nodeRow);
 
         // Die Kante zum naechsten Knoten — die letzte Zeile hat keine.
@@ -81,7 +81,7 @@ export function showPathList(panel, cy) {
         // Eingerueckt unter dem Knoten, mit einer Linie, die die Kette traegt.
         const linkRow = el('div',
             'display:flex;align-items:center;gap:6px;margin:1px 0 1px 3px;'
-            + 'border-left:2px solid #cbd5e1;padding:2px 0 2px 8px;color:#475569');
+            + 'border-left:2px solid var(--nt-faint,#cbd5e1);padding:2px 0 2px 8px;color:var(--nt-text-2,#475569)');
 
         // Ports in LAUFRICHTUNG, nicht in der Speicherrichtung der Kante.
         // Cytoscape haelt source/target so, wie die Kante angelegt wurde —
@@ -92,16 +92,16 @@ export function showPathList(panel, cy) {
         const pS = (vonHier ? d.portSrc : d.portTgt) || '';
         const pT = (vonHier ? d.portTgt : d.portSrc) || '';
         if (pS || pT) {
-            linkRow.appendChild(el('span', 'color:#64748b', (pS || '?') + ' → ' + (pT || '?')));
+            linkRow.appendChild(el('span', 'color:var(--nt-sub,#64748b)', (pS || '?') + ' → ' + (pT || '?')));
         }
 
         const pct = utilizationPct(d);
         if (pct !== null) {
-            if (linkRow.childNodes.length) linkRow.appendChild(el('span', 'color:#cbd5e1', '·'));
+            if (linkRow.childNodes.length) linkRow.appendChild(el('span', 'color:var(--nt-faint,#cbd5e1)', '·'));
             linkRow.appendChild(el('b', 'color:' + utilizationColor(pct), pct.toFixed(1) + '%'));
-            if (!d.perLink) linkRow.appendChild(el('span', 'color:#94a3b8;font-size:10px', t('path.est')));
+            if (!d.perLink) linkRow.appendChild(el('span', 'color:var(--nt-muted,#94a3b8);font-size:10px', t('path.est')));
         } else if (d.trafficIn || d.trafficOut) {
-            if (linkRow.childNodes.length) linkRow.appendChild(el('span', 'color:#cbd5e1', '·'));
+            if (linkRow.childNodes.length) linkRow.appendChild(el('span', 'color:var(--nt-faint,#cbd5e1)', '·'));
             linkRow.appendChild(el('span', '', '↓' + fmt(d.trafficIn || 0) + ' ↑' + fmt(d.trafficOut || 0)));
         }
 
@@ -114,7 +114,7 @@ export function showPathList(panel, cy) {
         }
 
         if (!linkRow.childNodes.length) {
-            linkRow.appendChild(el('span', 'color:#94a3b8', t('path.no_data')));
+            linkRow.appendChild(el('span', 'color:var(--nt-muted,#94a3b8)', t('path.no_data')));
         }
         list.appendChild(linkRow);
     });

@@ -28,6 +28,7 @@
 // nirgends nachlesen, nur messen. Genau dafuer ist die Matrix da.
 
 import { t } from './i18n.js';
+import { isDark } from './utils.js';
 
 function cfg() {
     return (typeof window !== 'undefined' && window.NT_CONFIG) || {};
@@ -145,31 +146,38 @@ export function showDeviceReport() {
     const alt = document.getElementById('nt-devreport');
     if (alt) alt.remove();
 
+    // Haengt an <body>, liegt also AUSSERHALB von #nt-root und erbt weder die
+    // Farb-Token noch die Dunkel-Klasse. .nt-float bringt die Token mit
+    // (network-topology.css), die Klasse setzen wir beim Oeffnen — dasselbe
+    // Muster wie Tooltip und Kontextmenue.
     const ov = document.createElement('div');
     ov.id = 'nt-devreport';
+    ov.className = 'nt-float';
+    ov.classList.toggle('nt-dark', isDark());
     ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,0.45);'
         + 'display:flex;align-items:center;justify-content:center;padding:24px';
 
     const box = document.createElement('div');
-    box.style.cssText = 'background:#fff;border-radius:10px;max-width:760px;width:100%;'
+    box.style.cssText = 'background:var(--nt-surface,#fff);color:var(--nt-text-2,#1f2c33);'
+        + 'border-radius:10px;max-width:760px;width:100%;'
         + 'max-height:100%;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.25);'
         + 'font-family:sans-serif';
 
     const head = document.createElement('div');
-    head.style.cssText = 'padding:14px 18px 8px;font-size:15px;font-weight:600;color:#0f172a';
+    head.style.cssText = 'padding:14px 18px 8px;font-size:15px;font-weight:600;color:var(--nt-text,#0f172a)';
     head.textContent = t('devreport.title');
     box.appendChild(head);
 
     const sub = document.createElement('div');
-    sub.style.cssText = 'padding:0 18px 10px;font-size:12px;color:#64748b;line-height:1.5';
+    sub.style.cssText = 'padding:0 18px 10px;font-size:12px;color:var(--nt-sub,#64748b);line-height:1.5';
     sub.textContent = t('devreport.intro');
     box.appendChild(sub);
 
     const ta = document.createElement('textarea');
     ta.readOnly = true;
     ta.style.cssText = 'flex:1;min-height:280px;margin:0 18px;padding:10px;font-family:ui-monospace,'
-        + 'SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;border:1px solid #e2e8f0;'
-        + 'border-radius:6px;resize:vertical;color:#334155';
+        + 'SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;border:1px solid var(--nt-line,#e2e8f0);'
+        + 'border-radius:6px;resize:vertical;color:var(--nt-text-2,#334155)';
     ta.value = txt || t('devreport.nodata');
     box.appendChild(ta);
 

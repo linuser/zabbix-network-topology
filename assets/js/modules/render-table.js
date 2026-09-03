@@ -797,7 +797,7 @@ function rowHtml(n, baseUrl, theme) {
         : isStale
         ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
             + 'border-radius:' + NT_R.pill + ';background:rgba(245,158,11,0.13);'
-            + 'color:#92400e;font-size:11px;font-weight:700"'
+            + 'color:var(--nt-warn-text,#92400e);font-size:11px;font-weight:700"'
             + ' title="' + esc(t('table.stale_tip', { m: Math.floor(_ageSec / 60) })) + '">'
             + '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
             + 'background:#f59e0b"></span>STALE</span>'
@@ -1046,13 +1046,13 @@ export function renderTable(wrap, nodes, edges) {
             if (_diff) {
                 const parts = [];
                 if (_diff.new.size)  parts.push('<span style="color:#06b6d4;font-weight:700">+' + _diff.new.size + '</span>');
-                if (_diff.gone.size) parts.push('<span style="color:#94a3b8;font-weight:700">−' + _diff.gone.size + '</span>');
+                if (_diff.gone.size) parts.push('<span style="color:var(--nt-muted,#94a3b8);font-weight:700">−' + _diff.gone.size + '</span>');
                 if (_diff.up.size)   parts.push('<span style="color:#dc2626;font-weight:700">↑' + _diff.up.size + '</span>');
                 if (_diff.down.size) parts.push('<span style="color:#16a34a;font-weight:700">↓' + _diff.down.size + '</span>');
                 const diffTxt = parts.length
                     ? ' · ' + esc(t('table.diff.since', { age: formatSnapshotAge(snap) })) + ': ' + parts.join(' ')
                     : ' · ' + esc(t('table.diff.since', { age: formatSnapshotAge(snap) })) + ': ' + esc(t('table.diff.none'));
-                counter.innerHTML = esc(txt) + '<span style="color:#94a3b8">' + diffTxt + '</span>';
+                counter.innerHTML = esc(txt) + '<span style="color:var(--nt-muted,#94a3b8)">' + diffTxt + '</span>';
             } else {
                 counter.textContent = txt;
             }
