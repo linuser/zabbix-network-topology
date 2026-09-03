@@ -164,6 +164,26 @@ final class MetricExtractor {
             // net.if.in.errors[ifInErrors.1] beginnen mit "net.if" — der
             // Traffic-Branch wuerde sie sonst schlucken und iface_health bliebe
             // fuer Standard-Zabbix-7-Templates leer.
+            // Ist das ueberhaupt ein Agent-Key? Einmal fragen, dreimal nutzen.
+            //
+            // Die beiden Agent-Regexe unten (net.if.in[...,errors] und
+            // ...,dropped]) standen als letztes Oder-Glied in ihrem elseif und
+            // liefen damit fuer JEDES Item, das weder Errors noch Discards ist
+            // — bei 134k Items also rund 268k Mal ins Leere.
+            //
+            // UND DAS KOSTETE NICHTS MESSBARES. Nachgemessen mit 800 Hosts und
+            // 134k Items, fuenf Laeufe je Variante: 101,7 ms gegen 102,6 ms,
+            // bei einer Streuung von zwei Millisekunden. PCRE haelt kompilierte
+            // Muster im Cache und steigt am fehlenden "net.if." sofort aus.
+            //
+            // Es bleibt trotzdem so stehen, aber aus dem anderen Grund: die
+            // Kette fragt dieselbe Sache jetzt einmal statt dreimal (die
+            // Abfrage stand unten im Traffic-Zweig noch einmal), und das ist
+            // die Vorfilter-Form, die der Octets-Zweig weiter oben schon hat.
+            // Wer hier spaeter Zeit sucht, soll nicht noch einmal an dieser
+            // Stelle danach graben.
+            $agent_if = strpos($key, 'net.if') === 0;
+
             if (strpos($key, 'ifOperStatus') !== false) {
                 // Oper-Status pro Interface. Bracket-Param als Korrelations-
                 // Key zu ifAdminStatus, damit admin-down (absichtlich
@@ -172,7 +192,7 @@ final class MetricExtractor {
             } elseif (strpos($key, 'ifAdminStatus') !== false) {
                 $iface_admin[$hid][HostMetadata::ifaceParam($key)] = (int) $val;
             } elseif (strpos($key, 'ifInErrors') !== false || strpos($key, 'ifOutErrors') !== false
-                  || preg_match('/net\.if\.(?:in|out)\[[^\]]*,errors\]/', $key)) {
+                  || ($agent_if && preg_match('/net\.if\.(?:in|out)\[[^\]]*,errors\]/', $key))) {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
                 $host_iface[$hid]['errors'] += (float) $val;
                 $ifx_e = self::ifIndexOf($key);
@@ -180,7 +200,7 @@ final class MetricExtractor {
                     $port_errors[$hid][$ifx_e] = ($port_errors[$hid][$ifx_e] ?? 0.0) + (float) $val;
                 }
             } elseif (strpos($key, 'ifInDiscards') !== false || strpos($key, 'ifOutDiscards') !== false
-                  || preg_match('/net\.if\.(?:in|out)\[[^\]]*,dropped\]/', $key)) {
+                  || ($agent_if && preg_match('/net\.if\.(?:in|out)\[[^\]]*,dropped\]/', $key))) {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
                 $host_iface[$hid]['discards'] += (float) $val;
                 $ifx_d = self::ifIndexOf($key);
@@ -200,7 +220,7 @@ final class MetricExtractor {
                 if ($sp > 0 && (!isset($host_speed[$hid]) || $sp > $host_speed[$hid])) {
                     $host_speed[$hid] = $sp;
                 }
-            } elseif (strpos($key, 'net.if') === 0) {
+            } elseif ($agent_if) {
                 // Zabbix agent traffic (bits/s)
                 $name = strtolower($item['name']);
                 if (!isset($host_traffic[$hid])) {
