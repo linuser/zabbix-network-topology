@@ -114,8 +114,32 @@ export function recomputeSimulation(cy) {
     }
     const baseline = reachable(cy, baseRoots, null);
 
+    // Sind ALLE Referenzknoten selbst simuliert ausgefallen?
+    //
+    // Das ist der wichtigste Fall der ganzen Funktion und war bis 5.3 falsch.
+    // Wer eine einzelne Firewall hat und fragt "was, wenn mein Router
+    // ausfaellt?", bekam "0 Hosts abgeschnitten" — weil die Referenzmenge leer
+    // wurde und Rueckfall 3 ersatzweise den ueberlebenden Host mit den meisten
+    // Kanten nahm. Von einem Switch aus ist die restliche Switch-Landschaft
+    // natuerlich weiter erreichbar.
+    //
+    // Damit beantwortete die Simulation stillschweigend eine ANDERE Frage:
+    // nicht "haengt das noch am Uplink", sondern "haengt das noch an
+    // irgendeinem ueberlebenden Geraet". Bei einem Router-Ausfall ist das
+    // genau die falsche, und die Antwort war beruhigend statt richtig.
+    //
+    // Richtig ist: faellt die Referenz selbst aus, gibt es keinen Uplink mehr
+    // — dann ist alles abgeschnitten, was ueber sie hing. Der Rueckfall bleibt
+    // fuer den anderen Fall: es gab NIE eine Referenz, weil die Karte gar
+    // keine Firewall und keinen Router enthaelt.
+    const alleReferenzenTot = baseRoots.length > 0
+        && baseRoots.filter(function(n) { return !_simulated.has(n.id()); }).length === 0;
+
     let roots = findRoots(cy, true);
-    if (roots.length === 0) {
+    if (roots.length === 0 && alleReferenzenTot) {
+        roots = cy.collection();   // leer -> nichts ist erreichbar
+        toast(t('whatif.root_all_down'), 'warn', 9000);
+    } else if (roots.length === 0) {
         // Fallback 3: hoechster Degree unter den Ueberlebenden. Toast macht
         // transparent worauf sich die Erreichbarkeit bezieht.
         const best = highestDegree(cy, true);

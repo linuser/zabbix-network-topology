@@ -447,6 +447,7 @@ export default {
     'edge.src.fresh.tip': 'Diese Verbindung ist neu aufgetaucht und war vorher nicht da.',
     'legend.guide.link_fresh': 'neue Verbindung',
     'legend.guide.link_stale': 'nicht mehr gemeldet',
+    'whatif.root_all_down': 'Alle Uplink-Referenzen dieser Karte sind Teil der Simulation \u2014 es gibt keinen Weg mehr nach draussen. Alles, was dahinter hing, gilt als abgeschnitten.',
     'legend.groups': 'GRUPPEN',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

@@ -442,6 +442,7 @@ export default {
     'edge.src.fresh.tip': 'This link appeared recently and was not there before.',
     'legend.guide.link_fresh': 'new link',
     'legend.guide.link_stale': 'no longer reported',
+    'whatif.root_all_down': 'Every uplink reference on this map is part of the simulation, so nothing has a path out any more. Everything that hung behind it counts as cut off.',
     'legend.groups': 'GROUPS',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',
