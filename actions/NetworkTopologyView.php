@@ -13,6 +13,10 @@ namespace Modules\NetworkTopology\Actions;
 use CController;
 use CControllerResponseData;
 use CControllerResponseFatal;
+// Ohne diesen Import sucht PHP die Klasse im Modul-Namespace und die Seite
+// endet in einem Fatal — WEISSE SEITE, kein Hinweis. Funktionen fallen auf den
+// globalen Namensraum zurueck (getUserTheme unten tut das), Klassen nicht.
+use CWebUser;
 use Modules\NetworkTopology\Topology\ManualLinks;
 use Modules\NetworkTopology\Topology\NodePositions;
 use Modules\NetworkTopology\Topology\SharedLayerFilter;
@@ -182,8 +186,7 @@ class NetworkTopologyView extends CController {
             // function_exists(), weil das Modul auch auf 7.0 LTS laeuft und
             // eine fehlende Hilfsfunktion die Seite sonst mit einem Fatal
             // beenden wuerde statt nur ohne Dunkelmodus zu starten.
-            'dark'              => function_exists('getUserTheme')
-                && stripos((string) getUserTheme(CWebUser::$data), 'dark') !== false,
+            'dark'              => self::themeIstDunkel(),
             'wallboard'         => (int) $this->getInput('wallboard', 0) === 1,
             // Link color scales set by a Super admin (module.config); null =
             // the built-in defaults from traffic.js.
@@ -234,5 +237,43 @@ class NetworkTopologyView extends CController {
         // Title is set on the response object, not in data array
         $response->setTitle(_('Network Topology'));
         $this->setResponse($response);
+    }
+
+    /**
+     * Laeuft Zabbix mit einem dunklen Theme? Nur ein HINWEIS fuer den Browser.
+     *
+     * Die Entscheidung faellt im Frontend an der gemessenen Hintergrundfarbe
+     * (seiteIstDunkel in utils.js). Dieser Wert greift nur, wenn sich dort
+     * nichts messen laesst — und deshalb darf er unter keinen Umstaenden die
+     * Seite kosten.
+     *
+     * ALS EIGENE METHODE MIT EIGENEM SCHUTZ, und das ist teuer gelernt: die
+     * erste Fassung stand als Ausdruck mitten im Antwort-Array und rief
+     * CWebUser::$data auf, ohne dass die Klasse importiert war. Im Namespace
+     * des Moduls sucht PHP sie unter Modules\NetworkTopology\Actions\CWebUser,
+     * findet nichts und beendet die Anfrage — WEISSE SEITE auf einer
+     * Produktionsinstanz, und php -l sieht davon nichts, weil die Syntax
+     * einwandfrei ist.
+     *
+     * Ein Dunkelmodus ist Kosmetik. Er darf nicht mehr kaputtmachen als sich
+     * selbst, also fangen wir hier alles ab, was schiefgehen kann, und geben
+     * im Zweifel false zurueck.
+     */
+    private static function themeIstDunkel(): bool {
+        try {
+            if (!function_exists('getUserTheme') || !class_exists('CWebUser')) {
+                return false;
+            }
+
+            $theme = getUserTheme(CWebUser::$data ?? []);
+
+            // Substring statt Namensliste: Zabbix 8.0 bringt mit
+            // ZBXNEXT-10657 ein weiteres dunkles Theme, und eine Liste der
+            // heute bekannten haette es als hell eingestuft.
+            return stripos((string) $theme, 'dark') !== false;
+        }
+        catch (\Throwable $e) {
+            return false;
+        }
     }
 }
