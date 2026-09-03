@@ -434,6 +434,7 @@ export default {
     'edge.match.ip': 'the neighbour reported an IP that belongs to this host.',
     'edge.match.ip_derived': 'an IP was inferred from a name pattern such as ip-10-0-0-5 \u2014 a guess.',
     'edge.match.short': 'only the short name matched, and it was unique in this selection.',
+    'edge.port.normalized': 'The neighbour reported this port in a different spelling; it was matched to the interface by normalising the name.',
     'legend.groups': 'GROUPS',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

@@ -439,6 +439,7 @@ export default {
     'edge.match.ip': 'der Nachbar nannte eine IP, die zu diesem Host geh\u00f6rt.',
     'edge.match.ip_derived': 'eine IP wurde aus einem Namensmuster wie ip-10-0-0-5 abgeleitet \u2014 geraten.',
     'edge.match.short': 'nur der Kurzname passte, und er war in dieser Auswahl eindeutig.',
+    'edge.port.normalized': 'Der Nachbar meldet diesen Port in anderer Schreibweise; die Zuordnung zum Interface erfolgte \u00fcber eine Normalisierung des Namens.',
     'legend.groups': 'GRUPPEN',
     'legend.severity': 'SEVERITY',
     'legend.ring': 'RING',

@@ -376,6 +376,11 @@ export function buildEdgeElements(edges, nodes) {
                     // beruht.
                     confidence: (typeof e.confidence === 'number') ? e.confidence : null,
                     matchKind: e.match || '',
+                    // Wie der gemeldete Nachbar-Port auf ein Interface der
+                    // Gegenseite aufgeloest wurde: '' (gar nicht), 'exact'
+                    // oder 'normalized'. Letzteres ist eine Annahme ueber
+                    // Schreibweisen und wird im Panel als solche benannt.
+                    portMatch: e.port_match || '',
                     // Interface-Health-Aggregat fuer Edge-Styling + Tooltip.
                     // downRatio (worst-case beider Endpunkte) steuert das
                     // Edge-Coloring — der Roh-Count wuerde bei einem Switch

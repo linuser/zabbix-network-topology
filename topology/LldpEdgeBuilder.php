@@ -322,6 +322,35 @@ final class LldpEdgeBuilder {
                     }
                 }
 
+                // Den gemeldeten Nachbar-Port auf ein Interface DES NACHBARN
+                // aufloesen. Gelingt es, hat die Kante Messwerte an beiden
+                // Enden — und die Aufloesung belegt zugleich, dass der
+                // gemeldete Port auf dem vermuteten Host existiert.
+                $far_metrics = null;
+                $port_match  = '';
+                if ($remote_port !== '' && !empty($port_names[$rhid])) {
+                    $auf = self::resolveRemotePort($remote_port, $port_names[$rhid]);
+                    if ($auf !== null) {
+                        [$fidx, $port_match] = $auf;
+                        if (isset($port_traffic[$rhid][$fidx])) {
+                            $ft = $port_traffic[$rhid][$fidx];
+                            $far_metrics = ['in' => round($ft['in']), 'out' => round($ft['out'])];
+                        }
+                        if (isset($port_speed[$rhid][$fidx]) && $port_speed[$rhid][$fidx] > 0) {
+                            $far_metrics ??= [];
+                            $far_metrics['speed'] = round($port_speed[$rhid][$fidx]);
+                        }
+                        if (isset($port_errors[$rhid][$fidx])) {
+                            $far_metrics ??= [];
+                            $far_metrics['errors'] = round((float) $port_errors[$rhid][$fidx], 3);
+                        }
+                        if (isset($port_discards[$rhid][$fidx])) {
+                            $far_metrics ??= [];
+                            $far_metrics['discards'] = round((float) $port_discards[$rhid][$fidx], 3);
+                        }
+                    }
+                }
+
                 $pair = [(string) $rid, (string) $rhid];
                 sort($pair);
                 $edge_key = implode('-', $pair);
@@ -342,8 +371,12 @@ final class LldpEdgeBuilder {
                                 // "beidseitig bestaetigt" gegen "einseitig".
                                 'reporters' => [(string) $rid => true],
                                 'match' => $match_kind,
+                                'port_match' => $port_match,
                                 'ports' => $ports,
-                                'port_metrics' => $my_metrics !== null ? [(string) $rid => $my_metrics] : []];
+                                'port_metrics' => array_filter([
+                                    (string) $rid  => $my_metrics,
+                                    (string) $rhid => $far_metrics,
+                                ], static fn($v) => $v !== null)];
                 } else {
                     // Edge schon bekannt (z.B. von LLDP) — Source/Ports/Metrik
                     // ergaenzen, wenn jetzt CDP oder die Gegenseite dieselbe
@@ -371,6 +404,14 @@ final class LldpEdgeBuilder {
                     }
                     if ($my_metrics !== null && !isset($edges[$eidx]['port_metrics'][(string) $rid])) {
                         $edges[$eidx]['port_metrics'][(string) $rid] = $my_metrics;
+                    }
+                    if ($far_metrics !== null && !isset($edges[$eidx]['port_metrics'][(string) $rhid])) {
+                        $edges[$eidx]['port_metrics'][(string) $rhid] = $far_metrics;
+                    }
+                    // Ein EXAKTER Porttreffer schlaegt einen normalisierten.
+                    if ($port_match === 'exact'
+                            || ($port_match === 'normalized' && ($edges[$eidx]['port_match'] ?? '') === '')) {
+                        $edges[$eidx]['port_match'] = $port_match;
                     }
                 }
             }
@@ -485,7 +526,94 @@ final class LldpEdgeBuilder {
             $score += 10;
         }
 
+        // Der gemeldete Nachbar-Port liess sich auf ein Interface des
+        // vermuteten Nachbarn aufloesen. Das ist ein Beleg fuer die Kante
+        // selbst — der gemeldete Port EXISTIERT dort.
+        //
+        // Normalisiert zaehlt weniger als exakt, und das ist der Punkt:
+        // "GigabitEthernet1/0/1" auf "Gi1/0/1" abzubilden ist eine Annahme
+        // ueber Schreibweisen, kein Messwert. Sie darf den Score heben, aber
+        // nicht so weit wie ein Treffer, der keine Annahme braucht.
+        if (($e['port_match'] ?? '') === 'exact') {
+            $score += 10;
+        } elseif (($e['port_match'] ?? '') === 'normalized') {
+            $score += 5;
+        }
+
         return max(0, min(100, $score));
+    }
+
+    /**
+     * Portnamen auf eine Vergleichsform bringen.
+     *
+     *   "GigabitEthernet1/0/1"  ->  "gi1/0/1"
+     *   "Gi1/0/1"               ->  "gi1/0/1"
+     *   "Te 1/1/4"              ->  "te1/1/4"
+     *   "ether1"                ->  "ether1"
+     *
+     * Nur Kleinschreibung, Leerzeichen weg und die gaengigen Langformen auf
+     * ihre uebliche Kurzform. BEWUSST KEIN Abschneiden von Ziffern oder
+     * Trennern: "1/0/1" und "1/0/11" duerfen nie zusammenfallen.
+     *
+     * Die Liste ist nach Laenge sortiert und bricht beim ersten Treffer ab —
+     * sonst machte "ethernet" aus "gigabitethernet1/0/1" ein "gigabiteth...".
+     */
+    private static function normPort(string $p): string {
+        $p = preg_replace('/\s+/', '', strtolower(trim($p)));
+        $syn = [
+            'tengigabitethernet'    => 'te',
+            'fortygigabitethernet'  => 'fo',
+            'hundredgigabitethernet'=> 'hu',
+            'twentyfivegigabitethernet' => 'twe',
+            'gigabitethernet'       => 'gi',
+            'fastethernet'          => 'fa',
+            'tengige'               => 'te',
+            'ethernet'              => 'eth',
+        ];
+        foreach ($syn as $lang => $kurz) {
+            if (strpos($p, $lang) === 0) {
+                return $kurz . substr($p, strlen($lang));
+            }
+        }
+        return $p;
+    }
+
+    /**
+     * Den vom Nachbarn gemeldeten Portnamen auf ein Interface DES NACHBARN
+     * aufloesen. Gibt [ifIndex, 'exact'|'normalized'] zurueck oder null.
+     *
+     * WARUM DAS MEHR IST ALS KOSMETIK
+     * -------------------------------
+     * Gelingt es, hat die Kante Messwerte an BEIDEN Enden statt nur beim
+     * Melder — und die Aufloesung ist zugleich ein Beleg: der gemeldete Port
+     * existiert auf dem Geraet, das wir fuer den Nachbarn halten.
+     *
+     * WARUM MEHRDEUTIGKEIT VERWORFEN WIRD
+     * -----------------------------------
+     * Faellt die normalisierte Form auf mehrere Interfaces, wird NICHTS
+     * zugeordnet. Dieselbe Regel wie beim Kurznamen-Abgleich der Hosts: eine
+     * falsche Zuordnung ist schlimmer als keine, weil die Zahlen danach
+     * aussehen wie eine Messung am richtigen Port.
+     */
+    private static function resolveRemotePort(string $name, array $names): ?array {
+        if ($name === '' || !$names) {
+            return null;
+        }
+        // 1. Exakt, wie gemeldet.
+        foreach ($names as $ifx => $nm) {
+            if ((string) $nm === $name) {
+                return [(string) $ifx, 'exact'];
+            }
+        }
+        // 2. Normalisiert — und nur, wenn eindeutig.
+        $ziel = self::normPort($name);
+        $treffer = [];
+        foreach ($names as $ifx => $nm) {
+            if (self::normPort((string) $nm) === $ziel) {
+                $treffer[] = (string) $ifx;
+            }
+        }
+        return count($treffer) === 1 ? [$treffer[0], 'normalized'] : null;
     }
 
     private static function capLabel(string $s): string {

@@ -258,12 +258,12 @@ stuetzte sich auf Chassis-ID und Management-Adresse, die beide **nicht erhoben
 werden** — bewertet wird stattdessen, wie der Name getroffen hat, ob beide
 Seiten melden und wie viel Beiwerk dazukommt.
 
-**Damit ist die Port-Normalisierung freigegeben** (`Gi1/0/1` ↔
-`GigabitEthernet1/0/1`). Sie erzeugt zwangslaeufig Fehltreffer, und eine
-falsche Kante ist schlimmer als eine fehlende, weil sie wie eine Messung
-aussieht — mit dem Score daneben wird aus dem Risiko eine Auskunft. Sie kann
-jetzt gebaut werden, muss aber ihren eigenen Match-Typ mitbringen, damit er in
-die Bewertung eingeht.
+**Port-Normalisierung — erledigt.** `Gi1/0/1` ↔ `GigabitEthernet1/0/1`. Der
+gemeldete Nachbar-Port wird auf ein Interface der Gegenseite aufgeloest; damit
+hat die Kante Messwerte an **beiden** Enden statt nur beim Melder. Sie traegt
+einen eigenen Match-Typ (`exact` / `normalized`), der unterschiedlich in die
+Bewertung eingeht — eine Annahme ueber Schreibweisen darf den Score heben, aber
+nicht so weit wie ein Treffer ohne Annahme. Mehrdeutige Formen werden verworfen.
 
 **Alterung / stale neighbors.** Verschwundene Nachbarn nicht sofort loeschen,
 sondern befristet als `stale` fuehren — sonst springt die Topologie bei kurzen

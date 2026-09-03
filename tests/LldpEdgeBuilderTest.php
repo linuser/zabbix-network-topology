@@ -234,6 +234,56 @@ check('unbekannter Uplink -> unmatched',    count($rU2['unmatched']),  1);
 // sie beruht — und ist die Vorbedingung fuer eine Port-Normalisierung, die ohne
 // ihn Falschkanten erzeugen wuerde, die wie Messungen aussehen.
 
+// ── Port-Normalisierung ────────────────────────────────────────────────────
+//
+// Der Nachbar meldet "GigabitEthernet1/0/1", auf dem Geraet heisst das
+// Interface "Gi1/0/1". Loest sich das auf, hat die Kante Messwerte an BEIDEN
+// Enden — und die Aufloesung belegt, dass der gemeldete Port dort existiert.
+//
+// Der wichtigste Fall unten ist die Mehrdeutigkeit: faellt die normalisierte
+// Form auf mehrere Interfaces, wird NICHTS zugeordnet.
+
+echo "\nPort-Normalisierung\n";
+
+$hP2 = ['sw' => ['host' => 'sw-p', 'name' => 'Switch P'],
+        'nb' => ['host' => 'nb-p', 'name' => 'Nachbar P']];
+$rawP  = [['hostid' => 'sw', 'key_' => 'lldpRemSysName[3]', 'lastvalue' => 'nb-p', 'src' => 'lldp']];
+
+$bau = static function (array $namen, string $gemeldet) use ($hP2, $rawP) {
+    return LldpEdgeBuilder::build(
+        $hP2, $rawP,
+        ['sw' => ['3' => ['desc' => $gemeldet]]],          // Nachbar meldet DIESEN Port
+        ['nb' => ['7' => ['in' => 5.0e6, 'out' => 2.0e6]], // Traffic am Nachbar-Port 7
+         'sw' => ['3' => ['in' => 1.0e6, 'out' => 1.0e6]]],
+        [], [], [], [],
+        ['nb' => $namen, 'sw' => ['3' => 'Gi1/0/3']]
+    );
+};
+
+// Langform gemeldet, kurz benannt -> normalisierter Treffer.
+$eP = findEdge($bau(['7' => 'Gi1/0/1'], 'GigabitEthernet1/0/1')['edges'], 'sw', 'nb') ?? [];
+check('Langform -> normalisierter Treffer',  $eP['port_match'] ?? null, 'normalized');
+check('Messwerte der GEGENSEITE dabei',      ($eP['port_metrics']['nb']['in'] ?? null), 5000000.0);
+
+// Exakt gemeldet -> exakter Treffer, hoeher bewertet.
+$eP2 = findEdge($bau(['7' => 'Gi1/0/1'], 'Gi1/0/1')['edges'], 'sw', 'nb') ?? [];
+check('identisch gemeldet -> exakt',         $eP2['port_match'] ?? null, 'exact');
+check('exakt zaehlt mehr als normalisiert',  ($eP2['confidence'] ?? 0) > ($eP['confidence'] ?? 0), true);
+
+// MEHRDEUTIG: zwei Interfaces fallen auf dieselbe normalisierte Form.
+$ePA = findEdge($bau(['7' => 'Gi1/0/1', '8' => 'GigabitEthernet1/0/1'], 'gi 1/0/1')['edges'], 'sw', 'nb') ?? [];
+check('mehrdeutig -> kein Porttreffer',      $ePA['port_match'] ?? null, '');
+check('mehrdeutig -> keine fremden Werte',   isset($ePA['port_metrics']['nb']), false);
+
+// Kein Namensbestand beim Nachbarn -> gar nichts, aber auch kein Fehler.
+$ePN = findEdge($bau([], 'Gi1/0/1')['edges'], 'sw', 'nb') ?? [];
+check('ohne Namen -> kein Porttreffer',      $ePN['port_match'] ?? null, '');
+check('ohne Namen -> Kante bleibt',          isset($ePN['from']), true);
+
+// Ziffern duerfen NICHT zusammenfallen.
+$ePZ = findEdge($bau(['7' => 'Gi1/0/11'], 'GigabitEthernet1/0/1')['edges'], 'sw', 'nb') ?? [];
+check('1/0/1 trifft nicht 1/0/11',           $ePZ['port_match'] ?? null, '');
+
 echo "\nConfidence\n";
 
 $hC = ['a' => ['host' => 'sw-a',  'name' => 'Switch A'],

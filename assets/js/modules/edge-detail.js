@@ -178,6 +178,15 @@ export function showEdgeDetail(panel, ed) {
             (istManuell || istGhost) ? t('edge.ports.none_kind') : t('edge.ports.none')));
     }
 
+    // Wurde der gemeldete Nachbar-Port auf ein echtes Interface aufgeloest?
+    // Nur der normalisierte Fall wird benannt — er beruht auf einer Annahme
+    // ueber Schreibweisen, und der Leser soll sie kennen. Ein exakter Treffer
+    // braucht keine Erklaerung.
+    if (d.portMatch === 'normalized') {
+        panel.appendChild(el('div', 'font-size:10px;color:#94a3b8;line-height:1.4;margin-top:3px',
+            t('edge.port.normalized')));
+    }
+
     // ── Traffic, mit der Herkunft der Zahl ──────────────────────────────────
     const tIn = d.trafficIn || 0, tOut = d.trafficOut || 0;
     const cap = d.capBps || 0;
