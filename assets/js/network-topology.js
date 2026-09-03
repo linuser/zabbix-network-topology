@@ -322,8 +322,14 @@ function init() {
     // Vor dem ersten Render, nicht danach: sonst zeichnet der erste Durchgang
     // hell und springt beim naechsten um.
     installThemeVars();
+    const dunkel = seiteIstDunkel(cfg.dark);
+    // Die Klasse MUSS auch auf <html>: Tooltip, Kontextmenue und das
+    // Export-Fenster haengen an document.body und liegen damit ausserhalb von
+    // #nt-root. Ohne die Klasse ganz oben erben sie die Farbvariablen nicht.
+    document.documentElement.classList.toggle('nt-dark', dunkel);
     const ntRoot = document.getElementById('nt-root');
-    if (ntRoot) ntRoot.classList.toggle('nt-dark', seiteIstDunkel(cfg.dark));
+    // #nt-root behaelt sie zusaetzlich — sechzehn Module fragen genau hier ab.
+    if (ntRoot) ntRoot.classList.toggle('nt-dark', dunkel);
 
     const wrap = document.getElementById('nt-canvas-wrap');
     const spin = document.getElementById('nt-loading');

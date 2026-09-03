@@ -106,11 +106,23 @@ const DUNKEL = {
 export function installThemeVars() {
     if (document.getElementById('nt-theme-vars')) return;
 
-    let css = '#nt-root.nt-dark{';
+    // AUF :root UND AUF #nt-root, und der erste Teil ist der wichtige.
+    //
+    // Zuerst standen die Variablen nur auf #nt-root. Das deckt alles ab, was
+    // IN der Karte liegt — und genau drei Dinge liegen nicht darin: der
+    // Tooltip, das Kontextmenue und das Export-Fenster haengen sich an
+    // document.body. Dort loeste keine Variable auf, es griff ueberall der
+    // helle Rueckfall, und der Tooltip stand als leuchtend weisser Kasten auf
+    // der dunklen Karte.
+    //
+    // Auf :root definiert erben sie alle drei, egal wo im Dokument sie
+    // landen. #nt-root bleibt zusaetzlich stehen, damit die Karte auch dann
+    // stimmt, wenn die Klasse aus irgendeinem Grund nur dort haengt.
+    let vars = '';
     for (const hex in DUNKEL) {
-        css += '--nt-c-' + hex + ':' + DUNKEL[hex] + ';';
+        vars += '--nt-c-' + hex + ':' + DUNKEL[hex] + ';';
     }
-    css += '}';
+    const css = ':root.nt-dark{' + vars + '}#nt-root.nt-dark{' + vars + '}';
 
     const st = document.createElement('style');
     st.id = 'nt-theme-vars';
