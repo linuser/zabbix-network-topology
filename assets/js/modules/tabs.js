@@ -17,8 +17,8 @@
 // Die Abfragen auf 'nt-dark' in den Render-Modulen sind damals absichtlich
 // stehen geblieben, weil das Heraustrennen jeden Render-Pfad angefasst haette,
 // ohne dass sich am Bild etwas aendert. Das hat sich ausgezahlt: die Klasse
-// wird jetzt beim Start aus Zabbix' Benutzer-Theme gesetzt (network-topology.js,
-// gespeist aus NT_CONFIG.dark), und sechzehn Module hatten ihre dunklen
+// wird jetzt beim Start aus Zabbix' Theme abgeleitet (initDarkMode unten),
+// und sechzehn Module hatten ihre dunklen
 // Farbwerte bereits fertig liegen.
 //
 // Ein zweiter Schalter neben dem von Zabbix kommt nicht zurueck: das waeren

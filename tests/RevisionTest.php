@@ -93,8 +93,29 @@ $u1 = ['n' => ['a' => "x" . chr(0xFF)]];
 $u2 = ['n' => ['a' => "y" . chr(0xFE)]];
 check('Revision ist nicht leer',              Revision::of($u1) !== '', true);
 check('16 Hex-Zeichen wie sonst auch',        strlen(Revision::of($u1)), 16);
-check('zwei kaputte Staende kollidieren nicht', Revision::of($u1) === Revision::of($u2), false);
+check('Staende mit gueltigem Unterschied bleiben unterscheidbar',
+                                              Revision::of($u1) === Revision::of($u2), false);
 check('sich selbst erkennt sie weiterhin',    Revision::matches(Revision::of($u1), $u1), true);
+
+// DIE GRENZE DES VERFAHRENS, ausdruecklich festgehalten.
+//
+// JSON_INVALID_UTF8_SUBSTITUTE bildet JEDES ungueltige Byte auf dasselbe
+// U+FFFD ab. Zwei Staende, die sich NUR in ungueltigen Bytes unterscheiden,
+// bekommen deshalb dieselbe Revision — die Konflikterkennung sieht sie als
+// gleich an.
+//
+// Die erste Fassung dieses Tests behauptete mehr, als sie pruefte: ihre
+// beiden Vorlagen unterschieden sich auch im gueltigen Teil ("x" gegen "y"),
+// also waere sie selbst ohne das Flag durchgelaufen.
+//
+// Praktisch ist das heute folgenlos, weil die Sanitizer als Node-ID nur
+// ASCII durchlassen — ungueltige Bytes erreichen Revision gar nicht. Es steht
+// hier, damit die Annahme SICHTBAR ist: faellt sie irgendwann, faellt dieser
+// Test auf und nicht ein Benutzer.
+$g1 = ['n' => ['a' => "x" . chr(0xFF)]];
+$g2 = ['n' => ['a' => "x" . chr(0xFE)]];
+check('bekannte Grenze: nur ungueltige Bytes verschieden -> gleiche Revision',
+                                              Revision::of($g1) === Revision::of($g2), true);
 
 echo $failures === 0
     ? "\n  RevisionTest: alle Pruefungen bestanden\n"

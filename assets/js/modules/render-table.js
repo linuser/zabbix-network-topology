@@ -14,7 +14,7 @@
 //
 // Sortierung: Klick auf Spalten-Header. Default: Status-DESC (kritischste oben).
 
-import { esc, fmt, aggregateValues } from './utils.js';
+import { esc, fmt, aggregateValues, isDark } from './utils.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { t } from './i18n.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
@@ -1023,6 +1023,17 @@ export function renderTable(wrap, nodes, edges) {
     if (oldPanel) oldPanel.remove();
     const detailPanel = document.createElement('div');
     detailPanel.id = 'nt-detail-panel';
+    // AN <body>, ALSO AUSSERHALB VON #nt-root — und damit ausserhalb der
+    // Reichweite der Farb-Token. Das faellt nicht auf, solange dieser Kasten
+    // seine Farben selbst setzt (theme.*, gleich unten). Er tut es aber nicht
+    // allein: showDetail() aus detail-panel.js schreibt seinen Inhalt hier
+    // hinein und benutzt dafuer var(--nt-surface) und Verwandte OHNE
+    // Rueckfallwert. Ohne .nt-float loest davon nichts auf — Trenner
+    // verschwinden, Knopfflaechen werden durchsichtig, Text erbt die Farbe
+    // des Zabbix-Body. Im Tabellen-Tab war das der Grund, warum das Panel
+    // dunkel auf dunkel stand, waehrend die Tabelle daneben stimmte.
+    detailPanel.className = 'nt-float';
+    detailPanel.classList.toggle('nt-dark', isDark());
     detailPanel.style.cssText = 'position:fixed;top:170px;right:20px;width:300px;'
         + 'background:' + theme.surface + ';border:1px solid ' + theme.border
         + ';border-radius:10px;padding:14px;color:' + theme.text + ';'

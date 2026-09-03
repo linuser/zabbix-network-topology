@@ -37,6 +37,7 @@
 // ueber textContent gibt es die Escaping-Frage gar nicht erst.
 
 import { el, fmt } from './utils.js';
+import { hideDetail } from './detail-panel.js';
 import { t } from './i18n.js';
 import { utilizationColor, utilizationPct } from './traffic.js';
 
@@ -113,7 +114,11 @@ export function showEdgeDetail(panel, ed) {
         + 'line-height:1;padding:0;flex-shrink:0', '✕');
     close.addEventListener('click', function(e) {
         e.stopPropagation();
-        panel.style.display = 'none';
+        // ueber hideDetail(), nicht direkt: dort wird auch
+        // nt-detail-open geloescht. Wer nur display umstellt,
+        // laesst die Klasse stehen — und die Farblegende bleibt
+        // zur Seite geschoben, obwohl kein Panel mehr da ist.
+        hideDetail(panel);
     });
     head.appendChild(close);
     panel.appendChild(head);

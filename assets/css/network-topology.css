@@ -203,12 +203,17 @@ body.nt-wallboard .nt-footer { display: none; }
 /* The detail panel and the color guide (legend.js, #nt-bottom-legend) share
    the bottom-left corner. While the panel is open (class set by showDetail)
    the guide moves right, next to the panel, instead of sitting underneath. */
+/* !important, und zwar notgedrungen: legend.js schreibt left und max-width
+   INLINE ueber style.cssText, und ein Inline-Stil schlaegt jede Regel aus dem
+   Stylesheet, egal wie spezifisch sie ist. Ohne das Schluesselwort war diese
+   Regel wirkungslos — die Legende blieb unter dem Panel liegen, und die
+   Verschiebung stand nur im Changelog. */
 #nt-root.nt-detail-open #nt-bottom-legend {
-    left: 252px;
-    max-width: calc(100% - 430px);
+    left: 252px !important;
+    max-width: calc(100% - 430px) !important;
 }
 @media (max-width: 900px) {
-    #nt-root.nt-detail-open #nt-bottom-legend { left: 212px; }
+    #nt-root.nt-detail-open #nt-bottom-legend { left: 212px !important; }
 }
 
 /* Search field in the toolbar (toolbar.js) — follows the module theme, not

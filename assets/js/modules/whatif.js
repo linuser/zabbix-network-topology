@@ -103,9 +103,21 @@ export function reachable(cy, roots, blocked, ohneManuelle) {
             //
             // Dass die beiden verschieden sind, weiss diese Datei ohnehin: der
             // Containment-Block weiter unten propagiert entlang genau dieser
-            // Kanten in die andere Richtung (toter Traeger reisst Gaeste mit).
-            // Sie zusaetzlich als Weg zu zaehlen war doppelt und falsch.
-            if (edge.data('kind') === 'hosts') return;
+            // Kanten (toter Traeger reisst Gaeste mit).
+            //
+            // NUR IN TRAEGERRICHTUNG SPERREN, NICHT GANZ. Die erste Fassung
+            // uebersprang hosts-Kanten vollstaendig — das behob den Fehler
+            // hier, brach aber root-cause.js, das reachable() mitbenutzt und
+            // KEINEN Containment-Durchgang hat: dort verschwanden alle Gaeste
+            // aus der Ursachen- und Opferrechnung, aus "1 Ursache, 5 Opfer"
+            // wurde "1 Ursache, 0 Opfer".
+            //
+            // Die Kante ist gerichtet (build-elements: source = Traeger,
+            // target = Gast, "GERICHTET Parent→Child"). Vom Wirt zum Gast ist
+            // sie ein gueltiger Weg — laeuft der Hypervisor, ist die VM
+            // erreichbar. Vom Gast zum Wirt nicht. Genau diese eine Richtung
+            // war der Fehler, nicht die Kante an sich.
+            if (edge.data('kind') === 'hosts' && edge.source().id() !== cur) return;
             if (ohneManuelle && String(edge.id() || '').indexOf('ml_') === 0) return;
             const s = edge.source().id();
             const t2 = edge.target().id();
@@ -126,6 +138,10 @@ export function recomputeSimulation(cy) {
     // Baseline: was haengt OHNE Ausfaelle am Uplink? Nur wer hier drin ist
     // kann durch die Simulation etwas verlieren.
     let baseRoots = findRoots(cy, false);
+    // Waren es ECHTE Referenzen (Firewall/Router) oder nur die Ersatzwahl nach
+    // Kantenzahl? Der Unterschied entscheidet weiter unten darueber, ob ein
+    // Ausfall "alles abgeschnitten" bedeutet — und er ging bisher verloren.
+    const echteReferenzen = baseRoots.length > 0;
     if (baseRoots.length === 0) {
         baseRoots = highestDegree(cy, false);
         if (!baseRoots) { _removeBanner(); return; }
@@ -150,7 +166,15 @@ export function recomputeSimulation(cy) {
     // — dann ist alles abgeschnitten, was ueber sie hing. Der Rueckfall bleibt
     // fuer den anderen Fall: es gab NIE eine Referenz, weil die Karte gar
     // keine Firewall und keinen Router enthaelt.
-    const alleReferenzenTot = baseRoots.length > 0
+    //
+    // NUR BEI ECHTEN REFERENZEN. Ohne diese Bedingung galt auch die Ersatzwahl
+    // nach Kantenzahl als "Referenz": auf einer Karte ganz ohne Firewall und
+    // Router waehlt Rueckfall 3 den Knoten mit den meisten Kanten, und wer
+    // dann genau diesen simulierte, bekam "die ganze Karte ist abgeschnitten"
+    // statt der Ersatzrechnung. Das ist derselbe Fehler wie vorher, nur mit
+    // umgekehrtem Vorzeichen — und er widerspricht dem Absatz darueber, der
+    // den Rueckfall ausdruecklich fuer genau diesen Fall vorsieht.
+    const alleReferenzenTot = echteReferenzen
         && baseRoots.filter(function(n) { return !_simulated.has(n.id()); }).length === 0;
 
     let roots = findRoots(cy, true);
@@ -193,13 +217,20 @@ export function recomputeSimulation(cy) {
     // Switch abschalten will, verlaesst sich dann auf eine Zahl, die seine
     // NAS gar nicht kannte.
     let unbekannt = 0;
+    // WELCHE das sind, nicht nur wie viele. Der Containment-Durchgang weiter
+    // unten kann so einen Knoten nachtraeglich doch als abgeschnitten
+    // erkennen — eine VM, deren Traeger stirbt. Ohne dieses Gedaechtnis stand
+    // sie danach in BEIDEN Zahlen: einmal als "nicht beurteilbar" und einmal
+    // als "abgeschnitten", und der Erklaertext widersprach der roten
+    // Markierung auf der Karte.
+    const unbekannteIds = {};
     // Ueberlebt nur dank einer von Hand gezogenen Kante.
     let nurManuell = 0;
     cy.nodes('[!isGroup]').forEach(function(n) {
         const id = n.id();
         if (_simulated.has(id)) { n.addClass('nt-sim-dead'); return; }
         if (n.data('_isGhost') || n.data('_isInternet')) return;
-        if (!baseline[id]) { unbekannt++; return; }
+        if (!baseline[id]) { unbekannt++; unbekannteIds[id] = true; return; }
         if (!visited[id]) { n.addClass('nt-sim-cut'); cutCount++; return; }
         if (!visitedOhne[id]) { nurManuell++; }
     });
@@ -225,6 +256,10 @@ export function recomputeSimulation(cy) {
                 if (_simulated.has(childId)) return;            // bleibt 'dead'
                 const c = cy.getElementById(childId);
                 if (c.hasClass('nt-sim-cut')) return;           // schon markiert
+                // War er "nicht beurteilbar", ist er es jetzt nicht mehr: sein
+                // Traeger stirbt, also stirbt er mit. Aus der einen Zahl raus,
+                // in die andere rein — nicht in beide.
+                if (unbekannteIds[childId]) { unbekannt--; delete unbekannteIds[childId]; }
                 c.addClass('nt-sim-cut'); cutCount++;
                 work.push(childId);
             });

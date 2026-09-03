@@ -133,39 +133,54 @@ export function el(tag, css, text) {
  *
  * WARUM NICHT AM THEME-NAMEN
  * --------------------------
- * Der Controller schickt einen Hinweis mit (NT_CONFIG.dark), der auf dem
- * Theme-NAMEN beruht. Der ist zweimal unzuverlaessig: Zabbix 8.0 bringt mit
- * ZBXNEXT-10657 ein weiteres dunkles Theme, und wer eigenes Theme-CSS
- * ausliefert, kann es nennen wie er will. Die Seite selbst weiss es besser
- * als jede Liste — also fragen wir sie.
+ * Der Aufrufer reicht einen Hinweis herein, der auf dem DATEINAMEN des
+ * eingebundenen Stylesheets beruht (detectZabbixDark in tabs.js). Der ist
+ * zweimal unzuverlaessig: Zabbix 8.0 bringt mit ZBXNEXT-10657 ein weiteres
+ * dunkles Theme, und wer eigenes Theme-CSS ausliefert, kann es nennen wie er
+ * will. Die Seite selbst weiss es besser als jede Liste — also fragen wir sie.
  *
- * Gemessen wird die tatsaechliche Hintergrundfarbe und daraus die relative
- * Helligkeit nach WCAG. Ein transparenter Hintergrund (rgba mit Alpha 0,
- * "transparent") ist keine Messung: dann faellt die Entscheidung auf den
- * Hinweis vom Server zurueck.
+ * MEHRERE ELEMENTE, NICHT NUR EINES. Die erste Fassung mass nur <main> und
+ * gab bei durchsichtigem Hintergrund sofort den Hinweis zurueck. Genau das
+ * ist bei Zabbix aber der Normalfall: die Grundfarbe liegt auf <body> oder
+ * einem Wrapper, <main> erbt sie nur optisch und meldet selbst
+ * "rgba(0,0,0,0)". Damit lief die Messung praktisch nie, und uebrig blieb die
+ * Dateinamen-Heuristik, die sie ersetzen sollte.
  *
- * @param {boolean} hinweis Voreinstellung, wenn sich nichts messen laesst.
+ * Jetzt wird die Kette von innen nach aussen abgeklopft und das erste
+ * Element genommen, das wirklich eine Farbe traegt.
+ *
+ * @param {boolean} hinweis Voreinstellung, wenn sich nirgends etwas messen laesst.
  */
 export function seiteIstDunkel(hinweis) {
     try {
-        const el = document.querySelector('main') || document.body;
-        if (!el) return !!hinweis;
-        const bg = window.getComputedStyle(el).backgroundColor || '';
-        const m = bg.match(/rgba?\(([^)]+)\)/);
-        if (!m) return !!hinweis;
-        const teile = m[1].split(',').map(function(v) { return parseFloat(v); });
-        // Alpha 0 heisst: hier ist gar keine Farbe, nur Durchsicht.
-        if (teile.length > 3 && teile[3] === 0) return !!hinweis;
-        // Relative Helligkeit nach WCAG 2.x, mit der sRGB-Gammakorrektur.
         const kanal = function(c) {
             c = c / 255;
             return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
         };
-        const L = 0.2126 * kanal(teile[0]) + 0.7152 * kanal(teile[1]) + 0.0722 * kanal(teile[2]);
-        // 0.18 statt 0.5: die Grenze soll dunkle Themes treffen, nicht bloss
-        // graue. Zabbix' dark-theme liegt weit darunter, blue-theme weit
-        // darueber — dazwischen ist viel Luft.
-        return L < 0.18;
+
+        const kandidaten = [
+            document.querySelector('main'),
+            document.querySelector('.wrapper'),
+            document.body,
+            document.documentElement
+        ];
+
+        for (let i = 0; i < kandidaten.length; i++) {
+            const el = kandidaten[i];
+            if (!el) continue;
+            const m = (window.getComputedStyle(el).backgroundColor || '').match(/rgba?\(([^)]+)\)/);
+            if (!m) continue;
+            const teile = m[1].split(',').map(function(v) { return parseFloat(v); });
+            // Alpha 0 heisst: hier ist gar keine Farbe, nur Durchsicht —
+            // weitersuchen statt aufgeben.
+            if (teile.length > 3 && teile[3] === 0) continue;
+            const L = 0.2126 * kanal(teile[0]) + 0.7152 * kanal(teile[1]) + 0.0722 * kanal(teile[2]);
+            // 0.18 statt 0.5: die Grenze soll dunkle Themes treffen, nicht
+            // bloss graue. Sie liegt bei etwa #777; Zabbix' dark-theme liegt
+            // weit darunter, blue-theme weit darueber.
+            return L < 0.18;
+        }
+        return !!hinweis;
     } catch (e) {
         // getComputedStyle kann in exotischen Kontexten werfen. Dann gilt
         // der Hinweis; ein Fehler hier darf die Karte nicht kosten.
