@@ -120,7 +120,13 @@ export function setupBottomLegend(wrap, dark) {
     r1 += chip(dot(SEV_COL[0]) + '<b>' + esc(t('legend.guide.optimal')) + '</b>');
     for (let i = 1; i <= 5; i++) r1 += chip(dot(SEV_COL[i]) + esc(SEV_LBL[i]));
     r1 += chip('<span style="color:#dc2626;font-weight:800;margin-right:4px">✕</span>' + esc(t('legend.guide.offline')));
-    r1 += chip('<span style="opacity:0.4;margin-right:4px">◐</span>' + esc(t('legend.guide.maint')));
+    // Wartung: der oranger gestrichelte Ring UND das Schluessel-Badge, so wie es
+    // auf der Karte aussieht. Hier stand ein gedimmtes ◐ — ein Zeichen, das
+    // dort nirgends vorkommt. Gemeint war wohl "der Knoten ist gedimmt";
+    // gelesen wurde es als Symbol, und wer danach suchte, fand es nie.
+    r1 += chip('<span style="display:inline-block;width:11px;height:11px;border-radius:50%;'
+        + 'border:2px dashed #f59e0b;margin-right:4px;vertical-align:middle"></span>'
+        + esc(t('legend.guide.maint')));
 
     // Verbindungen — LLDP/CDP (gruen gestrichelt), Internet (blau), Down
     // (rot gestrichelt).

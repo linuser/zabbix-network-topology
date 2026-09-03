@@ -214,11 +214,23 @@ export function makeNodeImage(d) {
         const mX = prob > 0 ? (C * 2 - 22 - mR - 2) : (C * 2 - mR - 2);
         const mY = mR + 2;
         p += '<circle cx="' + mX + '" cy="' + mY + '" r="' + mR + '" fill="#f59e0b" stroke="white" stroke-width="1.5"/>';
-        // Schraubenschlüssel-Glyph (vereinfacht): zwei abgewinkelte Linien
-        p += '<g transform="translate(' + mX + ',' + mY + ') scale(0.55)" stroke="white" stroke-width="2"'
+        // Schraubenschluessel: EINE Diagonale als Griff, dazu der offene Kopf.
+        //
+        // Hier standen zwei gekreuzte Diagonalen — also ein ✕. Der Kommentar
+        // sagte "Schraubenschluessel (vereinfacht)", aber die Vereinfachung
+        // hatte nichts davon uebrig gelassen. Und ✕ ist auf dieser Karte schon
+        // vergeben: es ist der Offline-Indikator. Zwei verschiedene Zustaende
+        // trugen damit dasselbe Zeichen, unterschieden allein durch orange
+        // gegen rot — ausgerechnet die Paarung, die bei Rot-Gruen-Schwaeche am
+        // ehesten zusammenfaellt.
+        //
+        // Der offene Kopf (Kreisbogen mit Luecke, nicht gefuellt) ist das, was
+        // einen Schluessel bei dieser Groesse erkennbar macht; ein gefuellter
+        // Punkt sah aus wie ein Nagel.
+        p += '<g transform="translate(' + mX + ',' + mY + ') scale(0.62)" stroke="white" stroke-width="2"'
            + ' stroke-linecap="round" stroke-linejoin="round" fill="none">'
-           + '<path d="M-5,-5 L5,5 M-5,5 L5,-5"/>'
-           + '<circle cx="-5" cy="-5" r="2.5" fill="white" stroke="none"/>'
+           + '<path d="M-1.5,1.5 L5,-5"/>'
+           + '<path d="M-2.5,-5.5 A3.6,3.6 0 1 0 -5.5,-2.5"/>'
            + '</g>';
     }
 
