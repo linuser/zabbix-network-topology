@@ -99,6 +99,7 @@ export function showEdgeDetail(panel, ed) {
     // fuehrt zu einem Geraet, das Zabbix gar nicht kennt.
     const istManuell = String(d.id || '').indexOf('ml_') === 0;
     const istGhost   = !!d._isGhostEdge;
+    const istStale   = !!d._isStaleEdge;
     const quellen    = Array.isArray(d.src) ? d.src : [];
 
     panel.style.display = 'block';
@@ -130,7 +131,13 @@ export function showEdgeDetail(panel, ed) {
     // Zugehoerigkeitstest ist besser als escapen — so gelangt gar nichts
     // Fremdes in die Ausgabe.
     const srcRow = el('div', 'display:flex;gap:4px;margin-bottom:2px');
-    if (istManuell) {
+    if (istStale) {
+        // Wie lange her, in ganzen Minuten: eine Sekundenangabe suggeriert eine
+        // Genauigkeit, die der Poll-Takt nicht hergibt.
+        const min = d.lastSeen ? Math.max(0, Math.round((Date.now()/1000 - d.lastSeen) / 60)) : null;
+        srcRow.appendChild(pill(t('edge.src.stale'), '#c2410c',
+            min === null ? t('edge.src.stale.tip') : t('edge.src.stale.tip_min', { n: min })));
+    } else if (istManuell) {
         srcRow.appendChild(pill(t('edge.src.manual'), '#7c3aed', t('edge.src.manual.tip')));
     } else if (istGhost) {
         srcRow.appendChild(pill(t('edge.src.ghost'), '#94a3b8', t('edge.src.ghost.tip')));
@@ -145,7 +152,7 @@ export function showEdgeDetail(panel, ed) {
     // hierher sah jede Verbindung gleich sicher aus, obwohl die eine von
     // beiden Enden bestaetigt wird und die andere auf einer einzigen Meldung
     // beruht. Bei manuellen und Ghost-Kanten sagt das nichts — dort weggelassen.
-    if (!istManuell && !istGhost && Array.isArray(d.reporters) && d.reporters.length) {
+    if (!istManuell && !istGhost && !istStale && Array.isArray(d.reporters) && d.reporters.length) {
         if (d.confirmed) {
             srcRow.appendChild(pill('\u2713 ' + t('edge.confirmed'), '#16a34a',
                 t('edge.confirmed.tip')));
@@ -158,7 +165,7 @@ export function showEdgeDetail(panel, ed) {
     }
     // Sicherheit der Zuordnung. Die Farbe folgt derselben Logik wie ueberall
     // sonst im Modul: gruen heisst nicht "gut", sondern "belegt".
-    if (!istManuell && !istGhost && typeof d.confidence === 'number') {
+    if (!istManuell && !istGhost && !istStale && typeof d.confidence === 'number') {
         const c = d.confidence;
         const col = c >= 80 ? '#16a34a' : (c >= 50 ? '#f59e0b' : '#c2410c');
         const wie = d.matchKind ? t('edge.match.' + d.matchKind) : '';
@@ -175,7 +182,7 @@ export function showEdgeDetail(panel, ed) {
         row(panel, tLbl, null, el('b', '', pT || '?'));
     } else {
         panel.appendChild(el('div', 'font-size:11px;color:#94a3b8',
-            (istManuell || istGhost) ? t('edge.ports.none_kind') : t('edge.ports.none')));
+            (istManuell || istGhost || istStale) ? t('edge.ports.none_kind') : t('edge.ports.none')));
     }
 
     // Wurde der gemeldete Nachbar-Port auf ein echtes Interface aufgeloest?

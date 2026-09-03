@@ -269,6 +269,21 @@ export function buildEdgeElements(edges, nodes) {
         // Node-Summen-Traffic des meldenden Hosts (der Ghost selbst hat 0) und
         // die Weathermap faerbt sie als hoch ausgelastet — voellig irrefuehrend
         // fuer eine Verbindung zu einem Geraet, das wir gar nicht messen.
+        // Alternde Kante: nicht mehr gemeldet, aber noch nicht abgelaufen.
+        // Wie bei den Ghost-Kanten KEINE Traffic-Berechnung — es gibt keine
+        // aktuellen Werte, und der Node-Summen-Traffic der Endpunkte wuerde
+        // eine Auslastung vortaeuschen, die niemand gemessen hat.
+        if (e.stale) {
+            elements.push({
+                data: { id: e.id || ('estale_' + i), source: src, target: tgt,
+                        trafficIn: 0, trafficOut: 0, tLabel: '', isLLDP: false,
+                        portSrc: (e.ports && e.ports[src]) || '',
+                        portTgt: (e.ports && e.ports[tgt]) || '',
+                        _isStaleEdge: true, lastSeen: e.last_seen || 0 }
+            });
+            return;
+        }
+
         if (e._isGhostEdge) {
             elements.push({
                 data: { id: e.id || ('eghost_' + i), source: src, target: tgt,

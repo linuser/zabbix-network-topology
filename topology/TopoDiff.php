@@ -79,6 +79,67 @@ class TopoDiff {
     }
 
     /**
+     * Alternde Kanten: was verschwunden ist, aber noch nicht lange genug.
+     *
+     * WARUM ES DAS BRAUCHT
+     * --------------------
+     * Bisher galt: eine Kante wird gemeldet oder sie ist weg. LLDP-Tabellen
+     * haben aber Aussetzer — ein Geraet startet neu, eine Discovery faellt
+     * einmal aus, ein Poll kommt zu frueh. Die Karte sprang dann jedes Mal:
+     * Kante weg, Toast, naechster Poll, Kante wieder da, Toast. Das macht die
+     * Aenderungsmeldung wertlos, weil man sie nach dem dritten Fehlalarm
+     * ignoriert.
+     *
+     * UND ES BEANTWORTET DIE OFFENE FRAGE BEIM TOPOLOGY-DIFF
+     * -----------------------------------------------------
+     * "Eine verschwundene Kante existiert nicht mehr — wie lange zeichnet man
+     * sie?" Genau so lange, wie sie altern darf. Beides ist dieselbe Frage,
+     * und getrennt gebaut ergaebe es zwei halbe Antworten.
+     *
+     * ALTBESTAND
+     * ----------
+     * Eintraege ohne Zeitstempel stammen aus der Zeit vor dieser Funktion.
+     * Sie werden NICHT wiederbelebt: sonst zoege die erste Abfrage nach einem
+     * Update jede laengst verschwundene Kante als "stale" zurueck auf die
+     * Karte. Dieselbe Ueberlegung wie bei den Ports ohne Zeitstempel.
+     *
+     * @param int $now  Zeitstempel, als Parameter fuer testbare Alterung
+     * @param int $ttl  Sekunden, die eine Kante ueberlebt
+     * @return array{store: array, stale: array}
+     */
+    public static function ageOut(?array $baseline, array $current, int $now, int $ttl): array {
+        $store = [];
+        $stale = [];
+
+        foreach ($current as $k => $e) {
+            $e['seen'] = $now;
+            $store[$k] = $e;
+        }
+
+        foreach (($baseline ?? []) as $k => $e) {
+            if (isset($current[$k]) || !is_array($e)) {
+                continue;
+            }
+            $seen = (int) ($e['seen'] ?? 0);
+            if ($seen <= 0 || ($now - $seen) > $ttl) {
+                continue;   // ohne Zeitstempel oder zu alt -> endgueltig weg
+            }
+            // seen NICHT auffrischen: sonst altert die Kante nie und bliebe
+            // fuer immer auf der Karte stehen.
+            //
+            // Die Markierung ist noetig, weil die alternde Kante im Speicher
+            // BLEIBT: ohne sie faende compare() sie bei jedem folgenden Poll
+            // erneut "in der Baseline, aber nicht aktuell" und meldete sie
+            // wieder und wieder als verschwunden.
+            $e['stale'] = true;
+            $store[$k] = $e;
+            $stale[$k] = $e;
+        }
+
+        return ['store' => $store, 'stale' => $stale];
+    }
+
+    /**
      * Vergleicht zwei Staende.
      *
      * @return array{added: array, removed: array, moved: array}
@@ -105,6 +166,11 @@ class TopoDiff {
         }
 
         foreach ($baseline as $k => $was) {
+            // Bereits als alternd gemeldete Kanten nicht erneut melden — sie
+            // stehen noch auf der Karte und wurden beim Verschwinden angesagt.
+            if (is_array($was) && !empty($was['stale'])) {
+                continue;
+            }
             if (!isset($current[$k])) {
                 $res['removed'][] = [
                     'a' => self::label($was, 'a', 0),
@@ -125,6 +191,8 @@ class TopoDiff {
      */
     private static function movedPorts($was, array $now): ?array {
         // Altbestand: numerisch indiziertes [labelA, labelB], keine Ports.
+        // Der spaeter hinzugekommene Zeitstempel 'seen' zaehlt hier NICHT als
+        // Feld — verglichen werden nur die Ports.
         if (!is_array($was) || !array_key_exists('pa', $was)) {
             return null;
         }

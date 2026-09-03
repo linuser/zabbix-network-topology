@@ -92,6 +92,16 @@ export function buildCytoscapeStyle(dark) {
             'font-style': 'italic',
             'min-zoomed-font-size': 9,
         }},
+        // Alternde Kante: zuletzt gemeldet, aber gerade nicht. Deutlich
+        // schwaecher als eine lebende, aber KRAEFTIGER als eine Ghost-Kante —
+        // sie war eben noch echt. Punktiert statt gestrichelt, damit sich die
+        // beiden auf einen Blick unterscheiden.
+        { selector: 'edge[?_isStaleEdge]', style: {
+            'width': 2, 'line-color': dark ? '#7c6f5a' : '#c2a878',
+            'line-style': 'dotted', 'line-dash-pattern': [1, 4],
+            'opacity': 0.6, 'curve-style': 'straight',
+            'label': '', 'source-text-offset': 0, 'target-text-offset': 0,
+        }},
         { selector: 'edge[?_isGhostEdge]', style: {
             'width': 1.5, 'line-color': dark ? '#64748b' : '#94a3b8',
             'line-style': 'dashed', 'line-dash-pattern': [2, 5],

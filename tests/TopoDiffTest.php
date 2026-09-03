@@ -148,6 +148,56 @@ $beide = TopoDiff::snapshot([$edge('h1', 'h2', 'Gi1/0/22', 'eth3')], $label);
 $dB    = TopoDiff::compare($vorher, $beide);
 check('zwei geaenderte Ports an einer Kante',   count($dB['moved'][0]['ports']), 2);
 
+// ── Alterung ───────────────────────────────────────────────────────────────
+//
+// LLDP-Tabellen haben Aussetzer. Ohne Frist sprang die Karte bei jedem davon:
+// Kante weg, Toast, naechster Poll, Kante wieder da, Toast. Nach dem dritten
+// Fehlalarm ignoriert man die Meldung — dann ist sie wertlos.
+
+echo "\nAlterung\n";
+
+$e1  = TopoDiff::snapshot([$edge('h1', 'h2', 'Gi1/0/18', 'eth0')], $label);
+$T   = 900;
+
+// Erster Lauf: alles frisch, nichts alternd.
+$a1 = TopoDiff::ageOut(null, $e1, 1000, $T);
+check('erster Lauf -> nichts alternd',       count($a1['stale']), 0);
+check('erster Lauf -> im Speicher',          count($a1['store']), 1);
+check('Zeitstempel gesetzt',                 $a1['store']['h1|h2']['seen'], 1000);
+
+// Kante faellt aus, kurz danach: alternd, bleibt auf der Karte.
+$a2 = TopoDiff::ageOut($a1['store'], [], 1100, $T);
+check('kurz weg -> alternd',                 count($a2['stale']), 1);
+check('alternd -> bleibt im Speicher',       count($a2['store']), 1);
+check('alternd -> markiert',                 $a2['store']['h1|h2']['stale'] ?? null, true);
+check('alternd -> Zeitstempel NICHT erneuert', $a2['store']['h1|h2']['seen'], 1000);
+
+// Immer noch weg, aber jetzt zu lange.
+$a3 = TopoDiff::ageOut($a2['store'], [], 1000 + $T + 1, $T);
+check('zu alt -> endgueltig weg',            count($a3['stale']), 0);
+check('zu alt -> auch aus dem Speicher',     count($a3['store']), 0);
+
+// Kommt sie zurueck, ist sie wieder frisch und nicht mehr markiert.
+$a4 = TopoDiff::ageOut($a2['store'], $e1, 1200, $T);
+check('zurueck -> nicht mehr alternd',       count($a4['stale']), 0);
+check('zurueck -> Zeitstempel erneuert',     $a4['store']['h1|h2']['seen'], 1200);
+check('zurueck -> Markierung weg',           isset($a4['store']['h1|h2']['stale']), false);
+
+// DIE WIEDERHOLUNGSFALLE: eine alternde Kante steht noch im Speicher. Ohne
+// Markierung faende compare() sie bei JEDEM Poll erneut als verschwunden und
+// meldete sie wieder und wieder.
+$d1 = TopoDiff::compare($a1['store'], []);
+check('Verschwinden wird EINMAL gemeldet',   count($d1['removed']), 1);
+$d2 = TopoDiff::compare($a2['store'], []);
+check('alternde Kante nicht erneut gemeldet', count($d2['removed']), 0);
+
+// Altbestand ohne Zeitstempel darf nicht wiederbelebt werden — sonst zoege
+// die erste Abfrage nach einem Update jede laengst tote Kante zurueck.
+$altbestand = ['h1|h2' => ['a'=>'SW01','b'=>'AP-07','pa'=>'','pb'=>'']];
+$a5 = TopoDiff::ageOut($altbestand, [], 5000, $T);
+check('ohne Zeitstempel -> nicht alternd',   count($a5['stale']), 0);
+check('ohne Zeitstempel -> nicht behalten',  count($a5['store']), 0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

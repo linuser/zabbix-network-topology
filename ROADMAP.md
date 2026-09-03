@@ -265,10 +265,16 @@ einen eigenen Match-Typ (`exact` / `normalized`), der unterschiedlich in die
 Bewertung eingeht — eine Annahme ueber Schreibweisen darf den Score heben, aber
 nicht so weit wie ein Treffer ohne Annahme. Mehrdeutige Formen werden verworfen.
 
-**Alterung / stale neighbors.** Verschwundene Nachbarn nicht sofort loeschen,
-sondern befristet als `stale` fuehren — sonst springt die Topologie bei kurzen
-LLDP-Aussetzern. Gehoert mit „Topology-Diff auf der Karte" zusammen gebaut:
-derselbe Diff, dieselbe offene Frage, wie lange etwas sichtbar bleibt.
+**Alterung — erledigt.** Verschwundene Kanten bleiben 15 Minuten als `stale`
+auf der Karte (gepunktet, gedaempft), das Panel nennt „zuletzt vor N min
+gemeldet". Damit springt die Topologie nicht mehr bei einem einzelnen
+ausgefallenen Discovery-Durchlauf.
+
+**Und die offene Frage beim Topology-Diff ist damit beantwortet:** „eine
+verschwundene Kante existiert nicht mehr — wie lange zeichnet man sie?" Genau
+so lange, wie sie altern darf. Offen bleibt dort nur noch das Hervorheben
+NEUER Kanten; das Verschwinden ist jetzt auf der Karte zu sehen und nicht mehr
+nur im Toast.
 
 **Chassis-Subtype und Management-Address.** `lldpRemChassisIdSubtype` und
 `lldpRemManAddr` werden nicht erhoben — nachgesehen, null Treffer. Ohne den

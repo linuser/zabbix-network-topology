@@ -19,6 +19,17 @@ use API;
 
 class NetworkTopologyData extends NetworkTopologyController {
 
+    /**
+     * Wie lange eine nicht mehr gemeldete Kante auf der Karte bleibt, bevor
+     * sie endgueltig verschwindet.
+     *
+     * 15 Minuten, weil die LLDP-Discovery ueblicherweise deutlich seltener
+     * laeuft als der Karten-Refresh: ein einzelner ausgefallener Durchlauf
+     * darf die Verbindung nicht loeschen. Laenger waere schlechter — dann
+     * stuenden echte Abbauten zu lange als "alternd" auf der Karte.
+     */
+    private const STALE_TTL = 900;
+
     // Schutz vor CSRF-Last-Abuse (Lese-Endpoint, kein CSRF-Token):
     // Cap auf max 100 Gruppen pro Request. Realistisch hat ein User
     // selten >10 Gruppen ausgewaehlt — 100 ist 10x Sicherheits-Puffer
@@ -626,8 +637,42 @@ class NetworkTopologyData extends NetworkTopologyController {
         // aus dem Host-Paar bestand und sich beim Umstecken nicht aendert.
         $current  = TopoDiff::snapshot($edges, $host_label);
         $baseline = NtCache::get('topo_baseline', $cache_parts);
-        $topo_changes = TopoDiff::compare(is_array($baseline) ? $baseline : null, $current);
-        NtCache::set('topo_baseline', $cache_parts, $current, 7 * 86400);
+        $base_arr = is_array($baseline) ? $baseline : null;
+        $topo_changes = TopoDiff::compare($base_arr, $current);
+
+        // Alterung: was gerade nicht gemeldet wird, verschwindet nicht sofort
+        // von der Karte, sondern altert. LLDP-Tabellen haben Aussetzer — ein
+        // Neustart, eine ausgefallene Discovery, ein zu frueher Poll —, und
+        // ohne diese Frist sprang die Karte bei jedem davon.
+        $aged = TopoDiff::ageOut($base_arr, $current, time(), self::STALE_TTL);
+        NtCache::set('topo_baseline', $cache_parts, $aged['store'], 7 * 86400);
+
+        // Alternde Kanten zurueck in die Kantenliste — aber NUR, wenn beide
+        // Endpunkte noch sichtbare Knoten sind. Sonst haenge eine Kante ins
+        // Leere, etwa wenn die Gruppenauswahl einen der beiden Hosts nicht
+        // mehr enthaelt.
+        if ($aged['stale']) {
+            $sichtbar = [];
+            foreach ($nodes as $n) {
+                $sichtbar[(string) ($n['id'] ?? '')] = true;
+            }
+            $i = 0;
+            foreach ($aged['stale'] as $k => $alt_e) {
+                [$ka, $kb] = array_pad(explode('|', (string) $k, 2), 2, '');
+                if ($ka === '' || $kb === '' || !isset($sichtbar[$ka], $sichtbar[$kb])) {
+                    continue;
+                }
+                $ports = [];
+                if (($alt_e['pa'] ?? '') !== '') $ports[$ka] = $alt_e['pa'];
+                if (($alt_e['pb'] ?? '') !== '') $ports[$kb] = $alt_e['pb'];
+                $edges[] = [
+                    'id' => 'stale' . ($i++), 'from' => $ka, 'to' => $kb,
+                    'src' => [], 'ports' => $ports, 'port_metrics' => [],
+                    'reporters' => [], 'confirmed' => false,
+                    'stale' => true, 'last_seen' => (int) ($alt_e['seen'] ?? 0),
+                ];
+            }
+        }
 
         // ── Manuelle Verbindungen, nur fuer Widgets ───────────────────────
         //
