@@ -154,6 +154,41 @@ check('zwei geaenderte Ports an einer Kante',   count($dB['moved'][0]['ports']),
 // Kante weg, Toast, naechster Poll, Kante wieder da, Toast. Nach dem dritten
 // Fehlalarm ignoriert man die Meldung — dann ist sie wertlos.
 
+echo "\nLabel-Wechsel ist kein Umstecken\n";
+
+// Wechselwirkung zweier Aenderungen aus 5.3: die Portbezeichnung kommt jetzt
+// aus ifName statt aus dem ifIndex. Faellt dieses Item aus, steht wieder "9"
+// statt "Gi1/0/9" — ohne dass jemand ein Kabel angefasst hat. Ueber Labels
+// verglichen gaebe das einen falschen Alarm, und der schickt jemanden in den
+// Serverraum.
+$mitIdx = static function (string $lbl) {
+    return ['h1|h2' => ['a'=>'SW01','b'=>'AP-07','pa'=>$lbl,'pb'=>'eth0','ia'=>'9','ib'=>'2']];
+};
+$dL = TopoDiff::compare($mitIdx('Gi1/0/9'), $mitIdx('9'));
+check('Label wechselt, Index gleich -> kein Alarm', count($dL['moved']), 0);
+
+// Aendert sich der INDEX, ist es echt.
+$echt = ['h1|h2' => ['a'=>'SW01','b'=>'AP-07','pa'=>'Gi1/0/22','pb'=>'eth0','ia'=>'22','ib'=>'2']];
+$dE = TopoDiff::compare($mitIdx('Gi1/0/9'), $echt);
+check('Index wechselt -> Bewegung',                count($dE['moved']), 1);
+
+// Ohne Index auf beiden Seiten bleibt der Label-Vergleich als Rueckfall.
+$ohneIdx = static function (string $lbl) {
+    return ['h1|h2' => ['a'=>'SW01','b'=>'AP-07','pa'=>$lbl,'pb'=>'eth0']];
+};
+$dR = TopoDiff::compare($ohneIdx('Gi1/0/18'), $ohneIdx('Gi1/0/22'));
+check('ohne Index -> Label entscheidet',           count($dR['moved']), 1);
+
+echo "\nRueckkehr einer Kante\n";
+
+// Eine Kante, die weg war und zurueckkommt, ist eine Nachricht. Sonst
+// widersprechen sich Karte (badged sie als neu) und Toast (schwiege).
+$eR  = TopoDiff::snapshot([$edge('h1', 'h2', 'Gi1/0/18', 'eth0')], $label);
+$r1  = TopoDiff::ageOut(TopoDiff::ageOut(null, $eR, 100, 900)['store'], [], 200, 900);
+check('vorher: Eintrag ist alternd',   $r1['store']['h1|h2']['stale'] ?? null, true);
+$dRk = TopoDiff::compare($r1['store'], $eR);
+check('Rueckkehr wird als neu gemeldet', count($dRk['added']), 1);
+
 echo "\nAlterung\n";
 
 $e1  = TopoDiff::snapshot([$edge('h1', 'h2', 'Gi1/0/18', 'eth0')], $label);
@@ -201,7 +236,14 @@ check('ohne Zeitstempel -> nicht behalten',  count($a5['store']), 0);
 echo "\nNeu aufgetauchte Kanten\n";
 
 // Gegenstueck zur Alterung: eine neue Kante ist eine Weile als neu erkennbar.
-$n1 = TopoDiff::ageOut(null, $e1, 2000, $T);
+// OHNE Baseline ist nichts neu — sonst leuchtete beim ersten Poll die ganze
+// Karte gruen, und ohne APCu (NtCache liefert dann immer null) dauerhaft.
+$n0 = TopoDiff::ageOut(null, $e1, 2000, $T);
+check('ohne Baseline -> nichts ist neu',     isset($n0['store']['h1|h2']['first']), false);
+
+// Mit Baseline: eine Kante, die vorher nicht da war, ist neu.
+$leer = TopoDiff::ageOut(null, [], 1900, $T);
+$n1   = TopoDiff::ageOut($leer['store'], $e1, 2000, $T);
 check('erstes Auftauchen -> first gesetzt',  $n1['store']['h1|h2']['first'], 2000);
 
 // Bleibt sie, bleibt auch der erste Zeitpunkt stehen — sonst waere jede Kante

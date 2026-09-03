@@ -373,6 +373,13 @@ final class LldpEdgeBuilder {
                                 'match' => $match_kind,
                                 'port_match' => $port_match,
                                 'ports' => $ports,
+                                // Der ifIndex des Reporter-Ports. Das LABEL
+                                // kann sich aendern, ohne dass jemand ein Kabel
+                                // angefasst hat — faellt das ifName-Item aus,
+                                // steht dort wieder die nackte Zahl. Der Index
+                                // ist stabil und deshalb die richtige Groesse
+                                // fuer den Vergleich zweier Staende.
+                                'port_idx' => $port_idx !== '' ? [(string) $rid => $port_idx] : [],
                                 'port_metrics' => array_filter([
                                     (string) $rid  => $my_metrics,
                                     (string) $rhid => $far_metrics,
@@ -398,6 +405,9 @@ final class LldpEdgeBuilder {
                     }
                     if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
                         $edges[$eidx]['ports'][(string) $rid] = $port;
+                    }
+                    if ($port_idx !== '' && !isset($edges[$eidx]['port_idx'][(string) $rid])) {
+                        $edges[$eidx]['port_idx'][(string) $rid] = $port_idx;
                     }
                     if ($remote_port !== '' && !isset($edges[$eidx]['ports'][(string) $rhid])) {
                         $edges[$eidx]['ports'][(string) $rhid] = $remote_port;
@@ -617,7 +627,14 @@ final class LldpEdgeBuilder {
     }
 
     private static function capLabel(string $s): string {
-        return strlen($s) > 24 ? substr($s, 0, 24) : $s;
+        // mb_substr, NICHT substr. Seit hier auch Interface-Namen durchlaufen
+        // (ifName/ifDescr/ifAlias, und ifAlias ist frei getippter Text), ist
+        // ein byteweiser Schnitt gefaehrlich: mitten in einer UTF-8-Sequenz
+        // gekappt scheitert json_encode() an der ganzen Antwort — die Karte
+        // laedt dann GAR NICHT mehr, wegen eines Umlauts in einer
+        // Portbeschreibung. Die Geschwisterstellen (Zeile 203, 206,
+        // MetricExtractor::capName) machen es laengst richtig.
+        return mb_strlen($s) > 24 ? mb_substr($s, 0, 24) : $s;
     }
 
     /**

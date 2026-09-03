@@ -100,7 +100,14 @@ export function showPathList(panel, cy) {
             'display:flex;align-items:center;gap:6px;margin:1px 0 1px 3px;'
             + 'border-left:2px solid #cbd5e1;padding:2px 0 2px 8px;color:#475569');
 
-        const pS = d.portSrc || '', pT = d.portTgt || '';
+        // Ports in LAUFRICHTUNG, nicht in der Speicherrichtung der Kante.
+        // Cytoscape haelt source/target so, wie die Kante angelegt wurde —
+        // laeuft der Pfad andersherum durch sie, standen local und remote
+        // vertauscht da. Bei einem Pfad ueber mehrere Hops betraf das etwa die
+        // Haelfte der Zeilen, und niemand haette es gemerkt.
+        const vonHier = ed.source().id() === nid;
+        const pS = (vonHier ? d.portSrc : d.portTgt) || '';
+        const pT = (vonHier ? d.portTgt : d.portSrc) || '';
         if (pS || pT) {
             linkRow.appendChild(el('span', 'color:#64748b', (pS || '?') + ' → ' + (pT || '?')));
         }

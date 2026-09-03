@@ -348,15 +348,29 @@ export function buildEdgeElements(edges, nodes) {
         // Node-Summen-Schaetzung — aus geschaetzter Weathermap wird gemessene.
         // port_metrics ist nach Reporter-Hostid gekeyt (in/out/speed des Ports).
         // perLink steuert, dass traffic.js NICHT durch 2 teilt (kein Doppelzaehlen).
-        const pm = (e.port_metrics && (e.port_metrics[src] || e.port_metrics[tgt])) || null;
+        // NUR wenn wirklich Port-Traffic vorliegt. Seit der Builder auch aus
+        // Speed, Errors oder Discards allein einen port_metrics-Eintrag
+        // anlegt, gibt es Eintraege OHNE in/out — und die als "am Port
+        // gemessen" auszuzeichnen waere genau die Halbwahrheit, gegen die das
+        // Panel antritt: 0 b/s mit gruener Messmarke statt der ehrlichen
+        // Schaetzung aus den Knotensummen.
+        const pmRaw = (e.port_metrics && (e.port_metrics[src] || e.port_metrics[tgt])) || null;
+        const pm = (pmRaw && pmRaw.in !== undefined && pmRaw.out !== undefined) ? pmRaw : null;
         let perLink = false, eIn = tIn, eOut = tOut, eCap = capBps, tLbl = tLabel;
         let portErr = null, portDrop = null;
+        // Errors/Discards gelten auch ohne Traffic-Item — sie sind eine eigene
+        // Messung am Port und haengen nicht daran, ob Octets gezaehlt werden.
+        if (pmRaw) {
+            if (pmRaw.errors   !== undefined) portErr  = pmRaw.errors;
+            if (pmRaw.discards !== undefined) portDrop = pmRaw.discards;
+        }
         if (pm) {
             perLink = true;
             // in/out konsistent aus Sicht des SRC-Knotens: pm ist nach Reporter-
             // Hostid gekeyt; ist der Reporter das TGT-Ende, sind pm.in/out relativ
             // zu SRC gespiegelt → sonst kippen ↓/↑ je nach Melde-Reihenfolge.
-            const fromSrc = !!(e.port_metrics && e.port_metrics[src]);
+            const fromSrc = !!(e.port_metrics && e.port_metrics[src]
+                              && e.port_metrics[src].in !== undefined);
             eIn  = (fromSrc ? pm.in  : pm.out) || 0;
             eOut = (fromSrc ? pm.out : pm.in)  || 0;
             if (pm.speed) eCap = pm.speed;

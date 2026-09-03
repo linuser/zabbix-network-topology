@@ -235,6 +235,11 @@ export function applyTrafficHeatmap(cy) {
  *
  * @returns Cytoscape-Collection der Disaster-Knoten
  */
+// IDs der Knoten, denen wir zuletzt eine Puls-Glorie verpasst haben. Ohne
+// dieses Gedaechtnis muesste man zum Aufraeumen ueber ALLE Knoten gehen — und
+// genau das hat fremde Glorien mitgeloescht.
+let _gepulst = [];
+
 export function markDisasterState(c) {
     const tote = c.nodes('[!isGroup]').filter(function(n) {
         return (n.data('severity') || 0) >= 5;
@@ -245,9 +250,30 @@ export function markDisasterState(c) {
         if (ids[e.source().id()] || ids[e.target().id()]) e.addClass('dead-edge');
         else e.removeClass('dead-edge');
     });
-    // Wer nicht mehr Disaster ist, verliert seine Glorie — sonst bleibt sie
-    // stehen, wenn sich ein Problem aufloest.
-    c.nodes('[!isGroup]').not(tote).style('underlay-opacity', 0);
+    // NUR die Knoten zuruecksetzen, die WIR gepulst haben.
+    //
+    // Vorher lief hier ein pauschales removeStyle ueber alle Nicht-Disaster-
+    // Knoten, etwa jede Sekunde. Ein Cytoscape-Bypass sticht das Stylesheet,
+    // also loeschte das im Sekundentakt: die Auswahl-Glorie (:selected), das
+    // cyanfarbene Pfad-Highlight (auf dem die Pfadliste aufbaut), die Markierung
+    // des ersten Knotens im Stern-Modus und den Erfolgsblitz nach einer
+    // manuellen Kante. Alles binnen einer Sekunde weg, ohne dass jemand den
+    // Zusammenhang zum Disaster-Puls vermutet haette.
+    //
+    // removeStyle statt style(...,0): der Bypass verschwindet ganz, das
+    // Stylesheet greift wieder.
+    const jetzt = {};
+    tote.forEach(function(n) { jetzt[n.id()] = true; });
+    _gepulst.forEach(function(id) {
+        if (jetzt[id]) return;
+        const n = c.getElementById(id);
+        if (n && n.length) {
+            n.removeStyle('underlay-opacity');
+            n.removeStyle('underlay-padding');
+            n.removeStyle('underlay-color');
+        }
+    });
+    _gepulst = Object.keys(jetzt);
     return tote;
 }
 
@@ -285,7 +311,10 @@ export function startEdgeAnimation(cy) {
         }
         if (document.hidden) return;   // CPU sparen wenn Tab unsichtbar
         offset = (offset + 1) % 22;
-        if (offset % 20 === 0) deadNodes = bewerte(c);
+        // % 22 laeuft der Zaehler, deshalb NICHT "% 20 === 0": das trifft 20
+        // und 0, also zweimal je Zyklus im Abstand von 100 ms. Ein fester Wert
+        // trifft genau einmal pro Umlauf.
+        if (offset === 20) deadNodes = bewerte(c);
 
         c.edges().filter(function(e) { return !e.hasClass('dead-edge'); })
             .style('line-dash-offset', -offset);

@@ -61,6 +61,7 @@ class TopoDiff {
             $pair = [(string) ($e['from'] ?? ''), (string) ($e['to'] ?? '')];
             sort($pair);
             $ports = is_array($e['ports'] ?? null) ? $e['ports'] : [];
+            $idx   = is_array($e['port_idx'] ?? null) ? $e['port_idx'] : [];
 
             $out[$pair[0] . '|' . $pair[1]] = [
                 'a'  => $host_label($pair[0]),
@@ -72,6 +73,14 @@ class TopoDiff {
                 // herum stuende.
                 'pa' => (string) ($ports[$pair[0]] ?? ''),
                 'pb' => (string) ($ports[$pair[1]] ?? ''),
+                // Zusaetzlich der ifIndex, wo bekannt. Verglichen wird
+                // vorrangig DIESER: das Label kann von "9" auf "Gi1/0/9"
+                // wechseln, weil ein ifName-Item auftaucht oder ausfaellt —
+                // ohne dass jemand ein Kabel angefasst hat. Ueber Labels
+                // verglichen gaebe das einen falschen "umgesteckt"-Alarm, und
+                // der schickt jemanden in den Serverraum.
+                'ia' => (string) ($idx[$pair[0]] ?? ''),
+                'ib' => (string) ($idx[$pair[1]] ?? ''),
             ];
         }
 
@@ -118,10 +127,22 @@ class TopoDiff {
             // bleibt, ist eine neue eine Weile als neu erkennbar. Beim
             // Wiederauftauchen wird der Wert bewusst NICHT uebernommen — eine
             // Kante, die weg war und zurueckkommt, ist wieder neu.
+            // OHNE Baseline gibt es keinen Vergleichspunkt, also ist NICHTS
+            // neu — genauso wie compare() beim ersten Lauf nichts meldet.
+            //
+            // Ohne diese Unterscheidung bekaeme beim ersten Poll jede Kante
+            // 'first = jetzt' und die ganze Karte leuchtete gruen. Ohne APCu
+            // liefert NtCache::get() IMMER null, dort waere es also der
+            // Dauerzustand — und bei jedem Wechsel der Gruppenauswahl
+            // ebenfalls, weil der Cache-Schluessel die Gruppen enthaelt.
             $vorher = $baseline[$k] ?? null;
-            $e['first'] = (is_array($vorher) && empty($vorher['stale']) && !empty($vorher['first']))
-                ? (int) $vorher['first']
-                : $now;
+            if ($baseline === null) {
+                unset($e['first']);
+            } else {
+                $e['first'] = (is_array($vorher) && empty($vorher['stale']) && !empty($vorher['first']))
+                    ? (int) $vorher['first']
+                    : $now;
+            }
             $store[$k] = $e;
         }
 
@@ -161,7 +182,13 @@ class TopoDiff {
         }
 
         foreach ($current as $k => $now) {
-            if (!isset($baseline[$k])) {
+            // Ein alternder Eintrag zaehlt hier als NICHT vorhanden: die Kante
+            // war weg, ist zurueck, und das ist eine Nachricht. Sonst
+            // widersprechen sich Karte und Meldung — die Karte zeigt sie als
+            // neu (ageOut setzt 'first' zurueck), der Toast schwiege.
+            $vorhanden = isset($baseline[$k])
+                && !(is_array($baseline[$k]) && !empty($baseline[$k]['stale']));
+            if (!$vorhanden) {
                 // Der Schluessel traegt die Host-IDs ("idA|idB"). Ohne ihn
                 // liefert der Diff nur Labels, und die Karte kann die
                 // betroffene Kante nicht finden — genau das stand dem
@@ -212,7 +239,24 @@ class TopoDiff {
         }
 
         $changed = [];
-        foreach ([['pa', 'a'], ['pb', 'b']] as $seite) {
+        foreach ([['pa', 'a', 'ia'], ['pb', 'b', 'ib']] as $seite) {
+            // Vorrang hat der ifIndex; nur wo er auf BEIDEN Staenden fehlt,
+            // bleibt der Label-Vergleich als Rueckfall. So loest ein Label-
+            // Wechsel bei gleichem Index keinen Alarm mehr aus.
+            $iv = (string) ($was[$seite[2]] ?? '');
+            $in = (string) ($now[$seite[2]] ?? '');
+            if ($iv !== '' && $in !== '') {
+                if ($iv === $in) {
+                    continue;   // selber Port, egal wie er gerade heisst
+                }
+                $changed[] = [
+                    'host' => (string) ($now[$seite[1]] ?? ''),
+                    'from' => (string) ($was[$seite[0]] ?? $iv),
+                    'to'   => (string) ($now[$seite[0]] ?? $in),
+                ];
+                continue;
+            }
+
             $vorher  = (string) ($was[$seite[0]] ?? '');
             $nachher = (string) ($now[$seite[0]] ?? '');
 
