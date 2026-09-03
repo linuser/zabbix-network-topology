@@ -167,7 +167,15 @@ final class NodePositions {
         $rows  = [];
 
         if ($clean) {
-            $json = json_encode($clean, JSON_UNESCAPED_SLASHES);
+            // SUBSTITUTE, obwohl hier heute kein ungueltiges UTF-8 ankommen
+            // kann: sanitize() laesst als Node-ID nur ID_PATTERN durch, also
+            // reines ASCII. Die Sicherheit dieser Zeile haengt damit an einer
+            // Zusicherung, die achtzig Zeilen weiter unten steht. Faellt sie
+            // irgendwann (ein Label-Feld, ein Notizfeld), gibt json_encode
+            // `false` zurueck, str_split() macht daraus ein leeres Array — und
+            // CProfile::updateArray LOESCHT dann die gespeicherten Positionen,
+            // ohne dass irgendwo ein Fehler auftaucht.
+            $json = json_encode($clean, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
             $rows = str_split($json, self::CHUNK);
         }
 

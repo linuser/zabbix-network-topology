@@ -51,7 +51,15 @@ class Revision {
      *                nachfragen", nicht ueber Zugriff.
      */
     public static function of($data): string {
-        return substr(hash('sha256', json_encode(self::normalize($data))), 0, 16);
+        // SUBSTITUTE, weil ein Scheitern hier nicht auffaellt, sondern die
+        // Konflikterkennung aushebelt: json_encode() gaebe `false` zurueck,
+        // hash() sieht dann den leeren String — und ZWEI verschiedene Staende
+        // bekaemen dieselbe Revision. matches() sagt "passt", und der zweite
+        // Benutzer ueberschreibt den ersten stillschweigend. Genau das soll
+        // diese Klasse verhindern.
+        $json = json_encode(self::normalize($data), JSON_INVALID_UTF8_SUBSTITUTE);
+
+        return substr(hash('sha256', (string) $json), 0, 16);
     }
 
     /**

@@ -237,6 +237,26 @@ $data_url = (new CUrl('zabbix.php'))
 
 ?>
 <script>
+// JSON_INVALID_UTF8_SUBSTITUTE ist hier KEINE Vorsichtsmassnahme, sondern
+// ein Fix. Ohne das Flag gibt json_encode() bei ungueltigem UTF-8 `false`
+// zurueck, und dann steht hier woertlich
+//
+//     window.NT_CONFIG = ;
+//
+// Das ist ein Syntaxfehler, der den GANZEN Script-Block killt — auch den
+// URL-Fallback zwanzig Zeilen weiter unten, der genau fuer den Fall gedacht
+// ist, dass NT_CONFIG fehlt. Die Seite baut sich auf, die Toolbar steht, und
+// die Karte haengt fuer immer auf "Loading topology...".
+//
+// Erreichbar ist das ueber die URL: internet_label kommt aus
+// getInput('internet'), Zabbix' 'string'-Validator prueft keine Kodierung.
+// Ein ?internet=%FF genuegt. Nachgestellt auf der Demo-Instanz — NT_CONFIG
+// war undefined, die Karte lud nie.
+//
+// Der AJAX-Weg hatte das Flag laengst (NetworkTopologyController::encodeJson);
+// diese eine Stelle schreibt an der Basisklasse vorbei direkt in die Seite und
+// wurde dabei vergessen. Hier ist der Ausfall sogar haerter: dort kommt eine
+// leere Antwort zurueck, hier stirbt das Skript der Seite.
 window.NT_CONFIG = <?= json_encode([
     'selected_groupids'    => array_values(array_map('strval', $data['selected_groupids'])),
     'selected_group_names' => array_values(array_column(
@@ -311,7 +331,7 @@ window.NT_CONFIG = <?= json_encode([
     'color_scales'  => $data['color_scales'] ?? null,
     'scales_csrf'   => \CCsrfTokenHelper::get('network.topology.scales'),
     'scales_url'    => 'zabbix.php?action=network.topology.scales'
-], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
 
 // Fallback: groupids/hostid aus URL wenn PHP NT_CONFIG nicht liefert
 if (!window.NT_CONFIG || ((!window.NT_CONFIG.selected_groupids || !window.NT_CONFIG.selected_groupids.length) && !window.NT_CONFIG.selected_hostid)) {

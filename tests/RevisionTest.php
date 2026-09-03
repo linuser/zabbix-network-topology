@@ -78,6 +78,24 @@ check('fremde Revision wird abgelehnt',       Revision::matches(Revision::of($c)
 check('leere Revision wird durchgelassen',    Revision::matches('', $a), true);
 check('Muell wird abgelehnt',                 Revision::matches('deadbeef', $a), false);
 
+// Ungueltiges UTF-8 darf die Revision nicht kollabieren lassen.
+//
+// Ohne JSON_INVALID_UTF8_SUBSTITUTE gibt json_encode() hier `false` zurueck,
+// hash() sieht den leeren String — und ZWEI verschiedene Staende bekommen
+// dieselbe Revision. matches() sagt dann "passt", und der zweite Benutzer
+// ueberschreibt den ersten stillschweigend. Das ist genau der Fall, den diese
+// Klasse verhindern soll, und er faellt sonst nirgends auf: es gibt keine
+// Fehlermeldung, nur einen verlorenen Speichervorgang.
+//
+// Heute kann das ueber die Sanitizer nicht passieren, morgen vielleicht schon.
+echo "\n  Revision — ungueltiges UTF-8\n\n";
+$u1 = ['n' => ['a' => "x" . chr(0xFF)]];
+$u2 = ['n' => ['a' => "y" . chr(0xFE)]];
+check('Revision ist nicht leer',              Revision::of($u1) !== '', true);
+check('16 Hex-Zeichen wie sonst auch',        strlen(Revision::of($u1)), 16);
+check('zwei kaputte Staende kollidieren nicht', Revision::of($u1) === Revision::of($u2), false);
+check('sich selbst erkennt sie weiterhin',    Revision::matches(Revision::of($u1), $u1), true);
+
 echo $failures === 0
     ? "\n  RevisionTest: alle Pruefungen bestanden\n"
     : "\n  RevisionTest: {$failures} Fehler\n";
