@@ -12,7 +12,7 @@
 // Geschichte: Diese Datei war einmal 2025 Zeilen. In fünf Refactor-Sessions
 // (v3.6 → v4.0) wurde sie auf eine reine Orchestrierungs-Schicht reduziert.
 
-import { esc } from './modules/utils.js';
+import { esc, seiteIstDunkel } from './modules/utils.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
@@ -309,15 +309,19 @@ function init() {
     // Umschalter entfernt wurde (siehe tabs.js) — die ganze Abstraktion lief
     // damit dauerhaft gegen false.
     //
-    // Hier haengt sie jetzt an Zabbix' Benutzereinstellung. Kein eigener
-    // Schalter, keine zweite Einstellung, die auseinanderlaufen kann: wer sein
-    // Zabbix dunkel stellt, bekommt die Karte dunkel, und wer es zurueckstellt,
-    // hell. Das Modul hat dazu keine eigene Meinung mehr.
+    // Hier haengt sie jetzt an Zabbix. Kein eigener Schalter, keine zweite
+    // Einstellung, die auseinanderlaufen kann: wer sein Zabbix dunkel stellt,
+    // bekommt die Karte dunkel. Das Modul hat dazu keine eigene Meinung mehr.
+    //
+    // Entschieden wird an der GEMESSENEN Hintergrundfarbe, nicht am Namen des
+    // Themes (siehe seiteIstDunkel). Der Name vom Server ist nur der Rueckfall,
+    // wenn sich nichts messen laesst — er kennt weder das neue dunkle Theme aus
+    // Zabbix 8.0 noch selbst ausgeliefertes Theme-CSS.
     //
     // Vor dem ersten Render, nicht danach: sonst zeichnet der erste Durchgang
     // hell und springt beim naechsten um.
     const ntRoot = document.getElementById('nt-root');
-    if (ntRoot) ntRoot.classList.toggle('nt-dark', !!cfg.dark);
+    if (ntRoot) ntRoot.classList.toggle('nt-dark', seiteIstDunkel(cfg.dark));
 
     const wrap = document.getElementById('nt-canvas-wrap');
     const spin = document.getElementById('nt-loading');

@@ -163,16 +163,27 @@ class NetworkTopologyView extends CController {
             // fuer dieselbe Frage, die auseinanderlaufen.
             //
             // getUserTheme() loest die Benutzereinstellung UND den Fall
-            // THEME_DEFAULT auf (dann gilt die Systemvorgabe). Von den vier
-            // ausgelieferten Themes sind zwei dunkel; alles andere ist hell,
-            // auch ein spaeter dazukommendes — im Zweifel hell, das ist die
-            // Voreinstellung von Zabbix selbst.
+            // THEME_DEFAULT auf (dann gilt die Systemvorgabe).
+            //
+            // SUBSTRING STATT NAMENSLISTE. Hier stand zuerst
+            // in_array($theme, ['dark-theme', 'hc-dark']) — eine Liste der
+            // heute ausgelieferten dunklen Themes. Zabbix 8.0 bringt mit
+            // ZBXNEXT-10657 ein weiteres ("Dark blue theme"), und eine
+            // Namensliste haette es als HELL eingestuft: dunkles Zabbix,
+            // helle Karte. Ein Substring faengt jede Benennung ab, die das
+            // Wort ueberhaupt enthaelt.
+            //
+            // Das ist trotzdem nur ein HINWEIS, keine Wahrheit. Wer sein
+            // Zabbix mit eigenem Theme-CSS faehrt, kann es "corporate"
+            // nennen und trotzdem schwarz sein. Die Entscheidung faellt
+            // deshalb im Browser anhand der tatsaechlichen Hintergrundfarbe;
+            // dieser Wert greift nur, wenn sich dort nichts messen laesst.
             //
             // function_exists(), weil das Modul auch auf 7.0 LTS laeuft und
             // eine fehlende Hilfsfunktion die Seite sonst mit einem Fatal
             // beenden wuerde statt nur ohne Dunkelmodus zu starten.
             'dark'              => function_exists('getUserTheme')
-                && in_array(getUserTheme(CWebUser::$data), ['dark-theme', 'hc-dark'], true),
+                && stripos((string) getUserTheme(CWebUser::$data), 'dark') !== false,
             'wallboard'         => (int) $this->getInput('wallboard', 0) === 1,
             // Link color scales set by a Super admin (module.config); null =
             // the built-in defaults from traffic.js.

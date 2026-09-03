@@ -119,3 +119,48 @@ export function el(tag, css, text) {
     if (text !== undefined && text !== null) e.textContent = String(text);
     return e;
 }
+
+/**
+ * Ist die Zabbix-Seite dunkel? Gemessen, nicht geraten.
+ *
+ * WARUM NICHT AM THEME-NAMEN
+ * --------------------------
+ * Der Controller schickt einen Hinweis mit (NT_CONFIG.dark), der auf dem
+ * Theme-NAMEN beruht. Der ist zweimal unzuverlaessig: Zabbix 8.0 bringt mit
+ * ZBXNEXT-10657 ein weiteres dunkles Theme, und wer eigenes Theme-CSS
+ * ausliefert, kann es nennen wie er will. Die Seite selbst weiss es besser
+ * als jede Liste — also fragen wir sie.
+ *
+ * Gemessen wird die tatsaechliche Hintergrundfarbe und daraus die relative
+ * Helligkeit nach WCAG. Ein transparenter Hintergrund (rgba mit Alpha 0,
+ * "transparent") ist keine Messung: dann faellt die Entscheidung auf den
+ * Hinweis vom Server zurueck.
+ *
+ * @param {boolean} hinweis Voreinstellung, wenn sich nichts messen laesst.
+ */
+export function seiteIstDunkel(hinweis) {
+    try {
+        const el = document.querySelector('main') || document.body;
+        if (!el) return !!hinweis;
+        const bg = window.getComputedStyle(el).backgroundColor || '';
+        const m = bg.match(/rgba?\(([^)]+)\)/);
+        if (!m) return !!hinweis;
+        const teile = m[1].split(',').map(function(v) { return parseFloat(v); });
+        // Alpha 0 heisst: hier ist gar keine Farbe, nur Durchsicht.
+        if (teile.length > 3 && teile[3] === 0) return !!hinweis;
+        // Relative Helligkeit nach WCAG 2.x, mit der sRGB-Gammakorrektur.
+        const kanal = function(c) {
+            c = c / 255;
+            return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        };
+        const L = 0.2126 * kanal(teile[0]) + 0.7152 * kanal(teile[1]) + 0.0722 * kanal(teile[2]);
+        // 0.18 statt 0.5: die Grenze soll dunkle Themes treffen, nicht bloss
+        // graue. Zabbix' dark-theme liegt weit darunter, blue-theme weit
+        // darueber — dazwischen ist viel Luft.
+        return L < 0.18;
+    } catch (e) {
+        // getComputedStyle kann in exotischen Kontexten werfen. Dann gilt
+        // der Hinweis; ein Fehler hier darf die Karte nicht kosten.
+        return !!hinweis;
+    }
+}
