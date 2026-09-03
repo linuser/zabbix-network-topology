@@ -183,7 +183,7 @@ function buildBar() {
     const bar = document.createElement('div');
     bar.id = 'nt-history-bar';
     bar.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;'
-        + 'background:#fef3c7;border-bottom:1px solid #fcd34d;flex-wrap:wrap;'
+        + 'background:var(--nt-c-fef3c7,#fef3c7);border-bottom:1px solid #fcd34d;flex-wrap:wrap;'
         + 'transition:opacity 0.2s';
 
     // Icon + Label
@@ -195,7 +195,7 @@ function buildBar() {
     // Range-Dropdown
     const rangeSel = document.createElement('select');
     rangeSel.id = 'nt-history-range';
-    rangeSel.style.cssText = 'padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;'
+    rangeSel.style.cssText = 'padding:3px 6px;border:1px solid var(--nt-c-cbd5e1,#cbd5e1);border-radius:4px;'
         + 'font-size:12px;background:#fff';
     RANGE_PRESETS.forEach(function(r, i) {
         const opt = document.createElement('option');
@@ -218,7 +218,7 @@ function buildBar() {
     // Zeit-Anzeige
     const tl = document.createElement('span');
     tl.id = 'nt-history-time';
-    tl.style.cssText = 'font-family:monospace;font-size:12px;color:#0f172a;'
+    tl.style.cssText = 'font-family:monospace;font-size:12px;color:var(--nt-c-0f172a,#0f172a);'
         + 'font-weight:700;min-width:130px;text-align:center;'
         + 'background:#fff;padding:3px 8px;border-radius:4px;border:1px solid #fcd34d';
     tl.textContent = '\u2014';
@@ -229,8 +229,8 @@ function buildBar() {
     const play = document.createElement('button');
     play.id = 'nt-history-play';
     play.textContent = '\u25B6';   // ▶
-    play.style.cssText = 'padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;'
-        + 'background:#fff;cursor:pointer;font-size:13px;color:#475569';
+    play.style.cssText = 'padding:3px 10px;border:1px solid var(--nt-c-cbd5e1,#cbd5e1);border-radius:4px;'
+        + 'background:#fff;cursor:pointer;font-size:13px;color:var(--nt-c-475569,#475569)';
     play.title = t('hist.play_pause');
     bar.appendChild(play);
     _playBtn = play;
@@ -238,8 +238,8 @@ function buildBar() {
     // Verlassen
     const close = document.createElement('button');
     close.textContent = t('hist.close');
-    close.style.cssText = 'padding:3px 10px;border:1px solid #cbd5e1;border-radius:4px;'
-        + 'background:#fff;cursor:pointer;font-size:12px;color:#475569;margin-left:auto';
+    close.style.cssText = 'padding:3px 10px;border:1px solid var(--nt-c-cbd5e1,#cbd5e1);border-radius:4px;'
+        + 'background:#fff;cursor:pointer;font-size:12px;color:var(--nt-c-475569,#475569);margin-left:auto';
     bar.appendChild(close);
 
     // Wiring

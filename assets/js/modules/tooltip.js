@@ -15,7 +15,7 @@ import { t } from './i18n.js';
 
 const _tip = document.createElement('div');
 _tip.id = 'nt-ring-tip';
-_tip.style.cssText = 'display:none;position:fixed;z-index:99998;background:#fff;border:1px solid #e2e8f0;'
+_tip.style.cssText = 'display:none;position:fixed;z-index:99998;background:#fff;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);'
     + 'border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);padding:10px 14px;font-size:12px;'
     + 'font-family:sans-serif;pointer-events:none;min-width:160px;';
 document.body.appendChild(_tip);
@@ -86,36 +86,36 @@ export function showTip(evt, d) {
 
     function bar(pct) {
         const filled = Math.round((pct || 0) / 100 * 8);
-        return '<span style="color:#334155;font-family:monospace">'
+        return '<span style="color:var(--nt-c-334155,#334155);font-family:monospace">'
             + '\u2588'.repeat(Math.max(0, filled))
             + '<span style="opacity:0.2">' + '\u2588'.repeat(Math.max(0, 8 - filled)) + '</span></span>';
     }
 
     const rows = [
-        { col: '#3b82f6', lbl: 'CPU',     val: d.cpu    != null ? bar(d.cpu)    + ' <b>' + d.cpu    + '%</b>' : '<span style="color:#94a3b8">\u2014</span>' },
-        { col: '#8b5cf6', lbl: 'Memory',  val: d.memory != null ? bar(d.memory) + ' <b>' + d.memory + '%</b>' : '<span style="color:#94a3b8">\u2014</span>' },
+        { col: '#3b82f6', lbl: 'CPU',     val: d.cpu    != null ? bar(d.cpu)    + ' <b>' + d.cpu    + '%</b>' : '<span style="color:var(--nt-c-94a3b8,#94a3b8)">\u2014</span>' },
+        { col: '#8b5cf6', lbl: 'Memory',  val: d.memory != null ? bar(d.memory) + ' <b>' + d.memory + '%</b>' : '<span style="color:var(--nt-c-94a3b8,#94a3b8)">\u2014</span>' },
         { col: '#22c55e', lbl: 'Traffic', val: '<b>\u2193 ' + fmt(traffic.in) + '</b>  <b>\u2191 ' + fmt(traffic.out) + '</b>' },
-        { col: '#f59e0b', lbl: 'Ping',    val: d.ping > 0       ? '<b>' + d.ping + ' ms</b>' : '<span style="color:#94a3b8">\u2014</span>' },
+        { col: '#f59e0b', lbl: 'Ping',    val: d.ping > 0       ? '<b>' + d.ping + ' ms</b>' : '<span style="color:var(--nt-c-94a3b8,#94a3b8)">\u2014</span>' },
     ];
 
     function buildHtml(spark) {
         const sparkCpu  = spark ? drawSparkline(spark.cpu,  '#3b82f6', 72, 22) : '';
         const sparkPing = spark ? drawSparkline(spark.ping, '#f59e0b', 72, 22) : '';
         const ipLine = d.ip
-            ? '<div style="font-size:10px;color:#64748b;font-family:monospace;margin-top:2px">&#128279; ' + esc(d.ip) + '</div>'
+            ? '<div style="font-size:10px;color:var(--nt-c-64748b,#64748b);font-family:monospace;margin-top:2px">&#128279; ' + esc(d.ip) + '</div>'
             : '';
         // Status-Pillen (Wartung, Acked) wenn relevant
         const pills = [];
-        if (d.maintenance) pills.push('<span style="display:inline-block;background:#fef3c7;color:#92400e;'
+        if (d.maintenance) pills.push('<span style="display:inline-block;background:var(--nt-c-fef3c7,#fef3c7);color:var(--nt-c-92400e,#92400e);'
             + 'padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">'
             + '\u{1F527} ' + esc(t('tip.maintenance')) + '</span>');
-        if (d.acknowledged) pills.push('<span style="display:inline-block;background:#dcfce7;color:#166534;'
+        if (d.acknowledged) pills.push('<span style="display:inline-block;background:var(--nt-c-dcfce7,#dcfce7);color:#166534;'
             + 'padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px">'
             + '\u2714 Acked</span>');
         const pillLine = pills.length
             ? '<div style="margin-top:3px">' + pills.join('') + '</div>'
             : '';
-        return '<div style="font-weight:700;font-size:11px;color:#0f172a;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid #f1f5f9">'
+        return '<div style="font-weight:700;font-size:11px;color:var(--nt-c-0f172a,#0f172a);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--nt-c-f1f5f9,#f1f5f9)">'
             + esc(d.label) + ipLine + pillLine + '</div>'
             + rows.map(function(r, i) {
                 let sparkEl = '';
@@ -125,7 +125,7 @@ export function showTip(evt, d) {
                 }
                 return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
                     + '<span style="width:8px;height:8px;border-radius:50%;background:' + r.col + ';flex-shrink:0;display:inline-block"></span>'
-                    + '<span style="color:#64748b;width:48px;flex-shrink:0">' + r.lbl + '</span>'
+                    + '<span style="color:var(--nt-c-64748b,#64748b);width:48px;flex-shrink:0">' + r.lbl + '</span>'
                     + '<span style="flex:1">' + r.val + '</span>'
                     + sparkEl
                     + '</div>';
@@ -135,15 +135,15 @@ export function showTip(evt, d) {
                 const items = d.extra_items.map(function(it) {
                     const lblShort = esc((it.name || '').substring(0, 28));
                     const val = it.error
-                        ? '<span style="color:#94a3b8;font-style:italic">' + esc(it.error) + '</span>'
+                        ? '<span style="color:var(--nt-c-94a3b8,#94a3b8);font-style:italic">' + esc(it.error) + '</span>'
                         : '<b>' + esc(fmtItemValue(it.value, it.units)) + '</b>';
                     return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:10px">'
-                        + '<span style="width:8px;height:8px;border-radius:50%;background:#06b6d4;flex-shrink:0"></span>'
-                        + '<span style="color:#64748b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + lblShort + '</span>'
+                        + '<span style="width:8px;height:8px;border-radius:50%;background:var(--nt-c-06b6d4,#06b6d4);flex-shrink:0"></span>'
+                        + '<span style="color:var(--nt-c-64748b,#64748b);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(it.name || '') + '">' + lblShort + '</span>'
                         + '<span style="flex-shrink:0">' + val + '</span>'
                         + '</div>';
                 }).join('');
-                return '<div style="margin-top:5px;padding-top:5px;border-top:1px solid #f1f5f9">' + items + '</div>';
+                return '<div style="margin-top:5px;padding-top:5px;border-top:1px solid var(--nt-c-f1f5f9,#f1f5f9)">' + items + '</div>';
             })() : '')
             + (spark && spark.since ? (function() {
                 const elapsed = Math.floor(Date.now() / 1000) - spark.since;
@@ -152,10 +152,10 @@ export function showTip(evt, d) {
                 const dd = Math.floor(hh / 24);
                 const sinceStr = dd > 0 ? dd + 'd ' + Math.floor(hh % 24) + 'h'
                               : (hh > 0 ? hh + 'h ' + mm + 'm' : mm + 'm');
-                return '<div style="font-size:10px;color:#f59e0b;margin-top:5px;padding-top:4px;border-top:1px solid #f1f5f9">'
+                return '<div style="font-size:10px;color:#f59e0b;margin-top:5px;padding-top:4px;border-top:1px solid var(--nt-c-f1f5f9,#f1f5f9)">'
                     + '\u23F1 ' + t('tip.problem_since', { t: '<b>' + esc(sinceStr) + '</b>' }) + '</div>';
             })() : '')
-            + (spark ? '' : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">\u231B ' + esc(t('tip.loading_history')) + '</div>');
+            + (spark ? '' : '<div style="font-size:9px;color:var(--nt-c-cbd5e1,#cbd5e1);margin-top:4px">\u231B ' + esc(t('tip.loading_history')) + '</div>');
     }
 
     _tip.style.width = '240px';
@@ -219,13 +219,13 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
         // Discovery-Source-Badge: LLDP/CDP/beides — falls vom Backend gemeldet
         const srcArr = (edgeData.src && edgeData.src.length) ? edgeData.src : [];
         const srcBadge = srcArr.length
-            ? ' <span style="font-size:9px;color:#fff;background:#64748b;border-radius:3px;'
+            ? ' <span style="font-size:9px;color:#fff;background:var(--nt-c-64748b,#64748b);border-radius:3px;'
                 + 'padding:1px 5px;margin-left:4px;letter-spacing:0.05em;text-transform:uppercase;font-weight:600">'
                 + esc(srcArr.join('+')) + '</span>'
             : '';
-        const header = '<div style="font-weight:700;font-size:11px;color:#0f172a;margin-bottom:6px;'
-            + 'padding-bottom:5px;border-bottom:1px solid #f1f5f9">'
-            + esc(srcLabel) + ' <span style="color:#94a3b8">↔</span> ' + esc(tgtLabel)
+        const header = '<div style="font-weight:700;font-size:11px;color:var(--nt-c-0f172a,#0f172a);margin-bottom:6px;'
+            + 'padding-bottom:5px;border-bottom:1px solid var(--nt-c-f1f5f9,#f1f5f9)">'
+            + esc(srcLabel) + ' <span style="color:var(--nt-c-94a3b8,#94a3b8)">↔</span> ' + esc(tgtLabel)
             + srcBadge
             + '</div>';
 
@@ -234,10 +234,10 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
         // Auslastung unten aus der echten Port-Metrik stammen, nicht geschaetzt.
         const pSrc = edgeData.portSrc || '', pTgt = edgeData.portTgt || '';
         const portRow = (pSrc || pTgt)
-            ? '<div style="font-size:10px;color:#475569;margin-bottom:5px">'
-                + '<span style="color:#94a3b8">Port</span> '
-                + '<b>' + esc(pSrc || '?') + '</b> <span style="color:#94a3b8">↔</span> <b>' + esc(pTgt || '?') + '</b>'
-                + (edgeData.perLink ? ' <span style="font-size:9px;color:#16a34a;font-weight:600;text-transform:uppercase;letter-spacing:0.04em">per-Link</span>' : '')
+            ? '<div style="font-size:10px;color:var(--nt-c-475569,#475569);margin-bottom:5px">'
+                + '<span style="color:var(--nt-c-94a3b8,#94a3b8)">Port</span> '
+                + '<b>' + esc(pSrc || '?') + '</b> <span style="color:var(--nt-c-94a3b8,#94a3b8)">↔</span> <b>' + esc(pTgt || '?') + '</b>'
+                + (edgeData.perLink ? ' <span style="font-size:9px;color:var(--nt-c-16a34a,#16a34a);font-weight:600;text-transform:uppercase;letter-spacing:0.04em">per-Link</span>' : '')
                 + '</div>'
             : '';
 
@@ -250,13 +250,13 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
             // der Tooltip wurde bei 40 % orange, die Kante erst bei 55 %.
             const pct = utilizationPct(edgeData);
             const pctCol = utilizationColor(pct);
-            utilPart = '<span style="color:#94a3b8">·</span>'
+            utilPart = '<span style="color:var(--nt-c-94a3b8,#94a3b8)">·</span>'
                 + '<span><b style="color:' + pctCol + '">' + pct.toFixed(1) + '%</b>'
-                + ' <span style="color:#94a3b8">/ ' + fmt(capBps) + '</span></span>';
+                + ' <span style="color:var(--nt-c-94a3b8,#94a3b8)">/ ' + fmt(capBps) + '</span></span>';
         }
-        const liveRow = '<div style="display:flex;gap:10px;font-size:11px;color:#475569;margin-bottom:4px">'
-            + '<span><span style="color:#06b6d4">↓</span> <b>' + fmt(tIn) + '</b></span>'
-            + '<span><span style="color:#f97316">↑</span> <b>' + fmt(tOut) + '</b></span>'
+        const liveRow = '<div style="display:flex;gap:10px;font-size:11px;color:var(--nt-c-475569,#475569);margin-bottom:4px">'
+            + '<span><span style="color:var(--nt-c-06b6d4,#06b6d4)">↓</span> <b>' + fmt(tIn) + '</b></span>'
+            + '<span><span style="color:var(--nt-c-f97316,#f97316)">↑</span> <b>' + fmt(tOut) + '</b></span>'
             + utilPart
             + '</div>';
 
@@ -269,33 +269,33 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
         let healthRow = '';
         if (ifDown > 0 || ifErr > 0.1 || ifDrop > 0.1) {
             const parts = [];
-            if (ifDown > 0) parts.push('<span style="color:#dc2626;font-weight:600">⬇ ' + ifDown + ' down</span>');
-            if (ifErr  > 0.1) parts.push('<span style="color:#f97316">err ' + ifErr.toFixed(1)  + '/s</span>');
+            if (ifDown > 0) parts.push('<span style="color:var(--nt-c-dc2626,#dc2626);font-weight:600">⬇ ' + ifDown + ' down</span>');
+            if (ifErr  > 0.1) parts.push('<span style="color:var(--nt-c-f97316,#f97316)">err ' + ifErr.toFixed(1)  + '/s</span>');
             if (ifDrop > 0.1) parts.push('<span style="color:#f59e0b">drop ' + ifDrop.toFixed(1) + '/s</span>');
             healthRow = '<div style="display:flex;gap:10px;font-size:10px;'
-                + 'margin-bottom:4px;padding-bottom:3px;border-bottom:1px dotted #f1f5f9">'
+                + 'margin-bottom:4px;padding-bottom:3px;border-bottom:1px dotted var(--nt-c-f1f5f9,#f1f5f9)">'
                 + parts.join(' · ') + '</div>';
         }
 
         if (!haveData && (sparkSrc || sparkTgt)) {
             // Daten geholt, aber keine Traffic-Items vorhanden
-            return header + portRow + liveRow + healthRow + '<div style="font-size:10px;color:#94a3b8;margin-top:4px">'
+            return header + portRow + liveRow + healthRow + '<div style="font-size:10px;color:var(--nt-c-94a3b8,#94a3b8);margin-top:4px">'
                 + esc(t('tip.no_traffic_history')) + '</div>';
         }
 
         const sparkBlock = haveData
-            ? '<div style="margin-top:6px;font-size:10px;color:#64748b">'
+            ? '<div style="margin-top:6px;font-size:10px;color:var(--nt-c-64748b,#64748b)">'
                 + (inSpark ? '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
-                    + '<span style="color:#06b6d4">↓ In</span>' + inSpark + '</div>' : '')
+                    + '<span style="color:var(--nt-c-06b6d4,#06b6d4)">↓ In</span>' + inSpark + '</div>' : '')
                 + (outSpark ? '<div style="display:flex;align-items:center;gap:6px">'
-                    + '<span style="color:#f97316">↑ Out</span>' + outSpark + '</div>' : '')
-                + '<div style="font-size:9px;color:#cbd5e1;margin-top:3px">' + esc(t('tip.last_1h'))
+                    + '<span style="color:var(--nt-c-f97316,#f97316)">↑ Out</span>' + outSpark + '</div>' : '')
+                + '<div style="font-size:9px;color:var(--nt-c-cbd5e1,#cbd5e1);margin-top:3px">' + esc(t('tip.last_1h'))
                     // Bei Per-Link-Kanten stammt die Live-Zeile oben aus der Port-Metrik,
                     // die 1h-Sparkline aber aus der Host-History beider Endpunkte
                     // (der Spark-Endpoint liefert nur Host-Werte) → ausweisen.
                     + (edgeData.perLink ? ' · ' + esc(t('tip.host_total')) : '') + '</div>'
                 + '</div>'
-            : '<div style="font-size:9px;color:#cbd5e1;margin-top:4px">⌛ ' + esc(t('tip.loading_history')) + '</div>';
+            : '<div style="font-size:9px;color:var(--nt-c-cbd5e1,#cbd5e1);margin-top:4px">⌛ ' + esc(t('tip.loading_history')) + '</div>';
 
         return header + portRow + liveRow + healthRow + sparkBlock;
     }

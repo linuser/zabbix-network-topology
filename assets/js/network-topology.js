@@ -13,6 +13,7 @@
 // (v3.6 → v4.0) wurde sie auf eine reine Orchestrierungs-Schicht reduziert.
 
 import { esc, seiteIstDunkel } from './modules/utils.js';
+import { installThemeVars } from './modules/theme.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
@@ -320,6 +321,7 @@ function init() {
     //
     // Vor dem ersten Render, nicht danach: sonst zeichnet der erste Durchgang
     // hell und springt beim naechsten um.
+    installThemeVars();
     const ntRoot = document.getElementById('nt-root');
     if (ntRoot) ntRoot.classList.toggle('nt-dark', seiteIstDunkel(cfg.dark));
 

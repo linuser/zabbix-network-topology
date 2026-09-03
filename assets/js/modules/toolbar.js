@@ -218,7 +218,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
 
         const menu = document.createElement('div');
         menu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-            + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
+            + 'background:#fff;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
             + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:160px;overflow:hidden;'
             + 'margin-top:2px';
 
@@ -324,7 +324,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         tapBtn.style.margin = '0';
         const tapMenu = document.createElement('div');
         tapMenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
-            + 'background:#fff;border:1px solid #e2e8f0;border-radius:6px;'
+            + 'background:#fff;border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:6px;'
             + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:130px;overflow:hidden;margin-top:2px';
         let _tapMs = loadTapholdMs();
         function tapLabel() { return t('toolbar.taphold', { ms: _tapMs }); }
@@ -447,13 +447,13 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
 
         const cMenu = document.createElement('div');
         cMenu.style.cssText = 'position:absolute;top:100%;left:0;background:#fff;'
-            + 'border:1px solid #e2e8f0;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.08);'
+            + 'border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.08);'
             + 'min-width:170px;z-index:300;display:none;margin-top:2px';
         ['auto', 'columns', 'rows', 'off'].forEach(function(opt) {
             const item = document.createElement('div');
             item.textContent = labels[opt];
             item.dataset.mode = opt;
-            item.style.cssText = 'padding:7px 12px;cursor:pointer;font-size:12px;color:#334155';
+            item.style.cssText = 'padding:7px 12px;cursor:pointer;font-size:12px;color:var(--nt-c-334155,#334155)';
             if (opt === cMode) {
                 item.style.background = '#dbeafe';
                 item.style.fontWeight = '600';
@@ -647,7 +647,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         si.placeholder = t('toolbar.search');
         si.title = t('toolbar.search.tip');
         si.style.cssText = 'width:140px;height:26px;font-size:12px;margin-left:8px;padding:0 8px;'
-            + 'border:1px solid #e2e8f0;border-radius:4px;outline:none;background:#fff;color:#334155';
+            + 'border:1px solid var(--nt-c-e2e8f0,#e2e8f0);border-radius:4px;outline:none;background:#fff;color:var(--nt-c-334155,#334155)';
         // Dieselbe Suchsprache wie in der Tabelle, statt eines indexOf auf den
         // Anzeigenamen. Damit kann die Karte, was die Tabelle laengst konnte:
         //
