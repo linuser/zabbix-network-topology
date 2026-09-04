@@ -48,17 +48,17 @@ Commit** — das Modul soll sich ohne Node installieren lassen.
 
 Drei Schichten, und die Trennung ist der Punkt:
 
-- **`actions/` (19 Controller)** — HTTP-Rand. Rate-Limiting, CSRF, Rechte,
+- **`actions/` (20 Controller)** — HTTP-Rand. Rate-Limiting, CSRF, Rechte,
   JSON. `NetworkTopologyData` ist der teuerste und wichtigste: er baut den
   gesamten Graphen. `NetworkTopologyView` rendert die Seite **und** legt die
   Konfiguration als `NT_CONFIG` ins DOM — unter anderem die manuellen
   Verbindungen. Widgets haben keinen solchen View-Controller; was nur dort
   liegt, sehen sie nie.
-- **`topology/` (10 Klassen)** — reine Logik ohne Zabbix-Abhängigkeiten,
+- **`topology/` (13 Klassen)** — reine Logik ohne Zabbix-Abhängigkeiten,
   deshalb testbar. Hier lebt alles Interessante: `LldpEdgeBuilder` (Kanten aus
   SNMP-Nachbartabellen), `NodeBuilder`, `ManualLinks`, `SharedLayerFilter`.
 - **`assets/js/` → ein Bundle.** `network-topology.js` ist nur Orchestrator;
-  der Renderer liegt in `modules/render-*.js` (10 davon, 46 Module insgesamt). Cytoscape.js für den
+  der Renderer liegt in `modules/render-*.js` (10 davon, 52 Module insgesamt). Cytoscape.js für den
   Graphen, Leaflet für Geo.
 
 ### Zwei-Ebenen-Speicherung
@@ -107,6 +107,35 @@ Eine Stelle ändern heißt: die andere mitändern.
 - Kommentare erklären **warum**, nicht was. Der Stil im Bestand ist
   ausführlich und nennt den Vorfall, der eine Regel ausgelöst hat — das ist
   gewollt, nicht Redundanz.
+
+## Farben — nie als fester Wert
+
+Das Modul zeichnet hell **oder dunkel**, je nach Zabbix-Theme. Deshalb gehört
+kein Farbwert mehr direkt in eine Inline-Regel:
+
+- **Token statt Hex.** Die Palette steht in `assets/css/network-topology.css`
+  als `--nt-surface`, `--nt-text`, `--nt-sub`, `--nt-line` und Verwandte,
+  je einmal hell und einmal dunkel. Im Code steht `color:var(--nt-text-2)`.
+  Ein neuer Farbwert gehört zuerst in die Palette.
+- **Was an `<body>` hängt, braucht `.nt-float`.** Die Token stehen auf
+  `#nt-root`. Tooltip, Kontextmenü, Export-Fenster, Geräte-Bericht und das
+  Detail-Panel des Tabellen-Tabs hängen sich aber an `document.body` und
+  liegen damit außerhalb. Ohne die Klasse löst dort **keine** Variable auf,
+  und weil `var()` ohne Rückfallwert einfach nichts liefert, verschwinden
+  Trennlinien und Flächen kommentarlos. Dazu die Dunkel-Klasse beim Öffnen
+  setzen (`classList.toggle('nt-dark', isDark())`).
+- **`color` immer explizit setzen.** Ein Element ohne eigene Textfarbe erbt
+  die des Zabbix-Body. Bei hellem Modul in dunklem Zabbix stand deshalb
+  fast weiße Schrift auf weißem Tooltip.
+- **Canvas und SVG erreicht keine CSS-Variable.** Die Knoten-Icons
+  (`icons.js`) sind SVG in einer Data-URI, die Cytoscape als Bild bekommt —
+  dort wird `isDark()` abgefragt und die Farbe direkt gewählt. Das Theme
+  gehört dann in den **Cache-Schlüssel**, sonst liefert der Bild-Cache nach
+  dem Umschalten weiter das Bild des anderen Themas.
+
+Ob es dunkel ist, entscheidet `seiteIstDunkel()` an der **gemessenen**
+Hintergrundfarbe, nicht am Namen des Themes: Zabbix 8.0 bringt ein weiteres
+dunkles Theme, und eigenes Theme-CSS kann heißen wie es will.
 
 ## Sicherheit
 

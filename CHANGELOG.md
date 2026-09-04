@@ -4,7 +4,69 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ## Unreleased
 
+### Added
+
+- **Click an edge for its own detail panel.** Ports on both ends, link
+  utilization against the negotiated speed, errors and discards *at the port*
+  rather than as a host total, which protocol reported the link, and how
+  confident the match is.
+
+- **The computed path is now a list, not only a highlight.** Between two hosts
+  the map has always colored the route; on a large map with seven hops you had
+  to trace a cyan chain through a hundred dimmed nodes, and a color cannot be
+  pasted into a ticket. The list names every hop with its ports in walking
+  direction, its utilization, and a warning where the link reports down ports,
+  errors or discards.
+
+- **Every LLDP/CDP edge says how certain it is.** A neighbour name is matched
+  against Zabbix hosts by several routes — exact name, IP, normalized port,
+  short name — and these are not equally trustworthy. The edge now carries the
+  match type and a score, so a guess no longer looks like a measurement.
+
+- **Two-sided links are told apart from one-sided ones.** If both ends report
+  each other, that is a confirmation; if only one does, the other end may be
+  mute, misconfigured, or not monitored at all.
+
+- **Edges age instead of vanishing.** A neighbour that stops being reported is
+  marked stale for a while rather than disappearing between two refreshes, and
+  the difference to the previous state is shown on the map: new links are
+  highlighted, moved cables are reported.
+
+- **Port names instead of bare indices.** Where `ifName`/`ifDescr`/`ifAlias`
+  is available the local port is labelled with it. Normalization ("Gi1/0/1" vs
+  "GigabitEthernet1/0/1") also matches the far side, which brings measurements
+  to links that previously had none — with its own match type, so the extra
+  reach stays visible in the confidence score.
+
+- **GraphML export** for draw.io and yEd, and a **device report** that
+  summarizes the LLDP/CDP landscape as counts — no host names, IP addresses,
+  neighbour names or community strings, so it can be pasted into an issue.
+
 ### Fixed
+
+- **A URL parameter could hang the map for good.** `NT_CONFIG` was written
+  into the page with `json_encode()` but without `JSON_INVALID_UTF8_SUBSTITUTE`.
+  On invalid UTF-8 the function returns `false`, so the page contained the
+  literal `window.NT_CONFIG = ;` — a syntax error that killed the whole script
+  block, including the URL fallback meant for exactly the case of a missing
+  `NT_CONFIG`. The page rendered, the toolbar appeared, and the map hung on
+  "Loading topology..." forever. Reachable from the address bar, since the
+  `internet` parameter is free text and Zabbix's `string` validator does not
+  check encoding. Not an information leak — `JSON_HEX_TAG` holds — but a
+  denial of service by link.
+
+- **What-if simulation answered a different question than the one asked.**
+  Simulating the only router reported "0 hosts cut off": the reference set
+  became empty and a surviving switch was picked instead, from which the rest
+  of the switch landscape is of course still reachable. It also walked
+  *hosting* relationships as if they were cables, so a guest VM could give its
+  own hypervisor connectivity. The banner now also names the hosts it cannot
+  assess at all and those that survive only through a manually drawn link.
+
+- **Maintenance was drawn as an ✕** — the same glyph as offline, only orange
+  instead of red. It is a wrench now, and the legend shows the dashed ring the
+  map actually draws.
+
 
 - **Dark mode was unreadable in the places that matter — and the light map
   was not safe either.** The hover tooltip, the detail panel, the context menu
@@ -38,10 +100,16 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 - **The map follows the Zabbix theme.** 5.2.0 removed the dark-mode toggle
   because it never survived a reload. The `nt-dark` styling it used to switch
-  is now driven by the Zabbix theme instead: with `dark-theme` or `hc-dark`
-  (detected from the theme stylesheet link) the map renders dark, otherwise
-  light. No setting, nothing to remember — the map matches the frontend
-  around it.
+  is now driven by the Zabbix theme instead. No setting, nothing to remember —
+  the map matches the frontend around it.
+
+  It decides by *measuring*, not by guessing: the module reads the page's
+  actual background color and computes its WCAG relative luminance. A theme
+  name would have been the obvious route and the wrong one — Zabbix 8.0 adds
+  another dark theme (ZBXNEXT-10657, "Dark blue theme") that no list written
+  today would contain, and a site shipping its own theme CSS can call it
+  anything while still being black. The stylesheet filename is kept only as a
+  fallback for when nothing can be measured.
 
 ## v5.2.0 — 2026-09-02
 

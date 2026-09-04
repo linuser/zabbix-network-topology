@@ -151,7 +151,12 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 
 **More UI**
 
-Per-host detail panel (severity, metrics, interface, proxy, action buttons) · dark mode · fullscreen · zoom + fit · mini-map · severity filter pills · search field with a small query language · layout presets.
+Per-host detail panel (severity, metrics, interface, proxy, action buttons) · per-edge detail panel (ports, utilization, errors and discards at the port, match confidence) · the computed path as a list · fullscreen · zoom + fit · mini-map · severity filter pills · search field with a small query language · layout presets.
+
+The map renders **light or dark to match your Zabbix theme** — there is no
+switch of its own. It decides by measuring the page's actual background
+rather than by recognizing a theme name, so a new Zabbix theme or your own
+theme CSS works without an update here.
 
 ### Installation
 
@@ -344,7 +349,12 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 
 **Weitere UI**
 
-Detail-Panel je Host (Severity, Metriken, Interface, Proxy, Action-Buttons) · Dark-Mode · Fullscreen · Zoom + Fit · Mini-Map · Severity-Filter-Pills · Suchfeld mit Query-Sprache · Layout-Presets.
+Detail-Panel je Host (Severity, Metriken, Interface, Proxy, Action-Buttons) · Detail-Panel je Kante (Ports, Auslastung, Errors und Discards am Port, Zuordnungssicherheit) · der berechnete Pfad als Liste · Fullscreen · Zoom + Fit · Mini-Map · Severity-Filter-Pills · Suchfeld mit Query-Sprache · Layout-Presets.
+
+Die Karte zeichnet **hell oder dunkel wie dein Zabbix-Theme** — einen eigenen
+Schalter gibt es nicht. Entschieden wird an der gemessenen Hintergrundfarbe
+der Seite, nicht am Namen des Themes: ein neues Zabbix-Theme oder eigenes
+Theme-CSS funktioniert damit ohne Anpassung hier.
 
 ### Installation
 
