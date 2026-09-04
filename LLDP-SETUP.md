@@ -62,6 +62,31 @@ list of neighbours.
 > matching won't hit. `uplink.rx` / `uplink.tx` (per-link traffic) are currently
 > **not** evaluated by the module.
 
+### Optional, but worth having: real port names
+
+If a host also has one of these per interface, the map labels the **local** port
+with its name instead of the bare index:
+
+| Key contains | Used as |
+|---|---|
+| `ifName` | first choice — `Gi1/0/24` |
+| `ifDescr` | second choice |
+| `ifAlias` | third choice — often the patch-panel label someone typed in |
+
+Nothing breaks without them; the port is then simply called `24`. Two things
+they do buy you:
+
+- **A moved cable becomes readable.** The module compares ports by `ifIndex`,
+  which is stable, but it *shows* you the name — "Gi1/0/24 → Gi1/0/7" says more
+  than "24 → 7".
+- **The far side gets measurements.** Port names are normalized (`Gi1/0/1` ↔
+  `GigabitEthernet1/0/1`), and that match brings traffic, errors and discards to
+  links that otherwise only had the reporting end's numbers. The edge panel marks
+  such a link as measured at the port rather than estimated from host totals.
+
+Note that `ifAlias` is free text from the device — it is truncated for display
+and, like every neighbour string, never trusted.
+
 ---
 
 ## What you have to do

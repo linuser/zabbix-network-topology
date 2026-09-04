@@ -205,6 +205,11 @@ Replace the `network_topology` directory with the new version, `chown`, reload p
 
 > **From 5.0 to 5.1:** three actions were added (`links`, `positions`, `portscan`). Without "Scan directory" the map still loads, but manual links and the saved node layout stop with "Unknown action". `nt-install.sh update` points this out whenever it finds new actions; `nt-install.sh check` reports the installed version and the widgets present.
 
+> **From 5.2 to 5.3:** **no new actions** — replacing the directory, `chown` and a php-fpm reload is all it takes, and "Scan directory" is optional here. Two things to know afterwards:
+>
+> - **Reload the page with a cache bypass** (Ctrl/Cmd + Shift + R) once. The bundle changed substantially; a normal reload may still serve the cached one, and you would be looking at the old UI while wondering why nothing changed.
+> - **The map now follows your Zabbix theme.** If your profile is set to a dark theme, the map renders dark from the first load. There is no switch — that is the point. Nothing is stored, nothing to migrate.
+
 #### Upgrading from 4.x to 5.0
 
 5.0 drops the `_v6` suffix from every identifier — the directory is now `network_topology` instead of `network_topology_v6`. **The old directory has to go**, otherwise Zabbix registers both modules and the menu entry shows up twice:
@@ -471,6 +476,11 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
 
 > **Von 5.0 auf 5.1:** Es sind drei Actions dazugekommen (`links`, `positions`, `portscan`). Ohne „Scan directory" lädt die Karte zwar, aber manuelle Verbindungen und die gespeicherte Knotenanordnung bleiben mit „Unknown action" stehen. `nt-install.sh update` sagt es beim Update dazu, sobald es neue Actions findet; `nt-install.sh check` zeigt die installierte Version und die vorhandenen Widgets.
+
+> **Von 5.2 auf 5.3:** **Keine neuen Actions** — Verzeichnis ersetzen, `chown`, php-fpm neu laden, das war es; „Scan directory" ist hier optional. Zwei Dinge danach:
+>
+> - **Einmal mit Cache-Umgehung neu laden** (Strg/Cmd + Umschalt + R). Das Bundle hat sich stark geändert; ein normales Neuladen liefert unter Umständen weiter das zwischengespeicherte, und man sieht die alte Oberfläche und wundert sich.
+> - **Die Karte folgt jetzt deinem Zabbix-Theme.** Steht im Profil ein dunkles Theme, zeichnet die Karte ab dem ersten Aufruf dunkel. Einen Schalter gibt es nicht — das ist die Absicht. Es wird nichts gespeichert, es ist nichts zu migrieren.
 
 #### Umstieg von 4.x auf 5.0
 
