@@ -498,20 +498,12 @@ final class MetricExtractor {
     /**
      * Zwei extract()-Ergebnisse zusammenfuehren.
      *
-     * WOFUER
-     * ------
      * Damit der Controller die Items STUECKWEISE holen kann statt alle auf
-     * einmal. Der Unterschied ist nicht kosmetisch: eine Item-Zeile aus der
-     * API kostet rund 570 Byte, und bei 5.000 Switch-artigen Hosts sind das
-     * 840.000 Items — 457 MB, allein fuers Halten der Liste, bevor hier auch
-     * nur eine Zeile gelaufen ist. Zabbix' Frontend hat 128 MB.
+     * einmal — warum das noetig ist und wie gross ein Stueck sein soll, steht
+     * bei HOSTS_PER_ITEM_CHUNK in NetworkTopologyData.
      *
-     * extract() verdichtet um etwa den Faktor 20. Holt man die Items in
-     * Stuecken und dampft jedes sofort ein, liegt nie mehr als ein Stueck roh
-     * im Speicher, waehrend das Ergebnis verdichtet mitwaechst.
-     *
-     * WARUM DAS SO EINFACH GEHT
-     * -------------------------
+     * WAS DIESE FUNKTION ZUSICHERT
+     * ----------------------------
      * Bis auf lldp_raw ist jedes Feld eine Karte `hostid => …`. Stueckelt man
      * nach HOSTS, sind die Schluessel zweier Stuecke disjunkt — die
      * Vereinigung ist dann verlustfrei, egal in welcher Reihenfolge.
@@ -519,8 +511,7 @@ final class MetricExtractor {
      * Das gilt NUR bei Stueckelung nach Hosts. Wer nach Items stueckelt,
      * zerreisst einen Host ueber zwei Stuecke, und dann gewinnt beim
      * Vereinigen ein Teilergebnis gegen das andere — etwa host_speed, das
-     * innerhalb eines Stuecks das Maximum bildet. Deshalb steht es hier und
-     * nicht als Nebensatz im Controller.
+     * innerhalb eines Stuecks das Maximum bildet.
      *
      * @param array $acc   bisheriges Ergebnis (leeres Array beim ersten Mal)
      * @param array $chunk Ergebnis von extract() fuer das naechste Stueck

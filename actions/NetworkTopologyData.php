@@ -333,28 +333,19 @@ class NetworkTopologyData extends NetworkTopologyController {
         // getrennte Calls (Traffic+LLDP separat von CPU+Mem+Ping), bis
         // searchByAny=true sie von der API-Logik her identisch machte.
         //
-        // Hier stand ein einziger API::Item()->get() ueber ALLE Hosts. Das ist
-        // die teuerste Stelle des Moduls, und sie war unbegrenzt.
+        // Hier stand ein einziger Aufruf ueber ALLE Hosts, und der sprengte bei
+        // grossen Gruppen den Prozess, bevor eine einzige Kante gebaut war. Die
+        // Messwerte dazu stehen bei HOSTS_PER_ITEM_CHUNK, wo die Stueckgroesse
+        // gewaehlt wird — hier waeren sie nur eine zweite Kopie.
         //
-        // NACHGEMESSEN: eine Item-Zeile aus der API kostet rund 570 Byte.
-        // 200.000 Items sind 109 MB, 840.000 sind 457 MB — und 840.000 sind
-        // genau das, was 5.000 switch-artige Hosts mit 24 Ports liefern.
-        // Zabbix verlangt fuer das Frontend 128 MB. Der Aufruf allein sprengte
-        // den Prozess also, bevor eine einzige Kante gebaut war, und beim
-        // Benutzer kommt das als weisse Seite ohne Meldung an.
-        //
-        // MetricExtractor verdichtet um etwa den Faktor 20. Holt man die Items
-        // in Stuecken und dampft jedes SOFORT ein, liegt nie mehr als ein
-        // Stueck roh im Speicher, waehrend das Ergebnis verdichtet mitwaechst:
-        // aus ~490 MB Spitze werden rund 60 MB.
-        //
-        // STUECKELN NACH HOSTS, NIEMALS NACH ITEMS. MetricExtractor::merge()
-        // vereinigt Karten der Form `hostid => …`; das ist nur dann verlustfrei,
-        // wenn die Items eines Hosts vollstaendig in EINEM Stueck liegen. Wer
-        // nach Items stueckelt, zerreisst einen Host, und dann gewinnt beim
-        // Vereinigen ein Teilergebnis gegen das andere — etwa host_speed, das
-        // innerhalb eines Stuecks das Maximum bildet. Der Test in
-        // MetricExtractorTest haelt genau diese Zusicherung fest.
+        // STUECKELN NACH HOSTS, NIEMALS NACH ITEMS. Das ist der Punkt, der beim
+        // Aendern zaehlt: MetricExtractor::merge() vereinigt Karten der Form
+        // `hostid => …`, und verlustfrei ist das nur, wenn die Items eines
+        // Hosts vollstaendig in EINEM Stueck liegen. Wer nach Items stueckelt,
+        // zerreisst einen Host, und dann gewinnt beim Vereinigen ein
+        // Teilergebnis gegen das andere — etwa host_speed, das innerhalb eines
+        // Stuecks das Maximum bildet. MetricExtractorTest haelt genau diese
+        // Zusicherung fest.
         $metrics         = [];
         $host_last_seen  = [];
 

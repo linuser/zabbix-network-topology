@@ -134,10 +134,9 @@ export function el(tag, css, text) {
  * WARUM NICHT AM THEME-NAMEN
  * --------------------------
  * Der Aufrufer reicht einen Hinweis herein, der auf dem DATEINAMEN des
- * eingebundenen Stylesheets beruht (detectZabbixDark in tabs.js). Der ist
- * zweimal unzuverlaessig: Zabbix 8.0 bringt mit ZBXNEXT-10657 ein weiteres
- * dunkles Theme, und wer eigenes Theme-CSS ausliefert, kann es nennen wie er
- * will. Die Seite selbst weiss es besser als jede Liste — also fragen wir sie.
+ * eingebundenen Stylesheets beruht (detectZabbixDark in tabs.js, dort steht
+ * auch, warum der Name allein nicht reicht). Die Seite selbst weiss es besser
+ * als jede Namensliste — also fragen wir sie.
  *
  * MEHRERE ELEMENTE, NICHT NUR EINES. Die erste Fassung mass nur <main> und
  * gab bei durchsichtigem Hintergrund sofort den Hinweis zurueck. Genau das
