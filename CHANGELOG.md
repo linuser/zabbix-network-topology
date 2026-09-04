@@ -44,6 +44,21 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+- **Large host groups ran the frontend out of memory before drawing anything.**
+  All metric items were fetched in a single unbounded API call. A row from
+  the item API costs about 570 bytes — measured, not estimated: 200,000 items
+  are 109 MB, and 5,000 switch-like hosts with 24 ports produce 840,000 of
+  them, or 457 MB, in a frontend Zabbix asks to run in 128 MB. The page died
+  before a single edge existed, with no message.
+
+  Items are now fetched **in chunks of 150 hosts** and reduced immediately, so
+  only one chunk is ever held raw while the result grows condensed. For 5,000
+  hosts with 24 ports each that is 566 MB down to 90 MB at unchanged runtime;
+  a more typical group of 5,000 servers with two interfaces each needs 22 MB.
+  Chunking is by *host*, never by item — a host's items must stay together for
+  the partial results to merge without loss, and there is a test for exactly
+  that.
+
 - **A very large topology crashed the page instead of saying so.** Building
   the LLDP/CDP edges costs about 5.2 KB of peak memory per edge — measured,
   not estimated: 9,600 edges take 50 MB, 19,200 take 99 MB. Zabbix asks for a

@@ -44,6 +44,33 @@ class NetworkTopologyData extends NetworkTopologyController {
     // Cap auf max 100 Gruppen pro Request. Realistisch hat ein User
     // selten >10 Gruppen ausgewaehlt — 100 ist 10x Sicherheits-Puffer
     // gegen einen Browser-Cross-Origin-Trigger mit riesigem Group-Array.
+    /**
+     * Wie viele Hosts je Item-Abruf. Eine SPEICHER-Groesse, keine Geschwindigkeit.
+     *
+     * Nachgemessen an 5.000 Hosts mit je 24 Ports — dem unguenstigsten Fall,
+     * einer reinen Switch-Landschaft, 840.000 Items:
+     *
+     *   ohne Stueckelung   566 MB   (PHP bricht bei 128 MB ab)
+     *   Stueck 500         127 MB
+     *   Stueck 250         103 MB
+     *   Stueck 150          90 MB
+     *   Stueck 100          86 MB
+     *   Stueck  50          82 MB
+     *
+     * Unterhalb von etwa 100 bringt es nichts mehr: die verbleibenden ~80 MB
+     * sind das VERDICHTETE ERGEBNIS selbst, und das muss liegen bleiben. Nach
+     * unten begrenzt also nicht die Stueckgroesse, sondern das Ergebnis.
+     *
+     * 150 laesst in einem 128-MB-Frontend rund 38 MB Luft und braucht fuer
+     * 5.000 Hosts 34 Abfragen. Der realistischere Fall — 5.000 Server mit je
+     * zwei Interfaces statt 24 — liegt bei 22 MB und 63 ms.
+     *
+     * Die Laufzeit haengt kaum daran (704 bis 738 ms ueber alle Stueckgroessen
+     * hinweg gemessen); was kleinere Stuecke wirklich kosten, sind Roundtrips
+     * zur API, und die bildet die Messung nicht ab.
+     */
+    private const HOSTS_PER_ITEM_CHUNK = 150;
+
     private const MAX_GROUPS = 100;
 
     /**
@@ -300,117 +327,148 @@ class NetworkTopologyData extends NetworkTopologyController {
             }
         }
 
-        // ── 3. ITEMS — alle relevanten Keys in einem API-Call ─────────────
-        // Frueher zwei getrennte Calls (Traffic+LLDP separat von CPU+Mem+Ping).
-        // searchByAny=true machte beide identisch von der API-Logik — nur ein
-        // Roundtrip noetig. Spart 50% API-Latenz auf dieser Stelle.
-        $items_a = API::Item()->get([
-            'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type'],
-            'hostids'      => $hostids,
-            'search'       => ['key_' => [
-                // Traffic — Agent + SNMP
-                'net.if', 'ifInOctets', 'ifOutOctets', 'ifHCInOctets', 'ifHCOutOctets',
-                // Interface-Health: oper-/admin-status + errors + discards
-                // (SNMP IF-MIB, moderne net.if.*-Template-Keys enthalten die
-                // MIB-Namen im Bracket und matchen ueber dieselben Substrings,
-                // Agent-Varianten net.if.*[*,errors|dropped] via Regex unten)
-                'ifOperStatus', 'ifAdminStatus', 'ifInErrors', 'ifOutErrors',
-                'ifInDiscards', 'ifOutDiscards',
-                // Link-Kapazitaet fuer den Weathermap-Modus (ifSpeed = bps
-                // 32bit, ifHighSpeed = Mbps 64bit; matcht auch die modernen
-                // net.if.speed[ifHighSpeed.X]-Template-Keys via Substring)
-                'ifHighSpeed', 'ifSpeed',
-                // LLDP (IEEE 802.1AB standard MIB)
-                //
-                // 'lldpRemPort' MUSS hier stehen, nicht nur 'lldpRemSysName':
-                // die Suche ist eine Substring-Suche, und lldpRemPortId /
-                // lldpRemPortDesc enthalten "lldpRemSysName" natuerlich nicht.
-                // Sie wurden deshalb NIE geholt — der MetricExtractor hat
-                // Zweige dafuer, LldpEdgeBuilder wertet sie aus, und beides
-                // lief ins Leere, weil die Items nie ankamen. Damit konnten die
-                // Port-zu-Port-Labels nicht funktionieren, obwohl README und
-                // LLDP-SETUP sie als Hauptmerkmal fuehren und das Template die
-                // Werte einsammelt.
-                'lldpRemSysName', 'lldpRemPort',
-                // Zusatzangaben ueber den Nachbarn — zahlen vor allem auf die
-                // NICHT ueberwachten ein, ueber die sonst nur der Name bekannt ist.
-                'lldpRemSysDesc', 'lldpRemSysCapEnabled', 'lldpRemChassisId',
-                // CDP (Cisco Discovery Protocol, Cisco-spezifisch)
-                //
-                // cdpCacheDevicePort traf 'cdpCacheDeviceId' ebenfalls nicht —
-                // dieselbe Luecke auf der CDP-Seite.
-                'cdpCacheDeviceId', 'cdpCacheDevicePort',
-                // Generische Neighbor-Discovery: Ubiquiti UniFi, MikroTik, custom
-                'neighbor.sysName', 'discovery.neighbor',
-                // CPU — Agent + SNMP variants
-                'system.cpu.util', 'hrProcessorLoad', 'ssCpuUser', 'ssCpuSystem',
-                'synoSystem.ssCpuIdle',
-                // Memory — Agent + SNMP HOST-RESOURCES-MIB
-                'vm.memory.size', 'hrStorageUsed', 'hrStorageSize', 'hrStorageType',
-                // Ping
-                'icmppingsec',
-            ]],
-            'searchByAny'  => true,
-            'monitored'    => true,
-            'preservekeys' => true
-        ]);
+        // ── 3. ITEMS — STUECKWEISE, nicht alle auf einmal ─────────────────
+        //
+        // Alle relevanten Keys in EINEM Aufruf je Stueck: frueher waren es zwei
+        // getrennte Calls (Traffic+LLDP separat von CPU+Mem+Ping), bis
+        // searchByAny=true sie von der API-Logik her identisch machte.
+        //
+        // Hier stand ein einziger API::Item()->get() ueber ALLE Hosts. Das ist
+        // die teuerste Stelle des Moduls, und sie war unbegrenzt.
+        //
+        // NACHGEMESSEN: eine Item-Zeile aus der API kostet rund 570 Byte.
+        // 200.000 Items sind 109 MB, 840.000 sind 457 MB — und 840.000 sind
+        // genau das, was 5.000 switch-artige Hosts mit 24 Ports liefern.
+        // Zabbix verlangt fuer das Frontend 128 MB. Der Aufruf allein sprengte
+        // den Prozess also, bevor eine einzige Kante gebaut war, und beim
+        // Benutzer kommt das als weisse Seite ohne Meldung an.
+        //
+        // MetricExtractor verdichtet um etwa den Faktor 20. Holt man die Items
+        // in Stuecken und dampft jedes SOFORT ein, liegt nie mehr als ein
+        // Stueck roh im Speicher, waehrend das Ergebnis verdichtet mitwaechst:
+        // aus ~490 MB Spitze werden rund 60 MB.
+        //
+        // STUECKELN NACH HOSTS, NIEMALS NACH ITEMS. MetricExtractor::merge()
+        // vereinigt Karten der Form `hostid => …`; das ist nur dann verlustfrei,
+        // wenn die Items eines Hosts vollstaendig in EINEM Stueck liegen. Wer
+        // nach Items stueckelt, zerreisst einen Host, und dann gewinnt beim
+        // Vereinigen ein Teilergebnis gegen das andere — etwa host_speed, das
+        // innerhalb eines Stuecks das Maximum bildet. Der Test in
+        // MetricExtractorTest haelt genau diese Zusicherung fest.
+        $metrics         = [];
+        $host_last_seen  = [];
 
-        // ── 3b. LASTVALUE via batched UNION-ALL Queries (Chunk=20 Items/Query)
-        //
-        // SETZT SQL-HISTORY VORAUS. Zabbix kann History auch nach Elasticsearch
-        // schreiben (HistoryStorageURL in zabbix.conf.php); dann bleiben diese
-        // Tabellen leer und die Karte zeigt Knoten ohne Metriken — kein Fehler,
-        // aber auch keine Zahlen. Vier andere Actions (Spark, ItemHistory,
-        // HealthHistory) gehen ueber API::History() und waeren davon nicht
-        // betroffen.
-        //
-        // Warum hier trotzdem direkt: history.get kennt kein "letzter Wert je
-        // Item" und wuerde pro Item eine eigene Abfrage mit Zeitfenster
-        // brauchen. Fuer die Karte sind das mehrere hundert Items bei jedem
-        // 30-Sekunden-Refresh — die UNION-ALL-Variante macht daraus ~25
-        // Abfragen. Der Unterschied ist der zwischen brauchbar und unbenutzbar.
-        //
-        // Die Itemids stammen aus einer rechtegefilterten API::Item()-Abfrage
-        // und werden vor der Interpolation nach int gecastet; sie kommen nie
-        // ungeprueft aus einer Benutzereingabe.
-        // (Batching extracted to fetchLastValues() — the host+hops discovery
-        // needs the exact same mechanism for the neighbour-name items.)
-        $all_items = $items_a + $items_show;
-        $lv = $this->fetchLastValues($all_items);
-        $last_values = $lv['values'];
-        $last_clocks = $lv['clocks'];   // itemid => max(clock) — fuer Stale-Detection
+        foreach (array_chunk($hostids, self::HOSTS_PER_ITEM_CHUNK) as $chunk_hostids) {
+            $chunk = API::Item()->get([
+                'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type'],
+                'hostids'      => $chunk_hostids,
+                    'search'       => ['key_' => [
+                    // Traffic — Agent + SNMP
+                    'net.if', 'ifInOctets', 'ifOutOctets', 'ifHCInOctets', 'ifHCOutOctets',
+                    // Interface-Health: oper-/admin-status + errors + discards
+                    // (SNMP IF-MIB, moderne net.if.*-Template-Keys enthalten die
+                    // MIB-Namen im Bracket und matchen ueber dieselben Substrings,
+                    // Agent-Varianten net.if.*[*,errors|dropped] via Regex unten)
+                    'ifOperStatus', 'ifAdminStatus', 'ifInErrors', 'ifOutErrors',
+                    'ifInDiscards', 'ifOutDiscards',
+                    // Link-Kapazitaet fuer den Weathermap-Modus (ifSpeed = bps
+                    // 32bit, ifHighSpeed = Mbps 64bit; matcht auch die modernen
+                    // net.if.speed[ifHighSpeed.X]-Template-Keys via Substring)
+                    'ifHighSpeed', 'ifSpeed',
+                    // LLDP (IEEE 802.1AB standard MIB)
+                    //
+                    // 'lldpRemPort' MUSS hier stehen, nicht nur 'lldpRemSysName':
+                    // die Suche ist eine Substring-Suche, und lldpRemPortId /
+                    // lldpRemPortDesc enthalten "lldpRemSysName" natuerlich nicht.
+                    // Sie wurden deshalb NIE geholt — der MetricExtractor hat
+                    // Zweige dafuer, LldpEdgeBuilder wertet sie aus, und beides
+                    // lief ins Leere, weil die Items nie ankamen. Damit konnten die
+                    // Port-zu-Port-Labels nicht funktionieren, obwohl README und
+                    // LLDP-SETUP sie als Hauptmerkmal fuehren und das Template die
+                    // Werte einsammelt.
+                    'lldpRemSysName', 'lldpRemPort',
+                    // Zusatzangaben ueber den Nachbarn — zahlen vor allem auf die
+                    // NICHT ueberwachten ein, ueber die sonst nur der Name bekannt ist.
+                    'lldpRemSysDesc', 'lldpRemSysCapEnabled', 'lldpRemChassisId',
+                    // CDP (Cisco Discovery Protocol, Cisco-spezifisch)
+                    //
+                    // cdpCacheDevicePort traf 'cdpCacheDeviceId' ebenfalls nicht —
+                    // dieselbe Luecke auf der CDP-Seite.
+                    'cdpCacheDeviceId', 'cdpCacheDevicePort',
+                    // Generische Neighbor-Discovery: Ubiquiti UniFi, MikroTik, custom
+                    'neighbor.sysName', 'discovery.neighbor',
+                    // CPU — Agent + SNMP variants
+                    'system.cpu.util', 'hrProcessorLoad', 'ssCpuUser', 'ssCpuSystem',
+                    'synoSystem.ssCpuIdle',
+                    // Memory — Agent + SNMP HOST-RESOURCES-MIB
+                    'vm.memory.size', 'hrStorageUsed', 'hrStorageSize', 'hrStorageType',
+                    // Ping
+                    'icmppingsec',
+                ]],
+                'searchByAny'  => true,
+                'monitored'    => true,
+                'preservekeys' => true
+            ]);
 
-        // Stale-Detection: pro Host das max(lastclock) aller seiner Items.
-        // Wenn das alle Items des Hosts mehrere Minuten alt sind, kommen
-        // keine neuen Daten mehr an — Host ist effektiv stale (auch wenn
-        // unavailable=false). Nur Items aus all_items (Live-Metriken),
-        // nicht aus Discovery oder anderen Quellen.
-        $host_last_seen = [];
-        foreach ($all_items as $iid => $item) {
-            if (!isset($last_clocks[$iid])) continue;
-            $hid = (int) $item['hostid'];
-            $clk = $last_clocks[$iid];
-            if (!isset($host_last_seen[$hid]) || $clk > $host_last_seen[$hid]) {
-                $host_last_seen[$hid] = $clk;
+            // ── 3b. LASTVALUE, je Stueck ──────────────────────────────────
+            //
+            // SETZT SQL-HISTORY VORAUS. Zabbix kann History auch nach
+            // Elasticsearch schreiben (HistoryStorageURL in zabbix.conf.php);
+            // dann bleiben diese Tabellen leer und die Karte zeigt Knoten ohne
+            // Metriken — kein Fehler, aber auch keine Zahlen.
+            //
+            // Warum direkt und nicht ueber history.get: das kennt kein
+            // "letzter Wert je Item" und braeuchte pro Item eine eigene
+            // Abfrage mit Zeitfenster. Die UNION-ALL-Variante in
+            // fetchLastValues() macht daraus rund 25 Abfragen je Stueck.
+            //
+            // Die Itemids stammen aus einer rechtegefilterten
+            // API::Item()-Abfrage und werden vor der Interpolation nach int
+            // gecastet; sie kommen nie ungeprueft aus einer Benutzereingabe.
+            $lv = $this->fetchLastValues($chunk);
+
+            // Stale-Detection: pro Host das max(lastclock) seiner Items. Wenn
+            // alle Items eines Hosts mehrere Minuten alt sind, kommen keine
+            // neuen Daten mehr an — der Host ist effektiv stale, auch wenn
+            // unavailable=false meldet.
+            foreach ($chunk as $iid => $item) {
+                if (!isset($lv['clocks'][$iid])) continue;
+                $hid = (int) $item['hostid'];
+                $clk = $lv['clocks'][$iid];
+                if (!isset($host_last_seen[$hid]) || $clk > $host_last_seen[$hid]) {
+                    $host_last_seen[$hid] = $clk;
+                }
             }
+
+            foreach ($chunk as $iid => &$item) {
+                $item['lastvalue'] = $lv['values'][$iid] ?? null;
+            }
+            unset($item);
+
+            // ── 4. Eindampfen und das Stueck FREIGEBEN ────────────────────
+            // Das unset() ist der ganze Zweck der Uebung: ohne es liegen am
+            // Ende doch wieder alle Stuecke gleichzeitig im Speicher.
+            $metrics = MetricExtractor::merge($metrics, MetricExtractor::extract($chunk));
+            unset($chunk, $lv);
         }
 
-        // Inject lastvalue back into items
-        foreach ($items_a as $iid => &$item) {
-            $item['lastvalue'] = $last_values[$iid] ?? null;
+        // Die "show"-Items sind eine eigene, kleine Menge (nur was per
+        // Host-Tag angefordert wurde) und laufen deshalb ausserhalb der
+        // Stueckelung. Ihre Lastvalues brauchen einen eigenen Durchgang, seit
+        // sie nicht mehr mit den Metrik-Items zusammen geholt werden.
+        if ($items_show) {
+            $lv_show = $this->fetchLastValues($items_show);
+            foreach ($items_show as $iid => &$item) {
+                $item['lastvalue'] = $lv_show['values'][$iid] ?? null;
+                $hid = (int) $item['hostid'];
+                $clk = $lv_show['clocks'][$iid] ?? null;
+                if ($clk !== null && (!isset($host_last_seen[$hid]) || $clk > $host_last_seen[$hid])) {
+                    $host_last_seen[$hid] = $clk;
+                }
+            }
+            unset($item, $lv_show);
         }
-        unset($item);
-        foreach ($items_show as $iid => &$item) {
-            $item['lastvalue'] = $last_values[$iid] ?? null;
-        }
-        unset($item);
 
-        // ── 4. PROCESS ITEMS ──────────────────────────────────────────────
-        // Metrik-Klassifikation ausgelagert nach topology/MetricExtractor.php
-        // (Review §6). Items rein, sieben Metrik-Arrays raus — reine
-        // Transformation, kein API-Call, kein Controller-Zustand. Dadurch
-        // erstmals einzeln testbar, statt nur ueber einen kompletten Request.
-        $metrics      = MetricExtractor::extract($items_a);
         $lldp_raw     = $metrics['lldp_raw'];
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         // Nachbar-Matching + Kantenbau ausgelagert nach

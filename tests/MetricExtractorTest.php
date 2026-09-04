@@ -150,6 +150,41 @@ $mu2 = MetricExtractor::extract([
 ]);
 check('uplink.rx/tx sind KEINE Nachbarn',    count($mu2['lldp_raw']),               0);
 
+// ── merge(): stueckweise auswerten muss dasselbe ergeben ──────────────────
+//
+// Der Controller holt die Items in Stuecken, weil die rohe Item-Liste bei
+// grossen Gruppen den Speicher sprengt (rund 570 Byte je Item; 840.000 Items
+// sind 457 MB bei 128 MB Limit). Die entscheidende Zusicherung ist deshalb:
+// stueckweise auswerten und zusammenfuehren liefert GENAU dasselbe wie alles
+// auf einmal. Sonst haengt die Karte still von der Stueckgroesse ab.
+echo "\n  MetricExtractor — merge()\n\n";
+
+$mA = [
+    ['itemid' => '1', 'hostid' => 'h1', 'key_' => 'ifHCInOctets[1]',  'name' => 'in',  'value_type' => '3', 'lastvalue' => '1000'],
+    ['itemid' => '2', 'hostid' => 'h1', 'key_' => 'ifHCOutOctets[1]', 'name' => 'out', 'value_type' => '3', 'lastvalue' => '2000'],
+    ['itemid' => '3', 'hostid' => 'h1', 'key_' => 'lldpRemSysName[0.1.1]', 'name' => 'n', 'value_type' => '1', 'lastvalue' => 'sw-b'],
+];
+$mB = [
+    ['itemid' => '4', 'hostid' => 'h2', 'key_' => 'ifHCInOctets[5]',  'name' => 'in',  'value_type' => '3', 'lastvalue' => '3000'],
+    ['itemid' => '5', 'hostid' => 'h2', 'key_' => 'ifHighSpeed[5]',   'name' => 'sp',  'value_type' => '3', 'lastvalue' => '1000'],
+    ['itemid' => '6', 'hostid' => 'h2', 'key_' => 'lldpRemSysName[0.5.1]', 'name' => 'n', 'value_type' => '1', 'lastvalue' => 'sw-a'],
+];
+
+$amStueck = MetricExtractor::merge(
+    MetricExtractor::merge([], MetricExtractor::extract($mA)),
+    MetricExtractor::extract($mB)
+);
+$amStueck2 = MetricExtractor::extract(array_merge($mA, $mB));
+
+check('stueckweise == auf einmal',        $amStueck == $amStueck2, true);
+check('beide Hosts im Port-Traffic',      count($amStueck['port_traffic'] ?? []), 2);
+check('lldp_raw wurde angehaengt',        count($amStueck['lldp_raw'] ?? []), 2);
+check('Hostids bleiben Hostids',          isset($amStueck['port_traffic']['h2']), true);
+
+// Der erste Aufruf mit leerem Akkumulator darf nichts verlieren.
+$leer = MetricExtractor::merge([], MetricExtractor::extract($mA));
+check('leerer Akkumulator liefert das Stueck', $leer == MetricExtractor::extract($mA), true);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

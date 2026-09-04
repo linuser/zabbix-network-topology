@@ -496,6 +496,61 @@ final class MetricExtractor {
     }
 
     /**
+     * Zwei extract()-Ergebnisse zusammenfuehren.
+     *
+     * WOFUER
+     * ------
+     * Damit der Controller die Items STUECKWEISE holen kann statt alle auf
+     * einmal. Der Unterschied ist nicht kosmetisch: eine Item-Zeile aus der
+     * API kostet rund 570 Byte, und bei 5.000 Switch-artigen Hosts sind das
+     * 840.000 Items — 457 MB, allein fuers Halten der Liste, bevor hier auch
+     * nur eine Zeile gelaufen ist. Zabbix' Frontend hat 128 MB.
+     *
+     * extract() verdichtet um etwa den Faktor 20. Holt man die Items in
+     * Stuecken und dampft jedes sofort ein, liegt nie mehr als ein Stueck roh
+     * im Speicher, waehrend das Ergebnis verdichtet mitwaechst.
+     *
+     * WARUM DAS SO EINFACH GEHT
+     * -------------------------
+     * Bis auf lldp_raw ist jedes Feld eine Karte `hostid => …`. Stueckelt man
+     * nach HOSTS, sind die Schluessel zweier Stuecke disjunkt — die
+     * Vereinigung ist dann verlustfrei, egal in welcher Reihenfolge.
+     *
+     * Das gilt NUR bei Stueckelung nach Hosts. Wer nach Items stueckelt,
+     * zerreisst einen Host ueber zwei Stuecke, und dann gewinnt beim
+     * Vereinigen ein Teilergebnis gegen das andere — etwa host_speed, das
+     * innerhalb eines Stuecks das Maximum bildet. Deshalb steht es hier und
+     * nicht als Nebensatz im Controller.
+     *
+     * @param array $acc   bisheriges Ergebnis (leeres Array beim ersten Mal)
+     * @param array $chunk Ergebnis von extract() fuer das naechste Stueck
+     */
+    public static function merge(array $acc, array $chunk): array {
+        if (!$acc) {
+            return $chunk;
+        }
+
+        foreach ($chunk as $feld => $wert) {
+            if ($feld === 'lldp_raw') {
+                // Flache Liste — anhaengen, nicht vereinigen.
+                $acc['lldp_raw'] = array_merge($acc['lldp_raw'] ?? [], $wert);
+                continue;
+            }
+            if (!isset($acc[$feld])) {
+                $acc[$feld] = $wert;
+                continue;
+            }
+            // '+' statt array_merge: die Schluessel sind Hostids und sollen
+            // Hostids BLEIBEN. array_merge nummeriert numerische Schluessel
+            // neu durch — aus Host 10084 wuerde 0, und jede spaetere
+            // Zuordnung liefe ins Leere.
+            $acc[$feld] = $acc[$feld] + $wert;
+        }
+
+        return $acc;
+    }
+
+    /**
      * ifHighSpeed → bps. ifHighSpeed ist Mbps, ABER das Zabbix-Standard-Template
      * multipliziert per Preprocessing teils schon auf bps. Heuristik: < 1e7 = Mbps
      * (800G-Link = 8e5 Mbps), >= 1e7 = bereits bps (kleinster realer bps: 10M = 1e7).
