@@ -17,6 +17,21 @@ one. And **the map now follows your Zabbix theme**: if your profile is set to
 a dark theme, it renders dark from the first load. There is no switch; that is
 the point.
 
+**No template update either.** All three shipped templates — `nt_lldp_snmp`,
+`nt_health_score`, `nt_topology_change` — are unchanged since 5.1.1, and none
+was added.
+
+What is worth knowing is where the *new* port-level features get their data.
+Port names, errors and discards at the port, and link utilization read
+`ifName` / `ifDescr` / `ifAlias`, `ifInErrors` / `ifOutDiscards` and
+`ifHighSpeed` — and those do **not** come from the LLDP template, which only
+walks the LLDP remote-systems table. They come from the ordinary interface
+monitoring on the same host, i.e. Zabbix's own *Network interfaces by SNMP*
+discovery or a vendor template. A host that carries only the NT LLDP template
+still produces edges; they simply have no port names and no per-port numbers.
+See [LLDP-SETUP.md](LLDP-SETUP.md), "Optional, but worth having: real port
+names".
+
 ### Thanks
 
 The theming work in this release is
