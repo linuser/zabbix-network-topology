@@ -89,7 +89,7 @@ npm-audit:
   image: node:22-alpine
   script:
     - npm ci
-    - npm audit --audit-level=moderate
+    - npm run ci:audit
 
 bundle-drift:
   stage: build

@@ -64,7 +64,7 @@ jobs:
       - name: pipeline
         run: npm run ci:pipeline
       - name: npm-audit
-        run: npm audit --audit-level=moderate
+        run: npm run ci:audit
       # Der wichtige: das Bundle ist eingecheckt und kann von den Quellmodulen
       # abweichen, wenn jemand den Build vergisst.
       - name: bundle-drift
