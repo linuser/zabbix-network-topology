@@ -592,6 +592,10 @@ class NetworkTopologyData extends NetworkTopologyController {
             'lldp_unmatched' => $lldp_unmatched,
             'lldp_quality'   => $lldp_quality_out,
             'health'         => $health,
+            // Hat die Obergrenze im Kantenbau zugeschlagen? Gehoert IN den
+            // Cache-Eintrag, nicht daneben: sonst verschwindet der Hinweis
+            // beim ersten Cache-Treffer, waehrend die gekappte Karte bleibt.
+            'edges_truncated' => LldpEdgeBuilder::lastTruncated(),
         ];
         NtCache::set('data_payload', $cache_parts, $core, self::CACHE_TTL);
 
@@ -744,6 +748,8 @@ class NetworkTopologyData extends NetworkTopologyController {
             ['nodes' => $nodes, 'edges' => $edges,
              'lldp_unmatched' => $core['lldp_unmatched'] ?? [],
              'lldp_quality'   => $core['lldp_quality']   ?? [],
+             // Verworfene Kanten. 0 heisst: die Karte ist vollstaendig.
+             'edges_truncated' => (int) ($core['edges_truncated'] ?? 0),
              'topo_changes'   => $topo_changes,
              'health'         => $core['health'] ?? [],
              // Truncation sichtbar machen (statt still abzuschneiden).

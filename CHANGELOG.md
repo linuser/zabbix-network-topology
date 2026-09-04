@@ -44,6 +44,17 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+- **A very large topology crashed the page instead of saying so.** Building
+  the LLDP/CDP edges costs about 5.2 KB of peak memory per edge — measured,
+  not estimated: 9,600 edges take 50 MB, 19,200 take 99 MB. Zabbix asks for a
+  128 MB frontend, and the host and item lists already sit in that same
+  process. Past roughly 20,000 edges PHP aborted with "Allowed memory size
+  exhausted", which reaches the user as a white page with no message at all.
+  There is now an upper limit of 8,000 edges (~41 MB), and hitting it is
+  reported: the map says how many links it did not draw. The limit is
+  deliberately far beyond a readable map — it should never trigger, and if it
+  does, it replaces a crash with a sentence.
+
 - **A URL parameter could hang the map for good.** `NT_CONFIG` was written
   into the page with `json_encode()` but without `JSON_INVALID_UTF8_SUBSTITUTE`.
   On invalid UTF-8 the function returns `false`, so the page contained the

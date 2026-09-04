@@ -434,6 +434,39 @@ check('ein Melder, aber ZWEI Ports eingetragen', count($eXY['ports'] ?? []),    
 check('trotzdem NICHT confirmed',                $eXY['confirmed'] ?? null,      false);
 check('trotzdem nur EIN reporter',               count($eXY['reporters'] ?? []), 1);
 
+// ── Obergrenze fuer Kanten ────────────────────────────────────────────────
+//
+// Sie schuetzt nicht vor Unuebersichtlichkeit, sondern vor einem PHP-Fatal:
+// der Kantenbau braucht rund 5,2 KB Spitzenspeicher je Kante, und Zabbix'
+// Frontend laeuft mit 128 MB. Ohne Obergrenze endet eine sehr grosse Topologie
+// in "Allowed memory size exhausted" — also einer weissen Seite ohne Meldung.
+//
+// Geprueft wird beides: dass gekappt wird, UND dass die Kappung gemeldet wird.
+// Eine stillschweigend unvollstaendige Karte waere schlimmer als gar keine,
+// weil sie aussieht wie eine vollstaendige.
+echo "\n  LldpEdgeBuilder — Obergrenze\n\n";
+
+$vieleHosts = [];
+$vieleRaw   = [];
+for ($i = 0; $i < 130; $i++) {
+    $vieleHosts['h' . $i] = ['host' => 'sw-' . $i, 'name' => 'Switch ' . $i];
+}
+for ($i = 0; $i < 130; $i++) {
+    for ($j = 1; $j <= 100; $j++) {
+        $vieleRaw[] = ['hostid' => 'h' . $i,
+                       'key_' => 'lldpRemSysName[0.' . $j . '.1]',
+                       'lastvalue' => 'sw-' . (($i + $j) % 130),
+                       'src' => 'lldp'];
+    }
+}
+$rCap = LldpEdgeBuilder::build($vieleHosts, $vieleRaw);
+check('kappt bei der Obergrenze',      count($rCap['edges']) <= 8000, true);
+check('meldet die verworfenen Kanten', LldpEdgeBuilder::lastTruncated() > 0, true);
+
+// Und der Normalfall darf davon nichts merken.
+LldpEdgeBuilder::build($hosts, $lldp_raw);
+check('kleine Karte bleibt ungekappt', LldpEdgeBuilder::lastTruncated(), 0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

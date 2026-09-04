@@ -389,6 +389,14 @@ function init() {
                         processed: data.processed_count
                     }));
             }
+            // Gekappte Kanten sind eine ANDERE Aussage als gekappte Gruppen:
+            // dort fehlen ganze Hosts, hier fehlen Verbindungen ZWISCHEN
+            // gezeichneten Hosts. Wer das verwechselt, sucht an der falschen
+            // Stelle. Deshalb eigener Schluessel und eigener Toast.
+            if (data.edges_truncated) {
+                toastTruncatedOnce('edges:' + data.edges_truncated,
+                    t('warn.edges_truncated', { n: data.edges_truncated }));
+            }
             // lldp_quality mit durchreichen — der LLDP-Q-Tab liest es aus
             // _ntLastData (ohne dieses Feld waere der Tab immer leer).
             window._ntLastData = { nodes: data.nodes || [], edges: data.edges || [],

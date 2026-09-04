@@ -310,6 +310,7 @@ export default {
     'stats.agg_summary': '{events} Events &middot; {hosts} Hosts &middot; {triggers} Trigger &middot; {from} – {to}',
     'stats.truncated': 'Achtung: Backend-Limit erreicht',
     'warn.truncated': '⚠ Nur die ersten {processed} von {requested} Hostgruppen ausgewertet — Auswahl eingrenzen für ein vollständiges Bild.',
+    'warn.edges_truncated': '⚠ {n} Verbindungen nicht gezeichnet — die Karte hat die Obergrenze erreicht und ist unvollständig. Auswahl eingrenzen.',
     'stats.col.host': 'Host',
     'stats.col.events': 'Events',
     'stats.col.worst': 'Worst',

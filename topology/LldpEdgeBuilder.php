@@ -45,11 +45,44 @@ final class LldpEdgeBuilder {
      *
      * @return array{edges: array, quality: array, unmatched: array}
      */
+    /**
+     * Obergrenze fuer LLDP/CDP-Kanten. NICHT gegen Unuebersichtlichkeit —
+     * gegen einen PHP-Fatal.
+     *
+     * NACHGEMESSEN, nicht geschaetzt: der Kantenbau braucht rund 5,2 KB
+     * Spitzenspeicher je Kante (400 Hosts / 9.600 Kanten -> 50 MB;
+     * 800 / 19.200 -> 99 MB, linear dazwischen). Zabbix verlangt fuer das
+     * Frontend mindestens 128 MB, und in diesem Prozess liegen daneben schon
+     * die Host- und Item-Listen. Der erste Messlauf ist genau daran
+     * gestorben: "Allowed memory size exhausted" — also eine WEISSE SEITE
+     * ohne Meldung, mitten im Kartenaufbau.
+     *
+     * 8.000 Kanten sind rund 41 MB und lassen dem Rest Luft. Die Zahl ist
+     * bewusst weit jenseits dessen, was eine lesbare Karte hat (die
+     * Obergrenze fuer manuelle Verbindungen liegt bei 2.000): sie soll nie
+     * greifen, und wenn doch, dann statt eines Absturzes.
+     */
+    private const MAX_EDGES = 8000;
+
+    /**
+     * Wie viele Kanten die Obergrenze verworfen hat. Wer eine gekappte Karte
+     * bekommt, soll das ERFAHREN — eine stillschweigend unvollstaendige
+     * Topologie ist schlimmer als gar keine, weil sie aussieht wie eine
+     * vollstaendige. Dieselbe Ueberlegung wie bei ManualLinks.
+     */
+    private static int $truncated = 0;
+
+    public static function lastTruncated(): int {
+        return self::$truncated;
+    }
+
     public static function build(array $hosts, array $lldp_raw,
             array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
             array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
             array $port_names = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
+        self::$truncated = 0;
+
         $name_map = [];
         $ip_map   = [];
         foreach ($hosts as $hid => $h) {
@@ -354,6 +387,16 @@ final class LldpEdgeBuilder {
                 $pair = [(string) $rid, (string) $rhid];
                 sort($pair);
                 $edge_key = implode('-', $pair);
+                // Obergrenze NUR fuer NEUE Kanten. Der Merge-Zweig unten
+                // ergaenzt eine bereits bekannte Kante um Quelle, Ports und
+                // Metrik — das kostet keinen nennenswerten Speicher und macht
+                // die Kanten, die wir behalten, VOLLSTAENDIGER. Hier
+                // abzubrechen wuerde also nichts sparen und stattdessen
+                // halbfertige Kanten hinterlassen.
+                if (!isset($seen_edges[$edge_key]) && count($edges) >= self::MAX_EDGES) {
+                    self::$truncated++;
+                    continue;
+                }
                 if (!isset($seen_edges[$edge_key])) {
                     $seen_edges[$edge_key] = count($edges);
                     // ports: lokaler Port am Reporter-Ende + Remote-Port am
