@@ -1,0 +1,31 @@
+# Was NICHT in eine Auslieferung gehoert.
+#
+# `git archive` liefert sonst den kompletten Baum aus, und das Zielverzeichnis
+# liegt unter dem Web-Root und ist oeffentlich abrufbar. Dieselbe Liste steht
+# als rsync-Ausschluss in deploy.sh; die Begruendung zu jedem Eintrag auch
+# dort. Wer hier etwas ergaenzt, ergaenzt es bitte auch drueben — bis die
+# beiden zusammengelegt sind, sind es zwei Stellen.
+#
+# Damit wird `git archive HEAD` inhaltsgleich mit der Release-ZIP, und ein
+# Update per git ist moeglich, ohne ein .git-Verzeichnis unter den Web-Root zu
+# legen (siehe INSTALL.md, "Update per git").
+
+.gitattributes      export-ignore
+.gitignore          export-ignore
+.gitlab-ci.yml      export-ignore
+.github/            export-ignore
+.claude/            export-ignore
+tools/              export-ignore
+tests/              export-ignore
+templates/          export-ignore
+screenshots/        export-ignore
+dashboards/         export-ignore
+deploy.sh           export-ignore
+nt-install.sh       export-ignore
+nt-uninstall.sh     export-ignore
+package.json        export-ignore
+package-lock.json   export-ignore
+eslint.config.mjs   export-ignore
+eslint-suppressions.json export-ignore
+CLAUDE.md           export-ignore
+ROADMAP.md          export-ignore
