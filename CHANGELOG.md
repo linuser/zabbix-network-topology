@@ -4,6 +4,31 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ## Unreleased
 
+### Thanks
+
+The theming work in this release is
+**[@christos-diamantis](https://github.com/christos-diamantis)**' — the design
+as much as the code. He opened
+[#11](https://github.com/linuser/zabbix-network-topology/issues/11) with five
+separate defects, screenshots for each, and the observation that made the
+whole thing tractable: the modules had no shared palette, so every one of them
+carried its own light-only colors.
+[PR #12](https://github.com/linuser/zabbix-network-topology/pull/12) is the
+answer to that, and it is the foundation of what shipped here.
+
+Two of his findings would not have occurred to me. The node icons are SVG
+serialized into a data URI and handed to Cytoscape as an image, so no CSS
+variable can ever reach them — and the image cache has to key on the theme, or
+it keeps serving the other one after a switch. And the tooltip was broken in
+*light* mode: setting no text color of its own, it inherited the Zabbix body
+color, which in the Zabbix dark theme is near-white on a white tooltip.
+
+What was added on top: the tokens were extended to the modules his PR did not
+touch (three of them did not exist yet when he wrote it), and the light/dark
+decision now measures the page's background instead of recognizing a theme
+name — because Zabbix 8.0 adds a dark theme no name list written today would
+contain.
+
 ### Added
 
 - **Click an edge for its own detail panel.** Ports on both ends, link
@@ -114,6 +139,7 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   mode. All of these now read from one set of color tokens (`--nt-*` in
   `network-topology.css`) with a light and a dark value; body-attached
   elements (tooltip, context menu) carry the tokens via `.nt-float`.
+  Contributed by **@christos-diamantis**
 
 - **Node quadrants and icons on the dark canvas.** The device glyph was drawn
   in dark slate (`#475569`), the quadrant separators in white — on the dark
@@ -122,15 +148,18 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   the empty quadrants tinted a bit stronger so the four fields stay readable.
   The image cache keys on the theme. Edges on the dark canvas get a little
   more opacity.
+  Contributed by **@christos-diamantis**
 
 - **The host-group filter turned navy in dark mode.** A
   `body:has(#nt-root.nt-dark)` rule recolored the Zabbix filter form and its
   multiselect to `#0f172a`/`#1e293b` — in the Zabbix dark theme, which draws
   its inputs dark already, a blue foreign body above the map. The rule is
   gone; the filter is Zabbix UI and follows the Zabbix theme.
+  Contributed by **@christos-diamantis**
 
 - **The detail panel covered the color guide.** Both sat in the bottom-left
   corner. While the panel is open the guide moves to its right.
+  Contributed by **@christos-diamantis**
 
 ### Changed
 
