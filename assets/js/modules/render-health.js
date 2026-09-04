@@ -19,7 +19,7 @@
 // Rendern: Karten-Grid, sortiert nach worst Score zuerst. Jede Karte zeigt
 // den Score gross + farbig (rot/orange/gelb/gruen) plus die Detail-Zahlen.
 
-import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
 
 const STALE_S = 300;
@@ -216,13 +216,10 @@ export function renderHealth(wrap, nodes) {
     if (window._ntCy)       { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     if (window._ntEdgeAnim) { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
 
-    const dark = !!(document.getElementById('nt-root')
-                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+    const dark = isDark();
     const theme = mkTabTheme(dark);
 
-    Array.from(wrap.children).forEach(function(ch) {
-        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
-    });
+    clearWrap(wrap);
 
     const root = document.createElement('div');
     root.style.cssText = 'padding:20px;background:' + theme.bg + ';color:' + theme.text

@@ -5,6 +5,7 @@
 // Cytoscape — pure DOM-Tiles. Sortiert pro Ebene nach Severity (worst zuerst).
 // Wird auch beim Dark-Mode-Wechsel komplett neu gerendert (siehe tabs.js).
 
+import { isDark, clearWrap } from './utils.js';
 import { showCtx } from './context-menu.js';
 import { showDetail } from './detail-panel.js';
 import { hideMinimap } from './minimap.js';
@@ -46,12 +47,9 @@ export function renderManagement(wrap, nodes, edges) {
     hideMinimap();
 
     // Canvas-Children leeren (Loading-Spinner behalten)
-    Array.from(wrap.children).forEach(function(ch) {
-        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
-    });
+    clearWrap(wrap);
 
-    const dark = !!(document.getElementById('nt-root')
-                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+    const dark = isDark();
     const bg   = dark ? '#0d1117' : '#f0f2f5';
     const card = dark ? '#161b22' : '#ffffff';
     const text = dark ? '#e6edf3' : '#1e293b';

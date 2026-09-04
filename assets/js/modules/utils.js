@@ -187,3 +187,19 @@ export function seiteIstDunkel(hinweis) {
         return !!hinweis;
     }
 }
+
+/**
+ * Die Zeichenflaeche leeren, aber den Lade-Hinweis stehen lassen.
+ *
+ * Stand achtmal wortgleich in den Render-Modulen. Die Ausnahme fuer
+ * #nt-loading ist der Grund, warum es kein schlichtes innerHTML = '' ist:
+ * das Element gehoert der Seite, nicht dem Tab, und wer es mitloescht, hat
+ * beim naechsten Laden keinen Hinweis mehr — sichtbar wird das erst auf einer
+ * langsamen Instanz.
+ */
+export function clearWrap(wrap) {
+    if (!wrap) return;
+    Array.from(wrap.children).forEach(function(ch) {
+        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
+    });
+}

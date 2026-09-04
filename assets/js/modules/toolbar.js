@@ -52,7 +52,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     const isFirstRun = !window._ntToolbarDone;
     window._ntToolbarDone = true;
 
-    // Tabs + Dark-Button werden von ensureBaseToolbar() gemanagt — hier nur
+    // Die Tabs werden von ensureBaseToolbar() gemanagt — hier nur
     // tech-spezifische Buttons.
     function mkbtn(id, lbl, fn) {
         const existing = id ? document.getElementById(id) : null;

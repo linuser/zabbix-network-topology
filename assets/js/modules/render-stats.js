@@ -11,7 +11,7 @@
 // zeigen wir einen Hinweis. "Pre"-Events (vor Range-Start bereits offen)
 // werden ausgeklammert — sie zaehlen nicht als neue Events.
 
-import { esc, mkTabTheme, buildBaseUrl, fmt, linkCapacity } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl, fmt, linkCapacity, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
 
 const RANGES = [
@@ -184,13 +184,10 @@ export function renderStats(wrap, nodes) {
     if (window._ntCy)         { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     if (window._ntEdgeAnim)   { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
 
-    const dark = !!(document.getElementById('nt-root')
-                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+    const dark = isDark();
     const theme = mkTabTheme(dark);
 
-    Array.from(wrap.children).forEach(function(ch) {
-        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
-    });
+    clearWrap(wrap);
 
     // Host-Lookup-Map (id → {label, host}) damit Top-Hosts den Namen kennen
     const hostMeta = {};

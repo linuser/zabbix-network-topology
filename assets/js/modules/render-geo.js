@@ -17,7 +17,7 @@
 //
 // Leaflet ist als globales L verfügbar (vor diesem Modul per <script> geladen).
 
-import { esc, fmt } from './utils.js';
+import { esc, fmt, clearWrap } from './utils.js';
 import { SEV_COL, SEV_LBL } from './severity.js';
 import { loadGeoProvider, saveGeoProvider } from './storage.js';
 import { GEO_PROVIDERS, getProvider } from './geo-providers.js';
@@ -262,9 +262,7 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
     window._ntToolbarDone = false;
 
     // Canvas leeren (Loading-Spinner behalten)
-    Array.from(wrap.children).forEach(function(ch) {
-        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
-    });
+    clearWrap(wrap);
 
     // Hosts mit gültigen Koordinaten filtern (beide gesetzt + numerisch)
     const geoNodes = nodes.filter(function(n) {

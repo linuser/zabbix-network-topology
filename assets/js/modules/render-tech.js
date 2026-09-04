@@ -14,7 +14,7 @@
 // State (Modul-privat):
 //   _posSaveTimer — debounce-Timer für drag-save
 
-import { esc } from './utils.js';
+import { esc, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
 import { primaryGroup, SEV_COL } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
@@ -248,9 +248,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     window._ntToolbarDone = false;
     const oldSev    = document.getElementById('nt-sev-filter');   if (oldSev)    oldSev.remove();
     const oldSearch = document.getElementById('nt-search-input'); if (oldSearch) oldSearch.remove();
-    Array.from(wrap.children).forEach(function(ch) {
-        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
-    });
+    clearWrap(wrap);
 
     const cyDiv = document.createElement('div');
     cyDiv.style.cssText = 'width:100%;height:100%;position:absolute;top:0;left:0';
@@ -258,8 +256,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     wrap.appendChild(cyDiv);
 
     const useLayout = 'cose';
-    const dark = !!(document.getElementById('nt-root')
-                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+    const dark = isDark();
 
     // Nur explizite Pixelmasse setzen, wenn der Flex-Wrapper schon eine Groesse
     // hat. Sonst friert ein zu frueh gemessenes 0px den Container auf Hoehe 0

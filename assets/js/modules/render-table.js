@@ -952,8 +952,7 @@ export function renderTable(wrap, nodes, edges) {
 
     // Theme aus Dark-Mode-State des Root-Containers ableiten - alle weiteren
     // Build-Funktionen kriegen das Theme als Parameter rein.
-    const dark = !!(document.getElementById('nt-root')
-                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+    const dark = isDark();
     const theme = mkTheme(dark);
 
     if (!nodes.length) {

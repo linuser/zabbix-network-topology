@@ -20,7 +20,7 @@
 // nicht. Aggregat-Counter sind unabhaengig — zaehlen wie viele Hosts
 // von einem Check betroffen sind.
 
-import { esc, mkTabTheme, buildBaseUrl } from './utils.js';
+import { esc, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
 
 // Check-Definitionen (exportiert — der Audit-Report in export.js rendert
@@ -138,13 +138,10 @@ export function renderCompliance(wrap) {
     if (window._ntCy)       { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     if (window._ntEdgeAnim) { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
 
-    const dark = !!(document.getElementById('nt-root')
-                 && document.getElementById('nt-root').classList.contains('nt-dark'));
+    const dark = isDark();
     const theme = mkTabTheme(dark);
 
-    Array.from(wrap.children).forEach(function(ch) {
-        if (ch.id !== 'nt-loading') wrap.removeChild(ch);
-    });
+    clearWrap(wrap);
 
     const root = document.createElement('div');
     root.style.cssText = 'padding:20px;background:' + theme.bg + ';color:' + theme.text
