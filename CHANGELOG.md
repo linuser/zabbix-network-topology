@@ -2,7 +2,20 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
-## Unreleased
+## v5.3.0 — 2026-09-04
+
+### Updating from 5.2 — nothing to do
+
+No migration, and this time **not even a rescan**: no action was added or
+renamed, so replacing the module directory, `chown`, and a php-fpm reload is
+the whole procedure. Map layouts, manual links, pins, notes and presets stay
+where they are.
+
+Two things to know afterwards. **Reload once with a cache bypass** — the
+bundle changed substantially, and a plain reload may still serve the cached
+one. And **the map now follows your Zabbix theme**: if your profile is set to
+a dark theme, it renders dark from the first load. There is no switch; that is
+the point.
 
 ### Thanks
 
