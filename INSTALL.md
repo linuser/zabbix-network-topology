@@ -210,6 +210,37 @@ Replace the `network_topology` directory with the new version, `chown`, reload p
 > - **Reload the page with a cache bypass** (Ctrl/Cmd + Shift + R) once. The bundle changed substantially; a normal reload may still serve the cached one, and you would be looking at the old UI while wondering why nothing changed.
 > - **The map now follows your Zabbix theme.** If your profile is set to a dark theme, the map renders dark from the first load. There is no switch — that is the point. Nothing is stored, nothing to migrate.
 
+#### Update via git
+
+If you would rather track the repository than download a ZIP each time: the
+built bundle is committed, so a checkout needs no Node.
+
+**Do not clone into the module directory.** It sits under the document root,
+and a `.git` folder there is readable by anyone who guesses the URL — config,
+history, the lot. Clone *outside* and export *into* the target instead:
+
+```bash
+# once
+sudo git clone --depth 1 https://github.com/linuser/zabbix-network-topology.git /opt/nt-src
+
+# each update — path depends on your layout, see section 1
+UI=/usr/share/zabbix/ui/modules          # or /usr/share/zabbix/modules
+sudo git -C /opt/nt-src pull
+sudo git -C /opt/nt-src archive HEAD | sudo tar -x -C "$UI/network_topology" --exclude='widget*'
+sudo chown -R root:root "$UI/network_topology"
+sudo systemctl reload php8.2-fpm         # your service name may differ
+```
+
+`git archive` honours the `export-ignore` rules in `.gitattributes`, so what
+lands in the target is the same set as the release ZIP — no `tools/`, no
+`tests/`, no `deploy.sh`, and no `.git`. The `--exclude='widget*'` is there
+because the widgets are **separate modules** with their own target
+directories; install those from the release ZIPs, or extract them the same way
+into `$UI/network_topology_widget` and friends.
+
+Pin to a release instead of tracking `main` with
+`git -C /opt/nt-src checkout v5.3.0`.
+
 #### Upgrading from 4.x to 5.0
 
 5.0 drops the `_v6` suffix from every identifier — the directory is now `network_topology` instead of `network_topology_v6`. **The old directory has to go**, otherwise Zabbix registers both modules and the menu entry shows up twice:
@@ -481,6 +512,37 @@ Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm
 >
 > - **Einmal mit Cache-Umgehung neu laden** (Strg/Cmd + Umschalt + R). Das Bundle hat sich stark geändert; ein normales Neuladen liefert unter Umständen weiter das zwischengespeicherte, und man sieht die alte Oberfläche und wundert sich.
 > - **Die Karte folgt jetzt deinem Zabbix-Theme.** Steht im Profil ein dunkles Theme, zeichnet die Karte ab dem ersten Aufruf dunkel. Einen Schalter gibt es nicht — das ist die Absicht. Es wird nichts gespeichert, es ist nichts zu migrieren.
+
+#### Update per git
+
+Wer lieber dem Repository folgt, als jedes Mal eine ZIP zu laden: das gebaute
+Bundle ist eingecheckt, ein Checkout braucht also kein Node.
+
+**Nicht in das Modulverzeichnis klonen.** Es liegt unter dem Web-Root, und ein
+`.git`-Verzeichnis dort ist für jeden lesbar, der die URL errät — Konfiguration,
+Historie, alles. Stattdessen *außerhalb* klonen und *hinein* exportieren:
+
+```bash
+# einmalig
+sudo git clone --depth 1 https://github.com/linuser/zabbix-network-topology.git /opt/nt-src
+
+# bei jedem Update — Pfad je nach Layout, siehe Abschnitt 1
+UI=/usr/share/zabbix/ui/modules          # oder /usr/share/zabbix/modules
+sudo git -C /opt/nt-src pull
+sudo git -C /opt/nt-src archive HEAD | sudo tar -x -C "$UI/network_topology" --exclude='widget*'
+sudo chown -R root:root "$UI/network_topology"
+sudo systemctl reload php8.2-fpm         # Servicename kann abweichen
+```
+
+`git archive` beachtet die `export-ignore`-Regeln aus `.gitattributes`. Im Ziel
+landet damit derselbe Satz wie in der Release-ZIP — kein `tools/`, kein
+`tests/`, kein `deploy.sh` und kein `.git`. Das `--exclude='widget*'` steht da,
+weil die Widgets **eigene Module** mit eigenem Zielverzeichnis sind; die
+entweder aus den Release-ZIPs installieren oder auf demselben Weg nach
+`$UI/network_topology_widget` und so weiter entpacken.
+
+Statt `main` zu folgen, lässt sich mit
+`git -C /opt/nt-src checkout v5.3.0` auf ein Release festnageln.
 
 #### Umstieg von 4.x auf 5.0
 
