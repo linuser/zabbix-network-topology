@@ -19,7 +19,7 @@ import { t } from './i18n.js';
 import { primaryGroup, SEV_COL } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import {
-    NT_GROUP_VIEW_KEY, NT_LLDP_KEY, NT_PERF_KEY,
+    NT_GROUP_VIEW_KEY, NT_LLDP_KEY, NT_PERF_KEY, setGroupViewEffective,
     loadPositions, savePositions, loadPinned, loadNotes, loadLinks, addLink,
     loadLayout, loadTapholdMs
 } from './storage.js';
@@ -47,7 +47,7 @@ import { buildLayoutConfig } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
 import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
 import { isFocusActive, filterToFocus, dropFocus, renderFocusBanner } from './focus-mode.js';
-import { toast } from './toast.js';
+import { toast, toastTruncatedOnce } from './toast.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
 import { NT_GROUP_CLUSTER_KEY, NT_GHOSTS_KEY } from './storage.js';
@@ -151,8 +151,53 @@ export function render(wrap, nodes, edges, dataUrl) {
     });
 
     // Group-View aktiv? → Hosts werden zu Aggregat-Nodes verschmolzen.
-    let _groupViewActive = false;
-    try { _groupViewActive = localStorage.getItem(NT_GROUP_VIEW_KEY) === '1'; } catch (e) {}
+    //
+    // AB EINER SCHWELLE VON SELBST, nach demselben Muster wie der
+    // Performance-Modus weiter unten: eine ausdrueckliche Wahl gewinnt, sonst
+    // entscheidet die Groesse.
+    //
+    // Der Grund ist nicht Geschmack. Seit die Items stueckweise geholt werden,
+    // schafft das Backend auch 5.000 Hosts — der Browser wird damit zur
+    // naechsten Wand. Der Performance-Modus greift ab 400 Knoten und
+    // VEREINFACHT sie; jenseits von etwa tausend hilft das nicht mehr, weil
+    // ein Kraft-Layout ueber so viele Knoten Sekunden braucht und das Bild
+    // danach ohnehin niemand lesen kann. Dann ist die Gruppenansicht die
+    // ehrlichere Antwort: sie zeigt weniger, aber sie zeigt etwas.
+    //
+    // 1200 ist eine ABWAEGUNG, keine Messung — anders als die Zahlen im
+    // Backend, die aus Speichermessungen stammen. Sie liegt bewusst deutlich
+    // ueber der Perf-Schwelle, damit dazwischen der mildere Eingriff greift.
+    //
+    // '0' im localStorage heisst ausdruecklich AUS und schlaegt die Schwelle:
+    // wer im Kontextmenue "Gruppenansicht verlassen" waehlt, bekommt seine
+    // Einzelhosts, auch wenn es viele sind. Das ist die Notbremse, ohne die
+    // eine automatische Umschaltung eine Bevormundung waere.
+    const GROUP_VIEW_THRESHOLD = 1200;
+    let _groupViewPref = null;
+    try {
+        const _gv = localStorage.getItem(NT_GROUP_VIEW_KEY);
+        if (_gv !== null) _groupViewPref = (_gv === '1');
+    } catch (e) {}
+
+    const _autoGroup = _groupViewPref === null
+        && groupNames.length > 1
+        && nodes.length >= GROUP_VIEW_THRESHOLD;
+
+    let _groupViewActive = _groupViewPref !== null ? _groupViewPref : _autoGroup;
+    // Damit Toolbar und Kontextmenue denselben Zustand sehen wie die Karte.
+    setGroupViewEffective(_groupViewActive && groupNames.length > 0);
+
+    if (_autoGroup) {
+        // Einmal sagen, WARUM die Karte anders aussieht als erwartet, und wie
+        // man da wieder rauskommt. Ohne den Hinweis sieht es nach einem Fehler
+        // aus — die Hosts sind ja "weg".
+        // Stabile Kennung, NICHT die Knotenzahl: die schwankt bei jedem
+        // 30-Sekunden-Refresh um ein paar Hosts, und der Hinweis kaeme dann
+        // immer wieder. Einmal pro Sitzung genuegt.
+        toastTruncatedOnce('autogroup',
+            t('group.auto', { n: nodes.length }));
+    }
+
     if (_groupViewActive && groupNames.length > 0) {
         const agg = aggregateByGroup(nodes, edges);
         nodes = agg.nodes;

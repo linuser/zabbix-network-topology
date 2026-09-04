@@ -36,6 +36,23 @@ export const NT_LEGEND_COLLAPSED_KEY = 'nt_' + PFX + 'legend_collapsed';
 export const NT_PERF_KEY = 'nt_' + PFX + 'perf';
 export const NT_TAB_KEY        = 'nt_' + PFX + 'active_tab';
 export const NT_GROUP_VIEW_KEY = 'nt_' + PFX + 'group_view';
+
+// Der TATSAECHLICHE Zustand der Gruppenansicht, nicht die gespeicherte Wahl.
+//
+// Beides faellt seit der Schwelle auseinander: ist nichts gespeichert und die
+// Karte hat sehr viele Knoten, gruppiert render-tech von selbst. Der Schluessel
+// bleibt dabei absichtlich LEER — eine automatische Entscheidung soll keine
+// Vorliebe werden, sonst bliebe die Karte gruppiert, lange nachdem sie wieder
+// klein geworden ist.
+//
+// Ohne diesen Wert las die Toolbar den leeren Schluessel als "aus", zeigte den
+// Haken nicht, waehrend die Karte gruppiert war — und ihr Umschalter haette
+// beim Klick "an" gesetzt, also sichtbar nichts getan. render-tech schreibt
+// hier bei jedem Render den Zustand hinein, den es wirklich benutzt hat.
+let _groupViewEffective = false;
+
+export function setGroupViewEffective(on) { _groupViewEffective = !!on; }
+export function isGroupViewEffective()    { return _groupViewEffective; }
 const NT_SEV_FILTER_KEY = 'nt_' + PFX + 'sev_filter';
 const NT_LAYOUT_KEY     = 'nt_' + PFX + 'layout';
 const NT_GEO_PROVIDER_KEY = 'nt_' + PFX + 'geo_provider';

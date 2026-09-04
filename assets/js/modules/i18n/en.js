@@ -305,6 +305,7 @@ export default {
     'stats.agg_summary': '{events} events &middot; {hosts} hosts &middot; {triggers} triggers &middot; {from} – {to}',
     'stats.truncated': 'Note: backend limit reached',
     'warn.truncated': '⚠ Only the first {processed} of {requested} host groups were evaluated — narrow the selection for a complete picture.',
+    'group.auto': 'ℹ {n} hosts — switched to the group view automatically, because the per-host map would be unreadable here. Right-click → leave group view to show every host again.',
     'warn.edges_truncated': '⚠ {n} links not drawn — the map hit its upper limit and is incomplete. Narrow the selection.',
     'stats.col.host': 'Host',
     'stats.col.events': 'Events',

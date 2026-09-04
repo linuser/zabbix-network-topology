@@ -44,6 +44,16 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+- **Very large maps switch to the group view by themselves.** With the item
+  fetching fixed, the backend now copes with 5,000 hosts — which makes the
+  browser the next wall. The performance mode already simplifies nodes from
+  400 up, but past roughly a thousand that stops helping: a force layout over
+  that many nodes takes seconds, and nobody can read the result anyway. Above
+  1,200 nodes the map therefore aggregates by host group unless you have
+  explicitly chosen otherwise, and says so once. Right-click → leave group
+  view still shows every host — an automatic choice that cannot be overridden
+  would be a nuisance, not a help.
+
 - **Large host groups ran the frontend out of memory before drawing anything.**
   All metric items were fetched in a single unbounded API call. A row from
   the item API costs about 570 bytes — measured, not estimated: 200,000 items

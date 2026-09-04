@@ -15,6 +15,7 @@
 //     Lösung: setRenderCallback() injiziert die render-Funktion vom Hauptmodul.
 
 import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
+    isGroupViewEffective,
          NT_GHOSTS_KEY,
          clearPositions, savePositions, savePinned, clearLinks, defaultLinkScope,
          loadLayout, saveLayout,
@@ -376,7 +377,10 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
 
     // Group-View Toggle (zwischen einzelnen Hosts und Aggregaten)
     let _groupViewOn = false;
-    try { _groupViewOn = localStorage.getItem(NT_GROUP_VIEW_KEY) === '1'; } catch (e) {}
+    // Den TATSAECHLICHEN Zustand, nicht die gespeicherte Wahl: bei
+    // automatischer Gruppierung ist nichts gespeichert, die Karte ist aber
+    // gruppiert (siehe storage.js).
+    _groupViewOn = isGroupViewEffective();
     const bGroup = mkbtn('nt-btn-groupview',
         _groupViewOn ? t('toolbar.group.expand') : t('toolbar.group.collapse'), null);
     if (_groupViewOn) {
@@ -384,7 +388,10 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         bGroup.style.color = '#fff';
     }
     bGroup.onclick = function() {
-        const nowOn = localStorage.getItem(NT_GROUP_VIEW_KEY) !== '1';
+        // Gegen den SICHTBAREN Zustand schalten. Vorher wurde gegen den
+        // gespeicherten geschaltet — bei automatischer Gruppierung haette ein
+        // Klick "an" gesetzt und damit sichtbar nichts getan.
+        const nowOn = !isGroupViewEffective();
         try { localStorage.setItem(NT_GROUP_VIEW_KEY, nowOn ? '1' : '0'); } catch (e) {}
         const d = window._ntLastData || {};
         if (d.nodes && d.nodes.length) {
