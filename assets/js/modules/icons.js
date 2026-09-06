@@ -132,11 +132,50 @@ export function makeNodeImage(d) {
     // Severity-Ring bei Offline grau + dashed um klar zu signalisieren dass
     // die Severity stale ist (eingefrorene Trigger vor Disconnect).
     const ringStroke = offline ? '#9ca3af' : (dead ? '#94a3b8' : sevCol);
-    const ringDash   = offline ? ' stroke-dasharray="6,4"' : '';
     const ringOp     = (offline || dead) ? '0.6' : '1';
+
+    // ZWEI KANAELE FUER DIE SEVERITY, NICHT NUR FARBE.
+    //
+    // Bis 5.3 trug der Ring die Severity ausschliesslich im Farbton. Rechnet
+    // man die sechs Stufen in Graustufen um, liegen vier davon fast gleich
+    // hell: Normal 0,41 — Info 0,38 — Warning 0,44 — Average 0,33. Wer Rot und
+    // Gruen nicht unterscheidet, sieht bei vier von sechs Stufen dasselbe Bild.
+    // Erst High (0,23) und Disaster (0,08) heben sich ab — also ausgerechnet
+    // die beiden, bei denen ohnehin alles blinkt.
+    //
+    // Dagegen zwei Kanaele, die ohne Farbe funktionieren:
+    //
+    //   STAERKE, ueber alle sechs Stufen monoton. Sie ist nebenbei das, was
+    //   man ohnehin will — ein schlimmerer Zustand traegt mehr Gewicht.
+    //
+    //   KERBEN, gezaehlt statt gedeutet: ab Warning bekommt der Ring
+    //   severity-1 Luecken, also eine bei Warning bis vier bei Disaster.
+    //   Zaehlen ist eindeutig, auch fuer den, der gar keine Farben sieht.
+    //   Normal und Info bleiben ununterbrochen, damit eine ruhige Karte ruhig
+    //   aussieht und die Luecke wirklich "hier ist etwas" bedeutet.
+    //
+    // Offline STICHT das: dort bleibt der lange Strich, weil er eine andere
+    // Aussage macht (die Severity ist eingefroren, nicht aktuell). Zwei
+    // Strichmuster uebereinander waeren nicht mehr lesbar.
+    const sev       = Math.min(d.severity || 0, 5);
+    const ringWidth = [2, 2.5, 3, 3.5, 4.5, 5.5][sev];
+
+    let ringDash = '';
+    if (offline) {
+        ringDash = ' stroke-dasharray="6,4"';
+    }
+    else if (sev >= 2) {
+        // Umfang durch Kerbenzahl: gleich verteilte Luecken von 5 px.
+        const luecken = sev - 1;
+        const umfang  = 2 * Math.PI * RI;
+        const strich  = (umfang / luecken) - 5;
+        ringDash = ' stroke-dasharray="' + strich.toFixed(1) + ',5"';
+    }
+
     p += '<circle cx="' + C + '" cy="' + C + '" r="' + RI
        + '" fill="' + gc + '" fill-opacity="' + (offline || dead ? '0.08' : (dark ? '0.28' : '0.15'))
-       + '" stroke="' + ringStroke + '" stroke-width="3" opacity="' + ringOp + '"' + ringDash + '/>';
+       + '" stroke="' + ringStroke + '" stroke-width="' + ringWidth
+       + '" opacity="' + ringOp + '"' + ringDash + '/>';
 
     // Acknowledged-Indikator: dicker grüner Doppel-Außenring um den Severity-Ring.
     // Zeigt: alle aktiven Probleme dieses Hosts wurden bestätigt.

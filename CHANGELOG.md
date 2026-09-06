@@ -2,6 +2,33 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## Unreleased
+
+### Fixed
+
+- **Severity was carried by color alone.** The ring around a node encoded its
+  worst problem purely as a hue. Converted to greyscale, four of the six levels
+  land almost on top of each other — Normal 0.41, Info 0.38, Warning 0.44,
+  Average 0.33. Only High (0.23) and Disaster (0.08) stand apart, which is to
+  say: exactly the two where everything is flashing anyway. For anyone who does
+  not separate red from green, two thirds of the scale read the same.
+
+  The ring now carries the level in two channels that work without color.
+  **Width** rises monotonically across all six levels — which is what you want
+  regardless, since a worse state should carry more visual weight. And
+  **notches**: from Warning up, the ring gets `severity - 1` gaps, so one at
+  Warning through four at Disaster. Counting is unambiguous even with no color
+  vision at all. Normal and Info stay unbroken, so a calm map still looks calm
+  and a gap actually means something.
+
+  Offline overrides both: it keeps its long dash, because it makes a different
+  statement — the severity is frozen, not current — and two dash patterns on
+  one ring stop being readable.
+
+  The color guide was showing a filled dot per level, i.e. only the channel
+  that fails. It now draws the ring as the map draws it; a legend that shows a
+  different shape than the map teaches nothing.
+
 ## v5.3.0 — 2026-09-04
 
 ### Updating from 5.2 — nothing to do

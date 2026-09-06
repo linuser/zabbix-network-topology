@@ -99,6 +99,27 @@ export function setupBottomLegend(wrap, dark) {
         return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'
             + c + ';vertical-align:middle;margin-right:4px"></span>';
     }
+    // Der Severity-Ring, so wie ihn icons.js auf die Karte zeichnet: Staerke
+    // und Kerbenzahl steigen mit der Stufe.
+    //
+    // Hier stand vorher ein gefuellter Punkt — also ausgerechnet nur der
+    // Farbkanal, der ohne Farbsehen nichts hergibt. Eine Legende, die eine
+    // andere Form zeigt als die Karte, erklaert nichts; sie muss dasselbe
+    // Zeichen tragen, sonst lernt niemand die Kodierung.
+    function sevRing(sev) {
+        const R = 6.5, cx = 9;
+        const w = [1.4, 1.7, 2, 2.3, 2.9, 3.5][sev];
+        let dash = '';
+        if (sev >= 2) {
+            const luecken = sev - 1;
+            const strich  = (2 * Math.PI * R) / luecken - 2.2;
+            dash = ' stroke-dasharray="' + strich.toFixed(1) + ',2.2"';
+        }
+        return '<svg width="18" height="18" viewBox="0 0 18 18" style="vertical-align:middle;'
+            + 'margin-right:4px;flex-shrink:0"><circle cx="' + cx + '" cy="9" r="' + R
+            + '" fill="none" stroke="' + SEV_COL[sev] + '" stroke-width="' + w + '"'
+            + dash + '/></svg>';
+    }
     function line(c, dashed) {
         return '<span style="display:inline-block;width:16px;height:0;border-top:3px '
             + (dashed ? 'dashed' : 'solid') + ' ' + c + ';vertical-align:middle;margin-right:5px"></span>';
@@ -117,8 +138,8 @@ export function setupBottomLegend(wrap, dark) {
     // Knoten (Severity-Ring) — Optimal hervorgehoben, dann Info..Disaster,
     // Offline (grauer Ring + X) und Wartung/veraltet (gedimmt).
     let r1 = grpTitle(t('legend.guide.nodes'));
-    r1 += chip(dot(SEV_COL[0]) + '<b>' + esc(t('legend.guide.optimal')) + '</b>');
-    for (let i = 1; i <= 5; i++) r1 += chip(dot(SEV_COL[i]) + esc(SEV_LBL[i]));
+    r1 += chip(sevRing(0) + '<b>' + esc(t('legend.guide.optimal')) + '</b>');
+    for (let i = 1; i <= 5; i++) r1 += chip(sevRing(i) + esc(SEV_LBL[i]));
     r1 += chip('<span style="color:#dc2626;font-weight:800;margin-right:4px">✕</span>' + esc(t('legend.guide.offline')));
     // Wartung: der oranger gestrichelte Ring UND das Schluessel-Badge, so wie es
     // auf der Karte aussieht. Hier stand ein gedimmtes ◐ — ein Zeichen, das
