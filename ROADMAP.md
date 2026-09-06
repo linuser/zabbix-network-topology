@@ -32,11 +32,20 @@ und schreibt hin, was er gefunden hat.
 Schritt 1 ist mit `edge-detail.js` (5.3) gebaut: Klick auf eine Kante oeffnet
 ein bleibendes Panel mit Ports, Traffic, Auslastung und Interface-Zustand.
 
-**Offen sind die neuen Messwerte:** Errors, Drops und Link-Uptime aus
-`ifInErrors`, `ifOutDiscards`, `ifLastChange` — Standard-OIDs, die praktisch
-jedes Geraet liefert. Dazu Sparklines fuer RX/TX; die Action
-`network.topology.spark` existiert fuer Knoten, ob sie sich auf Port-Items
-umbiegen laesst, ist ungeprueft.
+**Errors und Drops sind seit 5.3 drin** — `ifInErrors` und `ifOutDiscards`
+werden je Port ausgewertet und im Kanten-Panel angezeigt, nicht mehr als
+Host-Summe. Ebenfalls dazugekommen: Portnamen aus `ifName`/`ifDescr`/`ifAlias`
+statt nackter Indizes.
+
+**Offen bleiben zwei Dinge:**
+
+- **Link-Uptime** aus `ifLastChange`. Ein Standard-OID, aber es steht in keinem
+  der mitgelieferten Templates — es braeuchte also eine Template-Aenderung und
+  damit einen Re-Import beim Nutzer. Das ist der Grund, warum es liegen blieb,
+  nicht der Aufwand im Code.
+- **Sparklines fuer RX/TX je Port.** Die Action `network.topology.spark`
+  existiert fuer Knoten; ob sie sich auf Port-Items umbiegen laesst, ist
+  weiterhin ungeprueft.
 
 > **Vorbehalt, der beim Bauen nicht verschwunden, sondern sichtbar geworden
 > ist:** die Zuordnung Port → Traffic setzt `lldpRemLocalPortNum == ifIndex`
@@ -45,7 +54,40 @@ umbiegen laesst, ist ungeprueft.
 > Unterschied noch staerker auf.
 
 
-### 2. Zabbix 8
+### 2. SLA-Bezug auf der Karte — geprueft, aber nicht gebaut
+
+Vorschlag: wenn in Zabbix **Services mit SLA** hinterlegt sind, Hosts anders
+markieren, deren Ausfall SLA-relevant ist. Beantwortet eine andere Frage als
+die Severity — nicht "wie schlimm", sondern "kostet es etwas".
+
+**Der technische Weg steht, und er ist besser als befuerchtet.** Die Sorge war,
+dass Services nicht an Hosts haengen, sondern ueber Problem-Tags definiert
+sind — die Auswertung nachzubauen waere fehleranfaellig, und ein FALSCHER
+SLA-Marker ist schlimmer als keiner. Das erledigt Zabbix aber selbst:
+`service.get` kennt **`selectProblemEvents`** und liefert je Service die
+betroffenen Ereignisse mit `eventid`. Die Karte laedt die Probleme ohnehin,
+jedes mit Event-ID und Host. Es bleibt ein **Join auf die Event-ID** — keine
+Tag-Logik, kein Nachbau. Dazu `sla.get`, verknuepft ueber Service-Tags.
+Geprueft an Zabbix 7.4.14.
+
+**Was fehlt, ist nicht die Technik, sondern der Platz.** Der Knoten traegt
+schon Severity-Ring, Problem-Zaehler, Offline-Kreuz, Wartungs-Symbol,
+Leistungs-Quadranten, Typ-Symbol und das Stale-Abzeichen. Ein siebtes Signal
+macht ihn unlesbar, und Farbe ist ohnehin an zu vielen Stellen der einzige
+Traeger von Zustand.
+
+**Und niemand kann es pruefen:** auf den erreichbaren Instanzen gibt es null
+Services und null SLAs. Genau die Konstellation, die unten unter „Nachmessen,
+nicht neu bauen" steht — drei Dinge waren dort gebaut, sahen richtig aus und
+wirkten nicht.
+
+**Wenn gebaut, dann nicht am Knoten anfangen:** eine Zeile in der KPI-Leiste
+(„3 Ausfaelle, davon 1 SLA-relevant") und ein Vermerk im Detail-Panel. Das ist
+der Satz, den ein Verantwortlicher wissen will, und er kostet keinen Millimeter
+auf der Karte. Markierung am Knoten erst, wenn sich zeigt, dass das nicht
+reicht.
+
+### 3. Zabbix 8
 
 Branch `feat/zabbix-8`: Guard (`nt-assign-guard.js`), 261 Zeilen Befundtext,
 auf zwei Installationen bestätigt. Merged **konfliktfrei** auf main, ist in
@@ -55,7 +97,7 @@ Kombination mit den Widget-Änderungen aber **ungetestet**.
 liegt nur 7.4). Ohne Testinstanz nicht verifizierbar, und ungetestet gehört es
 in kein Release.
 
-### 3. Layout-Import — neu entwerfen
+### 4. Layout-Import — neu entwerfen
 
 Der Import war gebaut und ist wieder ausgebaut worden. Der Export bleibt: er
 liest nur und löst bereits die Hälfte des Zwecks.
