@@ -226,17 +226,26 @@ sudo git clone --depth 1 https://github.com/linuser/zabbix-network-topology.git 
 # each update — path depends on your layout, see section 1
 UI=/usr/share/zabbix/ui/modules          # or /usr/share/zabbix/modules
 sudo git -C /opt/nt-src pull
-sudo git -C /opt/nt-src archive HEAD | sudo tar -x -C "$UI/network_topology" --exclude='widget*'
+sudo git -C /opt/nt-src archive HEAD | sudo tar -x -C "$UI/network_topology" \
+  --exclude='widget*' --exclude='tools*' --exclude='tests*' --exclude='templates*' \
+  --exclude='screenshots*' --exclude='dashboards*' --exclude='deploy.sh' \
+  --exclude='nt-*.sh' --exclude='package*.json' --exclude='eslint*' \
+  --exclude='CLAUDE.md' --exclude='ROADMAP.md' --exclude='.gitlab-ci.yml'
 sudo chown -R root:root "$UI/network_topology"
 sudo systemctl reload php8.2-fpm         # your service name may differ
 ```
 
-`git archive` honours the `export-ignore` rules in `.gitattributes`, so what
-lands in the target is the same set as the release ZIP — no `tools/`, no
-`tests/`, no `deploy.sh`, and no `.git`. The `--exclude='widget*'` is there
-because the widgets are **separate modules** with their own target
-directories; install those from the release ZIPs, or extract them the same way
-into `$UI/network_topology_widget` and friends.
+The exclusions are spelled out on purpose rather than hidden in a
+`.gitattributes`. An earlier version used `export-ignore` so that `git archive`
+produced the release set by itself — which was tidier to type and turned out to
+be a trap: GitHub's source tarball and "Download ZIP" are produced by
+`git archive` too, so contributors got a repository with no `tests/` and no
+`tools/`, and a CI job in a container without git silently checked out the same
+crippled tree. An explicit list is longer and does only what it says.
+
+`--exclude='widget*'` is there because the widgets are **separate modules**
+with their own target directories; install those from the release ZIPs, or
+extract them the same way into `$UI/network_topology_widget` and friends.
 
 Pin to a release instead of tracking `main` with
 `git -C /opt/nt-src checkout v5.3.0`.
@@ -529,17 +538,28 @@ sudo git clone --depth 1 https://github.com/linuser/zabbix-network-topology.git 
 # bei jedem Update — Pfad je nach Layout, siehe Abschnitt 1
 UI=/usr/share/zabbix/ui/modules          # oder /usr/share/zabbix/modules
 sudo git -C /opt/nt-src pull
-sudo git -C /opt/nt-src archive HEAD | sudo tar -x -C "$UI/network_topology" --exclude='widget*'
+sudo git -C /opt/nt-src archive HEAD | sudo tar -x -C "$UI/network_topology" \
+  --exclude='widget*' --exclude='tools*' --exclude='tests*' --exclude='templates*' \
+  --exclude='screenshots*' --exclude='dashboards*' --exclude='deploy.sh' \
+  --exclude='nt-*.sh' --exclude='package*.json' --exclude='eslint*' \
+  --exclude='CLAUDE.md' --exclude='ROADMAP.md' --exclude='.gitlab-ci.yml'
 sudo chown -R root:root "$UI/network_topology"
 sudo systemctl reload php8.2-fpm         # Servicename kann abweichen
 ```
 
-`git archive` beachtet die `export-ignore`-Regeln aus `.gitattributes`. Im Ziel
-landet damit derselbe Satz wie in der Release-ZIP — kein `tools/`, kein
-`tests/`, kein `deploy.sh` und kein `.git`. Das `--exclude='widget*'` steht da,
-weil die Widgets **eigene Module** mit eigenem Zielverzeichnis sind; die
-entweder aus den Release-ZIPs installieren oder auf demselben Weg nach
-`$UI/network_topology_widget` und so weiter entpacken.
+Die Ausschlüsse stehen absichtlich ausgeschrieben da statt versteckt in einer
+`.gitattributes`. Eine frühere Fassung nutzte `export-ignore`, damit
+`git archive` den Release-Satz von allein liefert — kürzer zu tippen und eine
+Falle: GitHubs Quelltext-Tarball und der „Download ZIP"-Knopf werden ebenfalls
+mit `git archive` erzeugt. Beitragende bekamen also ein Repository ohne
+`tests/` und ohne `tools/`, und ein CI-Job in einem Container ohne git holte
+sich still denselben verstümmelten Baum. Eine ausgeschriebene Liste ist länger
+und tut nur, was dasteht.
+
+Das `--exclude='widget*'` steht da, weil die Widgets **eigene Module** mit
+eigenem Zielverzeichnis sind; die entweder aus den Release-ZIPs installieren
+oder auf demselben Weg nach `$UI/network_topology_widget` und so weiter
+entpacken.
 
 Statt `main` zu folgen, lässt sich mit
 `git -C /opt/nt-src checkout v5.3.0` auf ein Release festnageln.

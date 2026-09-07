@@ -33,6 +33,31 @@ jobs:
     runs-on: ubuntu-latest
     container: php:8.2-cli-alpine
     steps:
+      # git vor dem Checkout: sonst weicht actions/checkout auf den
+      # API-TARBALL aus, und der wird mit `git archive` erzeugt.
+      #
+      # Das ist kein theoretisches Risiko, sondern hat sechs Laeufe lang die
+      # Pipeline rot gefaerbt. Eine .gitattributes mit export-ignore auf
+      # tests/ und tools/ liess `git archive` genau diese Verzeichnisse
+      # weglassen — und damit fehlten sie auch im CI-Checkout. Der Job lief
+      # trotzdem los, php -l fand die vorhandenen Dateien, und erst die
+      # Testschleife fiel auf die Nase, weil `tests/*Test.php` auf nichts
+      # passte und die Shell das Muster woertlich weiterreichte:
+      #
+      #     --- tests/*Test.php
+      #     Could not open input file: tests/*Test.php
+      #
+      # Lokal waren alle dreizehn Gates gruen, weil dort das ganze Repository
+      # liegt. Die .gitattributes ist inzwischen weg, aber die Zeile bleibt:
+      # sie macht den Checkout zu einem echten Klon statt zu einem Download,
+      # und sie schuetzt vor derselben Falle, falls jemand export-ignore
+      # wieder einfuehrt.
+      #
+      # Die beiden anderen Jobs laufen auf ubuntu-latest OHNE Container, dort
+      # ist git vorhanden. Wer hier einen weiteren Container-Job ergaenzt,
+      # braucht diese Zeile ebenfalls.
+      - name: git (sonst kommt statt eines Klons nur ein Archiv)
+        run: apk add --no-cache git
       - uses: actions/checkout@v4
       - name: php-lint
         run: find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
