@@ -185,6 +185,47 @@ check('Hostids bleiben Hostids',          isset($amStueck['port_traffic']['h2'])
 $leer = MetricExtractor::merge([], MetricExtractor::extract($mA));
 check('leerer Akkumulator liefert das Stueck', $leer == MetricExtractor::extract($mA), true);
 
+// ── hrStorageType als OID und hrProcessorLoad ueber mehrere Kerne ────────
+//
+// Beides kam aus dem Projekt-Review. Der OID-Fall scheiterte an einem
+// (float)-Cast weiter oben, der aus "1.3.6.1.2.1.25.2.1.2" die Zahl 1.3
+// machte — RAM wurde nie erkannt. Und hrProcessorLoad halbierte fortlaufend,
+// statt zu mitteln.
+echo "\n  MetricExtractor — SNMP-Speicher und Mehrkern-CPU\n\n";
+
+$it = function ($id, $hid, $key, $val) {
+    return ['itemid' => (string) $id, 'hostid' => $hid, 'key_' => $key,
+            'name' => $key, 'value_type' => '3', 'lastvalue' => $val];
+};
+
+$mem = MetricExtractor::extract([
+    $it(1, 'hs', 'hrStorageType[1]', '1.3.6.1.2.1.25.2.1.2'),
+    $it(2, 'hs', 'hrStorageUsed[1]', '512'),
+    $it(3, 'hs', 'hrStorageSize[1]', '1024'),
+]);
+check('RAM per OID erkannt (50%)', (int) round($mem['memory']['hs'] ?? -1), 50);
+
+$mem2 = MetricExtractor::extract([
+    $it(1, 'hs', 'hrStorageType[1]', '2'),
+    $it(2, 'hs', 'hrStorageUsed[1]', '256'),
+    $it(3, 'hs', 'hrStorageSize[1]', '1024'),
+]);
+check('RAM als Ganzzahl weiterhin erkannt', (int) round($mem2['memory']['hs'] ?? -1), 25);
+
+// Acht Kerne, einer auf 80 % -> Mittelwert 10 %, nicht 0,6 %.
+$cpuItems = [];
+$werte = [80, 0, 0, 0, 0, 0, 0, 0];
+foreach ($werte as $n => $w) {
+    $cpuItems[] = $it(10 + $n, 'hc', 'hrProcessorLoad[' . ($n + 1) . ']', (string) $w);
+}
+$cpu = MetricExtractor::extract($cpuItems);
+check('Achtkerner wird gemittelt, nicht halbiert', (float) ($cpu['cpu']['hc'] ?? -1), 10.0);
+
+// Reihenfolge darf das Ergebnis nicht aendern.
+$cpuRev = MetricExtractor::extract(array_reverse($cpuItems));
+check('Reihenfolge der Items ist egal',
+      (float) ($cpuRev['cpu']['hc'] ?? -1), (float) ($cpu['cpu']['hc'] ?? -2));
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

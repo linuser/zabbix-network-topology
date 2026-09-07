@@ -91,6 +91,10 @@ final class MetricExtractor {
         $lldp_ports     = [];   // hid => [snmpindex => ['id'=>?, 'desc'=>?]]
         $lldp_meta      = [];   // hid => [snmpindex => ['desc'|'caps'|'chassis']]
         $host_cpu       = [];
+        // hrProcessorLoad: Summe und Kernzahl getrennt, damit am Ende ein
+        // echter Mittelwert steht und nicht eine Kette von Halbierungen.
+        $hr_cpu_sum     = [];
+        $hr_cpu_cnt     = [];
         $host_mem_used  = [];   // bytes (used)
         $host_mem_total = [];   // bytes (total)
         $host_mem_avail = [];   // bytes (available/free) \u2014 wenn used fehlt
@@ -359,12 +363,19 @@ final class MetricExtractor {
                 // Windows: perf_counter[\Processor(_Total)\% Processor Time]
                 if (!isset($host_cpu[$hid])) $host_cpu[$hid] = round($val, 1);
             } elseif (strpos($key, 'hrProcessorLoad') !== false) {
-                // HOST-RESOURCES-MIB: average across CPUs
-                if (!isset($host_cpu[$hid])) {
-                    $host_cpu[$hid] = round($val, 1);
-                } else {
-                    $host_cpu[$hid] = round(($host_cpu[$hid] + $val) / 2, 1);
-                }
+                // ECHTER Mittelwert ueber alle Kerne — Summe und Anzahl
+                // getrennt fuehren, erst am Ende teilen.
+                //
+                // Hier stand ($alt + $neu) / 2 je weiterem Kern. Das ist keine
+                // Mittelung, sondern eine fortlaufende Halbierung: der zuletzt
+                // gelesene Kern wiegt die Haelfte, der erste bei acht Kernen
+                // noch ein Hundertachtundzwanzigstel. Ein Achtkerner mit
+                // [80,0,0,0,0,0,0,0] ergab 0,6 % statt 10 %, und weil die
+                // Reihenfolge der Items mitentscheidet, konnte derselbe Host
+                // zwischen zwei Abfragen verschiedene Werte zeigen.
+                $hr_cpu_sum[$hid] = ($hr_cpu_sum[$hid] ?? 0.0) + $val;
+                $hr_cpu_cnt[$hid] = ($hr_cpu_cnt[$hid] ?? 0) + 1;
+                $host_cpu[$hid]   = round($hr_cpu_sum[$hid] / $hr_cpu_cnt[$hid], 1);
             } elseif ($key === 'ssCpuUser' || $key === 'ssCpuSystem') {
                 if (!isset($host_cpu[$hid])) $host_cpu[$hid] = 0.0;
                 $host_cpu[$hid] = round($host_cpu[$hid] + $val, 1);
@@ -416,7 +427,17 @@ final class MetricExtractor {
                 $idx = $m[1] ?? '0';
                 // hrStorageType kann als Integer (2) oder OID-String kommen:
                 // "2", ".2", "1.3.6.1.2.1.25.2.1.2" -> alle bedeuten RAM
-                $hr_type_raw = trim((string) $val);
+                // ROHWERT, nicht $val.
+                //
+                // $val ist weiter oben (float)-gecastet, und aus dem OID
+                // "1.3.6.1.2.1.25.2.1.2" macht das die Zahl 1.3. Damit schlug
+                // JEDER Test hier fehl: nicht "2", nicht ".2", endet nicht auf
+                // ".2", enthaelt kein "25.2.1.2". RAM wurde also nie erkannt —
+                // der Knoten zeigte dauerhaft "—" fuer Speicher, obwohl
+                // hrStorageUsed und hrStorageSize vorlagen. Schlimmer noch:
+                // "1.3" endet auf ".3" und lief damit in den Zweig fuer
+                // VIRTUELLEN Speicher.
+                $hr_type_raw = trim((string) ($item['lastvalue'] ?? ''));
                 if (
                     $hr_type_raw === '2' ||
                     $hr_type_raw === '.2' ||

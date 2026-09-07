@@ -101,16 +101,22 @@ class NetworkTopologySpark extends NetworkTopologyController {
                 $cpu_items[$hid] = $itemid;
             } elseif (strpos($key, 'icmppingsec') !== false && !isset($ping_items[$hid])) {
                 $ping_items[$hid] = $itemid;
+            // Fehler- und Verwurf-Zaehler sind KEIN Traffic.
+            //
+            // net.if.in["eth0",errors] beginnt mit "net.if.in" und landete
+            // sonst als Durchsatz in der Sparkline. CapacityForecast filtert
+            // dieselben Schluessel ausdruecklich heraus und nennt sich dabei
+            // ein Spiegelbild der Daten-Action — Spark wurde nie nachgezogen.
+            } elseif (preg_match('/[,.](?:errors|dropped|discards)\b/i', $key)) {
+                continue;
             } elseif (strpos($key, 'net.if.in') === 0 || strpos($key, 'ifInOctets') !== false
                   || strpos($key, 'ifHCInOctets') !== false) {
                 $trIn_items[$hid][] = $itemid;
-                // net.if.in liefert bps direkt (oder bytes/s — die Render-Tabelle
-                // multipliziert auch *8 fuer Octets-Keys), Octets sind Bytes/s → *8.
-                $trIn_scale[$itemid] = (strpos($key, 'Octets') !== false) ? 8 : 1;
+                $trIn_scale[$itemid] = self::bitFaktor($key);
             } elseif (strpos($key, 'net.if.out') === 0 || strpos($key, 'ifOutOctets') !== false
                   || strpos($key, 'ifHCOutOctets') !== false) {
                 $trOut_items[$hid][] = $itemid;
-                $trOut_scale[$itemid] = (strpos($key, 'Octets') !== false) ? 8 : 1;
+                $trOut_scale[$itemid] = self::bitFaktor($key);
             }
         }
 
@@ -136,7 +142,9 @@ class NetworkTopologySpark extends NetworkTopologyController {
                 'time_from' => $timeFrom,
                 'time_till' => $now,
                 'sortfield' => 'clock',
-                'sortorder' => 'ASC',
+                // DESC, nicht ASC — sonst liefert das gemeinsame Limit die
+                // AELTESTEN Zeilen. Siehe den Block hinter der Schleife.
+                'sortorder' => 'DESC',
                 'limit'     => max(30, count($cp_item_ids) * 30),
             ]);
             foreach ($hist as $h) {
@@ -152,7 +160,7 @@ class NetworkTopologySpark extends NetworkTopologyController {
                     'time_from' => $timeFrom,
                     'time_till' => $now,
                     'sortfield' => 'clock',
-                    'sortorder' => 'ASC',
+                    'sortorder' => 'DESC',
                     'limit'     => max(60, count($tr_item_ids) * 60),
                 ]);
                 foreach ($hist as $h) {
@@ -161,7 +169,21 @@ class NetworkTopologySpark extends NetworkTopologyController {
             }
         }
 
-        // ── 3. "Seit wann" — letzter Problem-Event pro Host ──────────────────
+        // AUFSTEIGEND SORTIEREN, nachdem absteigend geholt wurde.
+        //
+        // Die Abfragen oben holen DESC, und das ist der eigentliche Fix: das
+        // Limit gilt fuer ALLE itemids zusammen, nicht pro Item. Mit ASC
+        // lieferte Zabbix die aeltesten Zeilen des Zeitfensters — die
+        // "letzte Stunde" endete dann mitten drin, und ein Item mit kurzem
+        // Intervall ass das Budget der anderen auf, die dadurch ganz
+        // leer blieben. Mit DESC sind die NEUESTEN Zeilen sicher dabei; die
+        // Reihenfolge fuer die Darstellung stellen wir hier wieder her.
+        foreach ($history_map as $iid => &$_reihe) {
+            usort($_reihe, static function ($a, $b) { return $a['clock'] <=> $b['clock']; });
+        }
+        unset($_reihe);
+
+        // ── 3.        // ── 3. "Seit wann" — letzter Problem-Event pro Host ──────────────────
         // Wir holen den ältesten noch aktiven Problem-Event pro Host
         $since_map = [];   // hostid -> clock
 
@@ -229,6 +251,27 @@ class NetworkTopologySpark extends NetworkTopologyController {
     /**
      * Gleichmäßiges Subsampling eines Arrays auf max $n Werte.
      */
+    /**
+     * Bit-Faktor fuer einen Traffic-Schluessel — DIESELBE Regel wie
+     * MetricExtractor::extract().
+     *
+     * Dort steht: `$bits = (strpos($key, 'net.if') === 0) ? $val : $val * 8;`
+     * Ein net.if*-Schluessel liefert bereits Bit/s, ein roher Octets-Zaehler
+     * Byte/s.
+     *
+     * Hier stand stattdessen "enthaelt der Schluessel 'Octets'?" — und das
+     * trifft auch auf die modernen Template-Schluessel zu, etwa
+     * net.if.in[ifHCInOctets.8]. Der Tooltip zeigte damit den ACHTFACHEN Wert
+     * der Kantenbeschriftung fuer dieselbe Schnittstelle, und der
+     * Kapazitaets-Forecast wieder etwas Drittes.
+     *
+     * Die Regel gehoert eigentlich an EINE Stelle. Bis dahin steht hier
+     * wenigstens dabei, wo das Original liegt.
+     */
+    private static function bitFaktor(string $key): int {
+        return strpos($key, 'net.if') === 0 ? 1 : 8;
+    }
+
     private function sample(array $arr, int $n): array {
         $len = count($arr);
         if ($len <= $n || $len === 0) return $arr;
