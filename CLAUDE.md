@@ -102,6 +102,18 @@ Eine Stelle ändern heißt: die andere mitändern.
     müssen dieselben Schlüssel tragen)
   - PHP → `_('English text')`, Zabbix' eigene Übersetzungsfunktion
   - **Widgets → schlicht Englisch.** Dort gibt es kein `t()`.
+- **Commit-Nachrichten: Englisch.** Ab 09/2026, der Bestand bleibt deutsch —
+  eine veröffentlichte Historie umzuschreiben lohnt für eine Formulierung
+  nicht, und auf GitHub ist `main` ohnehin gegen Rewrites geschützt (ein
+  `--force` dorthin scheitert an `protected branch hook declined`). Der Grund
+  für den Wechsel: das Projekt hat inzwischen Beitragende und Melder, die kein
+  Deutsch lesen, und die Commit-Nachrichten sind hier ausführlich genug, um
+  Teil der Dokumentation zu sein.
+- **`i18n/de.js` enthält DEUTSCHE Texte** — anders als der Rest der Regel
+  oben, und das ist kein Widerspruch: die Datei IST die deutsche Übersetzung.
+  `ci:i18n` prüft deutschen Text im **Code**, nicht die Sprache in der
+  deutschen Sprachdatei. Eine englische Zeichenkette dort fällt also durch
+  kein Gate — schon passiert.
 
 ## Code-Stil
 
