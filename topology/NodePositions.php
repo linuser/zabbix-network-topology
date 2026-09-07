@@ -79,7 +79,18 @@ final class NodePositions {
     private const ID_PATTERN = '/^[A-Za-z0-9_.:-]{1,128}$/';
 
     /** View-Key: sortierte Group-IDs mit "_" verbunden, optional "_grp". */
-    private const VIEW_PATTERN = '/^[0-9_]{0,200}$/';
+    // Zwei Formen, weil es zwei Ansichten gibt:
+    //   "10084_10085"   — Hostgruppen, IDs sortiert und mit _ verbunden
+    //   "host10084_h2"  — EIN Host plus Hop-Radius
+    //
+    // Die zweite fehlte. Der Client baut sie seit der Hop-Ansicht
+    // (storage.js: 'host' + hostid + '_h' + hops), der Server verwarf sie
+    // still: sanitize() sprang per continue ueber die ganze Ansicht, und
+    // dieser Fall zaehlt NICHT in $truncated. Die Action antwortete also mit
+    // ok, ohne Hinweis, ohne Zaehler — und beim naechsten Laden war die
+    // Anordnung weg. Fuer jeden Benutzer, dauerhaft, seit es die Hop-Ansicht
+    // gibt.
+    private const VIEW_PATTERN = '/^(?:[0-9_]{0,200}|host[0-9]{1,20}_h[0-9]{1,2})$/';
 
     /**
      * Wie viele Knoten der letzte sanitize()-Lauf wegen MAX_NODES verworfen hat.

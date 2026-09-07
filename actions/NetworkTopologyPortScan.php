@@ -216,8 +216,23 @@ class NetworkTopologyPortScan extends NetworkTopologyController {
         $errno  = 0;
         $errstr = '';
 
+        // IPv6-Literale MUESSEN in eckige Klammern.
+        //
+        // Ohne sie entsteht aus 2001:db8::1 und Port 443 die Zeichenkette
+        // "tcp://2001:db8::1:443" — der Doppelpunkt vor dem Port ist von den
+        // Doppelpunkten der Adresse nicht zu unterscheiden. Der Aufruf
+        // scheitert oder verbindet sich mit etwas anderem; in beiden Faellen
+        // meldet der Portscan fuer jeden IPv6-Host "geschlossen", ohne dass
+        // ein Fehler sichtbar wird. Gemeldet in einem externen Audit.
+        //
+        // FILTER_FLAG_IPV6 statt einer Suche nach ':', damit ein Hostname
+        // nicht versehentlich geklammert wird.
+        $ziel = filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+            ? '[' . $host . ']'
+            : $host;
+
         $sock = @stream_socket_client(
-            'tcp://' . $host . ':' . $port,
+            'tcp://' . $ziel . ':' . $port,
             $errno,
             $errstr,
             self::TIMEOUT,

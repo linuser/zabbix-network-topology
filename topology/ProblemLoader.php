@@ -142,20 +142,31 @@ final class ProblemLoader {
                 if ($is_acked) {
                     $host_ack_acked[$hid] = ($host_ack_acked[$hid] ?? 0) + 1;
                 }
-                // Cap pro Host: 20 Probleme reichen für die UI; mehr würden
-                // den Accordion unbrauchbar machen und den Payload aufblähen.
+                // ERST SAMMELN, SPAETER KAPPEN — nicht umgekehrt.
+                //
+                // Hier wurde direkt beim Einsammeln bei MAX_PER_HOST
+                // abgeschnitten, und die API liefert nach eventid DESC, also
+                // NEUESTE zuerst. Die Sortierung nach Severity kommt erst
+                // danach. Ein Host mit 25 offenen Problemen, dessen einziges
+                // Disaster das aelteste ist, verlor damit genau dieses eine:
+                // die Liste zeigte zwanzig Warnungen, waehrend der Knoten aus
+                // der Trigger-Aggregation rot blieb. Panel und Symbol
+                // widersprachen sich, und zwar ausgerechnet im schlimmsten Fall.
                 if (!isset($host_problem_list[$hid])) $host_problem_list[$hid] = [];
-                if (count($host_problem_list[$hid]) < self::MAX_PER_HOST) {
-                    $host_problem_list[$hid][] = $entry;
-                }
+                $host_problem_list[$hid][] = $entry;
             }
         }
-        // Pro Host: nach Severity desc, dann nach Clock desc (neueste oben).
+        // Pro Host: nach Severity desc, dann nach Clock desc (neueste oben) —
+        // und ERST DANACH auf MAX_PER_HOST kappen, damit die Kappung die
+        // unwichtigsten trifft und nicht die aeltesten.
         foreach ($host_problem_list as $hid => &$list) {
             usort($list, function($a, $b) {
                 if ($a['severity'] !== $b['severity']) return $b['severity'] - $a['severity'];
                 return $b['clock'] - $a['clock'];
             });
+            if (count($list) > self::MAX_PER_HOST) {
+                $list = array_slice($list, 0, self::MAX_PER_HOST);
+            }
         }
         unset($list);
 

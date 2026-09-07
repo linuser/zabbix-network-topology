@@ -131,6 +131,25 @@ for ($i = 0; $i < 60; $i++) {
 }
 check('View-Cap bei 50',        views($manyViews), 50);
 
+// ── Hop-Ansicht: eigener View-Schluessel ─────────────────────────────────
+//
+// Der Client baut fuer "ein Host plus Hop-Radius" den Schluessel
+// host<id>_h<n> (storage.js). Der Server kannte nur die Zahlenform und
+// verwarf die Ansicht still — ok als Antwort, kein Zaehler, Anordnung beim
+// naechsten Laden weg.
+echo "\n  NodePositions — Hop-Ansicht\n\n";
+
+$hop = NodePositions::sanitize([
+    'host10084_h2'      => ['10085' => ['x' => 10, 'y' => 20]],
+    'host10084_h2_grp'  => ['10086' => ['x' => 30, 'y' => 40]],
+    '22_23'             => ['10087' => ['x' => 50, 'y' => 60]],
+    'hostABC_h2'        => ['10088' => ['x' => 70, 'y' => 80]],
+]);
+check('Hop-Ansicht bleibt erhalten',        isset($hop['host10084_h2']), true);
+check('Hop-Ansicht mit _grp bleibt',        isset($hop['host10084_h2_grp']), true);
+check('Gruppen-Ansicht unveraendert',       isset($hop['22_23']), true);
+check('unsinniger Schluessel faellt raus',  isset($hop['hostABC_h2']), false);
+
 echo $failures === 0
     ? "\n  NodePositionsTest: alle Pruefungen bestanden\n"
     : "\n  NodePositionsTest: {$failures} Fehler\n";

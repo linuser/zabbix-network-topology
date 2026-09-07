@@ -488,13 +488,21 @@ $confVon = function(array $ping) use ($hRtt, $rawRtt) {
     return $e === null ? -1 : (int) $e['confidence'];
 };
 
+// WERTE IN MILLISEKUNDEN — so legt MetricExtractor sie ab.
+//
+// Die erste Fassung dieses Tests fuetterte Sekunden (0.001 fuer 1 ms) und
+// bestand, waehrend der Code intern noch einmal mit 1000 multiplizierte. Er
+// pruefte damit meine Annahme ueber die Einheit statt die Wirklichkeit — und
+// in der Wirklichkeit bekam jede Kante in einem gesunden LAN den vollen
+// Abschlag. Ein Test mit der falschen Einheit ist schlimmer als keiner: er
+// gibt Sicherheit, die es nicht gibt.
 $ohne   = $confVon([]);
-$nah    = $confVon(['r1' => 0.001, 'r2' => 0.002]);   // 1 ms Unterschied
-$traege = $confVon(['r1' => 0.001, 'r2' => 0.050]);   // 49 ms — Switch-CPU
-$fern   = $confVon(['r1' => 0.001, 'r2' => 0.150]);   // 149 ms — andere Strecke
-$sehr   = $confVon(['r1' => 0.001, 'r2' => 0.400]);   // 399 ms
+$nah    = $confVon(['r1' => 0.5, 'r2' => 1.2]);     // 0,7 ms — dasselbe LAN
+$traege = $confVon(['r1' => 1.0, 'r2' => 50.0]);    // 49 ms — traege Switch-CPU
+$fern   = $confVon(['r1' => 1.0, 'r2' => 150.0]);   // 149 ms — andere Strecke
+$sehr   = $confVon(['r1' => 1.0, 'r2' => 400.0]);   // 399 ms
 
-check('ohne Laufzeitdaten unveraendert',        $nah,    $ohne);
+check('gesundes LAN wird NICHT abgewertet',     $nah,    $ohne);
 check('traeger Switch wird NICHT abgewertet',   $traege, $ohne);
 check('grosser Abstand kostet Punkte',          $fern < $ohne, true);
 check('sehr grosser Abstand kostet mehr',       $sehr < $fern,  true);
@@ -503,9 +511,25 @@ check('sehr grosser Abstand kostet mehr',       $sehr < $fern,  true);
 $hProxy = $hRtt;
 $hProxy['r2']['proxyid'] = '7';
 $rProxy = LldpEdgeBuilder::build($hProxy, $rawRtt, [], [], [], [], [], [], [],
-                                 ['r1' => 0.001, 'r2' => 0.400]);
+                                 ['r1' => 1.0, 'r2' => 400.0]);
 $eProxy = findEdge($rProxy['edges'], 'r1', 'r2');
 check('verschiedene Proxies: kein Abschlag',    (int) $eProxy['confidence'], $ohne);
+
+// ── Self-Loop mit NUMERISCHEN Host-IDs ───────────────────────────────────
+//
+// Alle Tests oben benutzen 'h1'/'aruba' als Host-ID. Echte Zabbix-Hostids sind
+// numerisch, und PHP normalisiert numerische Array-Schluessel zu int — der
+// Guard verglich deshalb int gegen string und war immer falsch. Genau die
+// Konstellation, die der Test nie hatte.
+echo "\n  LldpEdgeBuilder — Self-Loop bei numerischen Host-IDs\n\n";
+
+$hNum = ['10084' => ['host' => 'sw-core', 'name' => 'sw-core']];
+$rNum = LldpEdgeBuilder::build($hNum, [
+    ['hostid' => '10084', 'key_' => 'lldpRemSysName[0.1.1]',
+     'lastvalue' => 'sw-core', 'src' => 'lldp'],
+]);
+check('kein Self-Loop als Kante',      count($rNum['edges']), 0);
+check('self-Zaehler greift',           (int) ($rNum['quality']['10084']['self'] ?? 0), 1);
 
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"

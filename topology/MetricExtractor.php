@@ -271,6 +271,7 @@ final class MetricExtractor {
                  || strpos($key, 'cdpCacheDeviceId')  !== false   // Cisco CDP
                  || strpos($key, 'neighbor.sysName')  !== false   // generisch / Ubiquiti
                  || strpos($key, 'discovery.neighbor') !== false  // MikroTik & andere
+                 || strpos($key, 'mndp') !== false                // MikroTik MNDP
                  || preg_match('/(?:^|\.)(lldp.*sysname|cdp.*device)/i', $key)
                  )) {
                 // uplink.id (UniFi Network API): KEIN Geraete-Protokoll wie LLDP/CDP,
@@ -294,6 +295,13 @@ final class MetricExtractor {
                 // mndp.neighbor oder neighbor.mndp nennt, bekommt die eigene
                 // Quelle. Ein blosses discovery.neighbor bleibt 'other',
                 // weil dort nicht drinsteht, welches Protokoll es war.
+                //
+                // Der Schluessel muss dafuer auch durch die Bedingung OBEN
+                // kommen — das war beim ersten Anlauf nicht so. Die Zuordnung
+                // hier stand da, aber kein mndp-Schluessel erreichte sie je,
+                // weil die umschliessende Bedingung ihn gar nicht einliess.
+                // Tote Zuordnung mit einem Kommentar, der das Gegenteil
+                // behauptete.
                 $src = ($key === 'uplink.id')            ? 'unifi'
                     : ((strpos($key, 'mndp') !== false)  ? 'mndp'
                     : ((strpos($key, 'cdp')  !== false)  ? 'cdp'

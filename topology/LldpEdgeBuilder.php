@@ -248,7 +248,20 @@ final class LldpEdgeBuilder {
                     }
                     continue;
                 }
-                if ($rhid === $rid) {
+                // (string)-Vergleich, NICHT ===.
+                //
+                // $hosts kommt aus API::Host()->get([...'preservekeys' => true]),
+                // und PHP normalisiert numerische Array-Schluessel zu int. $rhid
+                // ist damit 10084, waehrend $rid = $item['hostid'] der rohe
+                // API-String "10084" ist. Ein striktes === war immer falsch:
+                // der Self-Loop wurde nie erkannt, ein Host der sich selbst
+                // meldet bekam eine echte Schleifen-Kante, und die "self"-Spalte
+                // im LLDP-Q-Tab stand auf JEDER Installation auf null.
+                //
+                // Im Test faellt das nicht auf, weil die Host-IDs dort
+                // 'h1'/'aruba' heissen — nicht numerisch, also keine
+                // Normalisierung, also stimmen die Typen zufaellig ueberein.
+                if ((string) $rhid === (string) $rid) {
                     // Self-Loop ignorieren (Host meldet sich selbst als Nachbarn)
                     $lldp_quality[$rid]['self']++;
                     continue;
@@ -654,8 +667,16 @@ final class LldpEdgeBuilder {
             return 0;
         }
 
-        // icmppingsec liefert SEKUNDEN.
-        $diff_ms = abs($ra - $rb) * 1000.0;
+        // MetricExtractor legt den Wert bereits in MILLISEKUNDEN ab
+        // (round($val * 1000, 1) bei icmppingsec) — hier NICHT noch einmal
+        // umrechnen.
+        //
+        // Genau das stand hier zuerst, und der Fehler war schlimmer als er
+        // aussieht: aus 0,5 ms und 1,2 ms wurden 700 "ms", also der volle
+        // Abschlag von 20 Punkten auf JEDE Kante in einem gesunden LAN. Der
+        // Test hat es nicht gefangen, weil ich ihn mit Sekundenwerten
+        // gefuettert habe — er pruefte meine Annahme, nicht die Wirklichkeit.
+        $diff_ms = abs($ra - $rb);
 
         if ($diff_ms > 250.0) {
             return 20;

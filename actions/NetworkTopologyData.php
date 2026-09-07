@@ -366,6 +366,19 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // 32bit, ifHighSpeed = Mbps 64bit; matcht auch die modernen
                     // net.if.speed[ifHighSpeed.X]-Template-Keys via Substring)
                     'ifHighSpeed', 'ifSpeed',
+                    // Interface-NAMEN. Ohne sie heisst der Port "9" statt
+                    // "Gi1/0/9" — und die Normalisierung, die der Gegenseite
+                    // Messwerte verschafft, hat nichts zu vergleichen.
+                    //
+                    // Sie fehlten hier, obwohl MetricExtractor sie seit 5.3
+                    // auswertet und LLDP-SETUP.md sie als Funktion beschreibt.
+                    // Der Zweig war also erreichbar, aber die Items kamen nie
+                    // an: eine dokumentierte Funktion, die nie laufen konnte.
+                    'ifName', 'ifDescr', 'ifAlias',
+                    // UniFi Network API: exakter Schluessel, KEIN Geraete-
+                    // protokoll. Stand aus demselben Grund nicht in der Suche
+                    // wie die Interface-Namen — Auswertung da, Daten nie.
+                    'uplink.id',
                     // LLDP (IEEE 802.1AB standard MIB)
                     //
                     // 'lldpRemPort' MUSS hier stehen, nicht nur 'lldpRemSysName':
