@@ -90,6 +90,11 @@ jobs:
         run: npm run ci:pipeline
       - name: npm-audit
         run: npm run ci:audit
+      # Faengt, was php -l strukturell nicht kann: eine benutzte, aber nicht
+      # importierte Zabbix-Klasse. Hat schon einmal eine Produktionsseite
+      # weiss gemacht.
+      - name: php-use
+        run: npm run ci:php-use
       # Der wichtige: das Bundle ist eingecheckt und kann von den Quellmodulen
       # abweichen, wenn jemand den Build vergisst.
       - name: bundle-drift

@@ -90,6 +90,7 @@ npm-audit:
   script:
     - npm ci
     - npm run ci:audit
+    - npm run ci:php-use
 
 bundle-drift:
   stage: build

@@ -20,13 +20,14 @@ npm run build        # esbuild -> assets/js/dist/nt-bundle.js (eingecheckt!)
 ./deploy.sh <server> all     # Hauptmodul + Widgets per SSH ausrollen
 ```
 
-**Die vollständige Gate-Kette — alle dreizehn, nicht nur die Node-Gates:**
+**Die vollständige Gate-Kette — alle vierzehn, nicht nur die Node-Gates:**
 
 ```bash
 npm run build && npm run ci:lint-php && npm run ci:test && npm run ci:eslint \
   && npm run ci:xss && npm run ci:parity && npm run ci:templates \
   && npm run ci:package && npm run ci:layers && npm run ci:i18n \
-  && npm run ci:pipeline && npm run ci:shellcheck && npm run ci:audit
+  && npm run ci:pipeline && npm run ci:shellcheck && npm run ci:audit \
+  && npm run ci:php-use
 ```
 
 `ci:audit` kam zuletzt dazu und ist der einzige Gate, der von etwas **außerhalb
@@ -35,10 +36,17 @@ Er kann deshalb rot werden, ohne dass sich eine Zeile geändert hat — und
 genauso wieder grün. Vorher lief er nur in der CI, und das Ergebnis kam per
 Mail statt vor dem Push.
 
+`ci:php-use` schließt die Lücke, die `ci:lint-php` strukturell nicht sehen
+kann: eine benutzte, aber nicht importierte Zabbix-Klasse. `php -l` prüft
+Syntax, und die war einwandfrei — erst die Auflösung zur Laufzeit scheitert.
+**Funktionen** fallen auf den globalen Namensraum zurück, **Klassen nicht**;
+ein `CWebUser::$data` ohne `use` hat damit eine Produktionsseite weiß gemacht,
+bei vollständig grünen Gates.
+
 `ci:lint-php` und `ci:test` brauchen `php` — **das ist installiert**
 (`/opt/homebrew/bin/php`). Sie zu überspringen hat schon einmal einen
 PHP-Fatal durchrutschen lassen (ein doppeltes `use` nach einem Merge, den git
-konfliktfrei zusammenführte). „Alle Gates grün" heißt dreizehn, nicht neun.
+konfliktfrei zusammenführte). „Alle Gates grün" heißt vierzehn, nicht neun.
 
 Einzelnen Test fahren — kein PHPUnit, kein DB-Zugriff, reines PHP:
 

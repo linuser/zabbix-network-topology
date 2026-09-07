@@ -20,7 +20,8 @@
     "ci:layers": "node tools/check-layers.mjs",
     "ci:i18n": "node tools/check-i18n.mjs",
     "ci:pipeline": "node tools/check-ci.mjs",
-    "ci:audit": "npm audit --audit-level=moderate"
+    "ci:audit": "npm audit --audit-level=moderate",
+    "ci:php-use": "node tools/check-php-use.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
