@@ -289,6 +289,28 @@ export function render(wrap, nodes, edges, dataUrl) {
         && groupNames.length >= 2
         && _clusterMode !== 'off';
 
+    // EINMAL SAGEN, DASS DIE EIGENE ANORDNUNG GERADE NICHT GILT.
+    //
+    // Die Entscheidung darueber ist alt und bleibt (siehe Absatz oben), aber
+    // sie war stumm. Gemeldet aus r/zabbix: "jedes Neuladen wirft meine Karte
+    // zurueck in ein unlesbares Knaeuel." Der Cluster-Modus schaltet sich ab
+    // zwei Hostgruppen SELBST ein, legt sein eigenes Raster und verwirft die
+    // gespeicherten Positionen kommentarlos. Wer seine Karte von Hand ordnet,
+    // sieht sie beim naechsten Render wieder zerfallen — und haelt das fuer
+    // seinen eigenen Fehler. Der Melder hat wochenlang nicht gefragt.
+    //
+    // Nur wenn es wirklich etwas zu verlieren gibt: ohne gespeicherte
+    // Positionen ist der Hinweis sinnlos und wuerde zum Rauschen.
+    if (_useCluster) {
+        let _hatPositionen = false;
+        try { _hatPositionen = Object.keys(loadPositions() || {}).length > 0; } catch (e) {}
+        if (_hatPositionen) {
+            // Stabile Kennung: der Hinweis gehoert einmal pro Sitzung gesagt,
+            // nicht bei jedem Auto-Refresh.
+            toastTruncatedOnce('clusterpos', t('cluster.overrides_positions'));
+        }
+    }
+
     // Layout-Config: bei Cluster ein preset, der eigentliche Layout-
     // Lauf passiert nach Cytoscape-Init pro Cluster-BoundingBox.
     // The preset seeds a deterministic grid scatter instead of leaving nodes

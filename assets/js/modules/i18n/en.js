@@ -488,6 +488,8 @@ export default {
     'tip.loading_history': 'Loading history...',
     'tip.no_traffic_history': 'No traffic history available (no net.if/ifIn/ifOut items)',
     'tip.last_1h': 'last 1h',
+    'cluster.overrides_positions': 'Cluster mode is arranging the map by host group — your saved node positions are not applied. Layout \u2192 Cluster: off restores them.',
+    'tip.health.hosts': 'both hosts:',
     'tip.host_total': 'host total (both ends)',
     'app.pick_groups': '← Please select host groups (or a host + hops) and click Apply.',
     'app.loading': 'Loading topology...',

@@ -6,6 +6,33 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+- **A red "down" count on links that were perfectly fine.** Reported on
+  r/zabbix: a red arrow with a number on some switch-to-switch links, while
+  every port on those switches was up. The reporter was right and the number
+  was wrong — it was the *raw* count of interfaces in `down` state, summed over
+  **both** endpoint hosts, all of their interfaces. A 48-port switch with
+  twenty unpatched sockets reports twenty down, and that appeared on every link
+  touching it. People went looking for a fault and found empty sockets.
+
+  The edge *color* had used the down **ratio** for exactly this reason — a raw
+  count would paint every edge on any real switch red. Only the tooltip kept
+  showing the raw number: one quantity, two representations, and the
+  misleading one in front. The tooltip now shows the same ratio the color uses,
+  and the row says which hosts it refers to. Exact per-port numbers have been
+  in the edge panel since 5.3.
+
+- **Cluster mode discarded saved node positions without saying so.** Also from
+  r/zabbix: "every refresh throws my map back into an unreadable design." From
+  two host groups up, cluster mode switches itself on, lays out its own grid
+  and ignores stored positions. That behaviour is deliberate — otherwise you
+  could never see columns again after saving once — but it was silent, so
+  people who arranged their map by hand watched it fall apart and assumed they
+  had done something wrong. The reporter had lived with it for weeks before
+  asking.
+
+  It now says so once per session, and names the way out: *Layout → Cluster:
+  off*. Only when there are saved positions to lose.
+
 - **Severity was carried by color alone.** The ring around a node encoded its
   worst problem purely as a hue. Converted to greyscale, four of the six levels
   land almost on top of each other — Normal 0.41, Info 0.38, Warning 0.44,

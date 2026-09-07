@@ -274,19 +274,42 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
             + '</div>';
 
         // Interface-Health (wenn vom Backend geliefert) als zweite Zeile.
-        // Werte sind aggregat ueber alle Interfaces beider Endpunkte —
-        // exakte Port-Zuordnung fehlt (siehe LLDP-Quality-Tab).
-        const ifDown = edgeData.ifaceDown || 0;
-        const ifErr  = edgeData.ifaceErr  || 0;
-        const ifDrop = edgeData.ifaceDrop || 0;
+        // DIESE ZEILE GILT DEN HOSTS, NICHT DER VERBINDUNG — und das muss
+        // drandstehen.
+        //
+        // Gemeldet aus r/zabbix: "roter Abwaerts-Pfeil mit einer Zahl an
+        // manchen Links, aber alle Ports sind up." Vollkommen berechtigt. Die
+        // Zahl war der ROH-Zaehler aller Interfaces im Zustand down, summiert
+        // ueber BEIDE Endpunkt-Hosts. Ein 48-Port-Switch mit zwanzig
+        // unbenutzten Buchsen meldet zwanzig — und das erschien an jeder Kante,
+        // die diesen Switch beruehrt. Der Nutzer suchte den Fehler an seinen
+        // Ports; es waren leere Buchsen.
+        //
+        // Die Kantenfarbe rechnet dafuer laengst mit dem ANTEIL (downRatio),
+        // genau weil der Rohzaehler sonst jede Kante rot faerben wuerde. Nur
+        // der Tooltip zeigte weiter die Rohzahl — dieselbe Groesse, zwei
+        // Darstellungen, und die missverstaendlichere im Vordergrund.
+        //
+        // Jetzt derselbe Anteil wie die Farbe, und die Zeile sagt, worauf sie
+        // sich bezieht. Die exakten Zahlen AM PORT stehen seit 5.3 im
+        // Kanten-Panel; ein Tooltip hat keinen Platz fuer den erklaerenden
+        // Halbsatz, ein Panel schon.
+        const ifDown  = edgeData.ifaceDown || 0;
+        const ifRatio = edgeData.ifaceDownRatio || 0;
+        const ifErr   = edgeData.ifaceErr  || 0;
+        const ifDrop  = edgeData.ifaceDrop || 0;
         let healthRow = '';
         if (ifDown > 0 || ifErr > 0.1 || ifDrop > 0.1) {
             const parts = [];
-            if (ifDown > 0) parts.push('<span style="color:#dc2626;font-weight:600">⬇ ' + ifDown + ' down</span>');
+            if (ifDown > 0) {
+                parts.push('<span style="color:#dc2626;font-weight:600">⬇ '
+                    + Math.round(ifRatio * 100) + '%</span>');
+            }
             if (ifErr  > 0.1) parts.push('<span style="color:#f97316">err ' + ifErr.toFixed(1)  + '/s</span>');
             if (ifDrop > 0.1) parts.push('<span style="color:#f59e0b">drop ' + ifDrop.toFixed(1) + '/s</span>');
             healthRow = '<div style="display:flex;gap:10px;font-size:10px;'
                 + 'margin-bottom:4px;padding-bottom:3px;border-bottom:1px dotted var(--nt-line-soft)">'
+                + '<span style="color:var(--nt-muted,#94a3b8)">' + esc(t('tip.health.hosts')) + '</span>'
                 + parts.join(' · ') + '</div>';
         }
 
