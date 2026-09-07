@@ -282,9 +282,22 @@ final class MetricExtractor {
                 // LldpEdgeBuilder loest ihn ohne Sonderlogik auf.
                 // Quelle merken (lldp/cdp/unifi/other) — Frontend kann das anzeigen
                 // oder zum Debuggen nutzen. Fuer den Match selber egal.
+                // MNDP vor der generischen Einordnung: MikroTiks eigenes
+                // Nachbarprotokoll kam bisher ueber discovery.neighbor herein
+                // und landete als 'other'. Damit war es im Confidence-Score
+                // nichts wert, obwohl es dieselbe Aussage macht wie CDP —
+                // beides sind Hersteller-Protokolle, die einen Nachbarn
+                // benennen. Angeregt aus r/zabbix von jemandem, der LLDP,
+                // MNDP, CDP und FIB nebeneinander auswertet.
+                //
+                // Erkannt am Schluesselnamen, nicht am Wert: wer sein Item
+                // mndp.neighbor oder neighbor.mndp nennt, bekommt die eigene
+                // Quelle. Ein blosses discovery.neighbor bleibt 'other',
+                // weil dort nicht drinsteht, welches Protokoll es war.
                 $src = ($key === 'uplink.id')            ? 'unifi'
+                    : ((strpos($key, 'mndp') !== false)  ? 'mndp'
                     : ((strpos($key, 'cdp')  !== false)  ? 'cdp'
-                    : ((strpos($key, 'lldp') !== false)  ? 'lldp' : 'other'));
+                    : ((strpos($key, 'lldp') !== false)  ? 'lldp' : 'other')));
                 $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val, 'src' => $src];
             }
         }

@@ -79,7 +79,7 @@ final class LldpEdgeBuilder {
     public static function build(array $hosts, array $lldp_raw,
             array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
             array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
-            array $port_names = []): array {
+            array $port_names = [], array $rtt = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         self::$truncated = 0;
 
@@ -489,7 +489,7 @@ final class LldpEdgeBuilder {
                 $_e['reporters'] = array_keys($_e['reporters']);
                 sort($_e['reporters']);
                 $_e['confirmed'] = count($_e['reporters']) >= 2;
-                $_e['confidence'] = self::confidence($_e);
+                $_e['confidence'] = self::confidence($_e, $hosts, $rtt);
             }
         }
         unset($_e);
@@ -556,7 +556,7 @@ final class LldpEdgeBuilder {
      * unabhaengig voneinander dasselbe sagen, wiegen mehr als jede Feinheit des
      * Namensabgleichs.
      */
-    private static function confidence(array $e): int {
+    private static function confidence(array $e, array $hosts = [], array $rtt = []): int {
         $basis = [
             'exact'       => 60,
             'ip'          => 50,
@@ -593,7 +593,77 @@ final class LldpEdgeBuilder {
             $score += 5;
         }
 
+        $score -= self::rttAbschlag($e, $hosts, $rtt);
+
         return max(0, min(100, $score));
+    }
+
+    /**
+     * Abschlag, wenn die Laufzeiten beider Enden nicht zu Nachbarn passen.
+     *
+     * WOHER DIE IDEE
+     * --------------
+     * Aus r/zabbix, von jemandem, der ein aehnliches Werkzeug baut und LLDP,
+     * MNDP, CDP, FIB UND Laufzeiten in seinen Score einrechnet. Der Punkt, den
+     * er trifft: unser Score bewertet ausschliesslich, WIE der Name zugeordnet
+     * wurde. Er ist damit blind gegen einen Treffer, der physikalisch unmoeglich
+     * ist — ein exakter Namenstreffer bekommt 60 Punkte, auch wenn das Geraet
+     * nachweislich hinter einer WAN-Strecke sitzt.
+     *
+     * WARUM DIE SCHWELLE SO HOCH IST
+     * ------------------------------
+     * Unser einziger Laufzeitwert ist icmppingsec — gemessen vom Server oder
+     * Proxy zum Host, NICHT zwischen den beiden Nachbarn. Verwertbar ist daran
+     * nur der UNTERSCHIED, und auch der nur mit Vorsicht: LLDP-Kanten
+     * verbinden ueberwiegend Switches, und Switches sind fuer traege
+     * ICMP-Antworten beruechtigt, weil ihre CPU sie nachrangig behandelt. Ein
+     * belasteter Switch kann zweistellige Millisekunden zeigen und trotzdem
+     * direkt angeschlossen sein.
+     *
+     * Deshalb 100 ms und nicht 20: bei diesem Abstand ist keine
+     * ICMP-Nachrangigkeit mehr die Erklaerung, sondern eine andere Strecke.
+     * Lieber ein Signal, das selten anschlaegt und dann recht hat, als eines,
+     * das oft anschlaegt und richtige Kanten abwertet — eine falsch
+     * abgewertete Kante ist derselbe Schaden wie eine falsch aufgewertete.
+     *
+     * NUR ABSCHLAG, NIE BONUS. Aehnliche Laufzeiten beweisen keine
+     * Nachbarschaft; zwei Geraete im selben Rack sehen gleich aus, egal ob ein
+     * Kabel zwischen ihnen liegt.
+     *
+     * NUR BEI GLEICHEM PROXY. Werden zwei Hosts von verschiedenen Proxies
+     * gemessen, sind die Werte gar nicht vergleichbar — dann sagt der
+     * Unterschied etwas ueber die Standorte der Proxies, nicht ueber die Hosts.
+     */
+    private static function rttAbschlag(array $e, array $hosts, array $rtt): int {
+        if (!$rtt) {
+            return 0;
+        }
+        $a = (string) ($e['from'] ?? '');
+        $b = (string) ($e['to']   ?? '');
+
+        $ra = (float) ($rtt[$a] ?? 0);
+        $rb = (float) ($rtt[$b] ?? 0);
+        if ($ra <= 0 || $rb <= 0) {
+            return 0;   // ohne beide Werte keine Aussage
+        }
+
+        // Verschiedene Messpunkte => nicht vergleichbar.
+        $pa = (string) ($hosts[$a]['proxyid'] ?? '');
+        $pb = (string) ($hosts[$b]['proxyid'] ?? '');
+        if ($pa !== $pb) {
+            return 0;
+        }
+
+        // icmppingsec liefert SEKUNDEN.
+        $diff_ms = abs($ra - $rb) * 1000.0;
+
+        if ($diff_ms > 250.0) {
+            return 20;
+        }
+        if ($diff_ms > 100.0) {
+            return 10;
+        }
+        return 0;
     }
 
     /**

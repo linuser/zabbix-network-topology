@@ -467,6 +467,46 @@ check('meldet die verworfenen Kanten', LldpEdgeBuilder::lastTruncated() > 0, tru
 LldpEdgeBuilder::build($hosts, $lldp_raw);
 check('kleine Karte bleibt ungekappt', LldpEdgeBuilder::lastTruncated(), 0);
 
+// ── Confidence: Laufzeit-Plausibilitaet ──────────────────────────────────
+//
+// Der Score bewertete bisher nur, WIE der Name zugeordnet wurde — und war
+// blind gegen einen exakten Treffer, der physikalisch nicht sein kann. Der
+// Abschlag greift bewusst erst spaet (100 ms), weil Switches ICMP nachrangig
+// behandeln und ein belasteter Switch sonst faelschlich abgewertet wuerde.
+echo "\n  LldpEdgeBuilder — Laufzeit im Confidence-Score\n\n";
+
+$hRtt = [
+    'r1' => ['host' => 'sw-a', 'name' => 'sw-a', 'proxyid' => '0'],
+    'r2' => ['host' => 'sw-b', 'name' => 'sw-b', 'proxyid' => '0'],
+];
+$rawRtt = [['hostid' => 'r1', 'key_' => 'lldpRemSysName[0.1.1]',
+            'lastvalue' => 'sw-b', 'src' => 'lldp']];
+
+$confVon = function(array $ping) use ($hRtt, $rawRtt) {
+    $r = LldpEdgeBuilder::build($hRtt, $rawRtt, [], [], [], [], [], [], [], $ping);
+    $e = findEdge($r['edges'], 'r1', 'r2');
+    return $e === null ? -1 : (int) $e['confidence'];
+};
+
+$ohne   = $confVon([]);
+$nah    = $confVon(['r1' => 0.001, 'r2' => 0.002]);   // 1 ms Unterschied
+$traege = $confVon(['r1' => 0.001, 'r2' => 0.050]);   // 49 ms — Switch-CPU
+$fern   = $confVon(['r1' => 0.001, 'r2' => 0.150]);   // 149 ms — andere Strecke
+$sehr   = $confVon(['r1' => 0.001, 'r2' => 0.400]);   // 399 ms
+
+check('ohne Laufzeitdaten unveraendert',        $nah,    $ohne);
+check('traeger Switch wird NICHT abgewertet',   $traege, $ohne);
+check('grosser Abstand kostet Punkte',          $fern < $ohne, true);
+check('sehr grosser Abstand kostet mehr',       $sehr < $fern,  true);
+
+// Verschiedene Proxies => nicht vergleichbar, also kein Abschlag.
+$hProxy = $hRtt;
+$hProxy['r2']['proxyid'] = '7';
+$rProxy = LldpEdgeBuilder::build($hProxy, $rawRtt, [], [], [], [], [], [], [],
+                                 ['r1' => 0.001, 'r2' => 0.400]);
+$eProxy = findEdge($rProxy['edges'], 'r1', 'r2');
+check('verschiedene Proxies: kein Abschlag',    (int) $eProxy['confidence'], $ohne);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

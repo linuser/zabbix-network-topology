@@ -6,6 +6,35 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+### Added
+
+- **The confidence score now sanity-checks round-trip times, and MNDP counts
+  as its own source.** Both suggested on r/zabbix by someone building a
+  comparable tool, who scores on LLDP, MNDP, CDP, FIB *and* latency. The
+  observation that landed: our score only ever judged **how the name was
+  matched**. It was blind to a match that is physically impossible — an exact
+  name hit scored 60 even for a device demonstrably behind a WAN link.
+
+  An edge whose two endpoints differ wildly in ping time now loses points.
+  Deliberately blunt: the threshold is **100 ms**, not 20. Our only latency
+  figure is `icmppingsec`, measured from the server or proxy to the host and
+  not between the neighbours, so only the *difference* means anything — and
+  LLDP edges mostly join switches, which are notorious for answering ICMP
+  slowly because their CPU deprioritises it. A loaded switch can show tens of
+  milliseconds while being directly attached. A wrongly demoted edge does the
+  same damage as a wrongly promoted one, so the check only fires where
+  ICMP deprioritisation can no longer explain the gap. It never awards points:
+  similar latency proves nothing about adjacency. And it stays silent when the
+  two hosts sit behind different proxies, where the numbers are not comparable
+  at all.
+
+  Separately, MikroTik's **MNDP** arrived through the generic
+  `discovery.neighbor` path and was scored as "other", i.e. worth nothing —
+  although it makes the same statement CDP does. A key containing `mndp` is
+  now its own source and carries the same weight.
+
+### Fixed
+
 - **`nt-install.sh` refused to install on Apache with mod_php.**
   ([#13](https://github.com/linuser/zabbix-network-topology/issues/13)) The
   script looked for a PHP-FPM service and nothing else. With mod_php there is

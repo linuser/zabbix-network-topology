@@ -471,7 +471,10 @@ class NetworkTopologyData extends NetworkTopologyController {
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
                               $metrics['lldp_meta'] ?? [],
                               $metrics['port_errors'] ?? [], $metrics['port_discards'] ?? [],
-                              $metrics['port_names'] ?? []);
+                              $metrics['port_names'] ?? [],
+                              // Laufzeiten fuer die Plausibilitaetspruefung im
+                              // Confidence-Score (siehe rttAbschlag).
+                              $metrics['ping'] ?? []);
         $edges          = $lldp['edges'];
         $lldp_quality   = $lldp['quality'];
         $lldp_unmatched = $lldp['unmatched'];
