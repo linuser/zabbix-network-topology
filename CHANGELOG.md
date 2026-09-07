@@ -6,6 +6,23 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+- **`nt-install.sh` refused to install on Apache with mod_php.**
+  ([#13](https://github.com/linuser/zabbix-network-topology/issues/13)) The
+  script looked for a PHP-FPM service and nothing else. With mod_php there is
+  no FPM service — PHP runs inside the Apache workers — so it aborted with
+  "kein php-fpm-Service gefunden" **before copying a single file**, on a
+  perfectly valid host. Not an exotic setup either: it is what the
+  distribution's `zabbix-frontend-php` package gives you, since it pulls in
+  `libapache2-mod-php` rather than FPM.
+
+  Detection now falls back to `apache2` and `httpd`, and FPM still wins when
+  both exist — with Apache *and* FPM, PHP runs in FPM and reloading Apache
+  would not clear the opcache. More importantly, a missing service is no
+  longer fatal at all: the files are copied either way, and the script says to
+  reload PHP by hand. Refusing to install because we cannot clear a cache was
+  the wrong trade. `nt-uninstall.sh` carried the same detection and got the
+  same fix.
+
 - **A red "down" count on links that were perfectly fine.** Reported on
   r/zabbix: a red arrow with a number on some switch-to-switch links, while
   every port on those switches was up. The reporter was right and the number

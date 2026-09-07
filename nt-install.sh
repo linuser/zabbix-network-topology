@@ -132,6 +132,20 @@ detect_fpm() {
     if [[ -z "$FPM" && "$units" == *"php-fpm.service"* ]]; then
         FPM="php-fpm"
     fi
+
+    # Apache mit mod_php: es GIBT keinen FPM-Dienst, PHP laeuft in den
+    # Apache-Arbeitsprozessen. Dort raeumt ein Reload von Apache den Opcache.
+    #
+    # Gemeldet als Issue #13: auf Debian 12 mit libapache2-mod-php8.2 brach
+    # "install" sofort ab, obwohl die Umgebung voellig in Ordnung war. Das ist
+    # kein Sonderfall — genau das bekommt man, wenn man das Frontend aus dem
+    # Distributionspaket zabbix-frontend-php installiert, das mod_php
+    # mitzieht statt FPM.
+    if [[ -z "$FPM" ]]; then
+        for svc in apache2 httpd; do
+            if [[ "$units" == *"$svc.service"* ]]; then FPM="$svc"; break; fi
+        done
+    fi
 }
 
 zbx_version() {   # liest ZABBIX_VERSION aus den Frontend-Files ($1 = UI-Pfad)
@@ -213,9 +227,14 @@ cmd_check() {
 
     detect_fpm
     if [[ -n "$FPM" ]]; then
-        if systemctl is-active --quiet "$FPM" 2>/dev/null; then ok "php-fpm: $FPM (aktiv)"
-        else warn "php-fpm: $FPM (nicht aktiv?)"; fi
-    else bad "kein php-fpm-Service gefunden"; rc=1; fi
+        if systemctl is-active --quiet "$FPM" 2>/dev/null; then ok "PHP-Neuladen ueber: $FPM (aktiv)"
+        else warn "PHP-Neuladen ueber: $FPM (nicht aktiv?)"; fi
+    else
+        # KEIN harter Fehler mehr. Ein fehlender Dienst heisst nur, dass wir
+        # den Opcache nicht selbst leeren koennen — nicht, dass die
+        # Installation ungueltig waere.
+        warn "kein php-fpm- oder Apache-Dienst gefunden — nach dem Kopieren bitte selbst neu laden"
+    fi
 
     ver=$(zbx_version "$UI")
     if [[ -n "$ver" ]]; then
@@ -233,7 +252,9 @@ cmd_check() {
 do_deploy() {
     local mode="$1" zip="$2" mod src stage prev=""
     detect_ui; detect_fpm
-    [[ -n "$FPM" ]] || die "kein php-fpm-Service gefunden."
+    # NICHT mehr abbrechen (Issue #13). Die Dateien zu kopieren ist auch ohne
+    # Dienst richtig; nur das Neuladen muss dann von Hand kommen. Vorher starb
+    # das Skript hier, bevor es eine einzige Datei angefasst hatte.
     command -v unzip >/dev/null 2>&1 || die "unzip fehlt — bitte installieren."
     mod="$UI/modules/$MODULE"
 
@@ -341,8 +362,15 @@ do_deploy() {
         fi
     done
 
-    echo "→ Reload $FPM"
-    $SUDO systemctl reload "$FPM" || die "php-fpm reload fehlgeschlagen ($FPM) — Modul liegt, aber Opcache evtl. alt."
+    if [[ -n "$FPM" ]]; then
+        echo "→ Reload $FPM"
+        $SUDO systemctl reload "$FPM" \
+            || die "Reload fehlgeschlagen ($FPM) — Modul liegt, aber Opcache evtl. alt."
+    else
+        warn "Kein Dienst zum Neuladen gefunden. Das Modul liegt richtig, aber der"
+        warn "Opcache kann noch die alte Fassung halten — bitte PHP bzw. den"
+        warn "Webserver von Hand neu laden."
+    fi
 
     echo
     echo "${C_OK}✓ $mode fertig${C_RST} — $mod (v$(manifest_version "$mod/manifest.json" || echo '?'))"

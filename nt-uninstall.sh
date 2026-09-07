@@ -118,6 +118,17 @@ detect_fpm() {
     if [[ -z "$FPM" && "$units" == *"php-fpm.service"* ]]; then
         FPM="php-fpm"
     fi
+
+    # Apache mit mod_php: kein FPM-Dienst vorhanden, PHP laeuft in den
+    # Apache-Arbeitsprozessen — dort raeumt ein Apache-Reload den Opcache.
+    # Dieselbe Ergaenzung wie in nt-install.sh (Issue #13). Sie hier zu
+    # vergessen hiesse: installieren geht, deinstallieren laesst den Opcache
+    # stehen, und das Modul scheint noch da zu sein.
+    if [[ -z "$FPM" ]]; then
+        for svc in apache2 httpd; do
+            if [[ "$units" == *"$svc.service"* ]]; then FPM="$svc"; break; fi
+        done
+    fi
 }
 
 # Datenbank: NUR Typ und Name aus zabbix.conf.php, nie das Passwort.
@@ -165,7 +176,7 @@ detect_ui; detect_fpm; detect_db
 
 echo "→ Gefunden"
 echo "    UI-Pfad:  $UI"
-echo "    php-fpm:  ${FPM:-${C_WARN}kein Service gefunden${C_RST}}"
+echo "    Reload:   ${FPM:-${C_WARN}kein Service gefunden${C_RST}}"
 echo "    DB:       ${DBTYPE:-unbekannt}${DBNAME:+ / $DBNAME}"
 echo
 
