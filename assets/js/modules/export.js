@@ -45,8 +45,12 @@ function currentBg() {
 // druckfreundliches Dokument mit @page A4 landscape + Map-Screenshot
 // (cy.png()) + Hosts-Tabelle. null wenn keine Cy-Instance verfuegbar.
 function buildReportHtml(opts) {
-    if (!window._ntCy || !window._ntNodes) return null;
-    const nodes = window._ntNodes;
+    if (!window._ntCy) return null;
+    // Hosts, nicht Kartenknoten — siehe render-tech.js zu _ntRawNodes.
+    // Das Kartenbild unten kommt weiterhin aus der gerenderten Instanz, das
+    // ist richtig so: es SOLL die Karte zeigen, wie sie dasteht.
+    const nodes = window._ntRawNodes || window._ntNodes;
+    if (!nodes) return null;
     const links = loadLinks();
     const now   = new Date().toLocaleString('de-DE');
 
@@ -108,8 +112,14 @@ function buildReportHtml(opts) {
 //
 // Returns: HTML-String oder null wenn keine Daten verfuegbar.
 function buildAuditHtml(complianceData) {
-    if (!window._ntNodes) return null;
-    const nodes = window._ntNodes.filter(function(n) { return !n._isInternet; });
+    const alle = window._ntRawNodes || window._ntNodes;
+    if (!alle) return null;
+    // Auch aus der Rohliste noch die virtuellen Knoten heraus: sie kann in
+    // aelteren Renderpfaden bereits die Internet-Wolke enthalten, und Geister
+    // sind ohnehin keine Hosts.
+    const nodes = alle.filter(function(n) {
+        return !n._isInternet && !n._isGhost && !n.isGroup;
+    });
     const now   = new Date().toLocaleString('de-DE');
     const STALE_S = 300;
     const nowSec  = Math.floor(Date.now() / 1000);

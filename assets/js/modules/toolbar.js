@@ -47,6 +47,10 @@ let _renderFn = function() {};
 export function setRenderCallback(fn) { _renderFn = fn; }
 
 
+// Handle auf den document-Listener des Layout-Menues, damit der naechste
+// Aufbau den vorigen abmelden kann (siehe unten).
+let _layoutDocClose = null;
+
 export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     const bar = document.querySelector('.nt-topbar__actions');
     const isFirstRun = !window._ntToolbarDone;
@@ -77,22 +81,29 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     }
 
     // Zoom-Buttons (existieren statisch im DOM)
-    const bIn  = document.getElementById('nt-btn-zoom-in');
-    const bOut = document.getElementById('nt-btn-zoom-out');
-    if (bIn) {
-        bIn.onclick = null;
-        bIn.addEventListener('click', function() {
-            cy.zoom({ level: cy.zoom() * 1.3,
+    //
+    // onclick = null ENTFERNT KEINEN addEventListener-Handler. Genau das stand
+    // hier, und setupToolbar laeuft bei JEDEM Render — render-tech setzt
+    // _ntToolbarDone vorher auf false zurueck. Nach drei Umschaltvorgaengen
+    // (Gruppenansicht, Perf, Geister) hingen vier Handler am "+", drei davon
+    // mit einer Closure auf Cytoscape-Instanzen, die laengst destroy()'t
+    // waren. Jeder Render behielt so einen kompletten Graphen im Speicher.
+    //
+    // Der Weg, den mkbtn weiter oben schon geht: das Element ersetzen. Ein
+    // Klon traegt keine Listener, und die statischen Knoepfe aus der View
+    // lassen sich nicht wie die erzeugten einfach neu bauen.
+    const zoomBtn = function (id, faktor) {
+        const alt_ = document.getElementById(id);
+        if (!alt_) return;
+        const neu_ = alt_.cloneNode(true);
+        alt_.parentNode.replaceChild(neu_, alt_);
+        neu_.addEventListener('click', function() {
+            cy.zoom({ level: cy.zoom() * faktor,
                       renderedPosition: { x: wrap.clientWidth / 2, y: wrap.clientHeight / 2 } });
         });
-    }
-    if (bOut) {
-        bOut.onclick = null;
-        bOut.addEventListener('click', function() {
-            cy.zoom({ level: cy.zoom() * 0.77,
-                      renderedPosition: { x: wrap.clientWidth / 2, y: wrap.clientHeight / 2 } });
-        });
-    }
+    };
+    zoomBtn('nt-btn-zoom-in',  1.3);
+    zoomBtn('nt-btn-zoom-out', 0.77);
 
     // Hide Labels
     const bLbl = document.getElementById('nt-btn-labels');
@@ -304,7 +315,20 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             e.stopPropagation();
             menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         });
-        document.addEventListener('click', function() { menu.style.display = 'none'; });
+        // Den vorigen Handler ABMELDEN, bevor ein neuer kommt.
+        //
+        // Der Block hier baut #nt-layout-wrap bei jedem setupToolbar neu, und
+        // jeder Aufbau haengte einen weiteren Listener an document, den
+        // niemand je entfernte. Im Wallboard mit 30-Sekunden-Refresh sind das
+        // 120 dauerhafte Listener pro Stunde, jeder mit einem abgehaengten
+        // menu-Element daran. export.js und render-table.js machen es an
+        // vergleichbarer Stelle richtig — mit einem Modul-Handle und einem
+        // removeEventListener davor.
+        if (_layoutDocClose) {
+            document.removeEventListener('click', _layoutDocClose);
+        }
+        _layoutDocClose = function() { menu.style.display = 'none'; };
+        document.addEventListener('click', _layoutDocClose);
 
         wrap.appendChild(btn);
         wrap.appendChild(menu);

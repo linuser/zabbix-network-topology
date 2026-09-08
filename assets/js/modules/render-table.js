@@ -1249,7 +1249,23 @@ export function renderTable(wrap, nodes, edges) {
         // mit dem Original-Datenobjekt übergeben — die Render-Funktion
         // iteriert nur über die übergebenen IDs.
         function renderPivotInto(area, counter) {
-            if (!_itemsData) return;
+            // NICHT stumm aussteigen — der Aufrufer hat gerade den
+            // Lade-Hinweis in dieselbe Flaeche geschrieben.
+            //
+            // fetchItemsPivot() liefert null, wenn keine Hostgruppen gewaehlt
+            // sind — genau der Fall in der Hop-Ansicht, wo selected_groupids
+            // leer bleibt. Der Hinweis blieb dann fuer immer stehen: kein
+            // Fehler, kein Ausweg ausser zurueck auf "Hosts".
+            if (!_itemsData) {
+                while (area.firstChild) area.removeChild(area.firstChild);
+                const hinweis = document.createElement('div');
+                hinweis.style.cssText = 'padding:14px;font-size:12px;'
+                    + 'color:var(--nt-sub,#64748b)';
+                hinweis.textContent = t('items.needs_groups');
+                area.appendChild(hinweis);
+                if (counter) counter.textContent = '';
+                return;
+            }
 
             // Datalist mit allen Hostnamen befuellen (idempotent: nur einmal
             // pro neuem Datensatz — wir markieren den Stand mit dataset.filled).

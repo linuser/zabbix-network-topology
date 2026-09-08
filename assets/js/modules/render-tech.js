@@ -370,6 +370,20 @@ export function render(wrap, nodes, edges, dataUrl) {
 
     window._ntCy = cy;
     window._ntNodes = nodes;
+    // Die ECHTEN Hosts, vor Aggregation, Internet-Wolke und Geisterknoten.
+    //
+    // _ntNodes wird hier absichtlich NACH allen Umformungen gesetzt — der
+    // Renderer und der Export des Kartenbildes brauchen genau das. Die
+    // Berichte brauchen das Gegenteil: in der Gruppenansicht meldete "Hosts
+    // total" die Zahl der HOSTGRUPPEN, die Tabelle listete Zeilen wie
+    // "Fox (12)" mit gemittelter CPU als waeren es Geraete, und bei
+    // eingeschalteten Geistern standen dort Namen von Geraeten, die Zabbix
+    // gar nicht ueberwacht. Da alle Pseudo-Knoten severity 0 tragen, meldete
+    // eine vollstaendig kaputte Gruppe "sauber".
+    //
+    // Die KPI-Zeile benutzte rawNodes von jeher richtig (updateKpi weiter
+    // unten) — nur die Berichte lasen das Falsche.
+    window._ntRawNodes = rawNodes;
     // (_ntGroupNames und _ntDataUrl waren tote Globals — niemand las sie.
     //  groupNames wird im Toolbar-Setup als Param weitergereicht; dataUrl
     //  wird von switchTab durchgereicht und im Auto-Refresh als Closure
@@ -657,6 +671,22 @@ export function render(wrap, nodes, edges, dataUrl) {
                 // Backend-Fehler (data.error) oder leere Antwort → Badge zeigen,
                 // letzten guten Stand behalten statt still zu ueberschreiben.
                 if (!data || !data.nodes) { _markRefresh(false); return; }
+
+                // NOCH EINMAL PRUEFEN, ob die Karte ueberhaupt noch dasteht.
+                //
+                // Die Wache oben laeuft VOR dem fetch. Eine teure Antwort
+                // braucht Sekunden, und in der Zeit kann der Benutzer den
+                // Tab wechseln: renderTable() zerstoert dann _ntCy und fuellt
+                // dieselbe Flaeche mit der Tabelle. Die verspaetete Antwort
+                // zeichnete anschliessend die Karte ueber die Tabelle,
+                // waehrend der Tabellen-Reiter markiert blieb — oder rief in
+                // der Nicht-Gruppenansicht cy.nodes() auf einer zerstoerten
+                // Instanz auf.
+                if (window._ntRefreshOn === false || !window._ntCy
+                        || (window._ntCy.destroyed && window._ntCy.destroyed())) {
+                    return;
+                }
+
                 _markRefresh(true);
                 window._ntLastData = window._ntLastData || {};
                 window._ntLastData.nodes = data.nodes;
