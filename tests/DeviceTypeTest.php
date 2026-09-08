@@ -264,6 +264,44 @@ check('radius-eap-01 wird kein Access Point',
 check('NVR am Template "UniFi API" -> camera, nicht wireless',
       HostMetadata::deviceType('nvr-01', ['UniFi API']), 'camera');
 
+// ── speakers(): wer gilt als Netzwerkgeraet, weil er Nachbarn aufzaehlt ──
+//
+// NodeBuilder stuft einen sonst nur als 'server' erkannten Host zum Switch
+// hoch, wenn er hier drinsteht. Das ist fuer LLDP/CDP/MNDP richtig und fuer
+// uplink.id falsch: das sagt nicht "wen sehe ich", sondern "an wem haenge
+// ich", und das meldet jedes Handy und jede Kamera hinter einem UniFi-
+// Controller. An einem Hotel-Standort waren dadurch 41 Clients Switches.
+echo "\n  speakers() — uplink.id macht aus einem Client keinen Switch\n\n";
+
+$raw = [
+    ['hostid' => '1', 'key_' => 'lldpRemSysName', 'lastvalue' => 'sw-core', 'src' => 'lldp'],
+    ['hostid' => '2', 'key_' => 'uplink.id',      'lastvalue' => 'a3ff…',   'src' => 'unifi'],
+    ['hostid' => '3', 'key_' => 'cdpCacheDeviceId', 'lastvalue' => 'rtr',   'src' => 'cdp'],
+    ['hostid' => '4', 'key_' => 'mndp.neighbor',  'lastvalue' => 'mt',      'src' => 'mndp'],
+    ['hostid' => '5', 'key_' => 'discovery.neighbor', 'lastvalue' => 'x',   'src' => 'other'],
+];
+$sp = HostMetadata::speakers($raw);
+
+check('LLDP-Melder zaehlt',            isset($sp['1']) ? 'ja' : 'nein', 'ja');
+check('uplink.id-Melder zaehlt NICHT', isset($sp['2']) ? 'ja' : 'nein', 'nein');
+check('CDP-Melder zaehlt',             isset($sp['3']) ? 'ja' : 'nein', 'ja');
+check('MNDP-Melder zaehlt',            isset($sp['4']) ? 'ja' : 'nein', 'ja');
+check('unbekannte Quelle zaehlt',      isset($sp['5']) ? 'ja' : 'nein', 'ja');
+
+// Ein Geraet, das BEIDES meldet — UniFi-Switch mit uplink.id und zusaetzlich
+// einer echten Nachbartabelle — muss weiterhin zaehlen. Die Ausnahme gilt der
+// Zeile, nicht dem Host.
+$sp2 = HostMetadata::speakers([
+    ['hostid' => '9', 'key_' => 'uplink.id',      'lastvalue' => 'x', 'src' => 'unifi'],
+    ['hostid' => '9', 'key_' => 'lldpRemSysName', 'lastvalue' => 'y', 'src' => 'lldp'],
+]);
+check('uplink.id + LLDP am selben Host zaehlt', isset($sp2['9']) ? 'ja' : 'nein', 'ja');
+
+// Zeilen ohne hostid duerfen nicht durchfallen (defensive: kam bei leeren
+// Item-Werten schon vor).
+check('Zeile ohne hostid wird uebersprungen',
+      count(HostMetadata::speakers([['key_' => 'lldpRemSysName', 'src' => 'lldp']])), 0);
+
 echo "\n";
 if ($failures > 0) {
     echo "  === {$failures} FEHLER ===\n\n";

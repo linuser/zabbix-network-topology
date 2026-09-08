@@ -494,17 +494,10 @@ class NetworkTopologyData extends NetworkTopologyController {
         $lldp_host_caps = $lldp['host_caps'] ?? [];
 
         // Wer selbst eine Nachbartabelle fuehrt, ist ein Netzwerkgeraet — ein
-        // Server tut das nicht. Schwaecher als die Capabilities (die sagen
-        // WAS es ist), aber es greift auch dann, wenn niemand Ueberwachtes das
-        // Geraet als Nachbarn sieht. Als Set gehalten, nicht als Liste: die
-        // Abfrage ist ein isset() pro Host.
-        $lldp_speakers = [];
-        foreach ($lldp_raw as $_r) {
-            if (isset($_r['hostid'])) {
-                $lldp_speakers[$_r['hostid']] = true;
-            }
-        }
-        unset($_r);
+        // Server tut das nicht. Die Auswahl steht in HostMetadata, damit sie
+        // testbar ist; sie war frueher hier inline und deshalb von keinem Test
+        // erreichbar (siehe tests/DeviceTypeTest.php).
+        $lldp_speakers = HostMetadata::speakers($lldp_raw);
         // ── 5a. HOSTING/CONTAINMENT-KANTEN (nt:parent-Tag) ────────────────
         // Ein Host deklariert via Tag  nt:parent = <Hostname>  seinen Traeger
         // (VM → Hypervisor, Container → Node, ...). Ergibt eine GERICHTETE

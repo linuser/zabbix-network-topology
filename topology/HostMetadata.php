@@ -236,4 +236,42 @@ final class HostMetadata {
 
         return 'server';
     }
+
+    /**
+     * Aus den eingesammelten Nachbar-Rohzeilen die Hosts bestimmen, die SELBST
+     * eine Nachbartabelle fuehren. Ergebnis ist ein Set hostid => true, weil
+     * der Aufrufer es nur per isset() abfragt.
+     *
+     * Der Sinn dahinter: wer Nachbarn aufzaehlt, ist ein Netzwerkgeraet — ein
+     * Server tut das nicht. NodeBuilder stuft damit einen Host, den Name und
+     * Template nur als 'server' erkennen, zum Switch hoch.
+     *
+     * 'unifi' ist davon ausgenommen, und das ist der Punkt dieser Methode:
+     * uplink.id aus der UniFi-Network-API ist KEINE Nachbartabelle. Eine
+     * Nachbartabelle sagt "wen sehe ich alles", uplink.id nur "an wem haenge
+     * ich" — und das meldet jedes Handy, jede Kamera, jeder Fernseher, den der
+     * Controller kennt. An einem Hotel-Standort standen deshalb 41 Clients als
+     * "Switch" in der Uebersicht, darunter ein MagentaTV-Stick. Aufgefallen
+     * ist es erst, als die Hosts kurze Namen bekamen und die Liste lesbar
+     * wurde; vorher hiess jeder Knoten 'UniFi Network - Site: "…" - Client:
+     * "…"' und niemand las bis zum Ende.
+     *
+     * Fuer die KANTEN bleibt uplink.id unveraendert gueltig — nur als Indiz
+     * dafuer, WAS ein Geraet ist, taugt es nicht.
+     */
+    public static function speakers(array $lldp_raw): array {
+        $out = [];
+
+        foreach ($lldp_raw as $row) {
+            if (!isset($row['hostid'])) {
+                continue;
+            }
+            if (($row['src'] ?? '') === 'unifi') {
+                continue;
+            }
+            $out[$row['hostid']] = true;
+        }
+
+        return $out;
+    }
 }
