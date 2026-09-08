@@ -152,9 +152,39 @@ final class HostMetadata {
      * Geraetetyp aus Hostname + Template-Namen raten (steuert das Icon).
      * Erster Treffer gewinnt — die Reihenfolge der Map ist daher bedeutsam
      * (spezifisch vor generisch), Fallback 'server'.
+     *
+     * $hints ist der zweite Anlauf und greift NUR, wenn der erste im
+     * 'server'-Fallback endet: sichtbarer Name und Host-Gruppen des Hosts.
+     *
+     * Der Grund dafuer ist strukturell und nicht auf einen Hersteller
+     * beschraenkt: bei jedem per LLD erzeugten Host ist der TECHNISCHE Name
+     * eine UUID, und die Templates heissen fuer alle Geraeteklassen gleich.
+     * Bei UniFi trugen Switch, Access Point und Gateway saemtlich
+     * 'UniFi Network API - Device' und eine UUID als Host — die Heuristik lief
+     * ins Leere und lieferte dreimal 'server'. Der sichtbare Name (LABNODE01)
+     * und die Gruppe stehen im selben Datensatz und wurden nie angesehen.
+     *
+     * Zweiter Anlauf statt einfach mehr Text in $s, weil die Muster kurz und
+     * gierig sind: 'switch' als Teilstring wuerde eine Gruppe "Switch room
+     * servers" zu einem Switch machen. Als Fallback kann es nur Hosts
+     * betreffen, ueber die sonst gar nichts bekannt ist — dort ist eine
+     * geratene Klasse besser als der pauschale Server.
      */
-    public static function deviceType(string $host, array $tpls): string {
-        $s = strtolower($host . ' ' . implode(' ', $tpls));
+    public static function deviceType(string $host, array $tpls, array $hints = []): string {
+        $first = self::matchType(strtolower($host . ' ' . implode(' ', $tpls)));
+
+        if ($first !== 'server' || $hints === []) {
+            return $first;
+        }
+
+        return self::matchType(strtolower(implode(' ', $hints)));
+    }
+
+    /**
+     * Der eigentliche Musterabgleich. Ausgelagert, damit deviceType() ihn
+     * zweimal auf verschiedene Eingaben anwenden kann.
+     */
+    private static function matchType(string $s): string {
         $map = [
             // Network security
             'firewall'       => ['fw-','firewall','fortigate','pfsense','opnsense','-asa-','srx',

@@ -73,7 +73,16 @@ const WOERTER = [
     'letzten', 'gemeldet', 'angelegt', 'gefunden', 'erreichbar', 'eingefroren',
     'gespeichert', 'geaendert', 'fehlgeschlagen', 'schliessen', 'zeigen',
     'laden', 'kostenlos', 'kostenloser', 'erscheinen', 'benoetigen',
-    'mindestens', 'berechtigung', 'schreibberechtigung', 'aufrufe'
+    'mindestens', 'berechtigung', 'schreibberechtigung', 'aufrufe',
+    // Nachgetragen 09/2026: 'Min. 2 Zeichen' stand als Hinweis in
+    // NetworkTopologyItemCount und kam durch alle vier Regeln — kein Umlaut,
+    // keine der Endungen, keine Umschrift, und 'Zeichen' fehlte in dieser
+    // Liste. Aufgefallen ist es in einer Review, nicht im Gate. Alle
+    // folgenden Woerter sind gegen Englisch gegengeprueft: keines davon ist
+    // ein englisches Wort, Fehlalarme sind damit ausgeschlossen.
+    'zeichen', 'eintrag', 'eintraege', 'zeile', 'zeilen', 'spalte', 'spalten',
+    'suche', 'gruppe', 'gruppen', 'datei', 'dateien', 'ordner', 'auswaehlen',
+    'abbrechen', 'speichern', 'uebernehmen', 'zurueck', 'weiter', 'hinweis'
 ];
 
 const UMLAUT = /[äöüÄÖÜß]/;

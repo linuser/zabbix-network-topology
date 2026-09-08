@@ -41,6 +41,10 @@ class NetworkTopologyDiag extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        if (!$this->throttle('diag')) {
+            return;
+        }
+
         $uid = (int) (\CWebUser::$data['userid'] ?? 0);
         $entries = [];
         $apcu = function_exists('apcu_fetch');

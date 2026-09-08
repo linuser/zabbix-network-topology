@@ -95,7 +95,14 @@ final class NodeBuilder {
             // meldet als L3-Switch auch das Bridge-Bit und wuerde vom Protokoll
             // zum Switch umgestempelt, obwohl der Name die Absicht kennt. So
             // aendert sich an keinem Host etwas, der heute richtig erkannt wird.
-            $detected_type = HostMetadata::deviceType($h['host'], $tpls);
+            // Sichtbarer Name und Gruppen als zweiter Anlauf — sie greifen nur,
+            // wenn Hostname und Template nichts hergeben. Bei LLD-Hosts ist
+            // genau das die Regel: der technische Name ist eine UUID.
+            $detected_type = HostMetadata::deviceType(
+                $h['host'],
+                $tpls,
+                array_merge([(string) ($h['name'] ?? '')], $host_group_names[$hid] ?? [])
+            );
             if ($detected_type === 'server') {
                 $from_caps = HostMetadata::typeFromCaps($lldp_host_caps[$hid] ?? []);
                 if ($from_caps !== '') {

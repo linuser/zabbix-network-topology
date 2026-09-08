@@ -381,7 +381,16 @@ final class MetricExtractor {
                 $host_cpu[$hid] = round($host_cpu[$hid] + $val, 1);
             } elseif ($key === 'synoSystem.ssCpuIdle') {
                 if (!isset($host_cpu[$hid])) {
-                    $host_cpu[$hid] = round(max(0.0, 100.0 - $val * 0.01), 1);
+                    // Die Einheit ist nicht festgelegt: manche Synology-
+                    // Templates liefern Prozent (0..100), andere Hundertstel-
+                    // Prozent (0..10000). Der feste Faktor 0.01 stand hier
+                    // ohne Beleg -- bei einem Geraet, das schlicht Prozent
+                    // meldet, ergab er dauerhaft 99 % CPU.
+                    //
+                    // Am Wert selbst zu entscheiden ist eindeutig, weil ein
+                    // Leerlauf ueber 100 in Prozent gar nicht existiert.
+                    $idle = $val > 100.0 ? $val * 0.01 : $val;
+                    $host_cpu[$hid] = round(min(100.0, max(0.0, 100.0 - $idle)), 1);
                 }
 
             // ── Memory Agent (klassisch: used/total getrennt) ─────────────

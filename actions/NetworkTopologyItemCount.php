@@ -22,6 +22,14 @@ class NetworkTopologyItemCount extends NetworkTopologyController {
 
     private const SAMPLE_SIZE = 5;
 
+    /**
+     * Mindestzahl an Zeichen ohne Wildcard. Identisch mit der Grenze in
+     * NetworkTopologyItems — die beiden Endpunkte gehoeren zusammen, der eine
+     * zaehlt, was der andere liefert. Ein Auseinanderlaufen zeigt sich als
+     * Zahl ueber einer leeren Tabelle.
+     */
+    public const MIN_PATTERN_CHARS = 3;
+
     protected function init(): void {
         $this->disableCsrfValidation();
     }
@@ -50,10 +58,15 @@ class NetworkTopologyItemCount extends NetworkTopologyController {
 
         // Kurze Patterns rejecten — sonst matched z.B. "v" zigtausend Items
         // und die DB leidet ohne dass der User sinnvolle Info bekommt.
+        //
+        // Die Grenze MUSS dieselbe sein wie in NetworkTopologyItems: dort galt
+        // 3, hier 2, und das Frontend liess bei 2 los. Wer zwei Zeichen eingab,
+        // bekam vom Zaehler "412 Items" und von der Datenabfrage eine
+        // Absage — also eine Zahl und darunter eine leere Tabelle.
         $stripped = str_replace('*', '', $pattern);
-        if (strlen($stripped) < 2) {
+        if (strlen($stripped) < self::MIN_PATTERN_CHARS) {
             $this->jsonResponse(['count' => null, 'sample' => [], 'truncated' => false,
-                            'hint' => 'Min. 2 Zeichen']);
+                            'hint' => _s('Minimum %1$d characters', self::MIN_PATTERN_CHARS)]);
             return;
         }
         if (strlen($pattern) > 200 || substr_count($pattern, '*') > 4

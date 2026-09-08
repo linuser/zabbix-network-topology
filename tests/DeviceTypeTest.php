@@ -264,6 +264,33 @@ check('radius-eap-01 wird kein Access Point',
 check('NVR am Template "UniFi API" -> camera, nicht wireless',
       HostMetadata::deviceType('nvr-01', ['UniFi API']), 'camera');
 
+// ── $hints: sichtbarer Name und Host-Gruppen als zweiter Anlauf ──────────
+//
+// Bei LLD-erzeugten Hosts ist der technische Name eine UUID und das Template
+// fuer alle Geraeteklassen dasselbe. Der erste Durchlauf endet dann immer im
+// 'server'-Fallback, obwohl Name und Gruppe im selben Datensatz stehen.
+echo "\n  deviceType() — Hints greifen nur, wenn sonst nichts erkannt wird\n\n";
+
+check('UUID + generisches Template ohne Hints -> server',
+      HostMetadata::deviceType('74d55e79-b52e-44a5-a324-1bf8bcc67464',
+                               ['UniFi Network API - Client']), 'server');
+
+check('… mit Gruppe ".../camera" -> camera',
+      HostMetadata::deviceType('74d55e79-b52e-44a5-a324-1bf8bcc67464',
+                               ['UniFi Network API - Client'],
+                               ['Rooftop', 'UniFi Network Clients/camera']), 'camera');
+
+check('Hints ueberstimmen einen Treffer NICHT',
+      HostMetadata::deviceType('cloudmail-01', [],
+                               ['Mail Gateway', 'Switch room servers']), 'mailserver');
+
+check('Leere Hints aendern nichts',
+      HostMetadata::deviceType('sw-core-01', [], []), 'switch');
+
+check('Hints ohne Treffer bleiben server',
+      HostMetadata::deviceType('7f3a91e2', ['Some Template'],
+                               ['Trailer', 'Kunden']), 'server');
+
 // ── speakers(): wer gilt als Netzwerkgeraet, weil er Nachbarn aufzaehlt ──
 //
 // NodeBuilder stuft einen sonst nur als 'server' erkannten Host zum Switch

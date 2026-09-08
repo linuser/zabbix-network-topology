@@ -62,6 +62,13 @@ class NetworkTopologyHealthHistory extends NetworkTopologyController {
     }
 
     protected function doAction(): void {
+        // Als einziger der teuren Lese-Endpunkte fehlte hier die Drosselung.
+        // Der Cache faengt Wiederholungen ab, aber nicht den ersten Schwall
+        // nach einem Neustart oder nach jeder Aenderung am Zeitraum.
+        if (!$this->throttle('health_history')) {
+            return;
+        }
+
         $_t0  = microtime(true);
         $days = (int) $this->getInput('days', 14);
 

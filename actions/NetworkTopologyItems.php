@@ -82,8 +82,9 @@ class NetworkTopologyItems extends NetworkTopologyController {
         }
         // Schutz: zu kurze Pattern verbieten (sonst potenziell zigtausende Items)
         $stripped = str_replace('*', '', $pattern);
-        if (strlen($stripped) < 3) {
-            $this->respond(['error' => 'Pattern too short (min 3 non-wildcard chars)']);
+        if (strlen($stripped) < NetworkTopologyItemCount::MIN_PATTERN_CHARS) {
+            $this->respond(['error' => _s('Pattern too short (min %1$d non-wildcard chars)',
+                                          NetworkTopologyItemCount::MIN_PATTERN_CHARS)]);
             return;
         }
         // Schutz gegen Pattern-DoS: zu viele Wildcards oder uebermaessige

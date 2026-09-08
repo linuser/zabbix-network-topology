@@ -221,7 +221,15 @@ function fmtDuration(sec) {
 // Wert formatieren je nach Unit. Nichts Schlaues — units sind in Zabbix
 // frei wählbar, wir machen nur die häufigsten Fälle.
 function fmtVal(v, unit) {
-    if (v === null || v === undefined || isNaN(v)) return '\u2014';
+    if (v === null || v === undefined || v === '' || isNaN(v)) return '\u2014';
+    // Zahl erzwingen, bevor irgendein Zweig eine Methode darauf aufruft.
+    // NetworkTopologyItems castet Werte oberhalb von PHP_INT_MAX absichtlich
+    // NICHT (Praezision), sie kommen als JSON-String an. isNaN('184467...')
+    // ist false, '184467...'.toFixed ist ein TypeError -- und der fliegt
+    // mitten im Aufbau der Tabelle, es bleibt also nicht eine Zelle leer,
+    // sondern die ganze Tabelle. Betroffen waren die Zweige ohne vorherige
+    // Rechnung: '%', 'ms' und der Default, also Items OHNE Einheit.
+    v = Number(v);
     if (unit === '%') return v.toFixed(1) + ' %';
     if (unit === 'B') {
         if (v < 1024) return v + ' B';
@@ -653,7 +661,11 @@ export function buildPivotToolbar(onApply, theme) {
     function _scheduleCountProbe(pattern) {
         if (_probeTimer) clearTimeout(_probeTimer);
         const p = (pattern || '').trim();
-        if (!p || p.replace(/\*/g, '').length < 2) {
+        // 3, nicht 2 — dieselbe Grenze wie NetworkTopologyItemCount und
+        // NetworkTopologyItems. Bei 2 fragte das Frontend den Zaehler, bekam
+        // eine Zahl, und die Datenabfrage lehnte danach ab: eine Zahl ueber
+        // einer leeren Tabelle.
+        if (!p || p.replace(/\*/g, '').length < 3) {
             countHint.textContent = '';
             return;
         }
