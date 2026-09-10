@@ -2,7 +2,7 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
-## Unreleased
+## v5.3.1 — 2026-09-10
 
 ### Updating from 5.3 — one template to re-import
 

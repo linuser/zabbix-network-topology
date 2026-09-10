@@ -210,6 +210,11 @@ Replace the `network_topology` directory with the new version, `chown`, reload p
 > - **Reload the page with a cache bypass** (Ctrl/Cmd + Shift + R) once. The bundle changed substantially; a normal reload may still serve the cached one, and you would be looking at the old UI while wondering why nothing changed.
 > - **The map now follows your Zabbix theme.** If your profile is set to a dark theme, the map renders dark from the first load. There is no switch — that is the point. Nothing is stored, nothing to migrate.
 
+> **From 5.3.0 to 5.3.1:** again **no new actions** — replace the directory, `chown`, reload php-fpm; "Scan directory" is optional. Reload the page once with a cache bypass, the bundle changed. Two things outside the module directory:
+>
+> - **Re-import one template: `templates/nt_lldp_snmp_template.yaml`**, with *Update existing* ticked for discovery rules and item prototypes. It makes LLDP discovery work on switches that omit the TimeMark from the neighbour index (confirmed: TP-Link JetStream T2600G). On every other device it changes nothing. The other two templates are unchanged.
+> - **UniFi through the official *UniFi Network API* templates:** only their *Client* template carries `uplink.id`. For edges between switches, access points and the gateway, add a dependent item `uplink.id` on `details.json` with JSONPath `$.uplink.deviceId` to the *UniFi Network API - Device* template — see [LLDP-SETUP.md](LLDP-SETUP.md).
+
 #### Update via git
 
 If you would rather track the repository than download a ZIP each time: the
@@ -248,7 +253,7 @@ with their own target directories; install those from the release ZIPs, or
 extract them the same way into `$UI/network_topology_widget` and friends.
 
 Pin to a release instead of tracking `main` with
-`git -C /opt/nt-src checkout v5.3.0`.
+`git -C /opt/nt-src checkout v5.3.1`.
 
 #### Upgrading from 4.x to 5.0
 
@@ -522,6 +527,11 @@ Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm
 > - **Einmal mit Cache-Umgehung neu laden** (Strg/Cmd + Umschalt + R). Das Bundle hat sich stark geändert; ein normales Neuladen liefert unter Umständen weiter das zwischengespeicherte, und man sieht die alte Oberfläche und wundert sich.
 > - **Die Karte folgt jetzt deinem Zabbix-Theme.** Steht im Profil ein dunkles Theme, zeichnet die Karte ab dem ersten Aufruf dunkel. Einen Schalter gibt es nicht — das ist die Absicht. Es wird nichts gespeichert, es ist nichts zu migrieren.
 
+> **Von 5.3.0 auf 5.3.1:** wieder **keine neuen Actions** — Verzeichnis ersetzen, `chown`, php-fpm neu laden; „Scan directory" ist optional. Einmal mit Cache-Umgehung neu laden, das Bundle hat sich geändert. Zwei Dinge außerhalb des Modulverzeichnisses:
+>
+> - **Ein Template neu importieren: `templates/nt_lldp_snmp_template.yaml`**, mit *Update existing* für Discovery-Regeln und Item-Prototypen. Damit funktioniert die LLDP-Discovery auf Switches, die die TimeMark im Nachbar-Index weglassen (bestätigt: TP-Link JetStream T2600G). An allen anderen Geräten ändert es nichts. Die beiden übrigen Templates sind unverändert.
+> - **UniFi über die offiziellen *UniFi Network API*-Templates:** nur deren *Client*-Template trägt `uplink.id`. Für Kanten zwischen Switches, Access Points und Gateway ein abhängiges Item `uplink.id` auf `details.json` mit JSONPath `$.uplink.deviceId` im Template *UniFi Network API - Device* ergänzen — siehe [LLDP-SETUP.de.md](LLDP-SETUP.de.md).
+
 #### Update per git
 
 Wer lieber dem Repository folgt, als jedes Mal eine ZIP zu laden: das gebaute
@@ -562,7 +572,7 @@ oder auf demselben Weg nach `$UI/network_topology_widget` und so weiter
 entpacken.
 
 Statt `main` zu folgen, lässt sich mit
-`git -C /opt/nt-src checkout v5.3.0` auf ein Release festnageln.
+`git -C /opt/nt-src checkout v5.3.1` auf ein Release festnageln.
 
 #### Umstieg von 4.x auf 5.0
 

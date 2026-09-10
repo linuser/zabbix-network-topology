@@ -50,11 +50,15 @@ list of neighbours.
 
 > **Special case UniFi (`uplink.id`):** Ubiquiti generally does **not** expose the
 > LLDP neighbour table over SNMP — only the controller knows the topology. The
-> official *UniFi Network API* template pulls it via JSONPath `$.uplinkDeviceId`
-> from `details.json` into an item `uplink.id` ("which device am I attached to").
-> Its value is the **device UUID** of the uplink — and because the same template
-> names its hosts after exactly that UUID, ordinary name matching resolves it to
-> the right host. The source shows up in the LLDP-Q tab as `unifi`.
+> official *UniFi Network API* templates expose it as an item `uplink.id` ("which
+> device am I attached to") — but **only for clients**: the *Client* template pulls
+> it via JSONPath `$.uplinkDeviceId` from `details.json`. The *Device* template has
+> no such item, so switches, access points and the gateway stay unconnected until
+> you add one yourself: a dependent item `uplink.id` on `details.json` with JSONPath
+> **`$.uplink.deviceId`** — the API nests the field for devices. Either way the
+> value is the **device UUID** of the uplink, and because the site discovery names
+> its hosts after exactly that UUID, ordinary name matching resolves it to the
+> right host. The source shows up in the LLDP-Q tab as `unifi`.
 >
 > Two limitations to know: it is the **controller's view**, not a device protocol
 > (if the controller goes down, the topology goes stale). And it only works while
@@ -241,13 +245,18 @@ person the afternoon you just spent.
 > SNMP on the *adopted devices*, not on the console itself; and Ubiquiti has been
 > winding SNMP down for years. So don't build on an LLDP walk against UniFi.
 >
-> **The path that holds:** the official **UniFi Network API** template. It creates
-> an item **`uplink.id`** per device/client (JSONPath `$.uplinkDeviceId` from
-> `details.json`) — the device UUID of the uplink. Since the same template names its
-> hosts after that UUID, the module resolves the edge with no extra work:
-> **linking the template is enough**, no custom items. Source in the LLDP-Q tab:
-> `unifi`. (Incidentally, the community on UniFi is fixed to `public` and not
-> configurable — which is why the field is absent from the UI.)
+> Measured again in September 2026 on a UDM Pro and a UniFi switch: with SNMP
+> enabled in the Network application, both answer — but `lldpRemSysName` returns
+> *No Such Object* on both, and on the UDM Pro so does the storage table of the
+> HOST-RESOURCES-MIB. SNMPv3 on the UDM Pro authenticates and then grants an empty
+> view. The console's own SNMP setting has no community field; the Network
+> application's does.
+>
+> **The path that holds:** the official **UniFi Network API** templates and
+> `uplink.id` — see the special case further up. For clients, linking the template
+> is enough. For edges between devices, one item has to be added to the *Device*
+> template (`$.uplink.deviceId` on `details.json`); without it the switches float
+> unconnected. Source in the LLDP-Q tab: `unifi`.
 
 ---
 

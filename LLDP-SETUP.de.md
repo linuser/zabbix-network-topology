@@ -51,12 +51,16 @@ Der Wert wird an `,`, Zeilenumbruch und `|` gesplittet — ein einzelnes Item da
 Liste aller Nachbarn enthalten.
 
 > **Sonderfall UniFi (`uplink.id`):** Ubiquiti gibt die LLDP-Nachbartabelle per SNMP in der
-> Regel **nicht** heraus — die Topologie kennt nur der Controller. Das offizielle
-> *UniFi Network API*-Template holt sie per JSONPath `$.uplinkDeviceId` aus `details.json`
-> in ein Item `uplink.id` („an welchem Gerät hänge ich"). Dessen Wert ist die **Geräte-UUID**
-> des Uplinks — und weil dasselbe Template seine Hosts technisch nach eben dieser UUID
-> benennt, löst das normale Namens-Matching sie direkt auf den richtigen Host auf. Quelle
-> erscheint im LLDP-Q-Tab als `unifi`.
+> Regel **nicht** heraus — die Topologie kennt nur der Controller. Die offiziellen
+> *UniFi Network API*-Templates liefern sie als Item `uplink.id` („an welchem Gerät hänge
+> ich") — aber **nur für Clients**: das *Client*-Template holt es per JSONPath
+> `$.uplinkDeviceId` aus `details.json`. Das *Device*-Template hat kein solches Item;
+> Switches, Access Points und Gateway bleiben ohne Kante, bis man es selbst ergänzt: ein
+> abhängiges Item `uplink.id` auf `details.json` mit JSONPath **`$.uplink.deviceId`** — die
+> API verschachtelt das Feld bei Geräten. Der Wert ist in beiden Fällen die
+> **Geräte-UUID** des Uplinks, und weil die Site-Discovery ihre Hosts technisch nach eben
+> dieser UUID benennt, löst das normale Namens-Matching sie direkt auf den richtigen Host
+> auf. Quelle erscheint im LLDP-Q-Tab als `unifi`.
 >
 > Zwei Einschränkungen, die man kennen muss: Es ist die **Controller-Sicht**, kein
 > Geräte-Protokoll (fällt der Controller aus, veraltet die Topologie). Und es funktioniert
@@ -217,12 +221,17 @@ du gerade investiert hast.
 > Geräten*, nicht auf der Konsole selbst; und Ubiquiti baut SNMP seit Jahren zurück. Auf einen
 > LLDP-Walk gegen UniFi sollte man also nicht bauen.
 >
-> **Der Weg, der trägt:** das offizielle **UniFi Network API**-Template. Es legt pro Gerät/Client
-> ein Item **`uplink.id`** an (JSONPath `$.uplinkDeviceId` aus `details.json`) — die Geräte-UUID
-> des Uplinks. Da dasselbe Template seine Hosts nach der UUID benennt, löst das Modul die Kante
-> ohne Zusatzarbeit auf: **Template dranhängen genügt**, keine eigenen Items bauen. Quelle im
-> LLDP-Q-Tab: `unifi`. (Die Community ist bei UniFi übrigens fest `public` und nicht einstellbar
-> — deshalb fehlt das Feld in der UI.)
+> Im September 2026 erneut gemessen, an einer UDM Pro und einem UniFi-Switch: mit in der
+> Network-Anwendung aktiviertem SNMP antworten beide — aber `lldpRemSysName` liefert auf
+> beiden *No Such Object*, auf der UDM Pro ebenso die Speichertabelle der HOST-RESOURCES-MIB.
+> SNMPv3 meldet sich auf der UDM Pro erfolgreich an und gewährt dann eine leere Sicht. Die
+> SNMP-Einstellung der Konsole selbst hat kein Community-Feld, die der Network-Anwendung schon.
+>
+> **Der Weg, der trägt:** die offiziellen **UniFi Network API**-Templates und `uplink.id` —
+> siehe den Sonderfall weiter oben. Für Clients genügt es, das Template anzuhängen. Für
+> Kanten zwischen Geräten muss im *Device*-Template ein Item ergänzt werden
+> (`$.uplink.deviceId` auf `details.json`); ohne es schweben die Switches unverbunden. Quelle
+> im LLDP-Q-Tab: `unifi`.
 
 ---
 
