@@ -172,7 +172,7 @@ doubt, verify with the [test below](#the-test-that-settles-it)):
 | **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ no SNMP | **no edges** | the "dumb switch" case → add manually |
 | **TP-Link unmanaged** | ✗ | invisible | devices appear directly connected, the switch is missing |
 | **Ubiquiti EdgeSwitch / EdgeMax** | ✓ mostly | **works** | EdgeOS, decent SNMP |
-| **Ubiquiti UniFi** (USW/UDM) | ✗ often **no** SNMP at all | **works via API** | LLDP lives in the controller → the official *UniFi Network API* template provides `uplink.id`, which the module reads directly |
+| **Ubiquiti UniFi** (USW/UDM) | ✗ SNMP answers, but **no** LLDP-MIB | **works via API** | Checked on a UDM Pro (UniFi OS) and a USW switch: SNMP answers, `lldpRemSysName` returns *No Such Object* on both. LLDP lives in the controller instead. The official *UniFi Network API* templates report `uplink.id` **only for clients** — for edges between devices, add a dependent item `uplink.id` on `details.json` with JSONPath `$.uplink.deviceId` to the *UniFi Network API - Device* template. The module reads it directly |
 | **Cisco** (IOS/NX-OS) | ✓ | **works** | CDP on by default, LLDP opt-in (`lldp run`) |
 | **Huawei** (VRP, e.g. S5700) | ✓ | **works** | confirmed on an S5700 in a production network. VRP answers the standard LLDP-MIB — but the default SNMP view may hide it, see below. The official *Huawei VRP by SNMP* template does **not** collect the neighbour table |
 | **MikroTik** (RouterOS) | ✓ walks only | **works** | confirmed on a CRS326-24S+2Q+ (RouterOS 7.22): the LLDP-MIB answers walks, but exact-instance GETs return `noSuchObject` — see below |

@@ -4,27 +4,38 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ## Unreleased
 
-### Fixed
+### Updating from 5.3 — one template to re-import
 
-- **LLDP discovery produced no items on TP-Link JetStream switches** (issue
-  #15, reported together with the complete fix by lechu2375). LLDP-MIB
-  defines the neighbour index as `TimeMark.LocalPort.RemIndex`; TP-Link
-  JetStream (tested: T2600G-28TS, HW v4) omits the TimeMark and answers
-  `25.1` instead of `1234.25.1`. The discovery script and all six item
-  prototypes required three parts, so every row was dropped — silently,
-  because *Discard value* raises no error anywhere. The first fix alone would
-  not have been enough: discovery would have created the items, and the
-  prototypes would have left every one of them empty. The TimeMark is now
-  optional in both places; devices that do send one are unaffected.
+No action was added or renamed, so **no rescan**: replacing the module
+directory, `chown`, and a php-fpm reload is the procedure. Reload the page once
+with a cache bypass — the bundle changed. Layouts, manual links, pins, notes and
+presets stay where they are.
 
-  **Re-import `templates/nt_lldp_snmp_template.yaml`** with *Update existing*
-  ticked for discovery rules and item prototypes — the fix lives in the
-  template, not in the module.
+**One shipped template changed: `nt_lldp_snmp`.** Re-import
+`templates/nt_lldp_snmp_template.yaml` with *Update existing* ticked for
+discovery rules and item prototypes. That is what makes TP-Link JetStream
+switches report their neighbours (see below); on every other device it changes
+nothing. `nt_health_score` and `nt_topology_change` are unchanged.
 
-  The template's logic is now under test. `ci:templates` runs the discovery
-  JavaScript and the six prototype regexes, read from the template file
-  itself, against walks of both index shapes — including the cases where an
-  optional TimeMark could let port 5 match port 25.
+**UniFi: one item you add yourself.** Only relevant if you monitor UniFi through
+the official *UniFi Network API* templates. Their *Client* template carries
+`uplink.id`, their *Device* template does not — so clients hang on their
+switches, while switches, access points and the gateway float unconnected. Add
+a dependent item `uplink.id` on the master item `details.json`, with JSONPath
+`$.uplink.deviceId` — nested for devices, unlike the flat field on clients. See
+the UniFi row in [LLDP-SETUP.md](LLDP-SETUP.md). Until this release, UniFi
+edges could not appear at all; see the second entry under *Fixed*.
+
+### Thanks
+
+**[@lechu2375](https://github.com/lechu2375)** opened
+[#15](https://github.com/linuser/zabbix-network-topology/issues/15) with the
+cause, the raw walk that proves it, a fix for both layers, and the observation
+that fixing only the first layer would leave every item empty — tested on two
+switches before he sent it. The fix in this release is his, verified against
+both index shapes and adopted unchanged. His
+[#14](https://github.com/linuser/zabbix-network-topology/issues/14), on
+neighbour matching across tenants, is still open.
 
 ### Added
 
@@ -55,6 +66,37 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+- **LLDP discovery produced no items on TP-Link JetStream switches**
+  ([#15](https://github.com/linuser/zabbix-network-topology/issues/15)).
+  LLDP-MIB defines the neighbour index as `TimeMark.LocalPort.RemIndex`;
+  TP-Link JetStream (tested: T2600G-28TS, HW v4) omits the TimeMark and answers
+  `25.1` instead of `1234.25.1`. The discovery script and all six item
+  prototypes required three parts, so every row was dropped — silently,
+  because *Discard value* raises no error anywhere. Fixing only the discovery
+  would not have been enough: it would have created the items, and the
+  prototypes would have left every one of them empty. The TimeMark is now
+  optional in both places; devices that do send one are unaffected. Needs the
+  template re-import described above. The template's logic is under test from
+  now on.
+
+- **UniFi edges could never appear.** The module fetches items by key, and
+  `uplink.id` was missing from the list — so the UniFi support described in
+  LLDP-SETUP.md never received a single value. Fetching it needed two more
+  changes to be safe. `uplink.id` no longer counts as evidence that a host is a
+  network device: it does not say "whom do I see" like a neighbour table, it
+  says "what do I hang on" — which every phone, camera and TV stick behind a
+  controller reports, and each of them would have been drawn as a switch. And
+  device classification now also consults a host's visible name and host
+  groups, because discovery-created hosts are named by UUID and share one
+  template name, so hostname and template say nothing. That second look only
+  happens when the first yields nothing; no host recognised correctly today
+  changes.
+
+- **The port names announced in 5.3.0 never appeared.** Same cause: `ifName`,
+  `ifDescr` and `ifAlias` were never fetched, so port labels and port names in
+  the edge panel stayed empty on every installation — while the 5.3.0 notes
+  explained where their data comes from. They are fetched now.
+
 - **`nt-install.sh` refused to install on Apache with mod_php.**
   ([#13](https://github.com/linuser/zabbix-network-topology/issues/13)) The
   script looked for a PHP-FPM service and nothing else. With mod_php there is
@@ -71,6 +113,17 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   reload PHP by hand. Refusing to install because we cannot clear a cache was
   the wrong trade. `nt-uninstall.sh` carried the same detection and got the
   same fix.
+
+- **The items table disappeared on very large counter values.** Values beyond
+  PHP's integer range are passed on as strings to keep their precision, and
+  formatting then called a number method on a string. The exception was thrown
+  mid-render — not one empty cell but no table at all — for items without a
+  unit, and for `%` and `ms`.
+
+- **Two characters in the item search gave a count above an empty table.** The
+  counter accepted two, the query it counts for required three. Both share one
+  limit now, and the frontend follows it. The hint next to the counter was also
+  in German; it is English now.
 
 - **A red "down" count on links that were perfectly fine.** Reported on
   r/zabbix: a red arrow with a number on some switch-to-switch links, while
@@ -99,6 +152,61 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   It now says so once per session, and names the way out: *Layout → Cluster:
   off*. Only when there are saved positions to lose.
 
+- **Positions arranged in the hop view were lost on reload.** The server
+  checked view names against a pattern that did not cover the hop view's
+  format, skipped the whole view and still answered "ok". Every hop-view
+  arrangement since the feature exists was discarded without a warning.
+
+- **A host's only Disaster could be missing from its problem list.** Problems
+  were capped at 20 per host *before* sorting by severity, while Zabbix returns
+  them newest first. Twenty recent warnings and an older Disaster meant twenty
+  warnings in the panel — and a red icon on the node.
+
+- **Memory never showed for SNMP hosts.** The storage type is an OID, and it
+  was read after a numeric cast that turned `1.3.6.1.2.1.25.2.1.2` into `1.3`.
+  RAM was never recognised, so the node showed "—" even with used and total
+  present.
+
+- **Multi-core CPU load was halved instead of averaged.** Each further core
+  was folded in as `(old + new) / 2`. An eight-core host with one busy core
+  reported 0.6 % instead of 10 %, and the result depended on item order.
+
+- **Synology showed 99 % CPU permanently** on devices that report idle time in
+  plain percent. A fixed factor assumed hundredths of a percent. The unit is
+  now read from the value, which is unambiguous: an idle above 100 does not
+  exist in percent.
+
+- **The tooltip sparkline disagreed with the map.** It chose its bit factor by
+  a different rule than the map, so for the common `net.if.in[ifHC…]` keys it
+  read eight times the edge label; error and discard counters were plotted as
+  traffic; and the history query returned the *oldest* rows of the window, so
+  "the last hour" could end half an hour ago.
+
+- **Reports counted host groups as hosts.** With Group View on, "Hosts total"
+  was the number of groups and rows averaged CPU across a whole group; with
+  ghost nodes on, reports listed devices Zabbix does not monitor. Reports now
+  read the hosts, not the rendered map.
+
+- **A late refresh could draw the map over the Table tab.** Switching tabs while
+  an expensive response was in flight left the map painted on top of the table,
+  with the Table tab still highlighted.
+
+- **The items view hung on its spinner in hop mode.** With a single host
+  selected there is no host group to query, and the view gave up without
+  replacing the loading placeholder. It now says what is missing.
+
+- **Wallboards grew in memory over time.** Toolbar handlers were added on every
+  render and never removed, some of them holding on to entire graphs that had
+  already been destroyed; the layout menu added one document listener per
+  rebuild — about 120 an hour on a wallboard.
+
+- **A host that named itself as its neighbour got a loop edge**, and the
+  "self" column in the LLDP-Q tab read zero on every installation. The guard
+  compared an integer with a string.
+
+- **The port scan reported every IPv6 host as closed.** The address was built
+  without brackets, which leaves an IPv6 literal ambiguous.
+
 - **Severity was carried by color alone.** The ring around a node encoded its
   worst problem purely as a hue. Converted to greyscale, four of the six levels
   land almost on top of each other — Normal 0.41, Info 0.38, Warning 0.44,
@@ -121,6 +229,9 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
   The color guide was showing a filled dot per level, i.e. only the channel
   that fails. It now draws the ring as the map draws it; a legend that shows a
   different shape than the map teaches nothing.
+
+- **Two data endpoints were not rate-limited** — the health history and the
+  diagnostics endpoint, the only two of eighteen without it.
 
 ## v5.3.0 — 2026-09-04
 

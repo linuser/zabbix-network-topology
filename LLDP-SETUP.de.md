@@ -146,7 +146,7 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 | **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ kein SNMP | **keine Kanten** | „dumb switch"-Fall → manuell |
 | **TP-Link unmanaged** | ✗ | unsichtbar | Geräte erscheinen direkt verbunden, Switch fehlt |
 | **Ubiquiti EdgeSwitch / EdgeMax** | ✓ meist | **funktioniert** | EdgeOS, ordentliches SNMP |
-| **Ubiquiti UniFi** (USW/UDM) | ✗ oft **gar kein** SNMP | **funktioniert via API** | LLDP lebt im Controller → offizielles *UniFi Network API*-Template liefert `uplink.id`, das Modul liest es direkt |
+| **Ubiquiti UniFi** (USW/UDM) | ✗ SNMP antwortet, aber **keine** LLDP-MIB | **funktioniert via API** | Geprüft an einer UDM Pro (UniFi OS) und einem USW-Switch: SNMP antwortet, `lldpRemSysName` liefert auf beiden *No Such Object*. LLDP lebt stattdessen im Controller. Die offiziellen *UniFi Network API*-Templates liefern `uplink.id` **nur für Clients** — für Kanten zwischen Geräten ein abhängiges Item `uplink.id` auf `details.json` mit JSONPath `$.uplink.deviceId` im Template *UniFi Network API - Device* ergänzen. Das Modul liest es direkt |
 | **Cisco** (IOS/NX-OS) | ✓ | **funktioniert** | CDP default an, LLDP opt-in (`lldp run`) |
 | **Huawei** (VRP, z. B. S5700) | ✓ | **funktioniert** | an einer S5700 im Produktivnetz bestätigt. VRP beantwortet die Standard-LLDP-MIB — die Default-SNMP-View kann sie aber verdecken, siehe unten. Das offizielle *Huawei VRP by SNMP*-Template sammelt die Nachbar-Tabelle **nicht** |
 | **MikroTik** (RouterOS) | ✓ nur Walks | **funktioniert** | an einer CRS326-24S+2Q+ (RouterOS 7.22) bestätigt: die LLDP-MIB beantwortet Walks, exakte GETs auf einzelne Instanzen liefern `noSuchObject` — siehe unten |

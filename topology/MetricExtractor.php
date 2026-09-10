@@ -279,9 +279,14 @@ final class MetricExtractor {
                  || preg_match('/(?:^|\.)(lldp.*sysname|cdp.*device)/i', $key)
                  )) {
                 // uplink.id (UniFi Network API): KEIN Geraete-Protokoll wie LLDP/CDP,
-                // sondern die Controller-Sicht — das Template holt per JSONPath
-                // $.uplinkDeviceId "an welchem Geraet haenge ich". Der Wert ist die
-                // UniFi-Geraete-UUID, und weil dasselbe Template seine Hosts nach
+                // sondern die Controller-Sicht — "an welchem Geraet haenge ich".
+                // Das offizielle Client-Template holt ihn per JSONPath
+                // $.uplinkDeviceId. Das Geraete-Template hat das Item NICHT; wer
+                // Kanten zwischen Switches und APs will, ergaenzt es dort selbst,
+                // und zwar mit $.uplink.deviceId — die API verschachtelt das Feld
+                // bei Geraeten (am 08.09.2026 an einem USW 24 PoE nachgesehen,
+                // siehe LLDP-SETUP.md). Der Wert ist in beiden Faellen die
+                // UniFi-Geraete-UUID, und weil die Site-Discovery ihre Hosts nach
                 // eben dieser UUID benennt, ist er zugleich der technische Hostname
                 // des Uplink-Hosts → das bestehende Namens-Matching im
                 // LldpEdgeBuilder loest ihn ohne Sonderlogik auf.
