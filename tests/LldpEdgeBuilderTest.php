@@ -515,6 +515,16 @@ $rProxy = LldpEdgeBuilder::build($hProxy, $rawRtt, [], [], [], [], [], [], [],
 $eProxy = findEdge($rProxy['edges'], 'r1', 'r2');
 check('verschiedene Proxies: kein Abschlag',    (int) $eProxy['confidence'], $ohne);
 
+// Proxy-GRUPPE: proxyid ist 0 wie bei einem Host am Server. Der Vergleich der
+// proxyid allein hielt beide fuer denselben Messpunkt — mit gleicher proxyid
+// muss hier trotzdem der Abschlag entfallen.
+$hGroup = $hRtt;
+$hGroup['r2']['proxy_groupid'] = '3';
+$rGroup = LldpEdgeBuilder::build($hGroup, $rawRtt, [], [], [], [], [], [], [],
+                                 ['r1' => 1.0, 'r2' => 400.0]);
+$eGroup = findEdge($rGroup['edges'], 'r1', 'r2');
+check('Proxy-Gruppe: kein Abschlag trotz gleicher proxyid', (int) $eGroup['confidence'], $ohne);
+
 // ── Self-Loop mit NUMERISCHEN Host-IDs ───────────────────────────────────
 //
 // Alle Tests oben benutzen 'h1'/'aruba' als Host-ID. Echte Zabbix-Hostids sind

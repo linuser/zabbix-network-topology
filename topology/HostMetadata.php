@@ -152,9 +152,15 @@ final class HostMetadata {
      * Geraetetyp aus Hostname + Template-Namen raten (steuert das Icon).
      * Erster Treffer gewinnt — die Reihenfolge der Map ist daher bedeutsam
      * (spezifisch vor generisch), Fallback 'server'.
-     *
-     * $hints ist der zweite Anlauf und greift NUR, wenn der erste im
-     * 'server'-Fallback endet: sichtbarer Name und Host-Gruppen des Hosts.
+     */
+    public static function deviceType(string $host, array $tpls): string {
+        return self::matchType(strtolower($host . ' ' . implode(' ', $tpls)));
+    }
+
+    /**
+     * Geraetetyp aus sichtbarem Namen und Host-Gruppen — die LETZTE Stufe in
+     * NodeBuilder, nach Template, LLDP-Capabilities und Nachbartabelle.
+     * Leerstring, wenn nichts passt; dann bleibt es beim 'server'.
      *
      * Der Grund dafuer ist strukturell und nicht auf einen Hersteller
      * beschraenkt: bei jedem per LLD erzeugten Host ist der TECHNISCHE Name
@@ -164,25 +170,26 @@ final class HostMetadata {
      * ins Leere und lieferte dreimal 'server'. Der sichtbare Name (LABNODE01)
      * und die Gruppe stehen im selben Datensatz und wurden nie angesehen.
      *
-     * Zweiter Anlauf statt einfach mehr Text in $s, weil die Muster kurz und
-     * gierig sind: 'switch' als Teilstring wuerde eine Gruppe "Switch room
-     * servers" zu einem Switch machen. Als Fallback kann es nur Hosts
-     * betreffen, ueber die sonst gar nichts bekannt ist — dort ist eine
-     * geratene Klasse besser als der pauschale Server.
+     * LETZTE Stufe, weil die Muster kurz und gierig sind und Gruppennamen frei
+     * gewaehlt: in der ersten Fassung liefen die Hints innerhalb von
+     * deviceType() und damit VOR den Capabilities — ein Switch, dessen
+     * Bridge-Bit ein Nachbar meldet, wurde in der Gruppe "Site A/Storage room"
+     * zu 'storage' und in "Backups" zu 'ups'. Der Kommentar behauptete schon
+     * damals das Gegenteil. Gefunden in einer Review. Was ein Geraet ueber
+     * sich selbst ankuendigt, schlaegt jeden Namen.
      */
-    public static function deviceType(string $host, array $tpls, array $hints = []): string {
-        $first = self::matchType(strtolower($host . ' ' . implode(' ', $tpls)));
-
-        if ($first !== 'server' || $hints === []) {
-            return $first;
+    public static function typeFromHints(array $hints): string {
+        $hints = array_filter(array_map('strval', $hints), static fn ($h) => $h !== '');
+        if ($hints === []) {
+            return '';
         }
+        $t = self::matchType(strtolower(implode(' ', $hints)));
 
-        return self::matchType(strtolower(implode(' ', $hints)));
+        return $t === 'server' ? '' : $t;
     }
 
     /**
-     * Der eigentliche Musterabgleich. Ausgelagert, damit deviceType() ihn
-     * zweimal auf verschiedene Eingaben anwenden kann.
+     * Der eigentliche Musterabgleich — fuer deviceType() und typeFromHints().
      */
     private static function matchType(string $s): string {
         $map = [
@@ -209,8 +216,9 @@ final class HostMetadata {
             // Surveillance
             'camera'         => ['cam-','camera','nvr','dvr','hikvision','dahua','axis'],
             // Power
-            'ups'            => ['ups-','usv-','usv','ups','apc','eaton','powerware',
-                                 'network ups'],
+            // 'ups' und 'usv' stehen unten als Ausdruck: als Teilstring trafen
+            // sie "backups01", "workgroups" und "busverbindung".
+            'ups'            => ['apc','eaton','powerware','network ups'],
             // Home automation
             'homeauto'       => ['home assistant','homeassistant','home-assistant',
                                  'zigbee','z-wave','domoticz','openhab'],
@@ -252,6 +260,9 @@ final class HostMetadata {
             'firewall' => '/\budm|\busg|\buxg/',
             'switch'   => '/\busw/',
             'wireless' => '/\buap|\bu6|\bu7|\beap\d|\bunifi ap\b/',
+            // Vorn eine Wortgrenze, hinten kein Buchstabe: "ups01", "ups-rack",
+            // "usv keller" ja — "backups", "upstream", "busverbindung" nein.
+            'ups'      => '/\bups(?![a-z])|\busv(?![a-z])/',
         ];
 
         // Ein Durchlauf, damit die Reihenfolge der Map fuer beide Formen

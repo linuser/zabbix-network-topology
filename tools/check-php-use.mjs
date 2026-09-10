@@ -37,7 +37,18 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DIRS = ['actions', 'topology', 'views'];
+// Wurzeln, REKURSIV durchlaufen. Die erste Fassung las drei Verzeichnisse
+// flach — und damit keine einzige Widget-Datei: die liegen unter
+// widget*/actions/ und widget*/includes/, also eine Ebene tiefer, und genau
+// dort macht ein fehlendes use eine Dashboard-Kachel weiss. Module.php liegt
+// im Wurzelverzeichnis und fehlte ebenso. Aufgefallen in einer Review; ein
+// Probelauf mit bloss ergaenzten Verzeichnisnamen war gruen und haette die
+// Unterverzeichnisse trotzdem nicht gesehen.
+const WURZELN = ['actions', 'topology', 'views',
+    ...readdirSync(ROOT, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && /^widget/.test(e.name))
+        .map((e) => e.name)];
+const EINZELDATEIEN = ['Module.php'];
 
 let failures = 0;
 let geprueft = 0;
@@ -53,11 +64,27 @@ function entkerne(src) {
         .replace(/"(?:\\.|[^"\\])*"/g, '""');   // doppelte
 }
 
-for (const dir of DIRS) {
-    let dateien;
-    try { dateien = readdirSync(join(ROOT, dir)).filter((f) => f.endsWith('.php')); }
-    catch { continue; }
+// Alle PHP-Dateien, nach Verzeichnis gruppiert — so bleibt die Pruefschleife
+// unten, wie sie war, und die Meldungen nennen weiter "verzeichnis/datei".
+const nachVerzeichnis = new Map();
+function sammle(rel) {
+    let eintraege;
+    try { eintraege = readdirSync(join(ROOT, rel), { withFileTypes: true }); }
+    catch { return; }
+    for (const e of eintraege) {
+        if (e.isDirectory()) { sammle(join(rel, e.name)); continue; }
+        if (!e.name.endsWith('.php')) continue;
+        if (!nachVerzeichnis.has(rel)) nachVerzeichnis.set(rel, []);
+        nachVerzeichnis.get(rel).push(e.name);
+    }
+}
+WURZELN.forEach(sammle);
+for (const f of EINZELDATEIEN) {
+    if (!nachVerzeichnis.has('.')) nachVerzeichnis.set('.', []);
+    nachVerzeichnis.get('.').push(f);
+}
 
+for (const [dir, dateien] of nachVerzeichnis) {
     for (const datei of dateien) {
         const pfad = join(ROOT, dir, datei);
         const roh  = readFileSync(pfad, 'utf8');

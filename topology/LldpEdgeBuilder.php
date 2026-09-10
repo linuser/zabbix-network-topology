@@ -661,6 +661,21 @@ final class LldpEdgeBuilder {
         }
 
         // Verschiedene Messpunkte => nicht vergleichbar.
+        //
+        // Proxy-GRUPPEN (Zabbix 7.0+) zuerst: ein Host, der ueber eine
+        // Proxy-Gruppe laeuft, traegt proxyid 0 — genau wie einer am Server.
+        // Der Vergleich der proxyid allein hielt die beiden deshalb fuer
+        // denselben Messpunkt, und eine korrekt verkabelte Kante ueber einen
+        // entfernten Proxy verlor bis zu 20 Punkte. Welcher Proxy der Gruppe
+        // gerade pingt, wechselt zudem; zwei Hosts derselben Gruppe sind also
+        // ebenso wenig vergleichbar. Diese Pruefung zieht nur ab und vergibt
+        // nie etwas — im Zweifel zu schweigen kostet nichts.
+        foreach ([$a, $b] as $hid) {
+            $pg = (string) ($hosts[$hid]['proxy_groupid'] ?? '0');
+            if ($pg !== '0' && $pg !== '') {
+                return 0;
+            }
+        }
         $pa = (string) ($hosts[$a]['proxyid'] ?? '');
         $pb = (string) ($hosts[$b]['proxyid'] ?? '');
         if ($pa !== $pb) {

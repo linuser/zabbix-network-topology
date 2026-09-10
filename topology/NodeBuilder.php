@@ -83,26 +83,20 @@ final class NodeBuilder {
             $acked = $host_ack_acked[$hid] ?? 0;
             $all_acked = $total > 0 && $acked === $total;
 
-            // Device-Type in vier Stufen. Die Reihenfolge ist der Punkt:
+            // Device-Type in fuenf Stufen. Die Reihenfolge ist der Punkt:
             //
             //   1. nt:icon-Tag           — explizit gesetzt, gewinnt immer
             //   2. Name/Template-Muster  — unveraendert wie bisher
             //   3. LLDP-Capabilities     — was der Nachbar ueber ihn meldet
             //   4. spricht LLDP/CDP      — dann ist es Netzwerkgeraet, kein Server
+            //   5. sichtbarer Name/Gruppen — letzter Ausweg, siehe unten
             //
-            // 3 und 4 greifen NUR, wenn Stufe 2 im 'server'-Fallback gelandet
+            // 3 bis 5 greifen NUR, wenn Stufe 2 im 'server'-Fallback gelandet
             // ist. Andersherum waere es riskant: ein Host namens "rtr-core-01"
             // meldet als L3-Switch auch das Bridge-Bit und wuerde vom Protokoll
             // zum Switch umgestempelt, obwohl der Name die Absicht kennt. So
             // aendert sich an keinem Host etwas, der heute richtig erkannt wird.
-            // Sichtbarer Name und Gruppen als zweiter Anlauf — sie greifen nur,
-            // wenn Hostname und Template nichts hergeben. Bei LLD-Hosts ist
-            // genau das die Regel: der technische Name ist eine UUID.
-            $detected_type = HostMetadata::deviceType(
-                $h['host'],
-                $tpls,
-                array_merge([(string) ($h['name'] ?? '')], $host_group_names[$hid] ?? [])
-            );
+            $detected_type = HostMetadata::deviceType($h['host'], $tpls);
             if ($detected_type === 'server') {
                 $from_caps = HostMetadata::typeFromCaps($lldp_host_caps[$hid] ?? []);
                 if ($from_caps !== '') {
@@ -120,6 +114,20 @@ final class NodeBuilder {
                     // bleibt der namenlose Host mit unbekanntem Template — und
                     // da ist Switch die bessere Wette als Server.
                     $detected_type = 'switch';
+                }
+                else {
+                    // Stufe 5, die letzte: sichtbarer Name und Host-Gruppen.
+                    // Bei LLD-Hosts ist der technische Name eine UUID, und
+                    // Template-Namen gelten fuer alle Geraeteklassen — ueber
+                    // sie ist dann nichts bekannt. Ausdruecklich NACH Caps und
+                    // Nachbartabelle: ein Gruppenname ist frei gewaehlt, ein
+                    // Bridge-Bit meldet das Geraet selbst (siehe typeFromHints).
+                    $from_hints = HostMetadata::typeFromHints(
+                        array_merge([(string) ($h['name'] ?? '')], $host_group_names[$hid] ?? [])
+                    );
+                    if ($from_hints !== '') {
+                        $detected_type = $from_hints;
+                    }
                 }
             }
             $effective_type = $host_icon_override[$hid] ?? $detected_type;

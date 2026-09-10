@@ -95,7 +95,11 @@ echo "\n== decodeCaps: beide Formate, die echte Geraete liefern ==\n";
 // decodeCaps ist private — der Reflection-Umweg ist Absicht: die Methode ist
 // kein oeffentlicher Vertrag, aber ihr Verhalten entscheidet ueber das Icon.
 $dc = new ReflectionMethod(LldpEdgeBuilder::class, 'decodeCaps');
-$dc->setAccessible(true);
+// Seit PHP 8.1 wirkungslos, seit 8.5 deprecated — die Warnung stand in jedem
+// Testlauf. Nur noch dort aufrufen, wo es etwas bewirkt.
+if (PHP_VERSION_ID < 80100) {
+    $dc->setAccessible(true);
+}
 $caps = static fn(string $in): array => $dc->invoke(null, $in);
 
 check('Hex "20 00" -> Bridge',        $caps('20 00'),             ['Bridge']);
@@ -148,7 +152,8 @@ echo "\n== Zusammenspiel: Capabilities ersetzen nur den Fallback ==\n";
  * braucht. Aendert sich die Reihenfolge dort, muss sie hier mitgeaendert
  * werden; genau das soll dieser Test erzwingen.
  */
-function resolveType(string $host, array $tpls, array $caps, bool $speaksLldp): string {
+function resolveType(string $host, array $tpls, array $caps, bool $speaksLldp,
+                     array $hints = []): string {
     $t = HostMetadata::deviceType($host, $tpls);
     if ($t === 'server') {
         $fromCaps = HostMetadata::typeFromCaps($caps);
@@ -157,6 +162,11 @@ function resolveType(string $host, array $tpls, array $caps, bool $speaksLldp): 
         }
         if ($speaksLldp) {
             return 'switch';
+        }
+        // Stufe 5 seit 5.3.1: sichtbarer Name und Gruppen, als letzte.
+        $fromHints = HostMetadata::typeFromHints($hints);
+        if ($fromHints !== '') {
+            return $fromHints;
         }
     }
     return $t;
@@ -199,6 +209,20 @@ check('namenloser Host, nur LLDP -> switch',
       resolveType('host99', ['Some Vendor Template'], [], true), 'switch');
 check('namenloser Host ohne LLDP -> server',
       resolveType('host99', ['Some Vendor Template'], [], false), 'server');
+
+// Stufe 5 und der Befund aus der Review: in der ersten Fassung liefen die
+// Hints VOR den Capabilities, und ein Switch mit Bridge-Bit wurde in der
+// Gruppe "Site A/Storage room" zu storage, in "Backups" zu ups. Derselbe Fall
+// laeuft in tests/NodeBuilderTest.php gegen den echten Code.
+check('Bridge-Bit schlaegt Gruppe "Site A/Storage room"',
+      resolveType('7f3a91e2', ['Some Vendor Template'], ['Bridge'], false,
+                  ['LABNODE01', 'Site A/Storage room']), 'switch');
+check('Nachbartabelle schlaegt Gruppe "Backups"',
+      resolveType('7f3a91e2', ['Some Vendor Template'], [], true,
+                  ['LABNODE01', 'Backups']), 'switch');
+check('ohne Caps und LLDP greift die Gruppe',
+      resolveType('7f3a91e2', ['UniFi Network API - Client'], [], false,
+                  ['Rooftop', 'UniFi Network Clients/camera']), 'camera');
 
 // ── Produktlinie ist keine Geraeteklasse ────────────────────────────────────
 // Anlass: eine UDM Pro (Firewall/Router) und ein NVR (Videorecorder) wurden
@@ -264,32 +288,42 @@ check('radius-eap-01 wird kein Access Point',
 check('NVR am Template "UniFi API" -> camera, nicht wireless',
       HostMetadata::deviceType('nvr-01', ['UniFi API']), 'camera');
 
-// ── $hints: sichtbarer Name und Host-Gruppen als zweiter Anlauf ──────────
+// ── typeFromHints(): sichtbarer Name und Host-Gruppen, letzte Stufe ─────
 //
 // Bei LLD-erzeugten Hosts ist der technische Name eine UUID und das Template
-// fuer alle Geraeteklassen dasselbe. Der erste Durchlauf endet dann immer im
-// 'server'-Fallback, obwohl Name und Gruppe im selben Datensatz stehen.
-echo "\n  deviceType() — Hints greifen nur, wenn sonst nichts erkannt wird\n\n";
+// fuer alle Geraeteklassen dasselbe. deviceType() endet dann im 'server'-
+// Fallback, obwohl Name und Gruppe im selben Datensatz stehen. NodeBuilder
+// fragt sie als LETZTE Stufe — nach Template, Caps und Nachbartabelle; dass
+// die Reihenfolge haelt, prueft tests/NodeBuilderTest.php.
+echo "\n  typeFromHints() — letzte Stufe der Erkennung\n\n";
 
-check('UUID + generisches Template ohne Hints -> server',
+check('UUID + generisches Template -> server',
       HostMetadata::deviceType('74d55e79-b52e-44a5-a324-1bf8bcc67464',
                                ['UniFi Network API - Client']), 'server');
+check('Gruppe ".../camera" -> camera',
+      HostMetadata::typeFromHints(['Rooftop', 'UniFi Network Clients/camera']), 'camera');
+check('ohne Treffer -> Leerstring, es bleibt server',
+      HostMetadata::typeFromHints(['Trailer', 'Kunden']), '');
+check('leere Hints -> Leerstring',
+      HostMetadata::typeFromHints(['', '']), '');
+check('Gruppe "Servers" -> Leerstring, kein Pseudo-Treffer',
+      HostMetadata::typeFromHints(['x1', 'Servers']), '');
 
-check('… mit Gruppe ".../camera" -> camera',
-      HostMetadata::deviceType('74d55e79-b52e-44a5-a324-1bf8bcc67464',
-                               ['UniFi Network API - Client'],
-                               ['Rooftop', 'UniFi Network Clients/camera']), 'camera');
+// ── 'ups' und 'usv' nur am Wortanfang ────────────────────────────────────
+//
+// Als Teilstring machten sie "backups01" zur USV — schon vor 5.3.1. Mit den
+// Gruppennamen als letzter Stufe waere es haeufiger geworden: "Backups" ist
+// ein verbreiteter Gruppenname.
+echo "\n  UPS-Erkennung — nicht mitten im Wort\n\n";
 
-check('Hints ueberstimmen einen Treffer NICHT',
-      HostMetadata::deviceType('cloudmail-01', [],
-                               ['Mail Gateway', 'Switch room servers']), 'mailserver');
-
-check('Leere Hints aendern nichts',
-      HostMetadata::deviceType('sw-core-01', [], []), 'switch');
-
-check('Hints ohne Treffer bleiben server',
-      HostMetadata::deviceType('7f3a91e2', ['Some Template'],
-                               ['Trailer', 'Kunden']), 'server');
+check('backups01 ist keine USV',       HostMetadata::deviceType('backups01', []), 'server');
+check('workgroups-fs ist keine USV',   HostMetadata::deviceType('workgroups-fs', []), 'server');
+check('upstream01 ist keine USV',      HostMetadata::deviceType('upstream01', []), 'server');
+check('busverbindung01 ist keine USV', HostMetadata::deviceType('busverbindung01', []), 'server');
+check('ups01 ist eine USV',            HostMetadata::deviceType('ups01', []), 'ups');
+check('usv-keller ist eine USV',       HostMetadata::deviceType('usv-keller', []), 'ups');
+check('Template "APC UPS by SNMP"',    HostMetadata::deviceType('x', ['APC UPS by SNMP']), 'ups');
+check('Gruppe "Backups" als Hint',     HostMetadata::typeFromHints(['LABNODE01', 'Backups']), '');
 
 // ── speakers(): wer gilt als Netzwerkgeraet, weil er Nachbarn aufzaehlt ──
 //

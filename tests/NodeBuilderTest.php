@@ -132,6 +132,55 @@ check('IP des primaeren Interfaces', $byId['h1']['ip']     ?? null, '10.0.0.1');
 check('Interface-Typ Agent',         $byId['h1']['iftype'] ?? null, 'Agent');
 check('Interface-Typ SNMP',          $byId['h2']['iftype'] ?? null, 'SNMP');
 
+// ── Stufe 5 gegen den ECHTEN NodeBuilder ─────────────────────────────────
+//
+// DeviceTypeTest bildet die Stufen nach; hier laeuft der Code selbst. Anlass
+// ist ein Review-Befund: sichtbarer Name und Host-Gruppen liefen zuerst
+// innerhalb von deviceType() und damit VOR den Capabilities — ein Switch mit
+// Bridge-Bit wurde in der Gruppe "Site A/Storage room" zu storage.
+echo "\nGeraetetyp — sichtbarer Name und Gruppen als LETZTE Stufe\n";
+
+$hStufe = [
+    // Switch, UUID als Hostname, Bridge-Bit gemeldet, ungluecklich benannte Gruppe
+    'h3' => mkHost('d08eeab1-3aa9-475b-8755-9a6cbcf05bd0', 'LABNODE01', 2, '10.0.1.3'),
+    // fuehrt selbst eine Nachbartabelle, Gruppe "Backups"
+    'h4' => mkHost('0a1b2c3d-0000-4000-8000-000000000004', 'LABNODE02', 2, '10.0.1.4'),
+    // UniFi-Kamera: weder Caps noch Nachbartabelle, nur die Gruppe weiss es
+    'h5' => mkHost('74d55e79-b52e-44a5-a324-1bf8bcc67464', 'Rooftop', 1, '10.0.1.5'),
+];
+foreach ($hStufe as &$hs) {
+    $hs['parentTemplates'] = [['name' => 'Some SNMP Template']];
+}
+unset($hs);
+
+$rS = NodeBuilder::build($hStufe,
+    ['cpu' => [], 'memory' => [], 'traffic' => [], 'iface' => [], 'speed' => [], 'ping' => []],
+    ['icon_override' => [], 'show_keys' => [], 'links' => []],
+    ['severity' => [], 'problems' => [], 'problem_list' => [], 'ack_total' => [],
+     'ack_acked' => [], 'last_seen' => []],
+    [
+        'group_names'        => [
+            'h3' => ['Site A/Storage room'],
+            'h4' => ['Backups'],
+            'h5' => ['UniFi Network Clients/camera'],
+        ],
+        'proxy_names'        => [],
+        'pgroup_names'       => [],
+        'lldp_quality'       => [],
+        'items_show'         => [],
+        'show_item_per_host' => [],
+        'primary_ip_cache'   => [],
+        'lldp_host_caps'     => ['h3' => ['Bridge']],
+        'lldp_speakers'      => ['h4' => true],
+    ]);
+$typ = [];
+foreach ($rS['nodes'] as $n) {
+    $typ[$n['id']] = $n['type'] ?? null;
+}
+check('Bridge-Bit schlaegt Gruppe "Storage room"', $typ['h3'] ?? null, 'switch');
+check('Nachbartabelle schlaegt Gruppe "Backups"',  $typ['h4'] ?? null, 'switch');
+check('ohne beides entscheidet die Gruppe',        $typ['h5'] ?? null, 'camera');
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

@@ -71,6 +71,29 @@ class NetworkTopologyData extends NetworkTopologyController {
      */
     private const HOSTS_PER_ITEM_CHUNK = 150;
 
+    /**
+     * Item-Schluessel, die einen NACHBARN benennen — jede Quelle, aus der eine
+     * Kante entsteht. Die Suche ist eine Teilstring-Suche (searchByAny).
+     *
+     * EINE Liste fuer beide Abfragen, die Kanten bauen: die Hauptabfrage und
+     * hopScope(). Vorher standen zwei, und sie liefen auseinander: der
+     * Hop-Abfrage fehlten uplink.id und mndp, der Hop-Modus kannte also keine
+     * einzige UniFi- oder MNDP-Kante und zeigte um einen UniFi-Switch nur den
+     * Switch selbst. Das vierte Mal in einem Release dasselbe Muster — die
+     * Auswertung existiert, die Daten kommen nie an (vorher ifName/ifDescr/
+     * ifAlias, uplink.id und mndp in der Hauptabfrage).
+     *
+     *   uplink.id   UniFi Network API: exakter Schluessel, kein Protokoll
+     *   mndp        MikroTik MNDP, als eigene Quelle bewertet —
+     *               'mndp.neighbor' enthaelt keinen der uebrigen Begriffe
+     *   neighbor.sysName / discovery.neighbor   generisch, Ubiquiti, custom
+     */
+    private const EDGE_NAME_KEYS = [
+        'lldpRemSysName', 'cdpCacheDeviceId',
+        'neighbor.sysName', 'discovery.neighbor',
+        'mndp', 'uplink.id',
+    ];
+
     private const MAX_GROUPS = 100;
 
     /**
@@ -375,10 +398,10 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // Der Zweig war also erreichbar, aber die Items kamen nie
                     // an: eine dokumentierte Funktion, die nie laufen konnte.
                     'ifName', 'ifDescr', 'ifAlias',
-                    // UniFi Network API: exakter Schluessel, KEIN Geraete-
-                    // protokoll. Stand aus demselben Grund nicht in der Suche
-                    // wie die Interface-Namen — Auswertung da, Daten nie.
-                    'uplink.id',
+                    // Alle Schluessel, die einen Nachbarn BENENNEN — geteilt
+                    // mit hopScope(), damit beide nicht wieder auseinander-
+                    // laufen. Darin auch uplink.id und mndp.
+                    ...self::EDGE_NAME_KEYS,
                     // LLDP (IEEE 802.1AB standard MIB)
                     //
                     // 'lldpRemPort' MUSS hier stehen, nicht nur 'lldpRemSysName':
@@ -390,7 +413,7 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // Port-zu-Port-Labels nicht funktionieren, obwohl README und
                     // LLDP-SETUP sie als Hauptmerkmal fuehren und das Template die
                     // Werte einsammelt.
-                    'lldpRemSysName', 'lldpRemPort',
+                    'lldpRemPort',
                     // Zusatzangaben ueber den Nachbarn — zahlen vor allem auf die
                     // NICHT ueberwachten ein, ueber die sonst nur der Name bekannt ist.
                     'lldpRemSysDesc', 'lldpRemSysCapEnabled', 'lldpRemChassisId',
@@ -398,9 +421,7 @@ class NetworkTopologyData extends NetworkTopologyController {
                     //
                     // cdpCacheDevicePort traf 'cdpCacheDeviceId' ebenfalls nicht —
                     // dieselbe Luecke auf der CDP-Seite.
-                    'cdpCacheDeviceId', 'cdpCacheDevicePort',
-                    // Generische Neighbor-Discovery: Ubiquiti UniFi, MikroTik, custom
-                    'neighbor.sysName', 'discovery.neighbor',
+                    'cdpCacheDevicePort',
                     // CPU — Agent + SNMP variants
                     'system.cpu.util', 'hrProcessorLoad', 'ssCpuUser', 'ssCpuSystem',
                     'synoSystem.ssCpuIdle',
@@ -861,10 +882,9 @@ class NetworkTopologyData extends NetworkTopologyController {
                 $items = API::Item()->get([
                     'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type'],
                     'hostids'      => array_keys($hosts),
-                    'search'       => ['key_' => [
-                        'lldpRemSysName', 'cdpCacheDeviceId',
-                        'neighbor.sysName', 'discovery.neighbor',
-                    ]],
+                    // Dieselben Nachbar-Schluessel wie die Hauptabfrage. Hier
+                    // stand eine eigene, kuerzere Liste ohne uplink.id und mndp.
+                    'search'       => ['key_' => self::EDGE_NAME_KEYS],
                     'searchByAny'  => true,
                     'monitored'    => true,
                     'preservekeys' => true

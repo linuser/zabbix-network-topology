@@ -56,8 +56,8 @@ neighbour matching across tenants, is still open.
   same damage as a wrongly promoted one, so the check only fires where
   ICMP deprioritisation can no longer explain the gap. It never awards points:
   similar latency proves nothing about adjacency. And it stays silent when the
-  two hosts sit behind different proxies, where the numbers are not comparable
-  at all.
+  two hosts sit behind different proxies, or when either is monitored through a
+  proxy group — the numbers are not comparable then.
 
   Separately, MikroTik's **MNDP** arrived through the generic
   `discovery.neighbor` path and was scored as "other", i.e. worth nothing —
@@ -88,9 +88,11 @@ neighbour matching across tenants, is still open.
   controller reports, and each of them would have been drawn as a switch. And
   device classification now also consults a host's visible name and host
   groups, because discovery-created hosts are named by UUID and share one
-  template name, so hostname and template say nothing. That second look only
-  happens when the first yields nothing; no host recognised correctly today
-  changes.
+  template name, so hostname and template say nothing. That look comes last —
+  only after template, LLDP capabilities and the neighbour table have all come
+  up empty — so no host recognised correctly today changes. The hop view
+  queried a shorter list of its own that lacked `uplink.id` and MNDP, so around
+  a UniFi switch it showed the switch alone; both queries share one list now.
 
 - **The port names announced in 5.3.0 never appeared.** Same cause: `ifName`,
   `ifDescr` and `ifAlias` were never fetched, so port labels and port names in
@@ -171,10 +173,17 @@ neighbour matching across tenants, is still open.
   was folded in as `(old + new) / 2`. An eight-core host with one busy core
   reported 0.6 % instead of 10 %, and the result depended on item order.
 
-- **Synology showed 99 % CPU permanently** on devices that report idle time in
-  plain percent. A fixed factor assumed hundredths of a percent. The unit is
-  now read from the value, which is unambiguous: an idle above 100 does not
-  exist in percent.
+- **Synology showed 99 % CPU permanently.** A fixed factor assumed the idle
+  value comes in hundredths of a percent, although the MIB defines it as plain
+  percent — so every standard device read as saturated. Percent is the default
+  now; a value above 100 can only be hundredths and is scaled back. One limit
+  remains for templates that do scale to hundredths: below 1 % idle, i.e. at
+  99 % load and more, their values look like percent.
+
+- **A host named `backups01` was drawn as a UPS.** The keyword matched `ups`
+  anywhere in a name, so `backups`, `workgroups` and `setups` all qualified —
+  and the German `usv` matched inside `busverbindung`. Both now have to start a
+  word.
 
 - **The tooltip sparkline disagreed with the map.** It chose its bit factor by
   a different rule than the map, so for the common `net.if.in[ifHC…]` keys it
