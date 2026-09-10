@@ -193,11 +193,11 @@ check('Merge: Metrik des 2. Reporters (B) angehaengt',   $eM['port_metrics']['B'
 // Damit braucht es KEINE Sonderlogik — der bestehende Matcher trifft.
 echo "\nUniFi uplink.id -> Kante\n";
 $hU = [
-    'sw'  => ['host' => 'edd7d002-b7b6-3675-8663-608ae2466f0b', 'name' => 'HSINSW02'],
-    'cli' => ['host' => '74f8d353-6b79-3645-81c1-9376cdc8ea42', 'name' => 'npu 2d:23'],
+    'sw'  => ['host' => 'bf995b97-bae1-4d4b-ab1a-79803bb97d4f', 'name' => 'LABNODE02'],
+    'cli' => ['host' => 'c5d9ea0b-b4be-44c8-8c35-be04b96f7036', 'name' => 'client 2d:23'],
 ];
 $rawU = [['hostid' => 'cli', 'key_' => 'uplink.id',
-          'lastvalue' => 'edd7d002-b7b6-3675-8663-608ae2466f0b', 'src' => 'unifi']];
+          'lastvalue' => 'bf995b97-bae1-4d4b-ab1a-79803bb97d4f', 'src' => 'unifi']];
 $rU = LldpEdgeBuilder::build($hU, $rawU);
 check('UUID matcht technischen Hostnamen -> Kante', hasEdge($rU['edges'], 'cli', 'sw'), true);
 check('genau eine Kante',                           count($rU['edges']),               1);

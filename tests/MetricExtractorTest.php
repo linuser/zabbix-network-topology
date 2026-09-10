@@ -136,13 +136,13 @@ check('lldp_raw: DevicePort-Wert nicht als Nachbar',   in_array('GigabitEthernet
 echo "\nUniFi uplink.id\n";
 $itemsU = [
     ['hostid' => 'c', 'key_' => 'uplink.id', 'name' => 'Uplink Device Id',
-     'lastvalue' => 'edd7d002-b7b6-3675-8663-608ae2466f0b'],
+     'lastvalue' => 'bf995b97-bae1-4d4b-ab1a-79803bb97d4f'],
 ];
 $mu = MetricExtractor::extract($itemsU);
 check('uplink.id wird als Nachbar erkannt',  count($mu['lldp_raw']),                1);
 check('uplink.id -> src=unifi',              $mu['lldp_raw'][0]['src'] ?? null,      'unifi');
 check('uplink.id -> Wert bleibt die UUID',   $mu['lldp_raw'][0]['lastvalue'] ?? null,
-      'edd7d002-b7b6-3675-8663-608ae2466f0b');
+      'bf995b97-bae1-4d4b-ab1a-79803bb97d4f');
 // Abgrenzung: uplink.rx/tx sind Traffic, KEINE Nachbarn — duerfen nicht rein.
 $mu2 = MetricExtractor::extract([
     ['hostid' => 'c', 'key_' => 'uplink.rx', 'name' => 'Uplink RX', 'lastvalue' => '12345'],
