@@ -75,7 +75,20 @@ zabbix_export:
                   // 0.Port.RemIndex so item keys stay stable. Port and
                   // RemIndex additionally go into their own macros - the
                   // prototypes use them to grab values from the walk text
-                  // with a timemark-agnostic regex.
+                  // with a regex that tolerates any TimeMark value AND a
+                  // missing TimeMark.
+                  //
+                  // MISSING TIMEMARK: TP-Link JetStream (T2600G-28TS, HW v4)
+                  // omits the element and returns a 2-part index, e.g. 25.1
+                  // instead of 1234.25.1 - a spec violation, but one that
+                  // ships. Until 5.3.1 both this script and all six item
+                  // prototypes required three parts, so every row was dropped
+                  // silently: DISCARD_VALUE shows no error anywhere. The
+                  // regexes used to be called "timemark-agnostic" - they were
+                  // agnostic to the TimeMark's VALUE, not to its ABSENCE.
+                  // Reported with the complete fix in issue #15 by lechu2375.
+                  // A missing TimeMark counts as 0, so a device that ever
+                  // mixed both shapes in one walk still keeps the newest row.
                   //
                   // SEEN GUARD: If an agent returns the same row under two
                   // TimeMarks within ONE walk (TimeFilter semantics - exactly
@@ -91,9 +104,9 @@ zabbix_export:
                   var rows = JSON.parse(value), best = {}, order = [];
                   for (var i = 0; i < rows.length; i++) {
                       var r = rows[i];
-                      var m = /^(\d+)\.(\d+)\.(\d+)$/.exec(r['{#SNMPINDEX}'] || '');
+                      var m = /^(?:(\d+)\.)?(\d+)\.(\d+)$/.exec(r['{#SNMPINDEX}'] || '');
                       if (!m) continue;
-                      var tm = parseInt(m[1], 10);
+                      var tm = m[1] === undefined ? 0 : parseInt(m[1], 10);
                       var idx = '0.' + m[2] + '.' + m[3];
                       r['{#SNMPINDEX}'] = idx;
                       r['{#NT_PORT}'] = m[2];
@@ -113,7 +126,8 @@ zabbix_export:
                   return JSON.stringify(out);
           description: |
             LLDP-MIB lldpRemSysName (1.0.8802.1.1.2.1.4.1.1.9). The {#SNMPINDEX}
-            carries TimeMark.LocalPort.RemIndex - the module reads the local port
+            is normalized to 0.LocalPort.RemIndex - the TimeMark, if the device
+            sends one at all, is dropped - and the module reads the local port
             from it. Over the same index it also fetches:
 
               .7  lldpRemPortId       remote port (fallback)
@@ -136,7 +150,7 @@ zabbix_export:
               preprocessing:
                 - type: REGEX
                   parameters:
-                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.9\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.9\.(?:\d+\.)?{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
                     - '\1'
                   error_handler: DISCARD_VALUE
               history: 7d
@@ -156,7 +170,7 @@ zabbix_export:
               preprocessing:
                 - type: REGEX
                   parameters:
-                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.7\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.7\.(?:\d+\.)?{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
                     - '\1'
                   error_handler: DISCARD_VALUE
               history: 7d
@@ -178,7 +192,7 @@ zabbix_export:
               preprocessing:
                 - type: REGEX
                   parameters:
-                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.8\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.8\.(?:\d+\.)?{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
                     - '\1'
                   error_handler: DISCARD_VALUE
               history: 7d
@@ -198,7 +212,7 @@ zabbix_export:
               preprocessing:
                 - type: REGEX
                   parameters:
-                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.10\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.10\.(?:\d+\.)?{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
                     - '\1'
                   error_handler: DISCARD_VALUE
               history: 7d
@@ -223,7 +237,7 @@ zabbix_export:
               preprocessing:
                 - type: REGEX
                   parameters:
-                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.12\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.12\.(?:\d+\.)?{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
                     - '\1'
                   error_handler: DISCARD_VALUE
               history: 7d
@@ -248,7 +262,7 @@ zabbix_export:
               preprocessing:
                 - type: REGEX
                   parameters:
-                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.5\.\d+\.{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
+                    - '(?m)^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.5\.(?:\d+\.)?{#NT_PORT}\.{#NT_REMIDX} = [A-Za-z0-9-]+: "?(.*?)"?$'
                     - '\1'
                   error_handler: DISCARD_VALUE
               history: 7d

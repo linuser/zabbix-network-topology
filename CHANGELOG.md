@@ -6,6 +6,26 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ### Fixed
 
+- **LLDP discovery produced no items on TP-Link JetStream switches** (issue
+  #15, reported together with the complete fix by lechu2375). LLDP-MIB
+  defines the neighbour index as `TimeMark.LocalPort.RemIndex`; TP-Link
+  JetStream (tested: T2600G-28TS, HW v4) omits the TimeMark and answers
+  `25.1` instead of `1234.25.1`. The discovery script and all six item
+  prototypes required three parts, so every row was dropped — silently,
+  because *Discard value* raises no error anywhere. The first fix alone would
+  not have been enough: discovery would have created the items, and the
+  prototypes would have left every one of them empty. The TimeMark is now
+  optional in both places; devices that do send one are unaffected.
+
+  **Re-import `templates/nt_lldp_snmp_template.yaml`** with *Update existing*
+  ticked for discovery rules and item prototypes — the fix lives in the
+  template, not in the module.
+
+  The template's logic is now under test. `ci:templates` runs the discovery
+  JavaScript and the six prototype regexes, read from the template file
+  itself, against walks of both index shapes — including the cases where an
+  optional TimeMark could let port 5 match port 25.
+
 ### Added
 
 - **The confidence score now sanity-checks round-trip times, and MNDP counts

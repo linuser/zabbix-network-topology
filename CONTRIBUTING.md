@@ -85,6 +85,10 @@ without it being clear why:
    - every group entry has a `uuid`
    - the same group name carries the same `uuid` in **all** files
    - the same `uuid` belongs to **exactly one** group name
+   - the LLDP template's **logic**: the discovery JavaScript and all six item
+     prototype regexes, read from the template file itself, run against real
+     walks with and without a TimeMark (issue #15 — TP-Link returned zero
+     items, and no test had ever looked inside a template)
 
    Zabbix matches groups by `uuid`, not by name, and the values are identical on
    every installation. They live in the `hstgrp` table — look there instead of
@@ -307,6 +311,10 @@ ohne dass klar ist warum:
    - Jeder Gruppeneintrag hat ein `uuid`.
    - Derselbe Gruppenname trägt in **allen** Dateien dasselbe `uuid`.
    - Dasselbe `uuid` hängt an **genau einem** Gruppennamen.
+   - Die **Logik** des LLDP-Templates: das Discovery-JavaScript und alle sechs
+     Prototyp-Regexe, direkt aus der Template-Datei gelesen, gegen echte Walks
+     mit und ohne TimeMark (Issue #15 — TP-Link lieferte null Items, und kein
+     Test hatte je in ein Template gesehen).
 
    Zabbix ordnet Gruppen über das `uuid` zu, nicht über den Namen, und die
    Werte sind auf jeder Installation gleich. Sie stehen in der Tabelle

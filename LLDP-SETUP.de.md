@@ -142,7 +142,7 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 |---|---|---|---|
 | **HP Aruba** (AOS-Switch / AOS-CX) | ✓ voll | **funktioniert** | Standard-LLDP-MIB |
 | **HP ProCurve** (alt, z. B. 2500) | ⚠ teils nur Senden | eingeschränkt | Alt-Serien senden LLDP, führen aber teils **keine** abfragbare Nachbar-Tabelle |
-| **TP-Link Omada / JetStream** (*managed*) | ✓ | **funktioniert** | volles NOS mit SNMP + LLDP-MIB |
+| **TP-Link Omada / JetStream** (*managed*) | ✓ | **funktioniert** | volles NOS mit SNMP + LLDP-MIB. Manche Modelle (bestätigt: T2600G-28TS, HW v4) lassen die TimeMark im Nachbar-Index weg; das mitgelieferte Template kommt damit **ab 5.3.1** zurecht — ältere Stände entdeckten auf diesen Switches gar keine Items (Issue #15) |
 | **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ kein SNMP | **keine Kanten** | „dumb switch"-Fall → manuell |
 | **TP-Link unmanaged** | ✗ | unsichtbar | Geräte erscheinen direkt verbunden, Switch fehlt |
 | **Ubiquiti EdgeSwitch / EdgeMax** | ✓ meist | **funktioniert** | EdgeOS, ordentliches SNMP |

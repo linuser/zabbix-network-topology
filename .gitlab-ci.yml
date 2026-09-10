@@ -116,11 +116,15 @@ parity:
 # Prueft die mitgelieferten Zabbix-Templates auf die Gruppen-UUID. Zwei von drei
 # waren ohne sie unterwegs und wurden beim Import abgewiesen — waehrend
 # INSTALL.md beide empfiehlt. Aufgefallen ist es erst einem Nutzer.
+# Dazu seit 5.3.1 die LOGIK im LLDP-Template: Discovery-JavaScript und die
+# sechs Prototyp-Regexe gegen echte Walks. Anlass war Issue #15 — TP-Link
+# ohne TimeMark, null Items, und kein Test hatte je in die Templates gesehen.
 templates:
   stage: test
   image: node:22-alpine
   script:
     - node tools/check-templates.mjs
+    - node tools/check-template-logic.mjs
 
 # Deutsche Texte, die im UI landen. Kommentare duerfen deutsch bleiben — das
 # Gate liest nur String-Literale, mit eigenem Scanner statt grep (Regex mit
