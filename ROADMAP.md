@@ -132,6 +132,56 @@ lässt sich Punkt 2 nicht sinnvoll beheben, nur verschieben.
 Die ausgebaute Prüfung (`sanitizeLayout`, ~90 Zeilen mit den serverseitigen
 Mustern und Grenzen) steht in der Git-Historie. Sie war **nicht** das Problem.
 
+### 5. NetBox-Export — Kabelliste im NetBox-Importformat
+
+Nutzerwunsch vom September 2026. Die Gegenrichtung zur
+[Dokumentationsdrift gegen NetBox](#dokumentationsdrift-gegen-netbox) weiter
+unten — und deutlich billiger, weil sie deren zwei Sicherheitsfragen gar nicht
+erst stellt.
+
+**Die Idee:** das Modul schreibt eine CSV-Datei im Kabel-Importformat von
+NetBox, der Admin spielt sie in NetBox über *Import* ein. Kein Token, keine
+Verbindung zu NetBox, keine neue Action — die Datei entsteht im Browser, wie
+die GraphML-Datei.
+
+**Nachgesehen, was schon da ist:** `graphml.js` gibt pro Kante bereits
+`sourceport`, `targetport`, `protocol`, Kapazität und Verkehr aus. Die Ports
+stammen aus `edge.ports` (`{hostid: port}` — Lokalport am Melder, Remote-Port am
+Nachbarn). Eine NetBox-CSV ist im Kern dieselbe Kantenliste in anderer Form:
+Gerät und Interface je Seite, dazu Status und Beschreibung. Die genauen
+Spaltennamen vor dem Bau gegen die eingesetzte NetBox-Version prüfen, nicht aus
+dem Gedächtnis schreiben.
+
+**Vier Regeln, ohne die der Export mehr schadet als nützt:**
+
+1. **Nur Kanten mit Port auf beiden Seiten.** UniFi-Uplinks (`uplink.id`),
+   manuelle Verbindungen und `nt:parent`-Kanten haben keinen Port und können
+   kein Kabel werden. Überspringen und im Dialog zählen, nicht still weglassen.
+2. **Nur gemessene, sichere Kanten.** Ein Kabel in NetBox ist eine
+   Tatsachenbehauptung; ein falsches schadet mehr als ein fehlendes. Beidseitig
+   bestätigt oder oberhalb einer Konfidenzschwelle, Quelle und Konfidenz in die
+   Beschreibung.
+3. **Rohdaten, nicht die gerenderte Karte.** GraphML exportiert, was zu sehen
+   ist — in der Gruppenansicht also Gruppenknoten. Für eine Zeichnung richtig,
+   für NetBox falsch. Genau dieser Fehler stand bis 5.3.1 in den Berichten
+   (`window._ntNodes` statt `_ntRawNodes`).
+4. **Gerätenamen.** Sie müssen zu NetBox passen, und `sw01` gibt es bei jedem
+   Kunden ([#14](https://github.com/linuser/zabbix-network-topology/issues/14)).
+   Ob NetBox je Seite einen Standort zur Unterscheidung annimmt, beim Bau
+   prüfen; er könnte aus einem Host-Tag kommen. Für eine erste Fassung optional.
+
+**Die Nebenwirkung ist mehr wert als die Datei:** NetBox prüft beim Import jede
+Zeile selbst — unbekanntes Gerät, unbekanntes Interface, Interface schon belegt.
+Der erste Import ist damit ein Abgleich gegen die Dokumentation, ohne dass das
+Modul etwas vergleicht. Und er zeigt mit echten Daten, wie gut Geräte- und
+Portnamen zwischen beiden Welten zusammenpassen — Frage 3 der Drift, beantwortet,
+bevor jemand den Vergleich baut.
+
+**Aufwand:** reines Frontend, ein Menüeintrag neben GraphML, kein Backend, keine
+Zugangsdaten. Etwa ein Tag mit Tests. Die Portnamen sind erst seit 5.3.1
+verlässlich: `ifName`, `ifDescr` und `ifAlias` wurden vorher gar nicht
+abgefragt.
+
 ## Später
 
 ### VLAN-Ansicht
@@ -400,6 +450,11 @@ Ausgang. Als Kantentyp gedacht deckt es sich mit
 [Nachbarschaft jenseits von LLDP/CDP](#nachbarschaft-jenseits-von-lldpcdp-ip-bgp-ospf-bridge)
 — eine „dokumentiert, aber nicht gemessen"-Kante ist derselbe Fall wie eine
 OSPF-Kante: eine Kante, die kein Kabel ist.
+
+**Der billige erste Schritt steht oben:** der
+[NetBox-Export](#5-netbox-export--kabelliste-im-netbox-importformat) braucht
+weder Token noch Server-Action, und der Import in NetBox beantwortet Frage 3 mit
+echten Daten.
 
 ### NT Neighbours — Widget fürs Host-Dashboard
 
