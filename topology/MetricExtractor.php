@@ -129,10 +129,33 @@ final class MetricExtractor {
                 $bits = (strpos($key, 'net.if') === 0) ? (float) $val : (float) $val * 8;
                 if (!isset($port_traffic[$hid][$ifx])) $port_traffic[$hid][$ifx] = ['in' => 0.0, 'out' => 0.0];
                 $port_traffic[$hid][$ifx][strtolower($om[1])] += $bits;
+            } elseif (($snmp_if = self::snmpIfKey($key)) !== null
+                    && ($snmp_if[0] === 'in' || $snmp_if[0] === 'out')) {
+                // net.if.in[24] — der MIB-Name fehlt im Schluessel, der Index
+                // steht nackt in der Klammer. So heissen die Interface-Items in
+                // einer ganzen Familie offizieller Zabbix-Templates (Cisco
+                // Catalyst 3750V2, Nexus 9000, pfSense, OPNsense) und in
+                // Vorlagen, die davon abgeleitet sind. Die Werte sind dort per
+                // Preprocessing schon bits/s.
+                //
+                // Die Suche oben verlangte "Octets" im Schluessel und sah diese
+                // Items deshalb nie. Die Karte schaetzte aus Knotensummen und
+                // gab als Grund an, lldpRemLocalPortNum passe nicht zum ifIndex
+                // — der Melder hat daraufhin beide Switches durchgewalkt und
+                // bewiesen, dass es passt (Issue #16). Der Hinweis war falsch,
+                // nicht seine Geraete.
+                $ifx = $snmp_if[1];
+                if (!isset($port_traffic[$hid][$ifx])) $port_traffic[$hid][$ifx] = ['in' => 0.0, 'out' => 0.0];
+                $port_traffic[$hid][$ifx][$snmp_if[0]] += (float) $val;
             }
             // §3b Per-Interface-Speed als Auslastungs-Divisor (optional). ifHighSpeed
             // = Mbps (highSpeedBps normalisiert, gleiche Heuristik wie Host-Speed);
             // ifSpeed = bps direkt.
+            if (($snmp_sp = self::snmpIfKey($key)) !== null && $snmp_sp[0] === 'speed') {
+                // net.if.speed[24]: dieselbe Template-Familie, schon in bps.
+                $sp = (float) $val;
+                if ($sp > 0) $port_speed[$hid][$snmp_sp[1]] = $sp;
+            }
             if (strpos($key, 'Speed') !== false) {
                 if (preg_match('/ifHighSpeed[.\[](\d+)/', $key, $sm)) {
                     $sp = self::highSpeedBps($val);
@@ -188,7 +211,36 @@ final class MetricExtractor {
             // Stelle danach graben.
             $agent_if = strpos($key, 'net.if') === 0;
 
-            if (strpos($key, 'ifOperStatus') !== false) {
+            $snmp_h = $agent_if ? self::snmpIfKey($key) : null;
+            if ($snmp_h !== null && $snmp_h[0] === 'status') {
+                // net.if.status[24] — Oper-Status ohne MIB-Namen. Gleicher
+                // Korrelations-Key wie ifOperStatus.24 ("24").
+                $iface_oper[$hid][$snmp_h[1]] = (int) $val;
+            } elseif ($snmp_h !== null && ($snmp_h[0] === 'in' || $snmp_h[0] === 'out' || $snmp_h[0] === 'type')) {
+                // Traffic je Port ist oben schon verbucht. Zur HOST-Summe
+                // unten im Agent-Zweig — der erkennt die Richtung am Itemnamen
+                // und kann sie deshalb fuer diese Keys genauso zaehlen wie
+                // bisher. 'type' gehoert nirgends hin.
+                if ($snmp_h[0] !== 'type') {
+                    if (!isset($host_traffic[$hid])) {
+                        $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
+                    }
+                    $host_traffic[$hid][$snmp_h[0]] += (float) $val;
+                }
+            } elseif ($snmp_h !== null && ($snmp_h[0] === 'errors' || $snmp_h[0] === 'discards')) {
+                if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
+                $host_iface[$hid][$snmp_h[0]] += (float) $val;
+                if ($snmp_h[0] === 'errors') {
+                    $port_errors[$hid][$snmp_h[1]] = ($port_errors[$hid][$snmp_h[1]] ?? 0.0) + (float) $val;
+                } else {
+                    $port_discards[$hid][$snmp_h[1]] = ($port_discards[$hid][$snmp_h[1]] ?? 0.0) + (float) $val;
+                }
+            } elseif ($snmp_h !== null && $snmp_h[0] === 'speed') {
+                $sp = (float) $val;
+                if ($sp > 0 && (!isset($host_speed[$hid]) || $sp > $host_speed[$hid])) {
+                    $host_speed[$hid] = $sp;
+                }
+            } elseif (strpos($key, 'ifOperStatus') !== false) {
                 // Oper-Status pro Interface. Bracket-Param als Korrelations-
                 // Key zu ifAdminStatus, damit admin-down (absichtlich
                 // deaktivierte Ports) unten nicht als "Link down" zaehlt.
@@ -631,6 +683,32 @@ final class MetricExtractor {
     private static function capName(string $v): string {
         $v = preg_replace('/\s+/', ' ', $v);
         return mb_substr($v, 0, 40);
+    }
+
+    /**
+     * Interface-Schluessel ohne MIB-Namen: net.if.in[24], net.if.out[24],
+     * net.if.speed[24], net.if.status[24], net.if.type[24],
+     * net.if.in.errors[24], net.if.out.discards[24].
+     *
+     * Liefert [Art, ifIndex] — Art ist in, out, speed, status, type, errors
+     * oder discards — oder null.
+     *
+     * NUR EIN NACKTER INDEX. Agent-Schluessel sehen gleich aus, tragen in der
+     * Klammer aber den Interface-NAMEN (net.if.in[eth0], net.if.in["ens18"]);
+     * reine Ziffern kommen dort nicht vor. Die Unterscheidung haengt also an
+     * der Klammer, nicht am Itemtyp — der steht in der Item-Abfrage gar nicht.
+     */
+    private static function snmpIfKey(string $key): ?array {
+        if (strncmp($key, 'net.if.', 7) !== 0) {
+            return null;
+        }
+        if (!preg_match('/^net\.if\.(in|out|speed|status|type)(?:\.(errors|discards))?\[(\d+)\]$/', $key, $m)) {
+            return null;
+        }
+        if ($m[2] !== '') {
+            return ($m[1] === 'in' || $m[1] === 'out') ? [$m[2], $m[3]] : null;
+        }
+        return [$m[1], $m[3]];
     }
 
     private static function ifIndexOf(string $key): string {

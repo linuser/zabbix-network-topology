@@ -541,6 +541,174 @@ $rNum = LldpEdgeBuilder::build($hNum, [
 check('kein Self-Loop als Kante',      count($rNum['edges']), 0);
 check('self-Zaehler greift',           (int) ($rNum['quality']['10084']['self'] ?? 0), 1);
 
+// ── Nachbar per MAC statt Name ─────────────────────────────────────────────
+//
+// Gemeldet aus dem Feld: ein Access-Switch nennt seinen Core nicht beim Namen,
+// sondern bei der Basis-MAC. Zabbix liefert die als Bytefolge "02 5E …", und
+// der Abgleich schnitt am ersten Leerzeichen ab: ein Geist aus zwei
+// Hex-Ziffern. Schlimmer: JEDES Geraet, dessen MAC mit demselben Byte beginnt, fiel in denselben Geist.
+// Alle Namen und Adressen hier sind erfunden (02:… = lokal verwaltet).
+echo "\n  LldpEdgeBuilder — Nachbar per MAC\n\n";
+
+$hMac = [
+    'core' => ['host' => 'lab-core', 'name' => 'lab-core'],
+    'acc1' => ['host' => 'lab-acc1', 'name' => 'lab-acc1'],
+    'acc2' => ['host' => 'lab-acc2', 'name' => 'lab-acc2'],
+    // Ein Host, der wie das erste Byte heisst: vorher ein falscher Treffer.
+    'h02'  => ['host' => '02',       'name' => '02'],
+];
+
+$rMac = LldpEdgeBuilder::build($hMac, [
+    ['hostid' => 'acc1', 'key_' => 'lldpRemSysName[0.3.1]', 'lastvalue' => '02 5E 10 00 00 01', 'src' => 'cdp'],
+    ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.4.1]', 'lastvalue' => '02 5E 20 00 00 02', 'src' => 'cdp'],
+    ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.5.1]', 'lastvalue' => '02:5e:10:00:00:01', 'src' => 'lldp'],
+]);
+$rawsMac = array_map(static fn($u) => $u['raw'], array_merge(
+    $rMac['quality']['acc1']['unmatched'] ?? [], $rMac['quality']['acc2']['unmatched'] ?? []));
+sort($rawsMac);
+check('MAC wird nicht auf das erste Byte gekuerzt',
+    $rawsMac, ['02:5E:10:00:00:01', '02:5E:10:00:00:01', '02:5E:20:00:00:02']);
+check('gleiches erstes Byte -> zwei verschiedene Geraete',
+    count(array_unique($rawsMac)), 2);
+check('Host "02" wird nicht ueber das erste Byte getroffen', count($rMac['edges']), 0);
+
+// ── Zuordnung ueber das Kabel ──────────────────────────────────────────────
+echo "\n  LldpEdgeBuilder — MAC ueber den Port an beiden Kabelenden\n\n";
+
+// Der Core meldet lab-acc1 mit Namen, dort auf Gi1/0/48.
+// lab-acc1 meldet an seinem Port 48 nur eine MAC.
+$rawPort = [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]',  'lastvalue' => 'lab-acc1', 'src' => 'lldp'],
+    ['hostid' => 'acc1', 'key_' => 'lldpRemSysName[0.48.1]', 'lastvalue' => '02 5E 10 00 00 01', 'src' => 'lldp'],
+];
+$portsPort = ['core' => ['0.1.1' => ['desc' => 'GigabitEthernet1/0/48']]];
+$namesPort = ['acc1' => ['48' => 'Gi1/0/48'], 'core' => ['1' => 'Gi1/0/1']];
+
+$rP = LldpEdgeBuilder::build($hMac, $rawPort, $portsPort, [], [], [], [], [], $namesPort);
+$eP = findEdge($rP['edges'], 'core', 'acc1') ?? [];
+check('Port-Treffer: genau eine Kante, kein Geist',  count($rP['edges']), 1);
+check('Port-Treffer: nichts mehr unmatched',        count($rP['unmatched']), 0);
+check('Port-Treffer: beidseitig bestaetigt',        $eP['confirmed'] ?? null, true);
+check('Port-Treffer: bester Beleg bleibt der Name', $eP['match'] ?? null, 'exact');
+// port_idx traegt nur der eigene Bericht ein — Beleg, dass die MAC-Zeile
+// von lab-acc1 in DIESE Kante eingeflossen ist.
+check('Port-Treffer: Access-Bericht in der Kante',  $eP['port_idx']['acc1'] ?? null, '48');
+
+// Ohne Interface-Namen: der Core meldet die nackte Portnummer.
+$rP2 = LldpEdgeBuilder::build($hMac, $rawPort,
+    ['core' => ['0.1.1' => ['id' => '48']]]);
+check('ohne ifName: Vergleich ueber den Portnamen',
+    (findEdge($rP2['edges'], 'core', 'acc1') ?? [])['confirmed'] ?? null, true);
+
+// Derselbe Port meldet ZUSAETZLICH ein benanntes Geraet: dann ist nicht zu
+// sagen, welche Zeile der Core ist.
+$rP3 = LldpEdgeBuilder::build($hMac, array_merge($rawPort, [
+    ['hostid' => 'acc1', 'key_' => 'lldpRemSysName[0.48.2]', 'lastvalue' => 'desk-phone-7', 'src' => 'lldp'],
+]), $portsPort, [], [], [], [], [], $namesPort);
+check('geteilter Port: MAC bleibt offen', count($rP3['quality']['acc1']['unmatched'] ?? []), 2);
+
+// Ein NAME, der auf keinen Host passt, ist ein anderes Geraet.
+$rP4 = LldpEdgeBuilder::build($hMac, [
+    $rawPort[0],
+    ['hostid' => 'acc1', 'key_' => 'lldpRemSysName[0.48.1]', 'lastvalue' => 'unknown-box', 'src' => 'lldp'],
+], $portsPort, [], [], [], [], [], $namesPort);
+check('Name statt MAC: keine Port-Zuordnung', count($rP4['unmatched']), 1);
+
+// Zwei Hosts melden denselben Port als Gegenstelle.
+$rP5 = LldpEdgeBuilder::build($hMac, array_merge($rawPort, [
+    ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.9.1]', 'lastvalue' => 'lab-acc1', 'src' => 'lldp'],
+]), ['core' => $portsPort['core'], 'acc2' => ['0.9.1' => ['desc' => 'Gi1/0/48']]],
+    [], [], [], [], [], $namesPort);
+check('zwei Gegenstellen: MAC bleibt offen', count($rP5['unmatched']), 1);
+
+// Anderer Port: kein Treffer.
+$rP6 = LldpEdgeBuilder::build($hMac, [
+    $rawPort[0],
+    ['hostid' => 'acc1', 'key_' => 'lldpRemSysName[0.47.1]', 'lastvalue' => '02 5E 10 00 00 01', 'src' => 'lldp'],
+], $portsPort, [], [], [], [], [], ['acc1' => ['47' => 'Gi1/0/47', '48' => 'Gi1/0/48']]);
+check('anderer Port: MAC bleibt offen', count($rP6['unmatched']), 1);
+
+// ── Zuordnung ueber die Chassis-ID ─────────────────────────────────────────
+echo "\n  LldpEdgeBuilder — MAC ueber die Chassis-ID\n\n";
+
+// lab-acc1 nennt den Core mit Namen UND Chassis-ID, lab-acc2 nur die MAC.
+$rawCh = [
+    ['hostid' => 'acc1', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'lab-core', 'src' => 'lldp'],
+    ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.2.1]', 'lastvalue' => '02 5E AA 00 00 0C', 'src' => 'cdp'],
+];
+$metaCh = ['acc1' => ['0.1.1' => ['chassis' => '02:5e:aa:00:00:0c']]];
+$rC = LldpEdgeBuilder::build($hMac, $rawCh, [], [], [], $metaCh);
+$eC = findEdge($rC['edges'], 'core', 'acc2') ?? [];
+check('Chassis-Treffer: Kante zum Core',  $eC !== [], true);
+check('Chassis-Treffer: als chassis markiert', $eC['match'] ?? null, 'chassis');
+check('Chassis-Treffer: nichts unmatched', count($rC['unmatched']), 0);
+
+// Dieselbe MAC fuer zwei verschiedene Hosts: nicht verwenden.
+$rC2 = LldpEdgeBuilder::build($hMac, array_merge($rawCh, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.7.1]', 'lastvalue' => 'lab-acc1', 'src' => 'lldp'],
+]), [], [], [], $metaCh + ['core' => ['0.7.1' => ['chassis' => '02 5E AA 00 00 0C']]]);
+check('widerspruechliche Chassis-ID: MAC bleibt offen', count($rC2['unmatched']), 1);
+
+// Eine Null-MAC ist keine Identitaet.
+$rC3 = LldpEdgeBuilder::build($hMac, [
+    ['hostid' => 'acc1', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'lab-core', 'src' => 'lldp'],
+    ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.2.1]', 'lastvalue' => '00:00:00:00:00:00', 'src' => 'lldp'],
+], [], [], [], ['acc1' => ['0.1.1' => ['chassis' => '00 00 00 00 00 00']]]);
+check('Null-MAC: keine Zuordnung', count($rC3['unmatched']), 1);
+
+// ── Issue #16: Port-Metrik mit net.if.in[ifIndex]-Items, Ende zu Ende ──────
+//
+// Zwei Switches melden einander ueber LLDP, lldpRemLocalPortNum == ifIndex,
+// die Interface-Items heissen net.if.in[24]. Bis 5.3.1 schaetzte die Karte aus
+// den Knotensummen. Namen und Werte erfunden.
+echo "\n  LldpEdgeBuilder — Port-Metrik aus net.if.in[ifIndex] (#16)\n\n";
+
+$m16 = Modules\NetworkTopology\Topology\MetricExtractor::extract([
+    ['hostid' => 'swa', 'key_' => 'lldpRemSysName[0.24.1]', 'name' => 'LLDP', 'lastvalue' => 'lab-swb'],
+    ['hostid' => 'swb', 'key_' => 'lldpRemSysName[0.46.1]', 'name' => 'LLDP', 'lastvalue' => 'lab-swa'],
+    ['hostid' => 'swa', 'key_' => 'net.if.in[24]',  'name' => 'Interface 24(): Bits received', 'lastvalue' => '3000'],
+    ['hostid' => 'swa', 'key_' => 'net.if.out[24]', 'name' => 'Interface 24(): Bits sent',     'lastvalue' => '5000'],
+    ['hostid' => 'swb', 'key_' => 'net.if.in[46]',  'name' => 'Interface 46(): Bits received', 'lastvalue' => '5000'],
+    ['hostid' => 'swb', 'key_' => 'net.if.out[46]', 'name' => 'Interface 46(): Bits sent',     'lastvalue' => '3000'],
+]);
+$r16 = LldpEdgeBuilder::build(
+    ['swa' => ['host' => 'lab-swa', 'name' => 'lab-swa'], 'swb' => ['host' => 'lab-swb', 'name' => 'lab-swb']],
+    $m16['lldp_raw'], $m16['lldp_ports'], $m16['port_traffic'], $m16['port_speed']);
+$e16 = findEdge($r16['edges'], 'swa', 'swb') ?? [];
+check('#16: Port-Metrik am Ende A (Port 24)', $e16['port_metrics']['swa']['in'] ?? null, 3000.0);
+check('#16: Port-Metrik am Ende B (Port 46)', $e16['port_metrics']['swb']['in'] ?? null, 5000.0);
+
+// ── Derselbe Port meldet LLDP-Namen und CDP-MAC ────────────────────────────
+//
+// Aruba-Switches beantworten die CDP-Nachbartabelle mit der MAC des Nachbarn,
+// waehrend dieselbe Verbindung ueber LLDP einen Namen traegt. Beides haengt am
+// selben lokalen Port. Bis 5.3.1 stand die Verbindung zum Nachbarn auf der
+// Karte UND daneben ein Geist aus zwei Hex-Ziffern. Namen erfunden.
+echo "\n  LldpEdgeBuilder — LLDP-Name und CDP-MAC am selben Port\n\n";
+
+$hAru = [
+    'core' => ['host' => 'lab-core', 'name' => 'lab-core'],
+    'acc'  => ['host' => 'lab-acc',  'name' => 'lab-acc'],
+    'acc2' => ['host' => 'lab-acc2', 'name' => 'lab-acc2'],
+];
+$rAru = LldpEdgeBuilder::build($hAru, [
+    ['hostid' => 'acc', 'key_' => 'lldpRemSysName[0.47.1]',  'lastvalue' => 'lab-core', 'src' => 'lldp'],
+    ['hostid' => 'acc', 'key_' => 'cdpCacheDeviceId[47.1]',  'lastvalue' => '02 5E 10 00 00 01', 'src' => 'cdp'],
+]);
+$eAru = findEdge($rAru['edges'], 'acc', 'core') ?? [];
+check('selber Port: eine Kante, kein Geist',  count($rAru['edges']), 1);
+check('selber Port: nichts unmatched',        count($rAru['unmatched']), 0);
+check('selber Port: beide Protokolle',        $eAru['src'] ?? null, ['cdp', 'lldp']);
+
+// Zeigen die anderen Zeilen desselben Ports auf VERSCHIEDENE Hosts, wird nichts
+// geraten (ein nicht verwalteter Switch dazwischen sieht genau so aus).
+$rAru2 = LldpEdgeBuilder::build($hAru, [
+    ['hostid' => 'acc', 'key_' => 'lldpRemSysName[0.47.1]', 'lastvalue' => 'lab-core',  'src' => 'lldp'],
+    ['hostid' => 'acc', 'key_' => 'lldpRemSysName[0.47.2]', 'lastvalue' => 'lab-acc2',  'src' => 'lldp'],
+    ['hostid' => 'acc', 'key_' => 'cdpCacheDeviceId[47.1]', 'lastvalue' => '02 5E 10 00 00 01', 'src' => 'cdp'],
+]);
+check('zwei Hosts am Port: MAC bleibt offen', count($rAru2['unmatched']), 1);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

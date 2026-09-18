@@ -458,7 +458,13 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         clusterWrap.id = 'nt-cluster-wrap';
         clusterWrap.style.cssText = 'position:relative;display:inline-block;margin-left:4px';
 
-        const cMode = (function() {
+        // let, nicht const: der Schalter muss seinen eigenen Stand kennen.
+        // Gemeldet aus dem Feld: "wenn ich Aus waehle, bleibt Auto stehen".
+        // Gespeichert und neu gezeichnet wurde laengst richtig — nur Beschriftung
+        // und Haekchen blieben auf dem Wert von der Toolbar-Erstellung stehen,
+        // und ein Schalter, der die Wahl nicht anzeigt, hat sie nicht
+        // angenommen.
+        let cMode = (function() {
             try { return localStorage.getItem(NT_GROUP_CLUSTER_KEY) || 'auto'; }
             catch (e) { return 'auto'; }
         })();
@@ -499,6 +505,13 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 e.stopPropagation();
                 const newMode = this.dataset.mode;
                 try { localStorage.setItem(NT_GROUP_CLUSTER_KEY, newMode); } catch (e2) {}
+                cMode = newMode;
+                cBtn.textContent = labels[newMode] || labels.auto;
+                Array.from(cMenu.children).forEach(function(kind) {
+                    const aktiv = kind.dataset.mode === newMode;
+                    kind.style.background = aktiv ? 'var(--nt-active-bg)' : '';
+                    kind.style.fontWeight = aktiv ? '600' : '400';
+                });
                 cMenu.style.display = 'none';
                 // Re-Render mit neuem Mode
                 const d = window._ntLastData || {};

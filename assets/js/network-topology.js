@@ -338,13 +338,22 @@ function init() {
         // Keine Gruppen ausgewählt — versuche die letzte Auswahl wiederherzustellen.
         // Wenn vorhanden: URL ergänzen und reload, damit das PHP-Backend die
         // Hostgroups validiert und das Multiselect korrekt vorbefüllt.
+        const _here = new URL(window.location.href);
+        // Marker nt_reset: Reset oder Clear+Apply — der Benutzer hat die
+        // Auswahl ABSICHTLICH geleert. Ohne den Marker sah das exakt aus wie
+        // ein frischer Aufruf, der Restore holte die alten Gruppen zurueck,
+        // und beide Knoepfe taten sichtbar nichts. Die gespeicherte Auswahl
+        // wird mit vergessen, sonst kommt sie beim naechsten Aufruf ueber den
+        // Menuepunkt wieder.
+        const _explicitEmpty = _here.searchParams.has('nt_reset');
+        if (_explicitEmpty) saveLastGroups([]);
         const lastGroups = loadLastGroups();
         // Marker _ntr: verhindert eine Reload-Schleife. Hat der User zu einer
         // gespeicherten Gruppe die Permission verloren, strippt das Backend sie
         // wieder → selected_groupids leer → ohne Marker wieder Auto-Restore →
         // reload → endlos. Wir versuchen den Restore genau EINMAL pro Kette.
-        const _restoreTried = new URL(window.location.href).searchParams.has('_ntr');
-        if (lastGroups && lastGroups.length && !_restoreTried) {
+        const _restoreTried = _here.searchParams.has('_ntr');
+        if (lastGroups && lastGroups.length && !_restoreTried && !_explicitEmpty) {
             const u = new URL(window.location.href);
             // Bestehende groupids[]-Params (gibt's hier definitionsgemäß nicht,
             // aber sicher ist sicher) und ggf. action ungetastet lassen

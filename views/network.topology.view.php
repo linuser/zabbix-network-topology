@@ -66,11 +66,11 @@ $selected_data = array_map(
                                         ]))->setWidth(ZBX_TEXTAREA_FILTER_STANDARD_WIDTH)
                                     )
                                     ->addItem(
+                                        // multiSelect('clean') is the multiselect's own
+                                        // API, instead of clicking on its internal markup.
                                         (new CButton('clear_groups', _('Clear')))
                                             ->setAttribute('type', 'button')
-                                            ->setAttribute('onclick',
-                                                'document.querySelectorAll("#groupids_ span.zi-remove-smaller").forEach(function(s){s.click();});'
-                                            )
+                                            ->setAttribute('onclick', 'jQuery("#groupids_").multiSelect("clean");')
                                             ->addClass('btn-alt')
                                     )
                             )
@@ -125,8 +125,14 @@ $selected_data = array_map(
                                 (new CSubmit('apply', _('Apply')))->addClass('btn-primary')
                             )
                             ->addItem(
+                                // nt_reset marks the selection as emptied on purpose.
+                                // Without it the page looks exactly like a fresh open,
+                                // and the auto-restore in network-topology.js put the
+                                // last groups straight back: Reset did nothing.
                                 (new CRedirectButton(_('Reset'),
-                                    (new CUrl('zabbix.php'))->setArgument('action', 'network.topology.view')
+                                    (new CUrl('zabbix.php'))
+                                        ->setArgument('action', 'network.topology.view')
+                                        ->setArgument('nt_reset', '1')
                                 ))->addClass('btn-alt')
                             )
 
@@ -403,6 +409,16 @@ if (!window.NT_CONFIG || ((!window.NT_CONFIG.selected_groupids || !window.NT_CON
             } else {
                 var hopsSel = document.getElementById("hops");
                 if (hopsSel) hopsSel.disabled = true;   // disabled = not submitted
+            }
+            // Clear, then Apply: nothing selected on purpose. Same marker as
+            // the Reset button, same reason.
+            form.querySelectorAll("input[name='nt_reset']").forEach(function(el){ el.remove(); });
+            if (!items.length && !hostItems.length) {
+                var rinp = document.createElement("input");
+                rinp.type = "hidden";
+                rinp.name = "nt_reset";
+                rinp.value = "1";
+                form.appendChild(rinp);
             }
         });
     }

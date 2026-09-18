@@ -151,6 +151,15 @@ final class LldpEdgeBuilder {
             return trim($s);
         };
 
+        // ── Durchgang 1: jede gemeldete Zeile einem Host zuordnen ─────────────
+        //
+        // ZWEI DURCHGAENGE STATT EINEM, seit Nachbarn auch ueber MAC und Port
+        // aufgeloest werden. Beides braucht das GESAMTBILD: welche Chassis-ID
+        // zu welchem Host gehoert, weiss man erst, wenn ein anderer Melder
+        // denselben Host mit Namen UND Chassis-ID genannt hat — und welcher
+        // Host am anderen Ende eines Kabels steckt, erst, wenn dessen eigene
+        // Meldung gelesen ist. Beides kann in $lldp_raw spaeter kommen.
+        $rows = [];
         foreach ($lldp_raw as $item) {
             // Wert kann komma-separierte Liste sein: "hv-01,SW-CORE-01".
             // CDP kann auch "\n"-separiert oder mit Pipe kommen.
@@ -170,315 +179,308 @@ final class LldpEdgeBuilder {
                     $match_kind = 'ip';
                 }
 
-                $neighbor_raw = $rhid ? $neighbor_full : $cleanNeighbor($neighbor_full);
+                // MAC STATT NAME. Manche Geraete nennen ihren Nachbarn nicht
+                // beim Namen, sondern bei seiner Basis-MAC — als Bytefolge, die
+                // Zabbix als "02 5E 10 00 00 01" liefert. cleanNeighbor() schnitt
+                // die am ersten Leerzeichen ab, uebrig blieb das erste Byte.
+                // Gemeldet aus dem Feld: ein Geisterknoten aus zwei Hex-Ziffern
+                // mit denselben Kanten wie der Core-Switch. Schlimmer als der falsche Name war die Folge:
+                // ALLE Geraete, deren MAC mit demselben Byte beginnt, fielen in
+                // EINEN Geist zusammen — ein Verteiler, den es nicht gibt, mit
+                // Kanten zu Switches, die nichts miteinander zu tun haben.
+                $mac = $rhid ? null : self::macForm($neighbor_full);
+
+                $neighbor_raw = $rhid ? $neighbor_full
+                    : ($mac !== null ? $mac : $cleanNeighbor($neighbor_full));
                 if ($neighbor_raw === '') continue;
                 $lldp_val = strtolower($neighbor_raw);
 
-                // 1. Exakter Match gegen cleaned host/visiblename/lowercase
-                if (!$rhid) {
-                    $rhid = $name_map[$lldp_val] ?? null;
-                    if ($rhid) $match_kind = 'exact_clean';
-                }
-
-                // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
-                if (!$rhid && isset($ip_map[$neighbor_raw])) {
-                    $rhid = $ip_map[$neighbor_raw];
-                    $match_kind = 'ip';
-                }
-
-                // 2b. reverse-DNS-Pattern wie "ip-10-0-0-5" oder "host-10-0-0-5"
-                //     → extrahiere die IP und versuche IP-Match
-                if (!$rhid && preg_match('/(?:^|[-_])(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})/', $lldp_val, $mm)) {
-                    $extracted_ip = str_replace('-', '.', $mm[1]);
-                    if (isset($ip_map[$extracted_ip])) {
-                        $rhid = $ip_map[$extracted_ip];
-                        $match_kind = 'ip_derived';
-                    }
-                }
-
-                // 3. Short-Hostname (O(1)-Lookup via Map) — unique vs ambiguous tracken
+                // Eine MAC ist kein Name: die Namensstufen 1-3 duerfen sie
+                // nicht sehen. Ein Host, der zufaellig "02" heisst, waere sonst
+                // ein Kurznamen-Treffer.
                 $ambiguous_candidates = null;
-                if (!$rhid) {
-                    $lldp_short = explode('.', $lldp_val)[0];
-                    $candidates = $short_name_map[$lldp_short] ?? [];
-                    if (count($candidates) === 1) {
-                        $rhid = array_key_first($candidates);
-                        $match_kind = 'short';
-                    } elseif (count($candidates) > 1) {
-                        // Ambiguous: Short-Name matched mehrere Hosts → fuer
-                        // Quality-Tab merken, aber nicht als Edge anlegen
-                        // (sonst zufaellige Zuordnung).
-                        $ambiguous_candidates = array_keys($candidates);
+                if ($mac === null) {
+                    // 1. Exakter Match gegen cleaned host/visiblename/lowercase
+                    if (!$rhid) {
+                        $rhid = $name_map[$lldp_val] ?? null;
+                        if ($rhid) $match_kind = 'exact_clean';
+                    }
+
+                    // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
+                    if (!$rhid && isset($ip_map[$neighbor_raw])) {
+                        $rhid = $ip_map[$neighbor_raw];
+                        $match_kind = 'ip';
+                    }
+
+                    // 2b. reverse-DNS-Pattern wie "ip-10-0-0-5" oder "host-10-0-0-5"
+                    //     → extrahiere die IP und versuche IP-Match
+                    if (!$rhid && preg_match('/(?:^|[-_])(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})/', $lldp_val, $mm)) {
+                        $extracted_ip = str_replace('-', '.', $mm[1]);
+                        if (isset($ip_map[$extracted_ip])) {
+                            $rhid = $ip_map[$extracted_ip];
+                            $match_kind = 'ip_derived';
+                        }
+                    }
+
+                    // 3. Short-Hostname (O(1)-Lookup via Map) — unique vs ambiguous tracken
+                    if (!$rhid) {
+                        $lldp_short = explode('.', $lldp_val)[0];
+                        $candidates = $short_name_map[$lldp_short] ?? [];
+                        if (count($candidates) === 1) {
+                            $rhid = array_key_first($candidates);
+                            $match_kind = 'short';
+                        } elseif (count($candidates) > 1) {
+                            // Ambiguous: Short-Name matched mehrere Hosts → fuer
+                            // Quality-Tab merken, aber nicht als Edge anlegen
+                            // (sonst zufaellige Zuordnung).
+                            $ambiguous_candidates = array_keys($candidates);
+                        }
                     }
                 }
 
                 $rid = $item['hostid'];
-                $src = $item['src'] ?? 'other';
-                $ensureQ($rid);
-                if (!$rhid) {
-                    if ($ambiguous_candidates !== null) {
-                        $lldp_quality[$rid]['ambiguous'][] = [
-                            'raw' => $neighbor_raw, 'src' => $src, 'candidates' => $ambiguous_candidates
-                        ];
-                    } else {
-                        // Zusatzangaben mitgeben, sofern das Template sie
-                        // liefert. Ueber denselben SNMPINDEX wie der SysName —
-                        // dieselbe Nachbar-Zeile in der lldpRemTable.
-                        $entry = ['raw' => $neighbor_raw, 'src' => $src];
-                        $midx  = HostMetadata::ifaceParam($item['key_']);
-                        if ($midx !== '' && isset($lldp_meta[$rid][$midx])) {
-                            $m = $lldp_meta[$rid][$midx];
-                            if (($m['desc'] ?? '') !== '') {
-                                // Auf eine Zeile kuerzen: SysDesc ist bei Cisco &
-                                // Co. ein mehrzeiliger Absatz mit Copyright und
-                                // Compile-Datum. Fuer "was ist das?" reicht der
-                                // Anfang, und der Rest blaeht die Antwort auf.
-                                $entry['desc'] = mb_substr(trim(preg_replace('/\s+/u', ' ', $m['desc'])), 0, 120);
-                            }
-                            if (($m['chassis'] ?? '') !== '') {
-                                $entry['chassis'] = mb_substr(trim($m['chassis']), 0, 64);
-                            }
-                            $caps = self::decodeCaps($m['caps'] ?? '');
-                            if ($caps) {
-                                $entry['caps'] = $caps;
-                            }
-                        }
-                        $lldp_quality[$rid]['unmatched'][] = $entry;
-                        $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $rid . ', src=' . $src . ')';
-                    }
-                    continue;
-                }
-                // (string)-Vergleich, NICHT ===.
-                //
-                // $hosts kommt aus API::Host()->get([...'preservekeys' => true]),
-                // und PHP normalisiert numerische Array-Schluessel zu int. $rhid
-                // ist damit 10084, waehrend $rid = $item['hostid'] der rohe
-                // API-String "10084" ist. Ein striktes === war immer falsch:
-                // der Self-Loop wurde nie erkannt, ein Host der sich selbst
-                // meldet bekam eine echte Schleifen-Kante, und die "self"-Spalte
-                // im LLDP-Q-Tab stand auf JEDER Installation auf null.
-                //
-                // Im Test faellt das nicht auf, weil die Host-IDs dort
-                // 'h1'/'aruba' heissen — nicht numerisch, also keine
-                // Normalisierung, also stimmen die Typen zufaellig ueberein.
-                if ((string) $rhid === (string) $rid) {
-                    // Self-Loop ignorieren (Host meldet sich selbst als Nachbarn)
-                    $lldp_quality[$rid]['self']++;
-                    continue;
-                }
-                $lldp_quality[$rid]['matched']++;
+                $rows[] = [
+                    'item'      => $item,
+                    'rid'       => $rid,
+                    'rhid'      => $rhid,
+                    'match'     => $match_kind,
+                    'raw'       => $neighbor_raw,
+                    'mac'       => $mac !== null,
+                    'ambiguous' => $ambiguous_candidates,
+                    'ctx'       => self::portContext($item, (string) $rid, $lldp_ports, $port_names),
+                ];
+            }
+        }
 
-                // Capabilities des getroffenen Nachbarn merken — gleiche
-                // Zeile der lldpRemTable wie der SysName, also gleicher Index.
-                // Erster Melder gewinnt: sehen zwei Switches dasselbe Geraet,
-                // sind die Angaben identisch; waeren sie es nicht, ist die
-                // erste so gut wie jede andere.
-                if (!isset($host_caps[$rhid])) {
-                    $cidx = HostMetadata::ifaceParam($item['key_']);
-                    if ($cidx !== '' && isset($lldp_meta[$rid][$cidx]['caps'])) {
-                        $c = self::decodeCaps($lldp_meta[$rid][$cidx]['caps']);
-                        if ($c) {
-                            $host_caps[$rhid] = $c;
-                        }
-                    }
-                }
-                // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
-                // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
-                // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
-                // die Mitte ist der lokale Port des Reporters. Keys wie
-                // lldp.rem.sysname[eth0] liefern den Namen direkt. Comma-
-                // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
-                // $idx = voller Index; korreliert Remote-Port + Traffic (§3).
-                // Lokaler Port auf den ifIndex reduzieren: LLDP-Index ist
-                // TimeMark.LocalPort.RemIndex (3-teilig, Mitte = Port), CDP-Index
-                // ist cdpCacheIfIndex.devIndex (2-teilig, erster Teil = ifIndex).
-                // Beide muessen auf den ifIndex zeigen, sonst verfehlt die
-                // Traffic-Korrelation (port_traffic ist nach ifIndex gekeyt).
-                $idx      = '';
-                $port     = '';
-                $port_idx = '';
-                if (strpos($item['key_'], '[') !== false) {
-                    $idx  = HostMetadata::ifaceParam($item['key_']);
-                    $port = $idx;
-                    if (preg_match('/^\d+\.(\d+)\.\d+$/', $idx, $pm)) {
-                        $port = $pm[1];            // LLDP: Mitte = lokaler Port
-                    } elseif (preg_match('/^(\d+)\.\d+$/', $idx, $pm)) {
-                        $port = $pm[1];            // CDP: erster Teil = ifIndex
-                    }
-                    // Der ifIndex ist die Korrelationsgroesse — als ANZEIGE
-                    // taugt eine nackte "9" nichts, waehrend das Nachbar-Ende
-                    // "Gi1/0/8" zeigt. Liefert das Template einen
-                    // Interface-Namen, gewinnt der; sonst bleibt es beim Index.
-                    // $port_idx behaelt den Index fuer die Metrik-Zuordnung.
-                    $port_idx = $port;
-                    if ($port !== '' && isset($port_names[$rid][$port]) && $port_names[$rid][$port] !== '') {
-                        $port = $port_names[$rid][$port];
-                    }
-                    $port = self::capLabel($port);
-                }
+        self::resolveByChassis($rows, $lldp_meta);
+        self::resolveByPort($rows, $port_names);
 
-                // §3 Remote-Port des Nachbarn: gleicher SNMPINDEX wie der SysName
-                // (lldpRemPortId/-Desc bzw. cdpCacheDevicePort). PortDesc ("nic0",
-                // "Gi1/0/8") gewinnt vor PortId, die laut PortIdSubtype eine MAC
-                // sein kann. Ergibt das Port-Label am NACHBAR-Ende der Kante —
-                // Port-zu-Port auch dann, wenn nur der Reporter ueberwacht ist.
-                // trim() VOR dem Leer-Test, sonst gewinnt ein whitespace-only
-                // PortDesc den Ternary und faellt NICHT auf die PortId zurueck.
-                $remote_port = '';
-                if ($idx !== '' && isset($lldp_ports[$rid][$idx])) {
-                    $rp   = $lldp_ports[$rid][$idx];
-                    $desc = trim((string) ($rp['desc'] ?? ''));
-                    $remote_port = self::capLabel($desc !== '' ? $desc : trim((string) ($rp['id'] ?? '')));
-                }
-
-                // §3b Per-Link-Traffic am lokalen Port des Reporters. Setzt
-                // lldpRemLocalPortNum == ifIndex voraus (auf Aruba/ProCurve 1:1);
-                // passt es nicht, gibt es schlicht keinen Treffer → keine Metrik.
-                // Nicht mehr nur an $port_traffic gebunden: Errors und Discards
-                // koennen vorliegen, wo kein Traffic-Item existiert, und
-                // umgekehrt. Frueher fiel dann alles weg, weil der Traffic den
-                // Einstieg bildete.
-                // ACHTUNG: ab hier der INDEX, nicht das Label. Seit der Port
-                // einen Namen tragen kann, sind die beiden verschieden — und
-                // port_traffic/-speed/-errors sind nach ifIndex gekeyt. Mit dem
-                // Label gesucht faende man nichts mehr, und zwar still: es gaebe
-                // schlicht keine Per-Link-Metrik mehr.
-                $pidx = $port_idx ?? $port;
-                $my_metrics = null;
-                if ($pidx !== '') {
-                    if (isset($port_traffic[$rid][$pidx])) {
-                        $pt = $port_traffic[$rid][$pidx];
-                        $my_metrics = ['in' => round($pt['in']), 'out' => round($pt['out'])];
-                    }
-                    if (isset($port_speed[$rid][$pidx]) && $port_speed[$rid][$pidx] > 0) {
-                        $my_metrics ??= [];
-                        $my_metrics['speed'] = round($port_speed[$rid][$pidx]);
-                    }
-                    // Errors/Discards AN DIESEM PORT — nicht die Host-Summe.
-                    // Der Unterschied ist der ganze Punkt: ein Switch mit einem
-                    // defekten Uplink traegt sonst an jeder seiner Kanten
-                    // dieselbe Fehlerrate.
-                    if (isset($port_errors[$rid][$pidx])) {
-                        $my_metrics ??= [];
-                        $my_metrics['errors'] = round((float) $port_errors[$rid][$pidx], 3);
-                    }
-                    if (isset($port_discards[$rid][$pidx])) {
-                        $my_metrics ??= [];
-                        $my_metrics['discards'] = round((float) $port_discards[$rid][$pidx], 3);
-                    }
-                }
-
-                // Den gemeldeten Nachbar-Port auf ein Interface DES NACHBARN
-                // aufloesen. Gelingt es, hat die Kante Messwerte an beiden
-                // Enden — und die Aufloesung belegt zugleich, dass der
-                // gemeldete Port auf dem vermuteten Host existiert.
-                $far_metrics = null;
-                $port_match  = '';
-                if ($remote_port !== '' && !empty($port_names[$rhid])) {
-                    $auf = self::resolveRemotePort($remote_port, $port_names[$rhid]);
-                    if ($auf !== null) {
-                        [$fidx, $port_match] = $auf;
-                        if (isset($port_traffic[$rhid][$fidx])) {
-                            $ft = $port_traffic[$rhid][$fidx];
-                            $far_metrics = ['in' => round($ft['in']), 'out' => round($ft['out'])];
-                        }
-                        if (isset($port_speed[$rhid][$fidx]) && $port_speed[$rhid][$fidx] > 0) {
-                            $far_metrics ??= [];
-                            $far_metrics['speed'] = round($port_speed[$rhid][$fidx]);
-                        }
-                        if (isset($port_errors[$rhid][$fidx])) {
-                            $far_metrics ??= [];
-                            $far_metrics['errors'] = round((float) $port_errors[$rhid][$fidx], 3);
-                        }
-                        if (isset($port_discards[$rhid][$fidx])) {
-                            $far_metrics ??= [];
-                            $far_metrics['discards'] = round((float) $port_discards[$rhid][$fidx], 3);
-                        }
-                    }
-                }
-
-                $pair = [(string) $rid, (string) $rhid];
-                sort($pair);
-                $edge_key = implode('-', $pair);
-                // Obergrenze NUR fuer NEUE Kanten. Der Merge-Zweig unten
-                // ergaenzt eine bereits bekannte Kante um Quelle, Ports und
-                // Metrik — das kostet keinen nennenswerten Speicher und macht
-                // die Kanten, die wir behalten, VOLLSTAENDIGER. Hier
-                // abzubrechen wuerde also nichts sparen und stattdessen
-                // halbfertige Kanten hinterlassen.
-                if (!isset($seen_edges[$edge_key]) && count($edges) >= self::MAX_EDGES) {
-                    self::$truncated++;
-                    continue;
-                }
-                if (!isset($seen_edges[$edge_key])) {
-                    $seen_edges[$edge_key] = count($edges);
-                    // ports: lokaler Port am Reporter-Ende + Remote-Port am
-                    // Nachbar-Ende. Meldet die Gegenseite dieselbe Edge, ergaenzt
-                    // der Merge-Zweig unten ihre Sicht (first-wins).
-                    $ports = [];
-                    if ($port !== '')        $ports[(string) $rid]  = $port;
-                    if ($remote_port !== '') $ports[(string) $rhid] = $remote_port;
-                    $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
-                                'to' => $rhid, 'iface' => $item['key_'],
-                                'src' => [$src => true],
-                                // WER die Kante gemeldet hat, nicht nur DASS sie
-                                // gemeldet wurde. Siehe den Kommentar am Ende der
-                                // Schleife: daraus faellt die Unterscheidung
-                                // "beidseitig bestaetigt" gegen "einseitig".
-                                'reporters' => [(string) $rid => true],
-                                'match' => $match_kind,
-                                'port_match' => $port_match,
-                                'ports' => $ports,
-                                // Der ifIndex des Reporter-Ports. Das LABEL
-                                // kann sich aendern, ohne dass jemand ein Kabel
-                                // angefasst hat — faellt das ifName-Item aus,
-                                // steht dort wieder die nackte Zahl. Der Index
-                                // ist stabil und deshalb die richtige Groesse
-                                // fuer den Vergleich zweier Staende.
-                                'port_idx' => $port_idx !== '' ? [(string) $rid => $port_idx] : [],
-                                'port_metrics' => array_filter([
-                                    (string) $rid  => $my_metrics,
-                                    (string) $rhid => $far_metrics,
-                                ], static fn($v) => $v !== null)];
+        // ── Durchgang 2: Kanten, Qualitaet, Geister ───────────────────────────
+        foreach ($rows as $row) {
+            $item                 = $row['item'];
+            $rid                  = $row['rid'];
+            $rhid                 = $row['rhid'];
+            $match_kind           = $row['match'];
+            $neighbor_raw         = $row['raw'];
+            $ambiguous_candidates = $row['ambiguous'];
+            [$idx, $port, $port_idx, $remote_port] = $row['ctx'];
+            $src = $item['src'] ?? 'other';
+            $ensureQ($rid);
+            if (!$rhid) {
+                if ($ambiguous_candidates !== null) {
+                    $lldp_quality[$rid]['ambiguous'][] = [
+                        'raw' => $neighbor_raw, 'src' => $src, 'candidates' => $ambiguous_candidates
+                    ];
                 } else {
-                    // Edge schon bekannt (z.B. von LLDP) — Source/Ports/Metrik
-                    // ergaenzen, wenn jetzt CDP oder die Gegenseite dieselbe
-                    // Verbindung meldet (merge-Logik, first-wins pro Feld).
-                    $eidx = $seen_edges[$edge_key];
-                    // Dieser Zweig WUSSTE schon immer, dass die Kante ein
-                    // zweites Mal gemeldet wird — er hat es nur nie
-                    // aufgeschrieben. Genau hier entsteht die Bestaetigung.
-                    $edges[$eidx]['reporters'][(string) $rid] = true;
-                    // Beste Match-Art gewinnt, nicht die erste: melden beide
-                    // Seiten, hat womoeglich nur eine den Namen exakt getroffen
-                    // — und dann ist die Kante so sicher wie ihr BESTER Beleg,
-                    // nicht so unsicher wie ihr schlechtester.
-                    if (self::matchRank($match_kind) > self::matchRank($edges[$eidx]['match'] ?? '')) {
-                        $edges[$eidx]['match'] = $match_kind;
+                    // Zusatzangaben mitgeben, sofern das Template sie
+                    // liefert. Ueber denselben SNMPINDEX wie der SysName —
+                    // dieselbe Nachbar-Zeile in der lldpRemTable.
+                    $entry = ['raw' => $neighbor_raw, 'src' => $src];
+                    $midx  = HostMetadata::ifaceParam($item['key_']);
+                    if ($midx !== '' && isset($lldp_meta[$rid][$midx])) {
+                        $m = $lldp_meta[$rid][$midx];
+                        if (($m['desc'] ?? '') !== '') {
+                            // Auf eine Zeile kuerzen: SysDesc ist bei Cisco &
+                            // Co. ein mehrzeiliger Absatz mit Copyright und
+                            // Compile-Datum. Fuer "was ist das?" reicht der
+                            // Anfang, und der Rest blaeht die Antwort auf.
+                            $entry['desc'] = mb_substr(trim(preg_replace('/\s+/u', ' ', $m['desc'])), 0, 120);
+                        }
+                        if (($m['chassis'] ?? '') !== '') {
+                            $entry['chassis'] = mb_substr(trim($m['chassis']), 0, 64);
+                        }
+                        $caps = self::decodeCaps($m['caps'] ?? '');
+                        if ($caps) {
+                            $entry['caps'] = $caps;
+                        }
                     }
-                    if (!isset($edges[$eidx]['src'][$src])) {
-                        $edges[$eidx]['src'][$src] = true;
+                    $lldp_quality[$rid]['unmatched'][] = $entry;
+                    $lldp_unmatched[] = $neighbor_raw . ' (from hostid=' . $rid . ', src=' . $src . ')';
+                }
+                continue;
+            }
+            // (string)-Vergleich, NICHT ===.
+            //
+            // $hosts kommt aus API::Host()->get([...'preservekeys' => true]),
+            // und PHP normalisiert numerische Array-Schluessel zu int. $rhid
+            // ist damit 10084, waehrend $rid = $item['hostid'] der rohe
+            // API-String "10084" ist. Ein striktes === war immer falsch:
+            // der Self-Loop wurde nie erkannt, ein Host der sich selbst
+            // meldet bekam eine echte Schleifen-Kante, und die "self"-Spalte
+            // im LLDP-Q-Tab stand auf JEDER Installation auf null.
+            //
+            // Im Test faellt das nicht auf, weil die Host-IDs dort
+            // 'h1'/'aruba' heissen — nicht numerisch, also keine
+            // Normalisierung, also stimmen die Typen zufaellig ueberein.
+            if ((string) $rhid === (string) $rid) {
+                // Self-Loop ignorieren (Host meldet sich selbst als Nachbarn)
+                $lldp_quality[$rid]['self']++;
+                continue;
+            }
+            $lldp_quality[$rid]['matched']++;
+
+            // Capabilities des getroffenen Nachbarn merken — gleiche
+            // Zeile der lldpRemTable wie der SysName, also gleicher Index.
+            // Erster Melder gewinnt: sehen zwei Switches dasselbe Geraet,
+            // sind die Angaben identisch; waeren sie es nicht, ist die
+            // erste so gut wie jede andere.
+            if (!isset($host_caps[$rhid])) {
+                $cidx = HostMetadata::ifaceParam($item['key_']);
+                if ($cidx !== '' && isset($lldp_meta[$rid][$cidx]['caps'])) {
+                    $c = self::decodeCaps($lldp_meta[$rid][$cidx]['caps']);
+                    if ($c) {
+                        $host_caps[$rhid] = $c;
                     }
-                    if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
-                        $edges[$eidx]['ports'][(string) $rid] = $port;
+                }
+            }
+
+            // §3b Per-Link-Traffic am lokalen Port des Reporters. Setzt
+            // lldpRemLocalPortNum == ifIndex voraus (auf Aruba/ProCurve 1:1);
+            // passt es nicht, gibt es schlicht keinen Treffer → keine Metrik.
+            // Nicht mehr nur an $port_traffic gebunden: Errors und Discards
+            // koennen vorliegen, wo kein Traffic-Item existiert, und
+            // umgekehrt. Frueher fiel dann alles weg, weil der Traffic den
+            // Einstieg bildete.
+            // ACHTUNG: ab hier der INDEX, nicht das Label. Seit der Port
+            // einen Namen tragen kann, sind die beiden verschieden — und
+            // port_traffic/-speed/-errors sind nach ifIndex gekeyt. Mit dem
+            // Label gesucht faende man nichts mehr, und zwar still: es gaebe
+            // schlicht keine Per-Link-Metrik mehr.
+            $pidx = $port_idx ?? $port;
+            $my_metrics = null;
+            if ($pidx !== '') {
+                if (isset($port_traffic[$rid][$pidx])) {
+                    $pt = $port_traffic[$rid][$pidx];
+                    $my_metrics = ['in' => round($pt['in']), 'out' => round($pt['out'])];
+                }
+                if (isset($port_speed[$rid][$pidx]) && $port_speed[$rid][$pidx] > 0) {
+                    $my_metrics ??= [];
+                    $my_metrics['speed'] = round($port_speed[$rid][$pidx]);
+                }
+                // Errors/Discards AN DIESEM PORT — nicht die Host-Summe.
+                // Der Unterschied ist der ganze Punkt: ein Switch mit einem
+                // defekten Uplink traegt sonst an jeder seiner Kanten
+                // dieselbe Fehlerrate.
+                if (isset($port_errors[$rid][$pidx])) {
+                    $my_metrics ??= [];
+                    $my_metrics['errors'] = round((float) $port_errors[$rid][$pidx], 3);
+                }
+                if (isset($port_discards[$rid][$pidx])) {
+                    $my_metrics ??= [];
+                    $my_metrics['discards'] = round((float) $port_discards[$rid][$pidx], 3);
+                }
+            }
+
+            // Den gemeldeten Nachbar-Port auf ein Interface DES NACHBARN
+            // aufloesen. Gelingt es, hat die Kante Messwerte an beiden
+            // Enden — und die Aufloesung belegt zugleich, dass der
+            // gemeldete Port auf dem vermuteten Host existiert.
+            $far_metrics = null;
+            $port_match  = '';
+            if ($remote_port !== '' && !empty($port_names[$rhid])) {
+                $auf = self::resolveRemotePort($remote_port, $port_names[$rhid]);
+                if ($auf !== null) {
+                    [$fidx, $port_match] = $auf;
+                    if (isset($port_traffic[$rhid][$fidx])) {
+                        $ft = $port_traffic[$rhid][$fidx];
+                        $far_metrics = ['in' => round($ft['in']), 'out' => round($ft['out'])];
                     }
-                    if ($port_idx !== '' && !isset($edges[$eidx]['port_idx'][(string) $rid])) {
-                        $edges[$eidx]['port_idx'][(string) $rid] = $port_idx;
+                    if (isset($port_speed[$rhid][$fidx]) && $port_speed[$rhid][$fidx] > 0) {
+                        $far_metrics ??= [];
+                        $far_metrics['speed'] = round($port_speed[$rhid][$fidx]);
                     }
-                    if ($remote_port !== '' && !isset($edges[$eidx]['ports'][(string) $rhid])) {
-                        $edges[$eidx]['ports'][(string) $rhid] = $remote_port;
+                    if (isset($port_errors[$rhid][$fidx])) {
+                        $far_metrics ??= [];
+                        $far_metrics['errors'] = round((float) $port_errors[$rhid][$fidx], 3);
                     }
-                    if ($my_metrics !== null && !isset($edges[$eidx]['port_metrics'][(string) $rid])) {
-                        $edges[$eidx]['port_metrics'][(string) $rid] = $my_metrics;
+                    if (isset($port_discards[$rhid][$fidx])) {
+                        $far_metrics ??= [];
+                        $far_metrics['discards'] = round((float) $port_discards[$rhid][$fidx], 3);
                     }
-                    if ($far_metrics !== null && !isset($edges[$eidx]['port_metrics'][(string) $rhid])) {
-                        $edges[$eidx]['port_metrics'][(string) $rhid] = $far_metrics;
-                    }
-                    // Ein EXAKTER Porttreffer schlaegt einen normalisierten.
-                    if ($port_match === 'exact'
-                            || ($port_match === 'normalized' && ($edges[$eidx]['port_match'] ?? '') === '')) {
-                        $edges[$eidx]['port_match'] = $port_match;
-                    }
+                }
+            }
+
+            $pair = [(string) $rid, (string) $rhid];
+            sort($pair);
+            $edge_key = implode('-', $pair);
+            // Obergrenze NUR fuer NEUE Kanten. Der Merge-Zweig unten
+            // ergaenzt eine bereits bekannte Kante um Quelle, Ports und
+            // Metrik — das kostet keinen nennenswerten Speicher und macht
+            // die Kanten, die wir behalten, VOLLSTAENDIGER. Hier
+            // abzubrechen wuerde also nichts sparen und stattdessen
+            // halbfertige Kanten hinterlassen.
+            if (!isset($seen_edges[$edge_key]) && count($edges) >= self::MAX_EDGES) {
+                self::$truncated++;
+                continue;
+            }
+            if (!isset($seen_edges[$edge_key])) {
+                $seen_edges[$edge_key] = count($edges);
+                // ports: lokaler Port am Reporter-Ende + Remote-Port am
+                // Nachbar-Ende. Meldet die Gegenseite dieselbe Edge, ergaenzt
+                // der Merge-Zweig unten ihre Sicht (first-wins).
+                $ports = [];
+                if ($port !== '')        $ports[(string) $rid]  = $port;
+                if ($remote_port !== '') $ports[(string) $rhid] = $remote_port;
+                $edges[] = ['id' => 'e'.count($edges), 'from' => $rid,
+                            'to' => $rhid, 'iface' => $item['key_'],
+                            'src' => [$src => true],
+                            // WER die Kante gemeldet hat, nicht nur DASS sie
+                            // gemeldet wurde. Siehe den Kommentar am Ende der
+                            // Schleife: daraus faellt die Unterscheidung
+                            // "beidseitig bestaetigt" gegen "einseitig".
+                            'reporters' => [(string) $rid => true],
+                            'match' => $match_kind,
+                            'port_match' => $port_match,
+                            'ports' => $ports,
+                            // Der ifIndex des Reporter-Ports. Das LABEL
+                            // kann sich aendern, ohne dass jemand ein Kabel
+                            // angefasst hat — faellt das ifName-Item aus,
+                            // steht dort wieder die nackte Zahl. Der Index
+                            // ist stabil und deshalb die richtige Groesse
+                            // fuer den Vergleich zweier Staende.
+                            'port_idx' => $port_idx !== '' ? [(string) $rid => $port_idx] : [],
+                            'port_metrics' => array_filter([
+                                (string) $rid  => $my_metrics,
+                                (string) $rhid => $far_metrics,
+                            ], static fn($v) => $v !== null)];
+            } else {
+                // Edge schon bekannt (z.B. von LLDP) — Source/Ports/Metrik
+                // ergaenzen, wenn jetzt CDP oder die Gegenseite dieselbe
+                // Verbindung meldet (merge-Logik, first-wins pro Feld).
+                $eidx = $seen_edges[$edge_key];
+                // Dieser Zweig WUSSTE schon immer, dass die Kante ein
+                // zweites Mal gemeldet wird — er hat es nur nie
+                // aufgeschrieben. Genau hier entsteht die Bestaetigung.
+                $edges[$eidx]['reporters'][(string) $rid] = true;
+                // Beste Match-Art gewinnt, nicht die erste: melden beide
+                // Seiten, hat womoeglich nur eine den Namen exakt getroffen
+                // — und dann ist die Kante so sicher wie ihr BESTER Beleg,
+                // nicht so unsicher wie ihr schlechtester.
+                if (self::matchRank($match_kind) > self::matchRank($edges[$eidx]['match'] ?? '')) {
+                    $edges[$eidx]['match'] = $match_kind;
+                }
+                if (!isset($edges[$eidx]['src'][$src])) {
+                    $edges[$eidx]['src'][$src] = true;
+                }
+                if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
+                    $edges[$eidx]['ports'][(string) $rid] = $port;
+                }
+                if ($port_idx !== '' && !isset($edges[$eidx]['port_idx'][(string) $rid])) {
+                    $edges[$eidx]['port_idx'][(string) $rid] = $port_idx;
+                }
+                if ($remote_port !== '' && !isset($edges[$eidx]['ports'][(string) $rhid])) {
+                    $edges[$eidx]['ports'][(string) $rhid] = $remote_port;
+                }
+                if ($my_metrics !== null && !isset($edges[$eidx]['port_metrics'][(string) $rid])) {
+                    $edges[$eidx]['port_metrics'][(string) $rid] = $my_metrics;
+                }
+                if ($far_metrics !== null && !isset($edges[$eidx]['port_metrics'][(string) $rhid])) {
+                    $edges[$eidx]['port_metrics'][(string) $rhid] = $far_metrics;
+                }
+                // Ein EXAKTER Porttreffer schlaegt einen normalisierten.
+                if ($port_match === 'exact'
+                        || ($port_match === 'normalized' && ($edges[$eidx]['port_match'] ?? '') === '')) {
+                    $edges[$eidx]['port_match'] = $port_match;
                 }
             }
         }
@@ -516,6 +518,298 @@ final class LldpEdgeBuilder {
         ];
     }
 
+    /**
+     * Ist der gemeldete Nachbar eine MAC-Adresse? Liefert sie in einer
+     * einheitlichen Form ("02:5E:10:00:00:01") oder null.
+     *
+     * Erkannt werden die Schreibweisen, die tatsaechlich ankommen:
+     *
+     *   "02 5E 10 00 00 01"   Bytefolge — so gibt Zabbix einen OCTET STRING
+     *                         aus, der kein druckbarer Text ist
+     *   "02:5e:10:00:00:01"   "02-5e-10-00-00-01"
+     *   "025e.1000.0001"      Cisco
+     *   "025e10000001"
+     *
+     * Die einheitliche Form ist der Punkt: dasselbe Geraet, von einem Switch
+     * als Bytefolge und vom anderen mit Doppelpunkten gemeldet, wird EIN
+     * Geist und nicht zwei.
+     */
+    private static function macForm(string $s): ?string {
+        $s = trim($s);
+        if (preg_match('/^(?:0x)?([0-9a-f]{12})$/i', $s, $m)) {
+            $hex = $m[1];
+        } elseif (preg_match('/^([0-9a-f]{2})([ :-])([0-9a-f]{2})\2([0-9a-f]{2})\2([0-9a-f]{2})\2([0-9a-f]{2})\2([0-9a-f]{2})$/i', $s, $m)) {
+            $hex = $m[1] . $m[3] . $m[4] . $m[5] . $m[6] . $m[7];
+        } elseif (preg_match('/^([0-9a-f]{4})\.([0-9a-f]{4})\.([0-9a-f]{4})$/i', $s, $m)) {
+            $hex = $m[1] . $m[2] . $m[3];
+        } else {
+            return null;
+        }
+        return implode(':', str_split(strtoupper($hex), 2));
+    }
+
+    /**
+     * Taugt diese MAC als Identitaet? 00:00:00:00:00:00 und FF:FF:FF:FF:FF:FF
+     * melden Geraete, die ihre eigene nicht kennen — viele verschiedene
+     * Geraete koennen sie tragen, eine Zuordnung darueber waere geraten.
+     */
+    private static function macUsable(?string $mac): bool {
+        return $mac !== null && $mac !== '00:00:00:00:00:00' && $mac !== 'FF:FF:FF:FF:FF:FF';
+    }
+
+    /** Chassis-ID der Zeile aus lldpRemChassisId, sofern sie eine MAC ist. */
+    private static function rowChassis(array $row, array $lldp_meta): ?string {
+        $cidx = HostMetadata::ifaceParam($row['item']['key_'] ?? '');
+        if ($cidx === '') {
+            return null;
+        }
+        $raw = (string) ($lldp_meta[$row['rid']][$cidx]['chassis'] ?? '');
+        $mac = $raw === '' ? null : self::macForm($raw);
+        return self::macUsable($mac) ? $mac : null;
+    }
+
+    /**
+     * Nicht zugeordnete Zeilen ueber die Chassis-ID aufloesen.
+     *
+     * Die Chassis-ID ist die einzige STABILE Kennung, die LLDP ueber einen
+     * Nachbarn liefert. Welche davon zu welchem Host gehoert, lernen wir von
+     * den Zeilen, die ueber den NAMEN sicher getroffen haben und die
+     * Chassis-ID mitbringen. Meldet ein anderer Switch dasselbe Geraet nur per
+     * MAC — oder unter einem alten Namen —, ist es damit trotzdem erkannt.
+     *
+     * Nur sichere Namenstreffer lehren eine Chassis-ID. Ein Kurznamen-Treffer
+     * kann danebenliegen, und ein Fehler hier vervielfaeltigt sich: jede
+     * weitere Meldung dieser MAC landete am falschen Host.
+     *
+     * Beanspruchen zwei Hosts dieselbe MAC (Stacks, HA-Paare mit geteilter
+     * Adresse), wird sie gar nicht verwendet.
+     */
+    private static function resolveByChassis(array &$rows, array $lldp_meta): void {
+        $sicher = ['exact' => true, 'exact_clean' => true, 'ip' => true];
+        $map = [];   // MAC => hostid, oder null bei Widerspruch
+        foreach ($rows as $r) {
+            if (!$r['rhid'] || !isset($sicher[$r['match']])) {
+                continue;
+            }
+            $mac = self::rowChassis($r, $lldp_meta);
+            if ($mac === null) {
+                continue;
+            }
+            if (!array_key_exists($mac, $map)) {
+                $map[$mac] = $r['rhid'];
+            } elseif ($map[$mac] !== null && (string) $map[$mac] !== (string) $r['rhid']) {
+                $map[$mac] = null;
+            }
+        }
+        if (!$map) {
+            return;
+        }
+        foreach ($rows as &$r) {
+            if ($r['rhid'] || $r['ambiguous'] !== null) {
+                continue;
+            }
+            $kandidaten = [
+                ($r['mac'] && self::macUsable($r['raw'])) ? $r['raw'] : null,
+                self::rowChassis($r, $lldp_meta),
+            ];
+            foreach ($kandidaten as $mac) {
+                if ($mac !== null && ($map[$mac] ?? null) !== null) {
+                    $r['rhid']  = $map[$mac];
+                    $r['match'] = 'chassis';
+                    break;
+                }
+            }
+        }
+        unset($r);
+    }
+
+    /**
+     * Nicht zugeordnete MAC-Zeilen ueber das KABEL aufloesen.
+     *
+     * Beide Enden einer Verbindung melden ihren Port. Sagt der Core "an mir
+     * haengt sw-access, dort auf Port 48" und sagt sw-access "an meinem Port
+     * 48 haengt 02:5E:10:…", dann beschreiben beide dasselbe Kabel — und die
+     * MAC ist der Core. Gemeldet aus dem Feld: Access-Switches, die ihren Core
+     * nur per MAC nennen, waehrend der Core sie mit Namen meldet. Jede
+     * Verbindung stand doppelt auf der Karte, einmal richtig und einmal zu
+     * einem Geist.
+     *
+     * Das braucht keine Daten, die wir nicht schon haben, und haengt an keiner
+     * Schreibweise eines Namens — nur daran, dass der Port auf beiden Seiten
+     * derselbe ist.
+     *
+     * DREI BEDINGUNGEN, SONST NICHTS
+     *
+     *   * Nur Zeilen, die eine MAC melden. Eine Zeile mit einem NAMEN, der auf
+     *     keinen Host passt, ist ein anderes Geraet — der Port-Treffer waere
+     *     dann ein Widerspruch, keine Bestaetigung.
+     *   * Der Port des Melders traegt genau EINE Nachbarzeile. Sieht ein Port
+     *     mehrere Nachbarn (ein nicht verwalteter Switch dazwischen), ist
+     *     nicht zu sagen, welche Zeile welches Geraet ist.
+     *   * Genau EIN Host meldet diesen Port als Gegenstelle.
+     */
+    private static function resolveByPort(array &$rows, array $port_names): void {
+        // Wer meldet welchen Port welches Hosts als Gegenstelle?
+        //   "<host>|i:<ifIndex>" — aufgeloest auf ein Interface des Hosts
+        //   "<host>|n:<portname>" — nur der normalisierte Name
+        $gegenstelle = [];
+        foreach ($rows as $r) {
+            if (!$r['rhid']) {
+                continue;
+            }
+            $rp = $r['ctx'][3];
+            if ($rp === '') {
+                continue;
+            }
+            $ziel = (string) $r['rhid'];
+            if (!empty($port_names[$ziel])) {
+                $auf = self::resolveRemotePort($rp, $port_names[$ziel]);
+                if ($auf !== null) {
+                    $gegenstelle[$ziel . '|i:' . $auf[0]][(string) $r['rid']] = $r['rid'];
+                }
+            }
+            $gegenstelle[$ziel . '|n:' . self::normPort($rp)][(string) $r['rid']] = $r['rid'];
+        }
+
+        $schluessel = static function (array $r): array {
+            $melder = (string) $r['rid'];
+            return [
+                $r['ctx'][2] !== '' ? $melder . '|i:' . $r['ctx'][2] : '',
+                $r['ctx'][1] !== '' ? $melder . '|n:' . self::normPort($r['ctx'][1]) : '',
+            ];
+        };
+
+        // Was haengt sonst noch an diesem Port? Zwei Zahlen je Port:
+        //   offen    — Zeilen ohne Zuordnung (die MAC selbst zaehlt mit)
+        //   zu       — Hosts, auf die andere Zeilen dieses Ports zeigen
+        $offen = [];
+        $zu    = [];
+        foreach ($rows as $r) {
+            foreach ($schluessel($r) as $k) {
+                if ($k === '') {
+                    continue;
+                }
+                if ($r['rhid']) {
+                    $zu[$k][(string) $r['rhid']] = $r['rhid'];
+                } else {
+                    $offen[$k] = ($offen[$k] ?? 0) + 1;
+                }
+            }
+        }
+
+        foreach ($rows as &$r) {
+            if ($r['rhid'] || !$r['mac'] || $r['ambiguous'] !== null) {
+                continue;
+            }
+            foreach ($schluessel($r) as $k) {
+                if ($k === '') {
+                    continue;
+                }
+                // Zwei offene Zeilen am selben Port: welche welches Geraet ist,
+                // steht nirgends. Das passiert mit einem nicht verwalteten
+                // Switch dazwischen.
+                if (($offen[$k] ?? 0) !== 1) {
+                    continue;
+                }
+                $andere = $zu[$k] ?? [];
+
+                // 1. DERSELBE PORT MELDET DEN HOST SCHON MIT NAMEN.
+                //
+                // Aruba-Switches beantworten die CDP-Nachbartabelle mit der MAC
+                // des Nachbarn, waehrend dieselbe Verbindung ueber LLDP einen
+                // sauberen Namen traegt. Beide Zeilen haengen am selben lokalen
+                // Port — also ist es dasselbe Kabel und dasselbe Geraet.
+                // Gemeldet mit Screenshot: die Karte zeigte die Verbindung zum
+                // Core und daneben einen Geist aus zwei Hex-Ziffern.
+                if (count($andere) === 1) {
+                    $host = reset($andere);
+                    if ((string) $host !== (string) $r['rid']) {
+                        $r['rhid']  = $host;
+                        $r['match'] = 'port';
+                        break;
+                    }
+                    continue;
+                }
+                if ($andere !== []) {
+                    // Mehrere verschiedene Hosts an diesem Port — nichts raten.
+                    continue;
+                }
+
+                // 2. DAS ANDERE KABELENDE MELDET DIESEN PORT.
+                if (!isset($gegenstelle[$k]) || count($gegenstelle[$k]) !== 1) {
+                    continue;
+                }
+                $host = reset($gegenstelle[$k]);
+                if ((string) $host === (string) $r['rid']) {
+                    continue;
+                }
+                $r['rhid']  = $host;
+                $r['match'] = 'port';
+                break;
+            }
+        }
+        unset($r);
+    }
+
+    /**
+     * Portangaben einer Nachbarzeile: [SNMP-Index, lokales Port-Label,
+     * lokaler ifIndex, Port-Label am Nachbar-Ende]. Haengt nur an der Zeile
+     * selbst, nicht an der Zuordnung — deshalb schon im ersten Durchgang,
+     * wo die Port-Zuordnung (resolveByPort) sie braucht.
+     */
+    private static function portContext(array $item, string $rid, array $lldp_ports, array $port_names): array {
+        // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
+        // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
+        // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
+        // die Mitte ist der lokale Port des Reporters. Keys wie
+        // lldp.rem.sysname[eth0] liefern den Namen direkt. Comma-
+        // Listen-Items ohne Bracket haben keinen Port-Bezug → leer.
+        // $idx = voller Index; korreliert Remote-Port + Traffic (§3).
+        // Lokaler Port auf den ifIndex reduzieren: LLDP-Index ist
+        // TimeMark.LocalPort.RemIndex (3-teilig, Mitte = Port), CDP-Index
+        // ist cdpCacheIfIndex.devIndex (2-teilig, erster Teil = ifIndex).
+        // Beide muessen auf den ifIndex zeigen, sonst verfehlt die
+        // Traffic-Korrelation (port_traffic ist nach ifIndex gekeyt).
+        $idx      = '';
+        $port     = '';
+        $port_idx = '';
+        if (strpos($item['key_'], '[') !== false) {
+            $idx  = HostMetadata::ifaceParam($item['key_']);
+            $port = $idx;
+            if (preg_match('/^\d+\.(\d+)\.\d+$/', $idx, $pm)) {
+                $port = $pm[1];            // LLDP: Mitte = lokaler Port
+            } elseif (preg_match('/^(\d+)\.\d+$/', $idx, $pm)) {
+                $port = $pm[1];            // CDP: erster Teil = ifIndex
+            }
+            // Der ifIndex ist die Korrelationsgroesse — als ANZEIGE
+            // taugt eine nackte "9" nichts, waehrend das Nachbar-Ende
+            // "Gi1/0/8" zeigt. Liefert das Template einen
+            // Interface-Namen, gewinnt der; sonst bleibt es beim Index.
+            // $port_idx behaelt den Index fuer die Metrik-Zuordnung.
+            $port_idx = $port;
+            if ($port !== '' && isset($port_names[$rid][$port]) && $port_names[$rid][$port] !== '') {
+                $port = $port_names[$rid][$port];
+            }
+            $port = self::capLabel($port);
+        }
+
+        // §3 Remote-Port des Nachbarn: gleicher SNMPINDEX wie der SysName
+        // (lldpRemPortId/-Desc bzw. cdpCacheDevicePort). PortDesc ("nic0",
+        // "Gi1/0/8") gewinnt vor PortId, die laut PortIdSubtype eine MAC
+        // sein kann. Ergibt das Port-Label am NACHBAR-Ende der Kante —
+        // Port-zu-Port auch dann, wenn nur der Reporter ueberwacht ist.
+        // trim() VOR dem Leer-Test, sonst gewinnt ein whitespace-only
+        // PortDesc den Ternary und faellt NICHT auf die PortId zurueck.
+        $remote_port = '';
+        if ($idx !== '' && isset($lldp_ports[$rid][$idx])) {
+            $rp   = $lldp_ports[$rid][$idx];
+            $desc = trim((string) ($rp['desc'] ?? ''));
+            $remote_port = self::capLabel($desc !== '' ? $desc : trim((string) ($rp['id'] ?? '')));
+        }
+
+        return [$idx, $port, $port_idx, $remote_port];
+    }
+
     /** Port-Label auf 24 Zeichen kappen (einheitlich fuer lokalen + Remote-Port). */
     /**
      * Rang einer Match-Art. Hoeher = besserer Beleg.
@@ -523,9 +817,11 @@ final class LldpEdgeBuilder {
      */
     private static function matchRank(string $kind): int {
         switch ($kind) {
-            case 'exact':       return 5;
-            case 'ip':          return 4;
-            case 'exact_clean': return 3;
+            case 'exact':       return 7;
+            case 'ip':          return 6;
+            case 'chassis':     return 5;
+            case 'exact_clean': return 4;
+            case 'port':        return 3;
             case 'ip_derived':  return 2;
             case 'short':       return 1;
             default:            return 0;
@@ -562,6 +858,8 @@ final class LldpEdgeBuilder {
      *   exact        60  der gemeldete Name IST der Hostname
      *   ip           50  der Nachbar nannte eine IP, die zu einem Host gehoert
      *   exact_clean  50  exakt, aber erst nach Abschneiden eines Zusatzes
+     *   chassis      50  die gemeldete MAC gehoert zu einem sicher getroffenen Host
+     *   port         40  eine MAC, aufgeloest ueber denselben Port an beiden Kabelenden
      *   ip_derived   35  IP aus einem Namensmuster ("ip-10-0-0-5") GERATEN
      *   short        30  nur der Kurzname, in DIESER Auswahl eindeutig
      *
@@ -574,6 +872,8 @@ final class LldpEdgeBuilder {
             'exact'       => 60,
             'ip'          => 50,
             'exact_clean' => 50,
+            'chassis'     => 50,
+            'port'        => 40,
             'ip_derived'  => 35,
             'short'       => 30,
         ];

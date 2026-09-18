@@ -93,6 +93,60 @@ function buildHierarchyPositions(nodes) {
     return positions;
 }
 
+// Position fuer Knoten OHNE gespeicherte Koordinate — Geister vor allem.
+//
+// Das preset-Layout gibt fuer sie undefined zurueck, und Cytoscape laesst den
+// Knoten dann dort, wo er ist: auf (0,0). Bei einem Dutzend Geistern liegt
+// damit ein Dutzend Knoten uebereinander im selben Punkt. Gemeldet mit
+// Screenshot, eine einzelne Hostgruppe, Layout "Auto" — also genau der Pfad,
+// der die gespeicherten Positionen wiederverwendet.
+//
+// Gesetzt wird ringfoermig um den NACHBARN, der eine Position hat: ein Geist
+// haengt definitionsgemaess an einem gemeldeten Host, und dort gehoert er auch
+// hin. Der Winkel kommt aus der Reihenfolge, nicht aus dem Zufall — sonst
+// springt die Karte bei jedem Neuzeichnen.
+function buildFallbackPositions(nodes, edges, saved) {
+    const fehlt = nodes.filter(function(n) { return !saved[String(n.id)]; });
+    if (!fehlt.length) return {};
+
+    // Nachbarn einsammeln (nur Knoten MIT Position sind als Anker brauchbar).
+    const anker = {};
+    (edges || []).forEach(function(e) {
+        const a = String(e.source !== undefined ? e.source : e.from);
+        const b = String(e.target !== undefined ? e.target : e.to);
+        if (saved[a] && !saved[b]) (anker[b] = anker[b] || []).push(a);
+        if (saved[b] && !saved[a]) (anker[a] = anker[a] || []).push(b);
+    });
+
+    // Mitte der bekannten Karte — Rueckfall fuer Knoten ganz ohne Anker.
+    const ids = Object.keys(saved);
+    let mx = 0, my = 0;
+    ids.forEach(function(id) { mx += saved[id].x || 0; my += saved[id].y || 0; });
+    if (ids.length) { mx /= ids.length; my /= ids.length; }
+
+    const proAnker = {};
+    const pos = {};
+    let ohne = 0;
+    fehlt.forEach(function(n) {
+        const id = String(n.id);
+        const a = (anker[id] || []).sort()[0];
+        if (a) {
+            const k = proAnker[a] = (proAnker[a] || 0) + 1;
+            // Ring um den Anker: die ersten acht auf 110 px, danach weiter aussen.
+            const ring = Math.floor((k - 1) / 8);
+            const w = ((k - 1) % 8) * (Math.PI / 4);
+            const r = 110 + ring * 70;
+            pos[id] = { x: (saved[a].x || 0) + Math.cos(w) * r,
+                        y: (saved[a].y || 0) + Math.sin(w) * r };
+        } else {
+            // Kein Anker: Raster neben der Karte statt Stapel auf (0,0).
+            pos[id] = { x: mx + (ohne % 10) * 140, y: my + 260 + Math.floor(ohne / 10) * 140 };
+            ohne++;
+        }
+    });
+    return pos;
+}
+
 // Baut das Layout-Config für Cytoscape. `layoutId` ist eine der LAYOUT_OPTIONS-
 // IDs ('auto' = Heuristik mit Preset-Versuch). nodes/edges werden nur für die
 // Heuristik bei 'auto' und für 'hierarchy' (Positions-Berechnung) gebraucht;
@@ -104,7 +158,12 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
     if (layoutId === 'auto' && !forceFresh) {
         // Preset-Versuch: 80% der Nodes haben gespeicherte, plausible Positionen
         const sp = loadPositions();
-        const ids = nodes.map(function(n) { return String(n.id); });
+        // Geister zaehlen bei der Abdeckung NICHT mit. Sie haben nie eine
+        // gespeicherte Position, und je mehr davon auf der Karte sind, desto
+        // sicherer fiel die eigene Anordnung unter die 80 % und wurde
+        // kommentarlos durch ein frisches Force-Layout ersetzt.
+        const ids = nodes.map(function(n) { return String(n.id); })
+            .filter(function(id) { return id.indexOf('ghost_') !== 0; });
         const hits = ids.filter(function(id) { return !!sp[id]; }).length;
         const coverage = ids.length > 0 ? hits / ids.length : 0;
         // Schutz gegen vergiftete localStorage-Snapshots (alle bei 0,0)
@@ -113,9 +172,10 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
             return p && (Math.abs(p.x) > 1 || Math.abs(p.y) > 1);
         });
         if (coverage >= 0.8 && hasNonZero) {
+            const fallback = buildFallbackPositions(nodes, edges, sp);
             return {
                 name: 'preset',
-                positions: function(node) { return sp[node.id()] || undefined; },
+                positions: function(node) { return sp[node.id()] || fallback[node.id()]; },
                 padding: 30
             };
         }
@@ -136,26 +196,33 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
             return {
                 name: 'cose', animate: true, animationDuration: 500, randomize: true,
                 padding: 50, nodeRepulsion: 8000, idealEdgeLength: 100, gravity: 1,
-                fit: true, componentSpacing: 40
+                fit: true, componentSpacing: 40,
+                // Die Beschriftung mitrechnen. Ohne das kennt das Layout nur
+                // den Knotenkreis von 44 px, waehrend ein Name wie "sw-edge-14.rack3" dreimal
+                // so breit ist — die Kreise standen frei, die Namen lagen
+                // uebereinander.
+                nodeDimensionsIncludeLabels: true
             };
         case 'concentric':
             return {
                 name: 'concentric', animate: true, animationDuration: 500,
                 padding: 50, fit: true, minNodeSpacing: 60,
+                nodeDimensionsIncludeLabels: true,
                 concentric: function(node) { return node.degree(); },
                 levelWidth: function() { return 1; }
             };
         case 'grid':
             return {
                 name: 'grid', animate: true, animationDuration: 500,
-                padding: 50, fit: true, avoidOverlap: true, condense: false
+                padding: 50, fit: true, avoidOverlap: true, condense: false,
+                nodeDimensionsIncludeLabels: true
             };
         case 'breadthfirst':
             // Wurzel = höchstgradiger Knoten (gleiche Heuristik wie render-tree)
             return {
                 name: 'breadthfirst', animate: true, animationDuration: 500,
                 directed: false, padding: 50, fit: true, spacingFactor: 1.4,
-                avoidOverlap: true
+                avoidOverlap: true, nodeDimensionsIncludeLabels: true
             };
         case 'hierarchy':
             // Tier-basiertes Preset-Layout — Positionen kommen aus
@@ -178,7 +245,12 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
             return {
                 name: 'cose', animate: true, animationDuration: 500, randomize: true,
                 padding: 50, nodeRepulsion: 8000, idealEdgeLength: 100, gravity: 1,
-                fit: true, componentSpacing: 40
+                fit: true, componentSpacing: 40,
+                // Die Beschriftung mitrechnen. Ohne das kennt das Layout nur
+                // den Knotenkreis von 44 px, waehrend ein Name wie "sw-edge-14.rack3" dreimal
+                // so breit ist — die Kreise standen frei, die Namen lagen
+                // uebereinander.
+                nodeDimensionsIncludeLabels: true
             };
     }
 }

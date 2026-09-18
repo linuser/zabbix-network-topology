@@ -226,6 +226,39 @@ $cpuRev = MetricExtractor::extract(array_reverse($cpuItems));
 check('Reihenfolge der Items ist egal',
       (float) ($cpuRev['cpu']['hc'] ?? -1), (float) ($cpu['cpu']['hc'] ?? -2));
 
+// ── Interface-Keys ohne MIB-Namen: net.if.in[24] (Issue #16) ───────────────
+//
+// Eine ganze Familie offizieller Zabbix-Templates (Cisco Catalyst 3750V2,
+// Nexus 9000, pfSense, OPNsense) nennt ihre Interface-Items net.if.in[24]:
+// kein "Octets", kein "ifOperStatus", der Index nackt in der Klammer. Die
+// Portzuordnung sah diese Items nie. Namen und Werte erfunden.
+echo "\n  MetricExtractor — net.if.*[ifIndex] ohne MIB-Namen\n\n";
+
+$itemsN = [
+    ['hostid' => 's1', 'key_' => 'net.if.in[24]',          'name' => 'Interface 24(): Bits received',  'lastvalue' => '4000000'],
+    ['hostid' => 's1', 'key_' => 'net.if.out[24]',         'name' => 'Interface 24(): Bits sent',      'lastvalue' => '1000000'],
+    ['hostid' => 's1', 'key_' => 'net.if.speed[24]',       'name' => 'Interface 24(): Speed',          'lastvalue' => '1000000000'],
+    ['hostid' => 's1', 'key_' => 'net.if.status[24]',      'name' => 'Interface 24(): Operational status', 'lastvalue' => '1'],
+    ['hostid' => 's1', 'key_' => 'net.if.status[23]',      'name' => 'Interface 23(): Operational status', 'lastvalue' => '2'],
+    ['hostid' => 's1', 'key_' => 'net.if.type[24]',        'name' => 'Interface 24(): Interface type', 'lastvalue' => '6'],
+    ['hostid' => 's1', 'key_' => 'net.if.in.errors[24]',   'name' => 'Interface 24(): Inbound packets with errors', 'lastvalue' => '0.5'],
+    ['hostid' => 's1', 'key_' => 'net.if.out.discards[24]','name' => 'Interface 24(): Outbound packets discarded', 'lastvalue' => '0.25'],
+    // Agent-Schluessel mit Interface-NAMEN bleiben, was sie waren.
+    ['hostid' => 's2', 'key_' => 'net.if.in[eth0]',        'name' => 'Interface eth0: Bits received',  'lastvalue' => '700'],
+];
+$mN = MetricExtractor::extract($itemsN);
+check('port_traffic in  net.if.in[24]',        $mN['port_traffic']['s1']['24']['in']  ?? null, 4000000.0);
+check('port_traffic out net.if.out[24]',       $mN['port_traffic']['s1']['24']['out'] ?? null, 1000000.0);
+check('port_speed net.if.speed[24] (bps)',     $mN['port_speed']['s1']['24']          ?? null, 1.0e9);
+check('port_errors net.if.in.errors[24]',      $mN['port_errors']['s1']['24']         ?? null, 0.5);
+check('port_discards net.if.out.discards[24]', $mN['port_discards']['s1']['24']       ?? null, 0.25);
+check('Host-Traffic zaehlt weiter (in)',       $mN['traffic']['s1']['in']             ?? null, 4000000.0);
+check('Host-Speed aus net.if.speed',           $mN['speed']['s1']                     ?? null, 1.0e9);
+check('Oper-Status: Port 23 down',             $mN['iface']['s1']['down']             ?? null, 1);
+check('net.if.type zaehlt nicht als Traffic',  $mN['traffic']['s1']['out']            ?? null, 1000000.0);
+check('Agent net.if.in[eth0]: kein Port',      isset($mN['port_traffic']['s2']),               false);
+check('Agent net.if.in[eth0]: Host-Traffic',   $mN['traffic']['s2']['in']             ?? null, 700.0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

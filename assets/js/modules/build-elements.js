@@ -354,8 +354,15 @@ export function buildEdgeElements(edges, nodes) {
         // gemessen" auszuzeichnen waere genau die Halbwahrheit, gegen die das
         // Panel antritt: 0 b/s mit gruener Messmarke statt der ehrlichen
         // Schaetzung aus den Knotensummen.
-        const pmRaw = (e.port_metrics && (e.port_metrics[src] || e.port_metrics[tgt])) || null;
-        const pm = (pmRaw && pmRaw.in !== undefined && pmRaw.out !== undefined) ? pmRaw : null;
+        // Der Eintrag MIT Zaehlern gewinnt, egal an welchem Ende er haengt.
+        // Vorher gewann das SRC-Ende schon dadurch, dass es existierte: hatte
+        // es nur Speed oder Errors, fiel die Kante auf die Schaetzung zurueck,
+        // obwohl das andere Ende gemessene Werte hatte.
+        const pmSrc = (e.port_metrics && e.port_metrics[src]) || null;
+        const pmTgt = (e.port_metrics && e.port_metrics[tgt]) || null;
+        const hatZaehler = function(p) { return !!(p && p.in !== undefined && p.out !== undefined); };
+        const pm = hatZaehler(pmSrc) ? pmSrc : (hatZaehler(pmTgt) ? pmTgt : null);
+        const pmRaw = pm || pmSrc || pmTgt;
         let perLink = false, eIn = tIn, eOut = tOut, eCap = capBps, tLbl = tLabel;
         let portErr = null, portDrop = null;
         // Errors/Discards gelten auch ohne Traffic-Item — sie sind eine eigene
@@ -369,8 +376,7 @@ export function buildEdgeElements(edges, nodes) {
             // in/out konsistent aus Sicht des SRC-Knotens: pm ist nach Reporter-
             // Hostid gekeyt; ist der Reporter das TGT-Ende, sind pm.in/out relativ
             // zu SRC gespiegelt → sonst kippen ↓/↑ je nach Melde-Reihenfolge.
-            const fromSrc = !!(e.port_metrics && e.port_metrics[src]
-                              && e.port_metrics[src].in !== undefined);
+            const fromSrc = (pm === pmSrc);
             eIn  = (fromSrc ? pm.in  : pm.out) || 0;
             eOut = (fromSrc ? pm.out : pm.in)  || 0;
             if (pm.speed) eCap = pm.speed;
