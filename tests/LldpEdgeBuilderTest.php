@@ -709,6 +709,59 @@ $rAru2 = LldpEdgeBuilder::build($hAru, [
 ]);
 check('zwei Hosts am Port: MAC bleibt offen', count($rAru2['unmatched']), 1);
 
+// ── Dieselbe private Adresse bei zwei Kunden (#14) ─────────────────────────
+//
+// Ein Dienstleister hat mehrere Mandanten auf einer Karte, und 192.168.1.10
+// gibt es in jedem zweiten Netz. Bis 5.3.1 gewann der zuletzt eingelesene
+// Host, und der Melder bekam eine Kante zu einem FREMDEN Kunden — mit 60
+// Punkten Sicherheit und ohne Hinweis im Qualitaets-Tab. Namen erfunden.
+echo "\n  LldpEdgeBuilder — doppelt vergebene IP\n\n";
+
+$hIp = [
+    'a1' => ['host' => 'lab-a-sw1', 'name' => 'lab-a-sw1',
+             'interfaces' => [['ip' => '192.168.1.10']]],
+    'b1' => ['host' => 'lab-b-sw1', 'name' => 'lab-b-sw1',
+             'interfaces' => [['ip' => '192.168.1.10']]],
+    'c1' => ['host' => 'lab-c-sw1', 'name' => 'lab-c-sw1',
+             'interfaces' => [['ip' => '10.99.0.5']]],
+    'melder' => ['host' => 'lab-melder', 'name' => 'lab-melder',
+                 'interfaces' => [['ip' => '10.99.0.1']]],
+];
+
+$rIp = LldpEdgeBuilder::build($hIp, [
+    ['hostid' => 'melder', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => '192.168.1.10', 'src' => 'lldp'],
+]);
+check('doppelte IP: keine Kante',            count($rIp['edges']), 0);
+check('doppelte IP: als mehrdeutig gemeldet', count($rIp['quality']['melder']['ambiguous'] ?? []), 1);
+$kand = ($rIp['quality']['melder']['ambiguous'][0]['candidates'] ?? []);
+sort($kand);
+check('doppelte IP: beide Kandidaten genannt', $kand, ['a1', 'b1']);
+check('doppelte IP: nicht als unmatched gezaehlt', count($rIp['quality']['melder']['unmatched'] ?? []), 0);
+
+// Eindeutige IP trifft weiterhin.
+$rIp2 = LldpEdgeBuilder::build($hIp, [
+    ['hostid' => 'melder', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => '10.99.0.5', 'src' => 'lldp'],
+]);
+check('eindeutige IP: Kante bleibt',   hasEdge($rIp2['edges'], 'melder', 'c1'), true);
+check('eindeutige IP: Art bleibt ip',  ($rIp2['edges'][0]['match'] ?? null), 'ip');
+
+// Zwei Schnittstellen DESSELBEN Hosts mit derselben Adresse sind kein Konflikt.
+$hIp3 = ['x1' => ['host' => 'lab-x-sw1', 'name' => 'lab-x-sw1',
+                  'interfaces' => [['ip' => '10.99.0.7'], ['ip' => '10.99.0.7']]],
+         'melder' => $hIp['melder']];
+$rIp3 = LldpEdgeBuilder::build($hIp3, [
+    ['hostid' => 'melder', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => '10.99.0.7', 'src' => 'lldp'],
+]);
+check('gleiche IP am selben Host: Kante',  hasEdge($rIp3['edges'], 'melder', 'x1'), true);
+
+// Der Kurzname darf die mehrdeutige IP nicht aufloesen: "192.168.1.10" faellt
+// sonst auf "192" zurueck und trifft einen Host dieses Namens.
+$hIp4 = $hIp + ['seltsam' => ['host' => '192', 'name' => '192']];
+$rIp4 = LldpEdgeBuilder::build($hIp4, [
+    ['hostid' => 'melder', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => '192.168.1.10', 'src' => 'lldp'],
+]);
+check('kein Kurznamen-Treffer auf "192"', count($rIp4['edges']), 0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

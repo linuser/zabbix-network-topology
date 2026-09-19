@@ -90,16 +90,44 @@ final class LldpEdgeBuilder {
             $name_map[strtolower($h['name'])] = $hid;
             foreach ($h['interfaces'] ?? [] as $iface) {
                 if (!empty($iface['ip'])) {
-                    $ip_map[$iface['ip']] = $hid;
+                    // KANDIDATENLISTE, nicht Ueberschreiben. Dieselbe private
+                    // Adresse kommt bei mehreren Kunden vor — 192.168.1.1 steht
+                    // in jedem zweiten Netz. Bis 5.3.1 gewann hier der zuletzt
+                    // eingelesene Host, still: der Melder bekam eine Kante zu
+                    // einem fremden Mandanten, mit 60 Punkten Sicherheit und
+                    // ohne einen Hinweis im Qualitaets-Tab. Gemeldet von einem
+                    // Dienstleister mit mehreren Kunden auf einer Karte (#14).
+                    $ip_map[$iface['ip']][(string) $hid] = $hid;
                 }
             }
         }
+        // Eine IP auf EINEN Host aufloesen. Gibt [hostid, null] bei genau einem
+        // Kandidaten, [null, [hostids]] bei mehreren und [null, null] wenn die
+        // Adresse unbekannt ist. Mehrdeutig heisst: keine Kante. Dieselbe Regel
+        // wie beim Kurznamen — eine falsche Kante ist schlimmer als eine
+        // fehlende, weil sie wie eine Messung aussieht.
+        $ipTreffer = static function (string $ip) use ($ip_map): array {
+            $kandidaten = $ip_map[$ip] ?? [];
+            if (count($kandidaten) === 1) {
+                return [reset($kandidaten), null];
+            }
+            if (count($kandidaten) > 1) {
+                return [null, array_values($kandidaten)];
+            }
+            return [null, null];
+        };
+
         // Short-Name-Map einmal vorberechnen statt pro Edge linear durch
         // alle name_map-Eintraege zu iterieren. Bei 500 Hosts × 500 LLDP-
         // Neighbors war das vorher 250k Vergleiche.
+        // (string) ist Pflicht, kein Zierrat: PHP macht aus einem numerischen
+        // Array-Schluessel ein int. Ein Host, der schlicht "192" oder "42"
+        // heisst, liefert hier also eine Zahl, und explode() wirft unter PHP 8
+        // einen TypeError — die Karte waere eine weisse Seite. Gefunden beim
+        // Test zur doppelt vergebenen IP, nicht im Feld.
         $short_name_map = [];   // short → [hid, ...]
         foreach ($name_map as $mapped_name => $mapped_hid) {
-            $short = explode('.', $mapped_name)[0];
+            $short = explode('.', (string) $mapped_name)[0];
             $short_name_map[$short][$mapped_hid] = true;
         }
 
@@ -172,11 +200,17 @@ final class LldpEdgeBuilder {
                 $neighbor_full = trim((string) $neighbor_full);
                 if ($neighbor_full === '') continue;
                 $match_kind = '';
+                $ip_mehrdeutig = null;
                 $rhid = $name_map[strtolower($neighbor_full)] ?? null;
                 if ($rhid) $match_kind = 'exact';
-                if (!$rhid && isset($ip_map[$neighbor_full])) {
-                    $rhid = $ip_map[$neighbor_full];
-                    $match_kind = 'ip';
+                if (!$rhid) {
+                    [$treffer, $mehrere] = $ipTreffer($neighbor_full);
+                    if ($treffer !== null) {
+                        $rhid = $treffer;
+                        $match_kind = 'ip';
+                    } elseif ($mehrere !== null) {
+                        $ip_mehrdeutig = $mehrere;
+                    }
                 }
 
                 // MAC STATT NAME. Manche Geraete nennen ihren Nachbarn nicht
@@ -207,23 +241,38 @@ final class LldpEdgeBuilder {
                     }
 
                     // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
-                    if (!$rhid && isset($ip_map[$neighbor_raw])) {
-                        $rhid = $ip_map[$neighbor_raw];
-                        $match_kind = 'ip';
+                    if (!$rhid) {
+                        [$treffer, $mehrere] = $ipTreffer($neighbor_raw);
+                        if ($treffer !== null) {
+                            $rhid = $treffer;
+                            $match_kind = 'ip';
+                        } elseif ($mehrere !== null) {
+                            $ip_mehrdeutig = $mehrere;
+                        }
                     }
 
                     // 2b. reverse-DNS-Pattern wie "ip-10-0-0-5" oder "host-10-0-0-5"
                     //     → extrahiere die IP und versuche IP-Match
                     if (!$rhid && preg_match('/(?:^|[-_])(\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3})/', $lldp_val, $mm)) {
                         $extracted_ip = str_replace('-', '.', $mm[1]);
-                        if (isset($ip_map[$extracted_ip])) {
-                            $rhid = $ip_map[$extracted_ip];
+                        [$treffer, $mehrere] = $ipTreffer($extracted_ip);
+                        if ($treffer !== null) {
+                            $rhid = $treffer;
                             $match_kind = 'ip_derived';
+                        } elseif ($mehrere !== null) {
+                            $ip_mehrdeutig = $mehrere;
                         }
                     }
 
                     // 3. Short-Hostname (O(1)-Lookup via Map) — unique vs ambiguous tracken
-                    if (!$rhid) {
+                    //
+                    // Eine mehrdeutige IP bricht hier ab: "192.168.1.10" wuerde
+                    // sonst auf den Kurznamen "192" zurueckfallen und bei einem
+                    // Host dieses Namens zufaellig treffen.
+                    if (!$rhid && $ip_mehrdeutig !== null) {
+                        $ambiguous_candidates = $ip_mehrdeutig;
+                    }
+                    if (!$rhid && $ambiguous_candidates === null) {
                         $lldp_short = explode('.', $lldp_val)[0];
                         $candidates = $short_name_map[$lldp_short] ?? [];
                         if (count($candidates) === 1) {
@@ -236,6 +285,10 @@ final class LldpEdgeBuilder {
                             $ambiguous_candidates = array_keys($candidates);
                         }
                     }
+                }
+
+                if (!$rhid && $ambiguous_candidates === null && $ip_mehrdeutig !== null) {
+                    $ambiguous_candidates = $ip_mehrdeutig;
                 }
 
                 $rid = $item['hostid'];
