@@ -236,7 +236,28 @@ export function showDetail(panel, d, cy) {
         cy.getElementById(d.id).connectedEdges().forEach(function(edge) {
             const other = edge.source().id() === d.id ? edge.target() : edge.source();
             if (other.data('isGroup')) return;
-            peers += (peers ? '<br>' : '') + '&#8596; ' + esc(other.data('label'));
+            // AN WELCHEM PORT HAENGT DAS DING.
+            //
+            // Die Frage, mit der jemand die Karte ueberhaupt erst sucht: ein
+            // Access Point ist tot und soll per PoE neu gestartet werden, also
+            // "show lldp neighbors" auf dem Switch und mit der Konfiguration
+            // vergleichen, welcher Port fehlt. Die Antwort lag schon in der
+            // Kante, nur eine Ebene tiefer — im Kanten-Panel, das man erst
+            // treffen muss. Hier steht sie an dem Geraet, das man ohnehin
+            // angeklickt hat.
+            //
+            // Bleibt auch stehen, wenn das Geraet nicht mehr meldet: Kanten
+            // altern (stale), statt zu verschwinden. Dann ist es der Port, an
+            // dem es ZULETZT hing — und genau den sucht man.
+            const eigener = edge.data('source') === d.id ? edge.data('portSrc') : edge.data('portTgt');
+            const drueben = edge.data('source') === d.id ? edge.data('portTgt') : edge.data('portSrc');
+            const portTeil = (eigener || drueben)
+                ? '<span style="color:var(--nt-muted);font-size:10px">'
+                    + (eigener ? ' ' + esc(eigener) : '')
+                    + (drueben ? ' \u2192 ' + esc(drueben) : '')
+                    + '</span>'
+                : '';
+            peers += (peers ? '<br>' : '') + '&#8596; ' + esc(other.data('label')) + portTeil;
         });
     }
 

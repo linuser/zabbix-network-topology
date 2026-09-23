@@ -230,6 +230,13 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
     const tOut = edgeData.trafficOut || 0;
     const srcId = edgeData.source || edgeData.from || '';
     const tgtId = edgeData.target || edgeData.to   || '';
+    // Fuehrt die Kante zu einem Geist, gibt es nichts zu messen: das Ziel ist
+    // kein Zabbix-Host. "0 b/s" und darunter "lade Verlauf" behaupteten
+    // trotzdem beides — und die Verlaufsabfrage lief wirklich los, mit einer
+    // ID, zu der es keinen Host gibt. Gemeldet mit Screenshot, zusammen mit
+    // demselben Fehler an Knoten und Panel.
+    const zuGeist = !!(edgeData._isGhostEdge || edgeData.isGhostEdge
+        || String(srcId).indexOf('ghost_') === 0 || String(tgtId).indexOf('ghost_') === 0);
 
     function buildHtml(sparkSrc, sparkTgt) {
         const inArr  = (sparkSrc || sparkTgt)
@@ -326,6 +333,12 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                 + parts.join(' · ') + '</div>';
         }
 
+        if (zuGeist) {
+            return header + portRow
+                + '<div style="font-size:10px;color:var(--nt-muted);margin-top:4px">'
+                + esc(t('tip.ghost.edge')) + '</div>';
+        }
+
         if (!haveData && (sparkSrc || sparkTgt)) {
             // Daten geholt, aber keine Traffic-Items vorhanden
             return header + portRow + liveRow + healthRow + '<div style="font-size:10px;color:var(--nt-muted);margin-top:4px">'
@@ -356,7 +369,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
     moveTip(evt);
 
     // Async: Spark fuer beide Endpunkte holen (einen Call mit beiden IDs).
-    if (!srcId || !tgtId) return;
+    if (zuGeist || !srcId || !tgtId) return;
     const cfg = window.NT_CONFIG;
     if (!cfg || !cfg.data_url) return;
     const cacheS = _sparkCache[srcId], cacheT = _sparkCache[tgtId];

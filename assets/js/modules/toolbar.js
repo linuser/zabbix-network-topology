@@ -433,6 +433,27 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     // nuetzliche — an einem 48-Port-Switch sind fast alle Geister
     // Arbeitsplatzrechner und verdecken den unueberwachten Switch daneben.
     const _GHOST_RING = ['off', 'infra', 'all'];
+    // Wie viele Hostgruppen liegen gerade auf der Karte? Unter zwei tut der
+    // Cluster-Modus NICHTS — er trennt Gruppen, und eine Gruppe laesst sich
+    // nicht trennen. Der Schalter liess sich trotzdem umstellen und schwieg
+    // dazu. Gemeldet aus dem Feld: "zwischen Reihen und Spalten sehe ich
+    // keinen Unterschied". Es gab keinen.
+    const loadClusterMode = function() {
+        let v = null;
+        try { v = localStorage.getItem(NT_GROUP_CLUSTER_KEY); } catch (e) {}
+        return (v === 'auto' || v === 'columns' || v === 'rows' || v === 'off') ? v : 'auto';
+    };
+
+    const _gruppenAufDerKarte = function() {
+        const d = window._ntLastData || {};
+        const gesehen = {};
+        (d.nodes || []).forEach(function(n) {
+            const g = n._primaryGroup || (n.groups && n.groups[0]);
+            if (g) gesehen[g] = true;
+        });
+        return Object.keys(gesehen).length;
+    };
+
     const _setGhostLabel = function() {
         const modus = loadGhostMode();
         bGhosts.textContent = t('toolbar.ghosts', { state: t('toolbar.ghosts.' + modus) });
@@ -481,8 +502,17 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         const cBtn = document.createElement('button');
         cBtn.className = 'btn-alt btn-small';
         cBtn.id = 'nt-btn-cluster';
-        cBtn.textContent = labels[cMode] || labels.auto;
-        cBtn.title = t('toolbar.cluster.tip');
+        // Unter zwei Hostgruppen trennt der Modus nichts. Das sieht man dem
+        // Schalter jetzt an, statt ihn ins Leere laufen zu lassen.
+        const _setClusterLabel = function() {
+            const wenige = _gruppenAufDerKarte() < 2;
+            cBtn.textContent = labels[loadClusterMode()] || labels.auto;
+            cBtn.style.opacity = wenige ? '0.5' : '1';
+            cBtn.title = wenige
+                ? t('toolbar.cluster.needs_groups')
+                : t('toolbar.cluster.tip');
+        };
+        _setClusterLabel();
         clusterWrap.appendChild(cBtn);
 
         const cMenu = document.createElement('div');
@@ -509,7 +539,7 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
                 const newMode = this.dataset.mode;
                 try { localStorage.setItem(NT_GROUP_CLUSTER_KEY, newMode); } catch (e2) {}
                 cMode = newMode;
-                cBtn.textContent = labels[newMode] || labels.auto;
+                _setClusterLabel();
                 Array.from(cMenu.children).forEach(function(kind) {
                     const aktiv = kind.dataset.mode === newMode;
                     kind.style.background = aktiv ? 'var(--nt-active-bg)' : '';

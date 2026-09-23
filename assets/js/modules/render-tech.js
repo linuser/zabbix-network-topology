@@ -224,8 +224,16 @@ export function render(wrap, nodes, edges, dataUrl) {
     if (_ghostMode !== 'off') {
         const _lq = (window._ntLastData && window._ntLastData.lldp_quality) || [];
         const withGhosts = injectGhostNodes(nodes, edges, _lq, _ghostMode);
+        const _vorher = nodes.length;
         nodes = withGhosts.nodes;
         edges = withGhosts.edges;
+        // "Nur Netzgeraete" und "alle" zeigen dasselbe, wenn kein Nachbar
+        // seine Faehigkeiten meldet — dann gibt es nichts zu filtern. Das
+        // sieht aus wie ein kaputter Schalter und wurde auch so gemeldet.
+        // Einmal pro Sitzung sagen, woran es liegt.
+        if (_ghostMode === 'infra' && !withGhosts.gefiltert && nodes.length > _vorher) {
+            toastTruncatedOnce('ghostfilter', t('warn.ghost_filter_idle'));
+        }
     }
 
     // Cytoscape-Elements (Nodes + Edges) bauen

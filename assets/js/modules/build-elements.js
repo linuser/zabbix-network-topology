@@ -159,10 +159,12 @@ export function injectGhostNodes(nodes, edges, lldpQuality, modus) {
     // Erst filtern, wenn ALLE Melder durch sind: die Faehigkeiten eines Geistes
     // koennen vom zweiten Melder kommen, und wer zu frueh aussortiert, wirft
     // einen Switch weg, weil der erste Melder nichts ueber ihn wusste.
+    let gefiltert = 0;
     if (nurInfra) {
         Object.keys(ghosts).forEach(function(gid) {
             if (istInfrastruktur(ghosts[gid])) return;
             delete ghosts[gid];
+            gefiltert++;
             for (let i = ghostEdges.length - 1; i >= 0; i--) {
                 if (ghostEdges[i].target === gid) ghostEdges.splice(i, 1);
             }
@@ -170,8 +172,12 @@ export function injectGhostNodes(nodes, edges, lldpQuality, modus) {
     }
 
     const list = Object.keys(ghosts).map(function(k) { return ghosts[k]; });
-    if (!list.length) return { nodes: nodes, edges: edges };
-    return { nodes: nodes.concat(list), edges: (edges || []).concat(ghostEdges) };
+    // gefiltert: wie viele der Filter verworfen hat. Null bei eingeschaltetem
+    // Filter heisst, dass KEIN Nachbar seine Faehigkeiten meldet — dann sieht
+    // die Stufe aus wie "alle", und genau so wurde sie gemeldet.
+    if (!list.length) return { nodes: nodes, edges: edges, gefiltert: gefiltert };
+    return { nodes: nodes.concat(list), edges: (edges || []).concat(ghostEdges),
+             gefiltert: gefiltert };
 }
 
 // Baut Cytoscape-Element-Array für alle Hosts.

@@ -187,7 +187,44 @@ Zugangsdaten. Etwa ein Tag mit Tests. Die Portnamen sind erst seit 5.3.1
 verlässlich: `ifName`, `ifDescr` und `ifAlias` wurden vorher gar nicht
 abgefragt.
 
-### 6. Endgeräte bündeln — ein Knoten statt achtundvierzig
+### 6. „An welchem Port hängt das Ding?" — als Suche und als Liste
+
+Nutzerwunsch vom September 2026, und der ehrlichste Satz dazu steht in seiner
+Mail: **das war der Grund, aus dem er die Karte überhaupt gesucht hat.**
+
+**Der Ablauf heute, ohne Modul:** Ein Access Point ist tot und soll per PoE neu
+gestartet werden. Also auf den Switch, `show lldp neighbors`, die Ausgabe gegen
+die Portbeschreibungen in der Konfiguration halten und suchen, welcher Port
+fehlt. Dann Port aus, Port an.
+
+**Was seit 5.3.3 davon da ist:** Ein Klick auf das Gerät zeigt in der
+Verbindungsliste den Port an beiden Enden. Und weil Kanten altern statt zu
+verschwinden, steht dort auch bei einem toten Gerät noch der Port, an dem es
+zuletzt hing — genau der Fall aus der Mail.
+
+**Was fehlt, damit daraus eine Antwort auf die Frage wird:**
+
+1. **Suche nach Gerät, Antwort Port.** Ein Feld, in das man einen Namen, eine
+   IP oder eine MAC wirft, und heraus kommt „hängt an sw-og-2, Gi1/0/8, zuletzt
+   gesehen vor 4 Minuten". Ohne vorher die richtige Kante auf der Karte treffen
+   zu müssen.
+2. **Eine Liste statt einer Karte.** Der Tabellen-Tab kennt Hosts, aber keine
+   Ports. Eine Spalte „hängt an" mit Switch und Port macht daraus eine
+   Patchliste, die sich ausdrucken und gegen die Dokumentation halten lässt —
+   und über den vorhandenen CSV-Export auch exportieren.
+3. **Geister mitnehmen.** Gerade die interessanten Geräte sind oft keine
+   Zabbix-Hosts. Der Port, an dem ein unbekanntes Gerät hängt, ist die Frage
+   hinter „was steckt da eigentlich".
+
+**Aufwand:** Die Daten liegen vollständig vor, `edge.ports` trägt beide Enden.
+Es ist Anzeige, keine neue Erhebung. Suche und Tabellenspalte je ein halber Tag,
+die Geister-Zeilen kommen fast geschenkt dazu.
+
+**Der Nachbar dieser Idee** ist die MAC/FDB-Suche weiter unten: dieselbe Frage,
+aber für Geräte, die gar nichts melden — dort beantwortet sie die
+Forwarding-Tabelle des Switches statt LLDP.
+
+### 7. Endgeräte bündeln — ein Knoten statt achtundvierzig
 
 Nutzerwunsch vom September 2026, per Mail, mit Screenshot. Die zweite Hälfte
 dessen, was in 5.3.2 als Filter gebaut wurde: Geister lassen sich jetzt auf
