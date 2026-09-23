@@ -70,7 +70,10 @@ export default {
     'toolbar.scales.tip':     'Thresholds and colors for link coloring (absolute traffic and weathermap utilization) - applies to all users',
     'toolbar.on':             'on',
     'toolbar.off':            'off',
-    'topo.added':             'Topology: new link {a} ↔ {b}',
+    'topo.added':             'Topology: new link {a} \u2194 {b}',
+    'topo.added.cable':       'Topology: another cable {a} {pa} \u2194 {b} {pb} \u2014 {n} parallel now',
+    'topo.removed.cable':     'Topology: cable {a} {pa} \u2194 {b} {pb} gone \u2014 {left} of {was} still up',
+    'topo.removed.last':      'Topology: last cable {a} {pa} \u2194 {b} {pb} gone \u2014 the link is down',
     'topo.removed':           'Topology: link {a} ↔ {b} disappeared',
 
     // Capacity forecast (stats tab)

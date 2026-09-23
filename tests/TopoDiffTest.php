@@ -325,6 +325,26 @@ $dAnders = TopoDiff::compare($sLag, $sAnders);
 check('anderes Kabel: added und removed',
     [count($dAnders['added']), count($dAnders['removed']), count($dAnders['moved'])], [1, 1, 0]);
 
+// Faellt EIN Kabel eines Buendels aus, ist die Verbindung nicht weg. Die
+// Meldung muss das sagen koennen — Ports und "3 von 4" reisen deshalb mit.
+$dCable = TopoDiff::compare($sLag, TopoDiff::snapshot([$lag2[0]], $label));
+$wegC = $dCable['removed'][0] ?? [];
+check('Kabel weg: Port der einen Seite',       $wegC['pa'] ?? null, 'p2');
+check('Kabel weg: Port der anderen Seite',     $wegC['pb'] ?? null, 'p50');
+check('Kabel weg: wie viele bleiben',          $wegC['left'] ?? null, 1);
+check('Kabel weg: wie viele waren es',         $wegC['was'] ?? null, 2);
+
+// Kommt ein Kabel DAZU, zaehlt die neue Gesamtzahl.
+$dCable2 = TopoDiff::compare(TopoDiff::snapshot([$lag2[0]], $label), $sLag);
+check('Kabel neu: neue Gesamtzahl',            $dCable2['added'][0]['n'] ?? null, 2);
+check('Kabel neu: Port dabei',                 $dCable2['added'][0]['pa'] ?? null, 'p2');
+
+// Eine EINZELNE Leitung bleibt bei der alten, kuerzeren Meldung: "Kabel 1
+// von 1 weg" waere keine Verbesserung.
+$dSingle = TopoDiff::compare(TopoDiff::snapshot([$edge('h1', 'h3', 'p5', 'p6')], $label), []);
+check('Einzelne Leitung: keine Kabelangaben',
+    [isset($dSingle['removed'][0]['pa']), isset($dSingle['removed'][0]['left'])], [false, false]);
+
 // Eine hosts-Kante (nt:parent) macht eine physische nicht "parallel".
 $kH = TopoDiff::keys([$lag2[0], ['from' => 'h1', 'to' => 'h2', '_type' => 'hosts']]);
 check('hosts-Kante zaehlt nicht als Member',   $kH[0], 'h1|h2');

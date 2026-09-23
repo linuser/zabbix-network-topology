@@ -342,6 +342,46 @@ class TopoDiff {
         }
         $baseline = self::reconcile($baseline, $current);
 
+        // Wie viele Kabel liegen zwischen diesem Hostpaar — vorher und jetzt?
+        //
+        // WARUM DIE MELDUNG DAS BRAUCHT
+        // -----------------------------
+        // Bis 5.3 war "Kante weg" dasselbe wie "Verbindung weg", weil ein
+        // Paar eine Kante hatte. Mit parallelen Links stimmt das nicht mehr:
+        // faellt EIN Mitglied eines Buendels aus, meldete die Karte "link
+        // core <-> acc disappeared" — und die Verbindung steht, drei von vier
+        // Kabeln tragen sie weiter. Der Satz schickt damit jemanden in den
+        // Serverraum, der dort nichts verloren hat, und beim naechsten Mal
+        // glaubt er der Meldung nicht mehr.
+        //
+        // Gezaehlt wird pro PAAR, nicht pro Kante: daraus wird "3 von 4".
+        $cur_pairs = $base_pairs = [];
+        foreach ($current as $ck => $_) {
+            $p = self::pairKey((string) $ck);
+            $cur_pairs[$p] = ($cur_pairs[$p] ?? 0) + 1;
+        }
+        foreach ($baseline as $bk => $be) {
+            // Alternde Eintraege zaehlen nicht mit: sie stehen noch im
+            // Speicher, aber als "war mal da", nicht als Kabel.
+            if (is_array($be) && !empty($be['stale'])) {
+                continue;
+            }
+            $p = self::pairKey((string) $bk);
+            $base_pairs[$p] = ($base_pairs[$p] ?? 0) + 1;
+        }
+        // Zusatzangaben NUR fuer Mitglieder eines Buendels (Schluessel mit
+        // '#'). Bei einer einzelnen Leitung bleibt die Meldung wie bisher —
+        // "Kabel 1 von 1 weg" waere eine Verschlimmbesserung.
+        $kabel = static function(string $k, $entry, array $extra): array {
+            if (strpos($k, '#') === false || !is_array($entry)) {
+                return [];
+            }
+            return $extra + [
+                'pa' => (string) ($entry['pa'] ?? ''),
+                'pb' => (string) ($entry['pb'] ?? ''),
+            ];
+        };
+
         foreach ($current as $k => $now) {
             // Ein alternder Eintrag zaehlt hier als NICHT vorhanden: die Kante
             // war weg, ist zurueck, und das ist eine Nachricht. Sonst
@@ -354,7 +394,9 @@ class TopoDiff {
                 // liefert der Diff nur Labels, und die Karte kann die
                 // betroffene Kante nicht finden — genau das stand dem
                 // Hervorheben auf der Karte im Weg.
-                $res['added'][] = ['a' => $now['a'], 'b' => $now['b'], 'k' => $k];
+                $res['added'][] = ['a' => $now['a'], 'b' => $now['b'], 'k' => $k]
+                    + $kabel((string) $k, $now,
+                        ['n' => $cur_pairs[self::pairKey((string) $k)] ?? 1]);
                 continue;
             }
 
@@ -373,11 +415,15 @@ class TopoDiff {
                 continue;
             }
             if (!isset($current[$k])) {
+                $pk = self::pairKey((string) $k);
                 $res['removed'][] = [
                     'a' => self::label($was, 'a', 0),
                     'b' => self::label($was, 'b', 1),
                     'k' => $k,
-                ];
+                ] + $kabel((string) $k, $was, [
+                    'left' => $cur_pairs[$pk] ?? 0,
+                    'was'  => $base_pairs[$pk] ?? 0,
+                ]);
             }
         }
 

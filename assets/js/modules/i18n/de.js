@@ -75,7 +75,10 @@ export default {
     'toolbar.scales.tip':     'Schwellen und Farben der Kantenfaerbung (absoluter Traffic und Weathermap-Auslastung) - gilt fuer alle Benutzer',
     'toolbar.on':             'an',
     'toolbar.off':            'aus',
-    'topo.added':             'Topologie: neue Verbindung {a} ↔ {b}',
+    'topo.added':             'Topologie: neue Verbindung {a} \u2194 {b}',
+    'topo.added.cable':       'Topologie: weiteres Kabel {a} {pa} \u2194 {b} {pb} \u2014 jetzt {n} parallel',
+    'topo.removed.cable':     'Topologie: Kabel {a} {pa} \u2194 {b} {pb} weg \u2014 {left} von {was} tragen noch',
+    'topo.removed.last':      'Topologie: letztes Kabel {a} {pa} \u2194 {b} {pb} weg \u2014 die Verbindung ist unten',
     'topo.removed':           'Topologie: Verbindung {a} ↔ {b} verschwunden',
 
     // Kapazitäts-Forecast (Stats-Tab)

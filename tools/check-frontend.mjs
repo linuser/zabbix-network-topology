@@ -274,6 +274,46 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// Die Aenderungsmeldung ist der eigentliche Zweck der parallelen Links: ein
+// ausgefallenes Buendelmitglied soll eine gemeldete Aenderung sein. Dann muss
+// der Satz aber auch stimmen — "link A <-> B disappeared" ist falsch, solange
+// drei von vier Kabeln tragen.
+console.log('\n  Meldung: ein Kabel ist nicht die Verbindung\n');
+const meldung = szenario('notify', { lang: 'en_US' }, `
+    // toast() baut ein div und setzt textContent. Wir merken uns jedes
+    // erzeugte Element und lesen hinterher, was dringestanden haette.
+    const erzeugt = [];
+    const create = globalThis.document.createElement;
+    globalThis.document.createElement = function(tag) {
+        const e = create(tag); erzeugt.push(e); return e;
+    };
+    globalThis.document.body.contains = () => true;
+    globalThis.requestAnimationFrame = (fn) => fn();
+    const N = await import(${JSON.stringify(MODULE('topo-notify.js'))});
+    N.notifyTopoChanges({
+        added: [{ a: 'core', b: 'acc', k: 'a|b#i2', pa: 'Gi1/0/2', pb: 'Te1/1/2', n: 2 }],
+        removed: [
+            { a: 'core', b: 'acc', k: 'a|b#i1', pa: 'Gi1/0/1', pb: 'Te1/1/1', left: 3, was: 4 },
+            { a: 'core', b: 'sw3', k: 'a|c#i9', pa: 'Gi1/0/9', pb: 'Gi0/1', left: 0, was: 1 },
+            { a: 'core', b: 'srv', k: 'a|d' },
+        ],
+    });
+    console.log(JSON.stringify(erzeugt.map((e) => e.textContent).filter(Boolean)));
+`);
+if (meldung) {
+    const txt = meldung.join(' | ');
+    pruefe('neues Kabel: Ports und neue Anzahl',
+        /another cable core Gi1\/0\/2 . acc Te1\/1\/2 . 2 parallel now/.test(txt), true);
+    pruefe('ein Kabel weg: was noch traegt',
+        /cable core Gi1\/0\/1 . acc Te1\/1\/1 gone . 3 of 4 still up/.test(txt), true);
+    pruefe('letztes Kabel weg: Verbindung unten',
+        /last cable core Gi1\/0\/9 .* the link is down/.test(txt), true);
+    pruefe('einzelne Leitung: kurzer Satz wie bisher',
+        /link core . srv disappeared/.test(txt), true);
+    pruefe('einzelne Leitung: ohne Kabelzaehlung',
+        /core . srv.*(of|parallel)/.test(txt), false);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);
