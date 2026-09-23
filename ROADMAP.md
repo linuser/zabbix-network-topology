@@ -229,7 +229,7 @@ gestartet werden. Also auf den Switch, `show lldp neighbors`, die Ausgabe gegen
 die Portbeschreibungen in der Konfiguration halten und suchen, welcher Port
 fehlt. Dann Port aus, Port an.
 
-**Was seit 5.3.3 davon da ist:** Ein Klick auf das Gerät zeigt in der
+**Was seit 5.4.0 davon da ist:** Ein Klick auf das Gerät zeigt in der
 Verbindungsliste den Port an beiden Enden. Und weil Kanten altern statt zu
 verschwinden, steht dort auch bei einem toten Gerät noch der Port, an dem es
 zuletzt hing — genau der Fall aus der Mail.
@@ -778,36 +778,21 @@ Deshalb gehört zu jedem „ist schon da" ein Test, bevor es als erledigt gilt:
 
 ## Kleinigkeiten
 
-- **Farbe ist oft der einzige Träger von Zustand.** Grüner Ring = OK, roter =
-  kritisch. Für Rot-Grün-Schwäche unbrauchbar. Der Compliance-Tab macht es
-  bereits richtig (✗ / i / ✓ **zusätzlich** zur Farbe) — der Beleg, dass es im
-  Modul geht.
+- ~~**Farbe ist oft der einzige Träger von Zustand.**~~ — **erledigt in 5.3.1**
+  (`ff542cf`). Severity hängt jetzt an der Ringstärke **und** an gezählten
+  Kerben (eine bei Warning bis vier bei Disaster), Offline am ✕, Wartung am
+  gestrichelten Ring plus Schlüssel-Badge. Bei den Kanten unterscheiden sich
+  Down, Errors und Discards zusätzlich in Strichmuster und Breite, und die
+  Heatmap trägt die Größenordnung in der Linienbreite. Nachgeprüft am
+  2026-09-23, nicht nur abgehakt.
 
-- **Wartung und Offline sind beide ein ✕, unterschieden nur durch die Farbe.**
-  Am 2026-09-02 an einem Knoten auf der Wegwerf-Instanz aufgefallen, nicht
-  gemeldet. Drei Aussagen stehen nebeneinander:
+- ~~**Wartung und Offline sind beide ein ✕**~~ — **ebenfalls erledigt in
+  5.3.1**, im selben Commit. Der „vereinfachte" Schraubenschlüssel, von dem
+  nur ein ✕ übrig war, ist ein offener Schlüsselkopf mit einer Diagonale als
+  Griff; die Legende zeigt den orange gestrichelten Ring statt eines ◐, das
+  auf der Karte nie vorkam. Dieser Eintrag stand hier noch, als beides längst
+  gebaut war — genau der Fall, vor dem der Kopf dieser Datei warnt.
 
-  | | zeigt |
-  |---|---|
-  | `icons.js:217` Kommentar | „Schraubenschlüssel-Glyph (vereinfacht)" |
-  | `icons.js:220` Pfad | `M-5,-5 L5,5 M-5,5 L5,-5` — **ein ✕** |
-  | `icons.js:160` Offline | „Rotes X als klarer Offline-Indikator" |
-  | `legend.js:123` Legende | ein gedimmtes **◐** |
-
-  Die „Vereinfachung" hat den Schraubenschlüssel so weit vereinfacht, dass
-  nichts davon übrig ist. Damit tragen zwei verschiedene Zustände dasselbe
-  Zeichen, und was sie trennt, ist orange gegen rot — ausgerechnet die Paarung,
-  die bei Rot-Grün-Schwäche am ehesten zusammenfällt. Der Punkt darüber ist hier
-  also nicht theoretisch.
-
-  Der ◐ in der Legende kommt auf der Karte überhaupt nicht vor; gemeint war
-  vermutlich „der Knoten ist gedimmt".
-
-  **Dieselbe Fehlerklasse wie Issue #9** — die Legende beschreibt etwas anderes
-  als das, was gezeichnet wird —, nur bei den Knoten statt bei den Kanten. Fix:
-  ein eindeutiges Glyph für Wartung, und die Legende auf das umstellen, was
-  wirklich zu sehen ist (Ring **und** Badge). Danach ist ✕ wieder eindeutig
-  Offline. Bewusst auf das nächste Bündel geschoben, nicht auf eine 5.2.1.
 - **Fullscreen:** Promise-Behandlung und Beschriftung sind repariert; **warum
   Chrome ablehnt**, ist ungeklärt.
 
