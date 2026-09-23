@@ -16,6 +16,15 @@ cables is now several lines. On a meshed core that is a visible change, and
 *View → All parallel links: off* puts it back to one line per pair, marked
 `×N`. Nothing is hidden either way — the count is on the line.
 
+**Expect one burst of change notifications, once.** The baseline the topology
+diff compares against knows **one** key per device pair; from this release on
+it knows one per cable. On the first refresh after the upgrade the old entry
+is carried over to one member of each bundle, and the remaining members are
+formally new — a 4×10G LAG therefore announces *another cable … — 4 parallel
+now* three times. Once, per user, then it is quiet. Nothing is wrong, and
+nothing was rediscovered: the map simply counts cables now where it used to
+count pairs.
+
 ### Thanks
 
 **[@christos-diamantis](https://github.com/christos-diamantis)** reported
