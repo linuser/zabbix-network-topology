@@ -126,6 +126,17 @@ templates:
     - node tools/check-templates.mjs
     - node tools/check-template-logic.mjs
 
+# Die simulierten Geraete der Entwicklungsumgebung (tools/devnet/geraete).
+# snmpsim meldet fuer eine Datei, die es nicht versteht, schlicht
+# "No Such Instance" — kein Fehler, kein Log, die Discovery findet einfach
+# nichts, und man sucht den Fehler im Modul. Eine Datei mit 0x-Praefix vor
+# den Hex-Werten hat genau so eine Stunde gekostet.
+snmprec:
+  stage: test
+  image: node:22-alpine
+  script:
+    - node tools/check-snmprec.mjs
+
 # Deutsche Texte, die im UI landen. Kommentare duerfen deutsch bleiben — das
 # Gate liest nur String-Literale, mit eigenem Scanner statt grep (Regex mit
 # Anfuehrungszeichen und Zeilenend-Kommentare brechen jede grep-Loesung).

@@ -20,14 +20,14 @@ npm run build        # esbuild -> assets/js/dist/nt-bundle.js (eingecheckt!)
 ./deploy.sh <server> all     # Hauptmodul + Widgets per SSH ausrollen
 ```
 
-**Die vollständige Gate-Kette — alle vierzehn, nicht nur die Node-Gates:**
+**Die vollständige Gate-Kette — alle fünfzehn, nicht nur die Node-Gates:**
 
 ```bash
 npm run build && npm run ci:lint-php && npm run ci:test && npm run ci:eslint \
   && npm run ci:xss && npm run ci:parity && npm run ci:templates \
-  && npm run ci:package && npm run ci:layers && npm run ci:i18n \
-  && npm run ci:pipeline && npm run ci:shellcheck && npm run ci:audit \
-  && npm run ci:php-use
+  && npm run ci:snmprec && npm run ci:package && npm run ci:layers \
+  && npm run ci:i18n && npm run ci:pipeline && npm run ci:shellcheck \
+  && npm run ci:audit && npm run ci:php-use
 ```
 
 `ci:audit` kam zuletzt dazu und ist der einzige Gate, der von etwas **außerhalb
@@ -46,7 +46,7 @@ bei vollständig grünen Gates.
 `ci:lint-php` und `ci:test` brauchen `php` — **das ist installiert**
 (`/opt/homebrew/bin/php`). Sie zu überspringen hat schon einmal einen
 PHP-Fatal durchrutschen lassen (ein doppeltes `use` nach einem Merge, den git
-konfliktfrei zusammenführte). „Alle Gates grün" heißt vierzehn, nicht neun.
+konfliktfrei zusammenführte). „Alle Gates grün" heißt fünfzehn, nicht neun.
 
 Einzelnen Test fahren — kein PHPUnit, kein DB-Zugriff, reines PHP:
 
@@ -182,6 +182,20 @@ trotzdem vor den Push. Wer ein Gate ergänzt, ergänzt es in `.gitlab-ci.yml`
 
 Die Begründung zu jedem Gate — jeweils mit dem Vorfall, der es ausgelöst hat —
 steht in [CONTRIBUTING.md](CONTRIBUTING.md) unter „Was die CI hart erzwingt".
+
+## Entwicklungsumgebung
+
+`tools/devnet/` ist ein Compose-Stack mit Zabbix 7.0, Postgres und **snmpsim**:
+simulierte SNMP-Geräte, je eine `.snmprec`-Datei in `tools/devnet/geraete/`.
+Der Punkt daran ist, dass alles Interessante an diesem Modul an SNMP-Werten
+hängt — Nachbartabellen, Portnamen, Interface-Zähler. Ein Agent liefert davon
+nichts, und echte Switches hat hier niemand. Jeder Fehlerbericht lässt sich so
+in eine Datei übersetzen und ist danach in Minuten nachstellbar.
+
+**Alle Werte darin sind erfunden.** Kein Walk aus einem Kundennetz, auch nicht
+leicht verändert. `npm run ci:snmprec` prüft das Format, weil snmpsim für eine
+Datei, die es nicht versteht, nur „No Such Instance" meldet — kein Fehler, kein
+Log, die Discovery findet nichts, und man sucht im Modul.
 
 ## Umgebung
 

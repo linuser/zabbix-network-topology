@@ -1,0 +1,71 @@
+# Entwicklungsumgebung fuer die Zabbix-Netzkarte. NICHT produktiv.
+#
+# Warum es das gibt: alles, was an diesem Modul interessant ist, haengt an
+# SNMP-Werten — LLDP- und CDP-Nachbartabellen, Portnamen, Interface-Zaehler.
+# Ein Zabbix-Agent liefert davon nichts. Hier beantwortet stattdessen snmpsim
+# aufgezeichnete Walks, und jeder Fehlerbericht wird damit zu einer Datei in
+# geraete/, die sich in Minuten nachstellen laesst.
+#
+# Start:
+#   cp .env.example .env    # und ein Passwort eintragen
+#   docker compose up -d
+#   → http://localhost:8081   (Admin / zabbix beim ersten Start)
+name: devnetz
+
+services:
+  db:
+    image: docker.io/library/postgres:17-alpine
+    container_name: devnetz-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${DEVNETZ_DB_PASSWORD:?bitte .env anlegen}
+    volumes:
+      - db_daten:/var/lib/postgresql/data
+
+  zabbix:
+    # 7.0 LTS, weil das Hauptmodul dort laufen muss. Fuer die Widgets einen
+    # zweiten Stack mit 7.4 danebenstellen (eigener name:, Port 8082).
+    image: docker.io/zabbix/zabbix-server-pgsql:alpine-7.0-latest
+    container_name: devnetz-zabbix
+    restart: unless-stopped
+    environment:
+      DB_SERVER_HOST: db
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${DEVNETZ_DB_PASSWORD:?bitte .env anlegen}
+      ZBX_STARTSNMPPOLLERS: "4"
+      ZBX_STARTDISCOVERERS: "2"
+    depends_on: [db]
+    ports:
+      - "10051:10051"
+
+  web:
+    image: docker.io/zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    container_name: devnetz-web
+    restart: unless-stopped
+    environment:
+      ZBX_SERVER_HOST: zabbix
+      DB_SERVER_HOST: db
+      POSTGRES_DB: zabbix
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: ${DEVNETZ_DB_PASSWORD:?bitte .env anlegen}
+      PHP_TZ: Europe/Berlin
+    depends_on: [zabbix]
+    ports:
+      - "8081:8080"
+    volumes:
+      # Der Arbeitsstand des Moduls, direkt gespiegelt. Fuer einen
+      # Installationstest diesen Mount entfernen und das ZIP einspielen.
+      - ./modul:/usr/share/zabbix/modules/network_topology
+
+  snmpsim:
+    build: ./snmpsim
+    container_name: devnetz-snmpsim
+    restart: unless-stopped
+    volumes:
+      - ./geraete:/data:ro
+
+volumes:
+  db_daten:

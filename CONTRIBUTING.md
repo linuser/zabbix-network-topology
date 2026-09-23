@@ -105,7 +105,21 @@ without it being clear why:
    files were rejected again, and rule 2 didn't see it, because it only checks
    name → `uuid`.
 
-6. **Nothing may slip into the module ZIP that doesn't belong there.** The module
+6. **The simulated devices have to stay readable for snmpsim.** The development
+   environment in `tools/devnet/` answers SNMP from `.snmprec` files, one per
+   device. snmpsim reads such a file as a sorted index, and for anything it does
+   not understand it simply answers `No Such Instance` — no error, no log line.
+   Discovery then finds nothing and you go looking for the bug in the module.
+   One file wrote its hex values as `4x|0x00112233`, with the `0x` prefix that
+   snmpsim cannot parse; the whole CDP subtree disappeared, and finding it cost
+   an afternoon. `npm run ci:snmprec` checks the shape, the sort order, the hex
+   values and duplicate OIDs.
+
+   Also, and this one is not a gate but a rule: **every value in those files is
+   invented.** No walk from anyone's network, not even slightly altered. People
+   send us screenshots in confidence.
+
+7. **Nothing may slip into the module ZIP that doesn't belong there.** The module
    directory sits under the web root and is publicly reachable — shell scripts,
    `tools/`, `templates/`, source maps and the repository itself have no business
    there. `npm run ci:package` simulates the package contents and checks them.
@@ -116,7 +130,7 @@ without it being clear why:
    how `nt-uninstall.sh` ended up in the package — the list named only the
    scripts known at the time.
 
-7. **The two-layer logic decides what different users see.** Positions and manual
+8. **The two-layer logic decides what different users see.** Positions and manual
    links live both shared (`module.config`, only super admins write) and personal
    (`CProfile`, everyone for themselves). On read, **personal wins per node** —
    not as a whole, otherwise a single own save would hide the shared map forever.
@@ -132,7 +146,7 @@ without it being clear why:
    **What the gate does not cover:** the path server → database → permission
    check. That needs two logged-in users in one browser.
 
-8. **No German text may reach the UI.** Comments in this repository are German
+9. **No German text may reach the UI.** Comments in this repository are German
    and stay that way — but anything a user reads has to be English.
    `npm run ci:i18n` checks it.
 
@@ -333,7 +347,21 @@ ohne dass klar ist warum:
    wieder abgewiesen, und Regel 2 sah es nicht, weil sie nur Name → `uuid`
    prüft.
 
-6. **Nichts darf ins Modul-ZIP rutschen, was nicht hineingehört.** Das
+6. **Die simulierten Geräte müssen für snmpsim lesbar bleiben.** Die
+   Entwicklungsumgebung in `tools/devnet/` beantwortet SNMP aus
+   `.snmprec`-Dateien, je eine pro Gerät. snmpsim liest so eine Datei als
+   sortierten Index und meldet für alles, was es nicht versteht, schlicht
+   `No Such Instance` — kein Fehler, kein Logeintrag. Die Discovery findet dann
+   nichts, und man sucht den Fehler im Modul. Eine Datei schrieb ihre Hex-Werte
+   als `4x|0x00112233`, mit dem `0x`-Präfix, das snmpsim nicht lesen kann; der
+   gesamte CDP-Zweig fiel aus, und die Suche danach kostete einen Nachmittag.
+   `npm run ci:snmprec` prüft Aufbau, Reihenfolge, Hex-Werte und doppelte OIDs.
+
+   Dazu eine Regel, die kein Gate prüfen kann: **jeder Wert in diesen Dateien
+   ist erfunden.** Kein Walk aus einem fremden Netz, auch nicht leicht
+   verändert. Wer uns Screenshots schickt, tut das im Vertrauen.
+
+7. **Nichts darf ins Modul-ZIP rutschen, was nicht hineingehört.** Das
    Modulverzeichnis liegt unter dem Web-Root und ist öffentlich abrufbar —
    Shell-Skripte, `tools/`, `templates/`, Source-Maps und das Repository selbst
    haben dort nichts verloren. `npm run ci:package` simuliert den Paketinhalt
@@ -345,7 +373,7 @@ ohne dass klar ist warum:
    `nt-uninstall.sh` ins Paket gerutscht — die Liste nannte nur die damals
    bekannten Skripte beim Namen.
 
-7. **Die Zwei-Ebenen-Logik entscheidet, was verschiedene Benutzer sehen.**
+8. **Die Zwei-Ebenen-Logik entscheidet, was verschiedene Benutzer sehen.**
    Positionen und manuelle Links liegen geteilt (`module.config`, nur
    Super-Admins schreiben) und persönlich (`CProfile`, jeder für sich). Beim
    Lesen gewinnt **persönlich pro Knoten** — nicht als Ganzes, sonst verdeckte
@@ -362,7 +390,7 @@ ohne dass klar ist warum:
    **Was das Gate nicht abdeckt:** den Weg Server → Datenbank → Rechteprüfung.
    Dafür braucht es zwei angemeldete Benutzer in einem Browser.
 
-8. **Kein deutscher Text darf ins UI.** Die Kommentare in diesem Repository sind
+9. **Kein deutscher Text darf ins UI.** Die Kommentare in diesem Repository sind
    deutsch und bleiben es — was ein Benutzer liest, muss aber englisch sein.
    `npm run ci:i18n` prüft das.
 

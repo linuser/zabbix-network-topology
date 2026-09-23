@@ -13,3 +13,5 @@ nt_smtp_password
 node_modules/
 assets/js/dist/*.map
 tools/clean-install-test/module/
+tools/devnet/.env
+tools/devnet/modul/
