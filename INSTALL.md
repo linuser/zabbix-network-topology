@@ -12,7 +12,7 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 
 ### Requirements
 
-- **Zabbix 7.0 LTS or 7.4+** (frontend) — the dashboard widgets (section 3) require **7.4**
+- **Zabbix 7.0 LTS or 7.4+** (frontend) — the dashboard widgets (section 3) included
 - **PHP 8.x** with php-fpm (or your web server's PHP handler)
 - **`unzip`** on the frontend host. Minimal installs don't always ship it: `sudo apt install unzip` or `sudo dnf install unzip`
 - Write access to the Zabbix UI `modules/` directory and the ability to reload php-fpm
@@ -163,7 +163,7 @@ sudo chown -R root:root network_topology_*_widget network_topology_widget
 sudo systemctl reload php8.2-fpm      # service name as determined above
 ```
 Then **Scan directory** → set the modules you want to *Enabled* → available in the dashboard editor. The widget ZIPs carry their files **directly**, without a top-level folder — that is why `-d <target>` is required.
-**Prerequisite:** the main module must be installed + enabled — and **Zabbix 7.4** (the widgets don't run on 7.0 LTS; the main module does).
+**Prerequisite:** the main module must be installed + enabled. Version-wise the widgets are no longer the exception: re-tested on **7.0.30** on 2026-09-24, all five render there.
 
 > **Why not standalone?** The data action `network.topology.data` belongs to the main module, and the topology widget loads Cytoscape.js from `modules/network_topology/assets/js/` — the library ships only once on purpose. Without the main module (or with it disabled) the tiles show an error. So **install and enable the main module first, then the widgets.**
 
@@ -337,7 +337,7 @@ DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
 
 ### Voraussetzungen
 
-- **Zabbix 7.0 LTS oder 7.4+** (Frontend) — die Dashboard-Widgets (Abschnitt 3) brauchen **7.4**
+- **Zabbix 7.0 LTS oder 7.4+** (Frontend) — die Dashboard-Widgets (Abschnitt 3) eingeschlossen
 - **PHP 8.x** mit php-fpm (bzw. der PHP-Handler deines Webservers)
 - **`unzip`** auf dem Frontend-Host (für Variante A). Minimal-Installationen bringen es nicht immer mit: `sudo apt install unzip` bzw. `sudo dnf install unzip`
 - Schreibzugriff auf das Zabbix-UI-Verzeichnis `modules/` und die Möglichkeit, php-fpm neu zu laden
@@ -485,7 +485,7 @@ sudo chown -R root:root network_topology_*_widget network_topology_widget
 sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
 ```
 Dann **Scan directory** → die gewünschten Module auf *Enabled* → im Dashboard-Editor verfügbar. Die ZIPs enthalten ihre Dateien **direkt**, ohne Oberordner — deshalb ist `-d <ziel>` zwingend.
-**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein — und **Zabbix 7.4** (die Widgets laufen nicht auf 7.0 LTS; das Hauptmodul schon).
+**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein. Bei der Version sind die Widgets keine Ausnahme mehr: am 2026-09-24 auf **7.0.30** nachgeprüft, dort rendern alle fünf.
 
 > **Warum nicht eigenständig?** Die Daten-Action `network.topology.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
 

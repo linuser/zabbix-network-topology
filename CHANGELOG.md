@@ -169,7 +169,12 @@ Their versions move independently of the module: **NT Topology 3.2.0** (the
 cable count above), **NT Health 2.1.2**, **NT Table 2.1.2**, **NT KPI 1.0.2**
 (the generated data access below). **NT Items 1.0.0** is unchanged.
 
-They still need **Zabbix 7.4** — the main module runs on 7.0 LTS as well.
+**And they are not 7.4-only any more.** The note that said so came from a
+test on 7.0.28 in July, where they registered but stayed on "Loading…".
+Re-tested on **7.0.30** with all five on one dashboard: topology, KPI, health,
+table and items render, no console errors. What changed in between is not
+established — so if they do hang on a 7.0 of yours, that is worth a report
+rather than a shrug.
 
 ### For contributors
 

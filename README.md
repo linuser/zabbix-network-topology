@@ -74,7 +74,7 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 > | What | Needed? | Requires |
 > |---|---|---|
 > | **Main module** — the topology page | **required**, this is the product | Zabbix 7.0 LTS or 7.4 |
-> | **Five dashboard widgets** — tiles for existing dashboards | optional extras | Zabbix **7.4**, and the main module installed *and* enabled |
+> | **Five dashboard widgets** — tiles for existing dashboards | optional extras | Zabbix **7.0 LTS or 7.4**, and the main module installed *and* enabled |
 >
 > The widgets read the main module's data action and load Cytoscape from its
 > assets; without it they show an error. Install the main module first.
@@ -215,7 +215,7 @@ All consume the same `network.topology.data` action (no second backend) and shar
 
 > **The widgets do not work standalone** — for two reasons: the data action `network.topology.data` is registered by the **main module**, and the topology widget additionally loads Cytoscape.js from its directory (`modules/network_topology/assets/js/`), so the ~360 KB library ships only once. Without the main module — or with it disabled — the tiles show an error ("main module unreachable" / "Cytoscape.js not loaded"). So install in this order: **main module first, widgets second.**
 
-> **Zabbix version:** the widgets require **Zabbix 7.4**. On **7.0 LTS** they do register, but stay stuck on "Loading…" because the widget JS base class differs. The **main module** runs on **7.0 LTS and 7.4**.
+> **Zabbix version:** both the **main module and the widgets** run on **7.0 LTS and 7.4**. An earlier note here said the widgets were 7.4-only — on 7.0.28 in July they registered but stayed on "Loading…". Re-tested on **7.0.30** on 2026-09-24 with all five on one dashboard: topology, KPI, health, table and items all render, no console errors. What changed in between is not established, so if a 7.0 of yours does hang, that is worth a report.
 
 ### Security
 
@@ -240,7 +240,7 @@ Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inse
 - Geo tab needs hosts with `inventory.location_lat` + `location_lon`
 - LLDP edges need neighbour items via SNMP → [LLDP-SETUP.md](LLDP-SETUP.md)
 - Zabbix 7.0+ for proxy group info (empty on 6.x)
-- **Dashboard widgets are Zabbix 7.4 only**; the main module runs on 7.0 LTS + 7.4
+- Everything runs on **7.0 LTS and 7.4** — widgets included, re-tested on 7.0.30
 
 ### Feedback & contributing
 
@@ -274,7 +274,7 @@ found had been in the module since the code was written.
 > | Was | Nötig? | Braucht |
 > |---|---|---|
 > | **Hauptmodul** — die Topologie-Seite | **erforderlich**, das ist das Produkt | Zabbix 7.0 LTS oder 7.4 |
-> | **Fünf Dashboard-Widgets** — Kacheln für bestehende Dashboards | optionale Zugabe | Zabbix **7.4**, dazu das installierte *und* aktivierte Hauptmodul |
+> | **Fünf Dashboard-Widgets** — Kacheln für bestehende Dashboards | optionale Zugabe | Zabbix **7.0 LTS oder 7.4**, dazu das installierte *und* aktivierte Hauptmodul |
 >
 > Die Widgets nutzen die Daten-Action des Hauptmoduls und laden Cytoscape aus
 > dessen Assets; ohne es zeigen sie eine Fehlermeldung. Erst das Hauptmodul.
@@ -417,7 +417,7 @@ Alle nutzen dieselbe `network.topology.data`-Action (kein zweites Backend) und t
 
 > **Die Widgets funktionieren nicht eigenständig** — und zwar aus zwei Gründen: Die Daten-Action `network.topology.data` registriert das **Hauptmodul**, und das Topologie-Widget lädt zusätzlich Cytoscape.js aus dessen Verzeichnis (`modules/network_topology/assets/js/`), damit die ~360 KB große Bibliothek nur einmal im Paket liegt. Fehlt oder deaktivierst du das Hauptmodul, zeigen die Kacheln eine Fehlermeldung („Hauptmodul nicht erreichbar" bzw. „Cytoscape.js not loaded"). Reihenfolge beim Installieren also: **erst Hauptmodul, dann Widgets.**
 
-> **Zabbix-Version:** Die Widgets brauchen **Zabbix 7.4**. Auf **7.0 LTS** registrieren sie sich zwar, bleiben aber wegen der abweichenden Widget-JS-Basisklasse auf „Loading…" hängen. Das **Hauptmodul** läuft auf **7.0 LTS und 7.4**.
+> **Zabbix-Version:** **Hauptmodul und Widgets** laufen auf **7.0 LTS und 7.4**. Hier stand früher, die Widgets seien 7.4-only — auf 7.0.28 blieben sie im Juli auf „Loading…" stehen. Am 2026-09-24 auf **7.0.30** mit allen fünf auf einem Dashboard nachgeprüft: Topologie, KPI, Health, Tabelle und Items rendern, keine Konsolenfehler. Was sich dazwischen geändert hat, ist nicht geklärt — wenn ein 7.0 bei dir doch hängt, ist das eine Meldung wert.
 
 ### Sicherheit
 
@@ -442,7 +442,7 @@ Aktuelle Chrome, Firefox, Safari, Edge. ES6-Module (kein IE11), `fetch`, CSS `in
 - Geo-Tab braucht Hosts mit `inventory.location_lat` + `location_lon`
 - LLDP-Kanten brauchen Nachbar-Items per SNMP → [LLDP-SETUP.md](LLDP-SETUP.md)
 - Zabbix 7.0+ für Proxy-Group-Info (in 6.x leer)
-- **Dashboard-Widgets nur Zabbix 7.4**; das Hauptmodul läuft auf 7.0 LTS + 7.4
+- Alles läuft auf **7.0 LTS und 7.4** — die Widgets eingeschlossen, auf 7.0.30 nachgeprüft
 
 ### Feedback & Mitmachen
 

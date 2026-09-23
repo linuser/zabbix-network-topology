@@ -9,9 +9,17 @@ Diese Datei ist auf Deutsch, wie die Kommentare im Code. Alles, was ein
 
 Ein **Zabbix-Frontend-Modul**: eine eigene Seite unter *Monitoring → Network
 Topology*, **kein** Dashboard-Widget. Die fünf `widget*/`-Verzeichnisse sind
-optionale Kacheln obendrauf und brauchen Zabbix 7.4; das Hauptmodul läuft auch
-auf 7.0 LTS. Diese Unterscheidung wird regelmäßig missverstanden — sie steht
-deshalb im ersten Absatz von README und Release-Notes.
+optionale Kacheln obendrauf. Diese Unterscheidung wird regelmäßig
+missverstanden — sie steht deshalb im ersten Absatz von README und
+Release-Notes.
+
+**Beides läuft auf 7.0 LTS und 7.4.** Bis 5.4.0 stand hier „Widgets brauchen
+7.4"; das stammte aus einem Test auf 7.0.28 im Juli 2026, wo sie sich
+registrierten, aber auf „Loading…" stehen blieben. Am 2026-09-24 auf **7.0.30**
+mit allen fünf auf einem Dashboard nachgemessen: alle rendern, keine
+Konsolenfehler. Woran es damals lag, ist **nicht** geklärt — die alte Aussage
+war eine Beobachtung mit einer erfundenen Begründung (die Widget-JS-Basisklasse
+ist auf beiden Versionen identisch, Methode für Methode verglichen).
 
 ## Befehle
 
