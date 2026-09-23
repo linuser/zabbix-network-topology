@@ -2,6 +2,50 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## Unreleased
+
+### Updating — nothing to re-import
+
+No action and no template changed. Reload the page once with a cache bypass,
+the bundle changed.
+
+### Added
+
+- **Parallel links (LAG, bonding, several cables) are drawn as what they are.**
+  Until now every pair of devices had exactly one edge: a second LLDP/CDP
+  report for the same pair was merged into the first, first-wins. A 2×10G LAG
+  showed one member's port and one member's counters, and a failed member was
+  invisible. Now every cable is its own edge, with its own ports, traffic,
+  utilisation and state.
+  - **Fanned out** (zoomed in): one curve per member, side by side, each in its
+    own weathermap colour; port labels at both ends stack into a small list.
+    A member that stops being reported while its siblings still are is drawn
+    red and dashed among the live ones.
+  - **Bundled** (zoomed out): one line marked `×N` (only slightly thicker —
+    the label carries the count), total traffic against total capacity of
+    the live members, amber glow while a member is down.
+  - *View → All parallel links: on / off*. On (default) fans out from 60 %
+    zoom upwards and bundles below. **Off always draws one line per device
+    pair with `×N`** — for meshed cores with six or seven cables between
+    every pair, where a fan turns into a thicket at any zoom.
+  - Clicking a bundle lists its members in the edge panel; a row opens that
+    member. Path highlighting marks the whole bundle.
+  - The topology diff reports a lost or added member on its own, instead of a
+    false "port moved". A link that gains a second cable is not reported as
+    removed and re-added.
+- The dashboard widget keeps one line per device pair — the tile is too small
+  for a fan.
+
+### How members are matched
+
+Both ends of one cable report it, often with labels that do not compare
+("10101" on one side, "GigabitEthernet1/0/1" on the other), and LLDP and CDP
+can number the same port differently. A report therefore only opens a new
+member when the **same device** already reported **every** existing member
+**over the same protocol** on other ports. The number of lines is exact; what
+can be wrong with incomparable labels is which far-end port is paired with
+which near-end port — never how many cables are drawn.
+
 ## v5.3.2 — 2026-09-23
 
 ### Updating from 5.3.1 — nothing to re-import

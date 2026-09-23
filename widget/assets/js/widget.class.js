@@ -405,11 +405,20 @@ class WidgetNetworkTopology extends CWidget {
         // Edges: nur die rendern wo BEIDE Endpunkte sichtbar sind
         var visibleIds = {};
         nodes.forEach(function (n) { visibleIds[String(n.id)] = true; });
+        // One line per device pair. The backend delivers one edge per cable
+        // since parallel links (LAG) exist; the main module fans them out,
+        // this tile is too small for that — and drawn with the same bow they
+        // would sit on top of each other, or mirror into an ellipse when
+        // reported from opposite ends.
+        var seenPair = {};
         this._edges.forEach(function (e, i) {
             if (!self._showLldp && e.iface === 'lldpRemSysName') return;
             var src = String(e.from || e.source);
             var tgt = String(e.to   || e.target);
             if (!visibleIds[src] || !visibleIds[tgt]) return;
+            var pk = src < tgt ? src + '|' + tgt : tgt + '|' + src;
+            if (seenPair[pk]) return;
+            seenPair[pk] = true;
             elements.push({ data: { id: 'e' + i, source: src, target: tgt }});
         });
 

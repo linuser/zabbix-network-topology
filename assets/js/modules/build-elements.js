@@ -23,6 +23,7 @@
 import { fmt, linkCapacity } from './utils.js';
 import { makeNodeImage } from './icons.js';
 import { SEV_COL } from './severity.js';
+import { annotateBundles } from './parallel-links.js';
 
 // Synthetische Internet-Wolke + Edges injizieren, falls nötig.
 // Mutiert NICHT die Eingabe-Arrays — gibt neue Arrays zurück.
@@ -269,7 +270,9 @@ export function buildNodeElements(nodes, perfMode) {
 // Baut Cytoscape-Edge-Element-Array.
 // - Self-Loops werden weggeworfen
 // - Beidseitige Edges (A-B und B-A) werden zu einer reduziert (deduplizierung
-//   per sortiertem Endpunkt-Paar)
+//   per sortiertem Endpunkt-Paar) — ausser physischen Links: die sind pro
+//   Kabel eine Kante (LAG, parallele Kabel) und werden per ID dedupliziert,
+//   anschliessend gruppiert annotateBundles() sie (parallel-links.js)
 // - Edges zu nicht-existierenden Knoten werden weggeworfen
 // - Internet-Edges (e._isInternetEdge) bekommen einen eigenen leeren
 //   Traffic-Datensatz und werden NICHT als isLLDP markiert (sonst würde
@@ -291,7 +294,15 @@ export function buildEdgeElements(edges, nodes) {
         // einer physischen LLDP-Kante zwischen denselben zwei Hosts kollidieren
         // (Hypervisor↔VM koennte theoretisch beides haben — die gerichtete
         // hosts-Kante soll dann ueberleben).
-        const k = (isHosts ? 'h_' : '') + [src, tgt].sort().join('_');
+        // Physical links (LLDP/CDP, ageing) are deduped per EDGE, not per
+        // pair: since the backend delivers one edge per cable, two edges
+        // between the same hosts are a LAG or parallel cables, not a
+        // duplicate. The backend already merges both ends' reports of one
+        // cable (LldpEdgeBuilder::findMember). parallel-links.js groups them.
+        const isPhysical = !isHosts && !e._isGhostEdge && !e._isInternetEdge
+                        && e._type !== 'manual' && e.id !== undefined;
+        const k = (isHosts ? 'h_' : '') + [src, tgt].sort().join('_')
+                + (isPhysical ? '#' + e.id : '');
         if (edgeSeen[k]) return;
         edgeSeen[k] = true;
 
@@ -474,5 +485,5 @@ export function buildEdgeElements(edges, nodes) {
                     portErr: portErr, portDrop: portDrop }
         });
     });
-    return elements;
+    return annotateBundles(elements);
 }

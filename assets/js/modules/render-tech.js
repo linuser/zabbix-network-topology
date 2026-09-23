@@ -43,6 +43,7 @@ import {
 import { ensureBaseToolbar } from './tabs.js';
 import { updateKpi, refreshKpi } from './kpi.js';
 import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
+import { applyBundleView, bindBundleView, trunkData } from './parallel-links.js';
 import { buildLayoutConfig } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
 import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
@@ -496,7 +497,8 @@ export function render(wrap, nodes, edges, dataUrl) {
     // (Wolken-Uplinks) haben einen virtuellen Internet-Knoten — kein
     // Tooltip dafuer, ist nicht aussagekraeftig.
     cy.on('mouseover', 'edge', function(e) {
-        const ed = e.target.data();
+        // A collapsed bundle shows its totals, not those of the lead member.
+        const ed = trunkData(e.target);
         if (ed._isInternetEdge) return;
         const src = e.target.source();
         const tgt = e.target.target();
@@ -588,6 +590,9 @@ export function render(wrap, nodes, edges, dataUrl) {
     // nodes wird nicht mehr uebergeben: die Funktion liest die Severity live
     // aus node.data(), damit der Auto-Refresh nicht an ihr vorbeilaeuft.
     startEdgeAnimation(cy);
+    // Parallel links: fan or trunk, before the heatmap reads the trunk class.
+    applyBundleView(cy);
+    bindBundleView(cy, applyTrafficHeatmap);
     setTimeout(function() { applyTrafficHeatmap(cy); applyPortLabels(cy); }, 1800);
 
     setupMinimap(cy, wrap);

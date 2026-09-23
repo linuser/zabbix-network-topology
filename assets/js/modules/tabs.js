@@ -250,6 +250,7 @@ const _GRAPH_ONLY_SELECTORS = [
     '#nt-btn-scales',     // color-scales editor (super admin)
     '#nt-btn-perf',       // Performance-Modus (vereinfachte Knoten)
     '#nt-btn-portlabels', // Port-Labels an Edge-Enden
+    '#nt-btn-parlinks',   // parallel links: auto / fanned / bundled
     '#nt-btn-rootcause',  // Root-Cause-Analyse
     '#nt-btn-link',       // Link-Mode
     '#nt-btn-unlink',     // Links entfernen
@@ -475,6 +476,7 @@ function regroupToolbar() {
     _moveIntoMenu('nt-btn-scales',     'nt-menu-view');
     _moveIntoMenu('nt-btn-perf',       'nt-menu-view');
     _moveIntoMenu('nt-btn-portlabels', 'nt-menu-view');
+    _moveIntoMenu('nt-btn-parlinks',   'nt-menu-view');
 
     _moveIntoMenu('nt-layout-wrap',    'nt-menu-layout');
     _moveIntoMenu('nt-btn-groupview',  'nt-menu-layout');

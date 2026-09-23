@@ -15,6 +15,8 @@
 //   _startId  — Host-ID des "von"-Endes (kann ohne aktiven Pfad gesetzt sein)
 //   _active   — true wenn aktuell ein Pfad gerendert ist (Klassen gesetzt)
 
+import { bundleMembers } from './parallel-links.js';
+
 let _startId = null;
 let _active  = false;
 
@@ -89,7 +91,11 @@ export function applyPathHighlight(cy, fromId, toId) {
     const nodeSel = path.nodeIds.map(function(id) { return '#' + CSS.escape(id); }).join(',');
     const edgeSel = path.edgeIds.map(function(id) { return '#' + CSS.escape(id); }).join(',');
     const pathNodes = cy.nodes(nodeSel);
-    const pathEdges = path.edgeIds.length ? cy.edges(edgeSel) : cy.collection();
+    let pathEdges = path.edgeIds.length ? cy.edges(edgeSel) : cy.collection();
+    // The search takes whichever member of a LAG it meets first. The path
+    // runs over the BUNDLE: highlight all of it — collapsed, the member found
+    // may well be one of the hidden ones, and the path would show a gap.
+    pathEdges.forEach(function(e) { pathEdges = pathEdges.union(bundleMembers(e)); });
     const pathEles  = pathNodes.union(pathEdges);
 
     cy.elements().not(pathEles).addClass('nt-path-dim');

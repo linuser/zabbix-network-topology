@@ -129,6 +129,45 @@ export function buildCytoscapeStyle(dark) {
             'width': 1.5, 'line-color': dark ? '#818cf8' : '#6366f1',
             'line-style': 'dashed', 'line-dash-pattern': [3, 4], 'opacity': 0.6,
         }},
+        // Parallel links (parallel-links.js). AFTER the stale/ghost/manual
+        // rules on purpose: an ageing LAG member keeps its dotted look but
+        // must bend with its bundle instead of going straight — and a later
+        // rule of equal specificity wins.
+        //
+        // Every member is an unbundled bezier with its own distance (cpd),
+        // fanned out around the 60 px bow of a single edge: the bundle reads
+        // as "this link, several times" rather than as a different shape.
+        { selector: 'edge.nt-par', style: {
+            'curve-style': 'unbundled-bezier',
+            'control-point-distances': 'data(cpd)', 'control-point-weights': [0.5],
+            'source-text-margin-y': 'data(portShift)', 'target-text-margin-y': 'data(portShift)',
+            // The ageing style zeroes these; a failed member's port label
+            // must still line up with its siblings'.
+            'source-text-offset': 26, 'target-text-offset': 26,
+        }},
+        // A member that is no longer reported while its siblings still are:
+        // for a LAG that is a failed cable or port, not a flaky discovery.
+        // Red instead of the beige of an ordinary ageing edge — next to live
+        // members the beige barely registers.
+        { selector: 'edge.nt-par[?_isStaleEdge]', style: {
+            'line-color': '#dc2626', 'line-style': 'dashed', 'line-dash-pattern': [4, 4],
+            'width': 2, 'opacity': 0.85,
+        }},
+        // Collapsed: the lead becomes the trunk on the plain bow, the rest is
+        // hidden. visibility, not display — see parallel-links.js.
+        // The ×N label is the only hint that this line is several cables —
+        // larger and bold, so it survives a zoomed-out map.
+        { selector: 'edge.nt-trunk', style: {
+            'control-point-distances': [60],
+            'font-size': 12, 'font-weight': 'bold',
+            'source-text-margin-y': 0, 'target-text-margin-y': 0,
+        }},
+        { selector: 'edge.nt-par-hidden', style: { 'visibility': 'hidden', 'events': 'no' }},
+        // A trunk with a failed member. A glow, not a line colour: the colour
+        // stays the weathermap's statement (same reasoning as _isFreshEdge).
+        { selector: 'edge.nt-trunk.nt-par-degraded', style: {
+            'underlay-color': '#f59e0b', 'underlay-opacity': 0.55, 'underlay-padding': 7,
+        }},
         { selector: 'node[!isGroup]:selected', style: {
             'underlay-color': '#6366f1', 'underlay-padding': 6,
             'underlay-opacity': 0.25, 'underlay-shape': 'ellipse',

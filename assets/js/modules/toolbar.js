@@ -29,6 +29,7 @@ import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
 import { refreshBottomLegend } from './legend.js';
 import { openColorScalesPanel } from './color-scales-ui.js';
 import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
+import { allLinksOn, setAllLinks, applyBundleView } from './parallel-links.js';
 import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
 import { t } from './i18n.js';
 import { toast } from './toast.js';
@@ -615,6 +616,20 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         setPortLabels(!portLabelsOn());
         _setPortsLabel();
         applyPortLabels(window._ntCy);
+    });
+
+    // Parallel links (LAG, bonding): off = always one line with ×N.
+    const bPar = mkbtn('nt-btn-parlinks', '', null);
+    const _setParLabel = function() {
+        bPar.textContent = t('toolbar.parlinks', { state: allLinksOn() ? t('toolbar.on') : t('toolbar.off') });
+        bPar.style.opacity = allLinksOn() ? '1' : '0.5';
+        bPar.title = t('toolbar.parlinks.tip');
+    };
+    _setParLabel();
+    bPar.addEventListener('click', function() {
+        setAllLinks(!allLinksOn());
+        _setParLabel();
+        if (applyBundleView(window._ntCy)) applyTrafficHeatmap(window._ntCy);
     });
 
     // Root-Cause-Analyse: Offline-Hosts in Ursache vs. Folge trennen
