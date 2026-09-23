@@ -3,7 +3,7 @@
 // Syntax:
 //   bare token             → match irgendwo (alle Felder konkateniert)
 //   field:value            → match nur im Feld (host, label, ip, type,
-//                            iftype, proxy, group)
+//                            iftype, proxy, group, port)
 //   "with spaces"          → quoted token (auch field:"foo bar")
 //   -token                 → NOT
 //   tokenA tokenB          → AND (implizit, default)
@@ -20,7 +20,7 @@
 //   matchQuery(ast, fields) → bool. fields ist {host: 'lowercase', ip: ...}
 //   FIELD_PREFIXES — Set bekannter Field-Namen
 
-const FIELD_PREFIXES = ['host', 'label', 'ip', 'type', 'iftype', 'proxy', 'group'];
+const FIELD_PREFIXES = ['host', 'label', 'ip', 'type', 'iftype', 'proxy', 'group', 'port'];
 const _FIELD_SET = {};
 FIELD_PREFIXES.forEach(function(f) { _FIELD_SET[f] = true; });
 
@@ -182,6 +182,10 @@ export function nodeToQueryFields(n) {
     const fIftype = (n.iftype || '').toLowerCase();
     const fProxy  = ((n.proxy_name || '') + ' ' + (n.proxy_group_name || '')).toLowerCase();
     const fGroup  = (n.groups || []).join(' ').toLowerCase();
+    // "haengt an": Geraet und Port der Gegenseite, von render-table gesetzt.
+    // Wie die anderen Sekundaerfelder NICHT in _any — "sw-01" soll nicht
+    // jeden Host treffen, der an sw-01 haengt, sondern sw-01.
+    const fPort   = (n._uplinkText || '').toLowerCase();
     return {
         host:   fHost,
         label:  fHost,
@@ -190,6 +194,7 @@ export function nodeToQueryFields(n) {
         iftype: fIftype,
         proxy:  fProxy,
         group:  fGroup,
+        port:   fPort,
         _any:   fHost + ' ' + fIp,
     };
 }

@@ -224,6 +224,56 @@ if (bund) {
     pruefe('Fehler eines Members erreicht den Trunk', bund.fehler.err,  42);
 }
 
+// "Haengt an" im Tabellen-Tab: die Spalte ist die Antwort auf die Frage, mit
+// der Leute das Modul suchen. Geprueft wird der TEXT, nicht die Auszeichnung.
+console.log('\n  Tabelle: an welchem Port haengt das Ding\n');
+const uplink = szenario('uplink', { lang: 'en_US' }, `
+    const T = await import(${JSON.stringify(MODULE('render-table.js'))});
+    const nodes = [
+        { id: 'ap1',  label: 'lab-ap-01', type: 'wireless' },
+        { id: 'sw1',  label: 'lab-sw-01', type: 'switch' },
+        { id: 'sw2',  label: 'lab-sw-02', type: 'switch' },
+        { id: 'srv1', label: 'lab-srv-1', type: 'server' },
+        { id: 'nix',  label: 'lab-nix-1', type: 'server' },
+    ];
+    const edges = [
+        // AP am Switch, Port auf der Switch-Seite
+        { id: 'e1', from: 'ap1', to: 'sw1', ports: { ap1: 'eth0', sw1: 'Gi1/0/8' } },
+        // Hosting-Kante zaehlt nicht als Kabel
+        { id: 'e2', from: 'sw1', to: 'srv1', _type: 'hosts', ports: {} },
+        // Zwei Kabel zwischen den Switches (LAG) plus ein Server ohne Port
+        { id: 'e3', from: 'sw1', to: 'sw2', ports: { sw1: 'Gi1/0/1', sw2: 'Te1/1/1' } },
+        { id: 'e4', from: 'sw1', to: 'sw2', ports: { sw1: 'Gi1/0/2', sw2: 'Te1/1/2' } },
+        { id: 'e5', from: 'srv1', to: 'sw2', ports: { sw2: 'Gi1/0/9' }, stale: true },
+    ];
+    Object.assign(globalThis, {});
+    const map = T.buildUplinks(nodes, edges);
+    // uplinkText liest den Modulzustand, den renderTable setzt — hier direkt.
+    T.buildUplinks(nodes, edges);
+    const txt = (id) => {
+        const l = map[id] || [];
+        return l.length ? (l[0].port ? l[0].name + ' | ' + l[0].port : l[0].name) : '';
+    };
+    console.log(JSON.stringify({
+        ap:      txt('ap1'),
+        srv:     txt('srv1'),
+        srvAlt:  (map.srv1 || [{}])[0].stale === true,
+        swZahl:  (map.sw1 || []).length,
+        swErst:  txt('sw1'),
+        ohne:    txt('nix'),
+        hosting: (map.srv1 || []).some((u) => u.nb === 'sw1'),
+    }));
+`);
+if (uplink) {
+    pruefe('AP: Switch und Port der Gegenseite', uplink.ap,  'lab-sw-01 | Gi1/0/8');
+    pruefe('Server: Port am Switch',             uplink.srv, 'lab-sw-02 | Gi1/0/9');
+    pruefe('Server: als alternd gekennzeichnet', uplink.srvAlt, true);
+    pruefe('LAG: beide Kabel gezaehlt',          uplink.swZahl, 3);
+    pruefe('Switch: Infrastruktur zuerst',       uplink.swErst, 'lab-sw-02 | Te1/1/1');
+    pruefe('ohne Nachbarn: leer',                uplink.ohne, '');
+    pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

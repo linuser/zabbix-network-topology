@@ -45,6 +45,78 @@ const TYPE_LBL = {
     linux: 'Linux', windows: 'Windows', macos: 'macOS', internet: 'Internet',
 };
 
+// "Haengt an": an welchem Geraet und an welchem Port steckt diese Zeile.
+//
+// WARUM DAS HIER STEHT UND NICHT AUF DER KARTE
+// --------------------------------------------
+// Die Frage, mit der Leute dieses Modul suchen, ist nicht "wie sieht mein
+// Netz aus", sondern "an welchem Port haengt das Ding" — der Access Point
+// ist tot und soll per PoE neu gestartet werden. Auf der Karte beantwortet
+// das seit 5.4.0 der Klick auf das Geraet. Als Spalte wird daraus eine
+// Patchliste, die sich sortieren, filtern und ausdrucken laesst.
+//
+// Infrastruktur nach Typ, nicht nach Faehigkeiten: an einem Switch haengt
+// etwas, an einem Server nicht. Meldet ein Server trotzdem einen Nachbarn,
+// ist das eine Verbindung, aber kein Uplink — solche Eintraege kommen
+// deshalb hinter die Infrastruktur, nicht weg.
+//
+// Access Points fehlen hier BEWUSST, obwohl sie Netzgeraete sind: sie haengen
+// an einem Switch, nicht umgekehrt. Stuenden sie drin, waere die Antwort fuer
+// einen Access-Switch "haengt an lab-ap-01" — richtig verkabelt, falsch
+// herum gelesen.
+const UPLINK_INFRA = { switch: 1, router: 1, firewall: 1 };
+
+// hostid => [{ nb, port, stale }, ...], beste Antwort zuerst.
+let _uplinks = {};
+
+export function buildUplinks(nodes, edges) {
+    const byId = {};
+    (nodes || []).forEach(function(n) { byId[String(n.id)] = n; });
+    const out = {};
+    (edges || []).forEach(function(e) {
+        if (e._type === 'hosts' || e.kind === 'hosts' || e._isInternetEdge
+                || e._isGhostEdge || e._type === 'manual') {
+            return;
+        }
+        const a = String(e.source || e.from || '');
+        const b = String(e.target || e.to || '');
+        if (!byId[a] || !byId[b] || a === b) return;
+        const ports = e.ports || {};
+        [[a, b], [b, a]].forEach(function(paar) {
+            const ich = paar[0], nb = paar[1];
+            (out[ich] = out[ich] || []).push({
+                nb: nb,
+                name: String(byId[nb].label || byId[nb].host || nb),
+                // Der Port am GEGENUEBER — "wo muss ich hin, um das Kabel zu
+                // ziehen". Der eigene Port steht im Detail-Panel.
+                port: String(ports[nb] || ''),
+                stale: !!e.stale,
+                infra: UPLINK_INFRA[(byId[nb].type || '')] ? 1 : 0,
+            });
+        });
+    });
+    Object.keys(out).forEach(function(hid) {
+        out[hid].sort(function(x, y) {
+            if (x.infra !== y.infra) return y.infra - x.infra;
+            if (!!x.stale !== !!y.stale) return x.stale ? 1 : -1;
+            if (!!x.port !== !!y.port) return x.port ? -1 : 1;
+            return x.name.localeCompare(y.name, undefined, { numeric: true });
+        });
+    });
+    return out;
+}
+
+/**
+ * Text der Spalte: "lab-sw-01 \u00b7 Gi1/0/8". Leer, wenn nichts bekannt ist.
+ * Exportiert, damit ci:frontend die Aussage ohne Browser lesen kann — sie ist
+ * der eigentliche Inhalt dieser Spalte, der Rest ist Auszeichnung.
+ */
+export function uplinkText(hid) {
+    const l = _uplinks[String(hid)];
+    if (!l || !l.length) return '';
+    return l[0].port ? l[0].name + ' \u00b7 ' + l[0].port : l[0].name;
+}
+
 // Filter-State (lebt in dieser Modul-Closure, persistiert nicht zwischen Tab-Wechseln)
 let _filterStatuses = new Set([0, 1, 2, 3, 4, 5]);  // alle Severities default an
 // Mehrfach-Gruppenfilter: alle gesetzten Gruppen werden AND-verknuepft
@@ -497,6 +569,11 @@ function compare(a, b) {
         case 'type':     av = (a.type  || '').toLowerCase(); bv = (b.type  || '').toLowerCase(); break;
         case 'group':    av = (a._primaryGroup || '').toLowerCase(); bv = (b._primaryGroup || '').toLowerCase(); break;
         case 'ip':       av = a.ip || ''; bv = b.ip || ''; break;
+        // Ohne Uplink ganz nach hinten, egal in welcher Richtung sortiert
+        // wird: eine Patchliste beantwortet "wo steckt es", und Zeilen ohne
+        // Antwort sind dort nie das Gesuchte.
+        case 'uplink':   av = (a._uplinkText || '\uffff').toLowerCase();
+                         bv = (b._uplinkText || '\uffff').toLowerCase(); break;
         case 'cpu':      av = (a.cpu == null ? -1 : a.cpu); bv = (b.cpu == null ? -1 : b.cpu); break;
         case 'memory':   av = (a.memory == null ? -1 : a.memory); bv = (b.memory == null ? -1 : b.memory); break;
         case 'ping':     av = (a.ping == null ? 1e9 : a.ping); bv = (b.ping == null ? 1e9 : b.ping); break;
@@ -735,6 +812,40 @@ function _diffBadgeHtml(id) {
     return '';
 }
 
+/**
+ * Zelleninhalt der Uplink-Spalte. Gibt '' zurueck, wenn nichts bekannt ist —
+ * der Aufrufer setzt dann den Gedankenstrich.
+ */
+function uplinkCell(n, theme) {
+    const l = _uplinks[String(n.id)];
+    if (!l || !l.length) return '';
+    const erste = l[0];
+    const rest  = l.length - 1;
+    const alle  = l.map(function(u) {
+        return (u.name || u.nb) + (u.port ? ' \u00b7 ' + u.port : '')
+             + (u.stale ? ' (' + t('table.uplink.stale') + ')' : '');
+    }).join('\n');
+    let html = '<span title="' + esc(alle) + '">'
+        + esc(erste.name || String(erste.nb))
+        + (erste.port
+            ? ' <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
+                + 'color:' + theme.textStrong + '">' + esc(erste.port) + '</span>'
+            : '')
+        + '</span>';
+    // Eine alternde Kante heisst: zuletzt hier gesehen. Genau der Fall, fuer
+    // den diese Spalte gebaut ist — das Geraet ist tot, der Port ist die
+    // Frage. Er darf deshalb nicht so aussehen wie eine lebende Angabe.
+    if (erste.stale) {
+        html += ' <span title="' + esc(t('table.uplink.stale')) + '" style="color:'
+             + theme.subSoft + ';font-size:11px">\u23f1</span>';
+    }
+    if (rest > 0) {
+        html += ' <span style="color:' + theme.subSoft + ';font-size:11px">'
+             + esc(t('table.uplink.more', { n: rest })) + '</span>';
+    }
+    return html;
+}
+
 function rowHtml(n, baseUrl, theme) {
     const sev = n.severity || 0;
     const sevCol = SEV_COL[sev];
@@ -841,6 +952,12 @@ function rowHtml(n, baseUrl, theme) {
                     + 'border-bottom:1px dotted ' + theme.border + '">(' + esc(n.iftype) + ')</span>'
                 : '')
             + '</td>'
+        // "Haengt an": Geraet und Port der Gegenseite. Mehrere Kabel (LAG,
+        // oder ein Switch mit vielen Nachbarn) stehen im Titel, damit die
+        // Zeile eine Zeile bleibt.
+        + '<td style="' + cellPad + ';font-size:12px;color:' + metricColor + '">'
+            + (uplinkCell(n, theme) || '<span style="color:' + theme.subSoft + '">\u2014</span>')
+            + '</td>'
         // CPU / Memory / Ping - bei Offline werden die Werte gedimmt dargestellt
         + '<td style="' + cellPadR + ';font-size:12px;color:' + metricColor
             + ';' + monoNum + '">' + fmtPct(n.cpu) + '</td>'
@@ -889,6 +1006,7 @@ function buildTable(nodes, baseUrl, theme) {
         { id: 'type',     lbl: 'Type',      align: 'left'  },
         { id: 'group',    lbl: t('table.col.group'), align: 'left'  },
         { id: 'ip',       lbl: 'IP',        align: 'left'  },
+        { id: 'uplink',   lbl: t('table.col.uplink'), align: 'left' },
         { id: 'cpu',      lbl: 'CPU',       align: 'right' },
         { id: 'memory',   lbl: 'Memory',    align: 'right' },
         { id: 'ping',     lbl: 'Ping',      align: 'right' },
@@ -948,6 +1066,11 @@ export function renderTable(wrap, nodes, edges) {
     // Refs fuer _applyFilterPreset() merken — der ruft renderTable() neu mit
     // gleichen Args nach Preset-Anwendung.
     _renderWrap = wrap; _renderNodes = nodes; _renderEdges = edges;
+    // Uplinks EINMAL je Render, nicht je Zeile: buildUplinks laeuft ueber alle
+    // Kanten, und rowHtml wird pro Host gerufen. Der Text haengt zusaetzlich am
+    // Knoten, damit Sortierung und Suche ihn ohne Neuberechnung sehen.
+    _uplinks = buildUplinks(nodes, edges);
+    (nodes || []).forEach(function(n) { n._uplinkText = uplinkText(n.id); });
     _urlSync();
 
     // Theme aus Dark-Mode-State des Root-Containers ableiten - alle weiteren
