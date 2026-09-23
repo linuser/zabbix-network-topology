@@ -145,8 +145,30 @@ for (const path of SHARED_FILES) {
     hashes.get(h).push(path);
 }
 
+// Zusaetzlich gegen die QUELLE. Bis 5.4.0 pruefte dieser Gate nur, dass die
+// vier Kopien untereinander gleich sind — vier gleich falsche Kopien waeren
+// durchgegangen, und bearbeitet wurden sie einzeln. Seit es
+// tools/widget-shared.js gibt, ist eine davon die Wahrheit.
+const QUELLE = 'tools/widget-shared.js';
+let quellHash = null;
+{
+    const m = read(QUELLE).match(/if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/);
+    if (!m) {
+        fail(`${QUELLE}: Block nicht gefunden`);
+    }
+    else {
+        quellHash = createHash('sha256').update(m[0]).digest('hex').slice(0, 12);
+    }
+}
+
 if (hashes.size === 1 && [...hashes.values()][0].length === SHARED_FILES.length) {
-    pass(`in allen ${SHARED_FILES.length} Dateien identisch (${[...hashes.keys()][0]})`);
+    const h = [...hashes.keys()][0];
+    if (quellHash !== null && h !== quellHash) {
+        fail(`Kopien sind untereinander gleich (${h}), weichen aber von ${QUELLE} ab (${quellHash}) — npm run build schreibt sie zurecht`);
+    }
+    else {
+        pass(`in allen ${SHARED_FILES.length} Dateien identisch und wie ${QUELLE} (${h})`);
+    }
 }
 else if (hashes.size > 1) {
     fail('Blöcke laufen auseinander:');

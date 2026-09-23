@@ -32,6 +32,7 @@
  * Fehler werden NICHT gecacht — sonst haengt ein Aussetzer 15 s lang an allen
  * Widgets. Definiert wird nur einmal; welches Widget zuerst laedt, ist egal.
  */
+// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
 if (!window.NtWidgetData) {
     window.NtWidgetData = (function () {
         var cache = {};

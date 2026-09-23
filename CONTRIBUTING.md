@@ -71,7 +71,10 @@ without it being clear why:
    - The **shared data access** (`window.NtWidgetData`) across four widget files.
      Compared byte for byte: if one copy ran with a different TTL or cache key,
      the dashboard's behaviour would depend on load order — a bug you cannot
-     reproduce.
+     reproduce. Since 5.4.0 those four copies are **generated** from
+     `tools/widget-shared.js` by `npm run build`, and the gate compares them
+     against that source as well — four identically wrong copies used to pass.
+     Edit the source, not the copies; each block carries a marker saying so.
 
    Change one site, change the other. The gate names the file that stepped out
    of line.
@@ -330,7 +333,11 @@ ohne dass klar ist warum:
    - Der **geteilte Datenzugriff** (`window.NtWidgetData`) in vier
      Widget-Dateien. Byte-Vergleich: liefe eine Kopie mit anderem TTL oder
      Cache-Schlüssel, hinge das Verhalten des Dashboards an der
-     Ladereihenfolge — ein Fehler, der sich nicht reproduzieren lässt.
+     Ladereihenfolge — ein Fehler, der sich nicht reproduzieren lässt. Seit
+     5.4.0 werden diese vier Kopien aus `tools/widget-shared.js` **erzeugt**
+     (`npm run build`), und der Gate vergleicht sie zusätzlich gegen die
+     Quelle — vier gleich falsche Kopien gingen vorher durch. Bearbeitet wird
+     die Quelle; über jedem Block steht eine Marke, die das sagt.
 
    Wer eine der Stellen ändert, ändert die andere mit. Das Gate sagt genau,
    welche Datei ausschert.

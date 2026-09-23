@@ -129,7 +129,16 @@ jsLoader kennt keine ES-Module. Zwei Dinge existieren deshalb zweimal, und
   vier Widget-Dateien. `widget_items` gehört bewusst nicht dazu, es holt seine
   Daten über eine andere Action.
 
-Eine Stelle ändern heißt: die andere mitändern.
+**Beim Datenzugriff ist das Duplikat seit 5.4.0 erzeugt**, nicht gepflegt: die
+Quelle ist `tools/widget-shared.js`, `node tools/sync-widget-shared.mjs`
+schreibt sie in die vier Dateien (läuft in `npm run build`), und `ci:parity`
+vergleicht die Kopien zusätzlich **gegen die Quelle** — vier gleich falsche
+Kopien gingen vorher durch. Bearbeitet wird nur noch die Quelle; über jedem
+Block steht eine Marke, die das sagt.
+
+Die Health-Score-Formel bleibt von Hand doppelt: sie steht auf beiden Seiten
+in anderem Code (ES-Modul gegen ES5-Klasse), da wäre Erzeugen mehr Mechanik
+als Nutzen. Dort gilt weiter: eine Stelle ändern heißt, die andere mitändern.
 
 ## Sprachregel
 

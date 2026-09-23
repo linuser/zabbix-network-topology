@@ -64,7 +64,11 @@ whose ports are merely unused, a port named on one side only, and a map where
     false "port moved". A link that gains a second cable is not reported as
     removed and re-added.
 - The dashboard widget keeps one line per device pair — the tile is too small
-  for a fan.
+  for a fan — but it **counts the cables**: `×4` on the line, `×4 (1 down)`
+  when a member is dead, red when all of them are. Without the count the tile
+  claimed the same thing for a 4×10G bundle as for a single cable, and a
+  failed member was invisible there — which is the very thing this release
+  set out to fix.
 
 - **"Connected to" — the port a device hangs on, as a column.** The hosts table
   carries device and port of the far end, and sorts and filters by them. That
@@ -159,6 +163,14 @@ which near-end port — never how many cables are drawn.
   being reported — on the line, in the member list, and in the trunk's colour.
   The two counts used to disagree.
 
+### Widgets
+
+Their versions move independently of the module: **NT Topology 3.2.0** (the
+cable count above), **NT Health 2.1.2**, **NT Table 2.1.2**, **NT KPI 1.0.2**
+(the generated data access below). **NT Items 1.0.0** is unchanged.
+
+They still need **Zabbix 7.4** — the main module runs on 7.0 LTS as well.
+
 ### For contributors
 
 - **`tools/devnet/`** — a compose stack with Zabbix 7.0, Postgres and
@@ -167,6 +179,14 @@ which near-end port — never how many cables are drawn.
   values, and a bug report can be translated into a file and reproduced in
   minutes. `npm run ci:snmprec` checks the format, because snmpsim answers a
   file it does not understand with "No Such Instance" and no error at all.
+
+- **The shared data access in the widgets is generated, not maintained.**
+  `window.NtWidgetData` sat byte-identical in four widget files, because the
+  jsLoader knows no ES modules and a widget cannot import the main module.
+  `ci:parity` guarded the copies against each other — but a change was still
+  a change in four places, and four identically wrong copies would have
+  passed. The source is `tools/widget-shared.js` now, `npm run build` writes
+  it into the four files, and the gate compares them against it.
 
 - **`npm run ci:frontend`** — a gate that reads what the interface *says*,
   without a browser: detail panel, tooltip, ghost filter, layout decision,

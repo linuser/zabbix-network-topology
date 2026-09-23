@@ -34,6 +34,7 @@
  * Fehler werden NICHT gecacht — sonst haengt ein Aussetzer 15 s lang an allen
  * Widgets. Definiert wird nur einmal; welches Widget zuerst laedt, ist egal.
  */
+// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
 if (!window.NtWidgetData) {
     window.NtWidgetData = (function () {
         var cache = {};
@@ -236,6 +237,23 @@ class WidgetNetworkTopology extends CWidget {
         });
     }
 
+    /*
+     * Ist dieses Kabel tot? Zwei Arten, dieselbe Regel wie im Hauptmodul
+     * (parallel-links.js memberDown): nicht mehr gemeldet ODER Port unten.
+     * Die zweite Art zeigt sich zuerst — die Gegenseite meldet ein gezogenes
+     * Kabel noch, bis die Alterung greift.
+     */
+    _kabelTot(e) {
+        if (e.stale) return true;
+        var pm = e.port_metrics;
+        if (!pm) return false;
+        var tot = false;
+        Object.keys(pm).forEach(function (hid) {
+            if (pm[hid] && pm[hid].down === true) tot = true;
+        });
+        return tot;
+    }
+
     _loadData() {
         var self     = this;
         var groupids = this._groupids;
@@ -410,16 +428,35 @@ class WidgetNetworkTopology extends CWidget {
         // this tile is too small for that — and drawn with the same bow they
         // would sit on top of each other, or mirror into an ellipse when
         // reported from opposite ends.
-        var seenPair = {};
-        this._edges.forEach(function (e, i) {
+        // Eine Linie je Paar — aber die Kabel werden GEZAEHLT, nicht
+        // weggeworfen. Ohne die Zahl behauptet die Kachel bei einem
+        // 4x10G-Buendel dasselbe wie bei einem einzelnen Kabel, und ein
+        // ausgefallenes Mitglied sieht man gar nicht. Genau das war der
+        // Grund fuer den ganzen Umbau im Hauptmodul.
+        var proPaar = {};
+        this._edges.forEach(function (e) {
             if (!self._showLldp && e.iface === 'lldpRemSysName') return;
             var src = String(e.from || e.source);
             var tgt = String(e.to   || e.target);
             if (!visibleIds[src] || !visibleIds[tgt]) return;
             var pk = src < tgt ? src + '|' + tgt : tgt + '|' + src;
-            if (seenPair[pk]) return;
-            seenPair[pk] = true;
-            elements.push({ data: { id: 'e' + i, source: src, target: tgt }});
+            if (!proPaar[pk]) proPaar[pk] = { n: 0, tot: 0, src: src, tgt: tgt };
+            proPaar[pk].n++;
+            if (self._kabelTot(e)) proPaar[pk].tot++;
+        });
+        var pi = 0;
+        Object.keys(proPaar).forEach(function (pk) {
+            var b = proPaar[pk];
+            var label = '';
+            if (b.n > 1) {
+                label = '\u00d7' + b.n + (b.tot > 0 ? ' (' + b.tot + ' down)' : '');
+            }
+            elements.push({ data: {
+                id: 'e' + (pi++), source: b.src, target: b.tgt,
+                label: label,
+                // Alle Kabel tot: die Verbindung ist unten, nicht degradiert.
+                _tot: b.n > 1 && b.tot >= b.n
+            }});
         });
 
         // Cola-Layout falls verfuegbar, sonst Cose. Fixer Bug: vorher hatten
@@ -462,7 +499,21 @@ class WidgetNetworkTopology extends CWidget {
                     'curve-style': 'unbundled-bezier',
                     'control-point-distances': [40],
                     'control-point-weights': [0.5],
-                    'opacity': 0.8
+                    'opacity': 0.8,
+                    // "x4 (1 down)" bei mehreren Kabeln, sonst leer. Klein
+                    // und grau: die Kachel soll nicht zur Beschriftungswand
+                    // werden, aber die Zahl gehoert dorthin, wo die Linie ist.
+                    'label': 'data(label)',
+                    'font-size': 9,
+                    'color': '#768d99',
+                    'text-background-color': '#ffffff',
+                    'text-background-opacity': 0.75,
+                    'text-background-padding': '1px'
+                }},
+                { selector: 'edge[?_tot]', style: {
+                    'line-color': '#e45959',
+                    'color': '#e45959',
+                    'opacity': 0.9
                 }}
             ],
             // KEIN Layout im Konstruktor. Hier stand eines mit animate:true,
