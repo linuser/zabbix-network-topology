@@ -165,8 +165,14 @@ export function buildCytoscapeStyle(dark) {
         { selector: 'edge.nt-par-hidden', style: { 'visibility': 'hidden', 'events': 'no' }},
         // A trunk with a failed member. A glow, not a line colour: the colour
         // stays the weathermap's statement (same reasoning as _isFreshEdge).
+        // Amber-500 leuchtet auf dunklem Grund und verwaescht auf hellem —
+        // deshalb im hellen Theme der dunklere Ton und weniger Deckung. Die
+        // Aussage haengt ohnehin nicht allein an der Farbe: das Label sagt
+        // "(1 down)" im Klartext dazu.
         { selector: 'edge.nt-trunk.nt-par-degraded', style: {
-            'underlay-color': '#f59e0b', 'underlay-opacity': 0.55, 'underlay-padding': 7,
+            'underlay-color': dark ? '#f59e0b' : '#d97706',
+            'underlay-opacity': dark ? 0.55 : 0.4,
+            'underlay-padding': 7,
         }},
         { selector: 'node[!isGroup]:selected', style: {
             'underlay-color': '#6366f1', 'underlay-padding': 6,

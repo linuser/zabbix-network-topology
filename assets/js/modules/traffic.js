@@ -186,7 +186,20 @@ export function applyTrafficHeatmap(cy) {
         // Same for an ageing edge: nothing measured, and its dotted style is
         // the statement. It matters most inside a LAG, where a failed member
         // must stand out from the live ones next to it.
-        if (edge.data('_isStaleEdge')) return;
+        if (edge.data('_isStaleEdge')) {
+            // Das Label muss trotzdem stimmen. Es steht hier oft INLINE vom
+            // letzten Lauf ("45 %"), und der misst niemand mehr. Ein Member
+            // eines Buendels bleibt stumm, alle anderen fallen auf das
+            // Stylesheet-Mapping data(tLabel) zurueck — beim Lead ist das
+            // "xN (n down)", also genau die Aussage, die eine ausgefallene
+            // Sammelverbindung braucht.
+            if ((edge.data('bundleSize') || 1) > 1 && edge.data('bundleIdx') !== 0) {
+                edge.style('label', '');
+            } else {
+                edge.removeStyle('label');
+            }
+            return;
+        }
         // A collapsed bundle is coloured from its TOTALS (parallel-links.js).
         const trunk = edge.hasClass('nt-trunk');
         const ed = trunk ? trunkData(edge) : edge.data();
