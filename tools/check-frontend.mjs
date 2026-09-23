@@ -314,6 +314,34 @@ if (meldung) {
         /core . srv.*(of|parallel)/.test(txt), false);
 }
 
+// Die Legende muss zeigen, was die Karte zeichnet. Genau das ging hier schon
+// zweimal auseinander (Issue #9 bei den Kanten, das gedimmte Zeichen bei den
+// Knoten), und seit 5.4.0 zeichnet die Karte zwei Dinge mehr: das Buendel und
+// seine Glut.
+console.log('\n  Legende: zeigt sie, was gezeichnet wird?\n');
+const legende = szenario('legend', { lang: 'en_US' }, `
+    const erzeugt = [];
+    const create = globalThis.document.createElement;
+    globalThis.document.createElement = function(tag) {
+        const e = create(tag); erzeugt.push(e); return e;
+    };
+    const L = await import(${JSON.stringify(MODULE('legend.js'))});
+    L.setupBottomLegend(create('div'), false);
+    const html = erzeugt.map(function(e) { return e.innerHTML || ''; }).join(' ');
+    console.log(JSON.stringify({
+        buendel: /parallel cables/.test(html),
+        zeichen: /\u00d7N/.test(html),
+        glut:    /dead cable/.test(html),
+        alternd: /no longer reported/.test(html),
+    }));
+`);
+if (legende) {
+    pruefe('Legende nennt die parallelen Kabel', legende.buendel, true);
+    pruefe('Legende zeigt das Zeichen selbst',   legende.zeichen, true);
+    pruefe('Legende nennt das tote Kabel',       legende.glut,    true);
+    pruefe('alternde Kante weiterhin drin',      legende.alternd, true);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

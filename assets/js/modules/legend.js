@@ -120,8 +120,13 @@ export function setupBottomLegend(wrap, dark) {
             + '" fill="none" stroke="' + SEV_COL[sev] + '" stroke-width="' + w + '"'
             + dash + '/></svg>';
     }
-    function line(c, dashed) {
-        return '<span style="display:inline-block;width:16px;height:0;border-top:3px '
+    // Die Staerke ist ein Parameter, seit ein Aufruf sie uebergibt: die
+    // alternde Kante wird duenner gezeichnet als eine lebende, und die
+    // Legende zeigte trotzdem 3 px, weil das dritte Argument hier ins Leere
+    // lief. Kleiner Fall derselben Sorte wie der Rest dieser Datei.
+    function line(c, dashed, w) {
+        return '<span style="display:inline-block;width:16px;height:0;border-top:'
+            + (w || 3) + 'px '
             + (dashed ? 'dashed' : 'solid') + ' ' + c + ';vertical-align:middle;margin-right:5px"></span>';
     }
     function chip(inner) {
@@ -162,6 +167,19 @@ export function setupBottomLegend(wrap, dark) {
         + 'margin-right:5px;vertical-align:middle;background:rgba(22,163,74,0.30)"></span>'
         + esc(t('legend.guide.link_fresh')));
     r2 += chip(line('#c2a878', true, 2) + esc(t('legend.guide.link_stale')));
+    // Parallele Links: die dicke Linie mit "x N" und die bernsteinfarbene
+    // Glut, wenn ein Kabel des Buendels tot ist. Beides zeichnet die Karte
+    // seit 5.4.0, und beides stand hier nicht — dieselbe Luecke wie beim
+    // gedimmten Ring und wie in Issue #9: die Legende beschreibt nicht, was
+    // zu sehen ist. Das Zeichen hier ist bewusst dasselbe wie dort, ein
+    // fettes Stueck Linie mit der Zahl daneben.
+    r2 += chip('<span style="display:inline-block;width:16px;height:0;'
+        + 'border-top:5px solid #64748b;vertical-align:middle;margin-right:4px"></span>'
+        + '<b style="margin-right:4px">\u00d7N</b>'
+        + esc(t('legend.guide.link_bundle')));
+    r2 += chip('<span style="display:inline-block;width:16px;height:7px;border-radius:3px;'
+        + 'margin-right:5px;vertical-align:middle;background:rgba(245,158,11,0.55)"></span>'
+        + esc(t('legend.guide.link_degraded')));
 
     // Edge color by traffic — the scale of the ACTIVE mode, with the same
     // tiers and colors as traffic.js. This used to show only the weathermap

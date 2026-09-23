@@ -473,6 +473,8 @@ export default {
     'edge.src.fresh.tip': 'This link appeared recently and was not there before.',
     'legend.guide.link_fresh': 'new link',
     'legend.guide.link_stale': 'no longer reported',
+    'legend.guide.link_bundle':  'parallel cables (bundled)',
+    'legend.guide.link_degraded':'bundle with a dead cable',
     'whatif.root_all_down': 'Every uplink reference on this map is part of the simulation, so nothing has a path out any more. Everything that hung behind it counts as cut off.',
     'whatif.banner_unknown': '{n} not assessable',
     'whatif.unknown_tip': 'These hosts have no discovered links on this map, so they were never reachable from the uplink and the simulation cannot say anything about them. Usually LLDP/CDP is missing there.',

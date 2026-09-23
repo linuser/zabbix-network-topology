@@ -478,6 +478,8 @@ export default {
     'edge.src.fresh.tip': 'Diese Verbindung ist neu aufgetaucht und war vorher nicht da.',
     'legend.guide.link_fresh': 'neue Verbindung',
     'legend.guide.link_stale': 'nicht mehr gemeldet',
+    'legend.guide.link_bundle':  'parallele Kabel (geb\u00fcndelt)',
+    'legend.guide.link_degraded':'B\u00fcndel mit totem Kabel',
     'whatif.root_all_down': 'Alle Uplink-Referenzen dieser Karte sind Teil der Simulation \u2014 es gibt keinen Weg mehr nach draussen. Alles, was dahinter hing, gilt als abgeschnitten.',
     'whatif.banner_unknown': '{n} nicht beurteilbar',
     'whatif.unknown_tip': 'Diese Hosts haben auf der Karte keine gefundenen Verbindungen. Sie waren nie vom Uplink aus erreichbar, die Simulation kann \u00fcber sie also nichts sagen. Meist fehlt dort LLDP/CDP.',
