@@ -181,7 +181,15 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
         }
         // Bei sparse Graphen (edges/nodes < 0.3) ist concentric besser als
         // cose, weil cose isolierte Nodes in einer Spalte stapelt.
-        const edgeCount = (edges && edges.length) || 0;
+        // Beide Seiten OHNE Geister zaehlen. ids ist oben schon gefiltert;
+        // die Kanten mitzufiltern gehoert dazu, sonst steigt der Quotient mit
+        // jedem Geist und die Wahl zwischen concentric und cose kippt an der
+        // Schwelle aus einem Grund, der mit dem Graphen nichts zu tun hat.
+        const edgeCount = (edges || []).filter(function(e) {
+            const a = String(e.source !== undefined ? e.source : e.from);
+            const b = String(e.target !== undefined ? e.target : e.to);
+            return a.indexOf('ghost_') !== 0 && b.indexOf('ghost_') !== 0;
+        }).length;
         const connectivity = ids.length > 0 ? edgeCount / ids.length : 0;
         if (connectivity < 0.3 && ids.length > 5) layoutId = 'concentric';
         else                                       layoutId = 'cose';

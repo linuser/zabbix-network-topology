@@ -32,7 +32,7 @@
 
 import { t } from './i18n.js';
 import { injectGhostNodes } from './build-elements.js';
-import { NT_GHOSTS_KEY } from './storage.js';
+import { loadGhostMode } from './storage.js';
 
 const COL = {
     neutral: { light: '#334155', dark: '#f1f5f9' },
@@ -217,13 +217,13 @@ function collect(nodes, cy) {
     // von selbst korrigierte: schwer zu melden, schwer zu glauben.
     const lq = (window._ntLastData && window._ntLastData.lldp_quality) || [];
     const ghosts = lq.length
-        ? Math.max(0, injectGhostNodes(base, [], lq).nodes.length - base.length)
+        ? Math.max(0, injectGhostNodes(base, [], lq, loadGhostMode()).nodes.length - base.length)
         : 0;
 
     // Sind sie zwar gezaehlt, aber im Graphen ausgeblendet? Dann sagt die
     // Kachel das dazu — sonst sucht jemand drei Knoten, die er nicht sieht.
     let ghostsHidden = true;
-    try { ghostsHidden = localStorage.getItem(NT_GHOSTS_KEY) !== '1'; } catch (e) {}
+    ghostsHidden = loadGhostMode() === 'off';
 
     return {
         // base, nicht nodes: sonst zaehlt die Zeile Ghosts als Hosts mit und

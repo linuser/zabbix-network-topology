@@ -17,6 +17,7 @@ namespace Modules\NetworkTopology\Topology;
  *   nt:link=<label>|<url>   eigene Links ins Kontextmenue
  *   nt:parent=<host>  Traeger-Beziehung (VM->Hypervisor) -> hosts-Kante
  *   nt:uplink=<host>:<port>  an welchem PORT welches Geraets dieser Host haengt
+ *   nt:lldp=<name>    unter welchem Namen dieser Host auf dem Draht auftritt
  *
  * Das ist Verarbeitung von Daten, die ein Mensch frei eintippt — inklusive der
  * Validierung, die verhindert, dass daraus etwas Gefaehrliches wird (nur
@@ -32,7 +33,7 @@ final class HostTagParser {
     /**
      * @param array $hosts  hostid => Host-Datensatz (mit 'tags')
      *
-     * @return array{icon_override: array, show_keys: array, links: array, parent: array, uplink: array}
+     * @return array{icon_override: array, show_keys: array, links: array, parent: array, uplink: array, lldp: array}
      */
     public static function parse(array $hosts): array {
         // ── 2b. TAG-SCAN: nt:icon, nt:show ────────────────────────────────
@@ -45,6 +46,7 @@ final class HostTagParser {
         $host_links         = [];   // hid => [{label, url}, ...]
         $host_parent        = [];   // hid => 'ParentHostname' (nt:parent-Tag → hosts-Kante)
         $host_uplink        = [];   // hid => ['host' => 'sw-01', 'port' => 'Gi1/0/8']
+        $host_lldp_names    = [];   // hid => ['sw-core-01', 'SW-CORE-01.lan'] (nt:lldp)
         // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
         $allowed_icons = ['firewall', 'router', 'switch', 'wireless',
                           'server', 'storage', 'camera', 'printer',
@@ -114,6 +116,28 @@ final class HostTagParser {
                     if (preg_match('/[\x00-\x1F\x7F]/', $label)) continue;
 
                     $host_links[$hid][] = ['label' => $label, 'url' => $url];
+                } elseif ($name === 'nt:lldp' && $value !== '') {
+                    // UNTER WELCHEM NAMEN TRITT DIESER HOST AUF DEM DRAHT AUF.
+                    //
+                    // Der Name in Zabbix und der Name, den ein Geraet per LLDP
+                    // aussendet, sind zwei verschiedene Dinge, und sie muessen
+                    // nicht zusammenpassen: umbenannte Hosts, ein Inventarname
+                    // in Zabbix gegen den Konfigurationsnamen auf dem Geraet,
+                    // oder ein Geraet, das seinen Hostnamen gar nicht kennt.
+                    // Dann melden die Nachbarn einen Namen, den es in Zabbix
+                    // nicht gibt, und die Karte zeichnet einen Geist neben dem
+                    // Host, den er meint. Gemeldet von einem Dienstleister mit
+                    // mehreren Mandanten (#14).
+                    //
+                    // Mehrfach erlaubt: ein Geraet kann unter mehreren Namen
+                    // auftreten (Kurzname und FQDN, Stack-Mitglieder).
+                    $lv = trim($value);
+                    if ($lv !== '' && strlen($lv) <= 128
+                            && !preg_match('/[\x00-\x1F\x7F]/', $lv)
+                            && count($host_lldp_names[$hid] ?? []) < 4
+                            && !in_array($lv, $host_lldp_names[$hid] ?? [], true)) {
+                        $host_lldp_names[$hid][] = $lv;
+                    }
                 } elseif ($name === 'nt:uplink' && $value !== '') {
                     // AN WELCHEM PORT HAENGT DIESES GERAET.
                     //
@@ -159,6 +183,7 @@ final class HostTagParser {
             'links'         => $host_links,
             'parent'        => $host_parent,
             'uplink'        => $host_uplink,
+            'lldp'          => $host_lldp_names,
         ];
     }
 }

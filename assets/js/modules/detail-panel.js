@@ -49,6 +49,13 @@ export function hideDetail(panel) {
 
 export function showDetail(panel, d, cy) {
     const sc = SEV_COL[d.severity || 0] || SEV_COL[0];
+    // GEISTER SIND KEINE HOSTS. Bis hierher wurden sie wie welche behandelt:
+    // eine gruene Pille "Normal" fuer ein Geraet, das gar nicht ueberwacht
+    // wird, daneben leere Felder fuer CPU, Speicher und Ping. Beides ist eine
+    // Aussage, die niemand gemacht hat. Die Karte selbst haelt sich laengst
+    // daran (kein Severity-Ring am Geisterknoten), nur dieses Panel nicht.
+    // Gemeldet mit Screenshot.
+    const istGeist = !!d._isGhost;
 
     const ti = typeInfo(d.type);
     const customMark = d.icon_override
@@ -109,7 +116,13 @@ export function showDetail(panel, d, cy) {
     };
 
     // Status-Pille (gross + prominent) \u2014 Offline > Stale > Severity Hierarchie
-    const statusPill = isOff
+    const statusPill = istGeist
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;'
+            + 'padding:3px 10px;border-radius:11px;background:rgba(148,163,184,0.16);'
+            + 'color:var(--nt-muted);font-size:12px;font-weight:700">'
+            + '<span style="width:8px;height:8px;border-radius:50%;border:2px dashed currentColor;'
+            + 'display:inline-block"></span>' + esc(t('detail.ghost.status')) + '</span>'
+        : isOff
         ? '<span style="display:inline-flex;align-items:center;gap:4px;'
             + 'padding:3px 10px;border-radius:11px;background:rgba(229,55,66,0.13);'
             + 'color:#e53742;font-size:12px;font-weight:700">'
@@ -144,7 +157,22 @@ export function showDetail(panel, d, cy) {
             + 'overflow:hidden;text-overflow:ellipsis">' + v + '</span>'
             + '</div>';
     };
-    const identityHtml =
+    const geisterHtml = istGeist
+        ? idRow(esc(t('detail.ghost.seen_via')),
+                esc((d._ghostSrc || []).join(', ').toUpperCase() || '\u2014'))
+        + idRow(esc(t('detail.ghost.seen_by')),
+                esc((d._ghostSeenBy || []).join(', ') || '\u2014'))
+        + (d._ghostChassis ? idRow('MAC', esc(d._ghostChassis)) : '')
+        + (d._ghostCaps && d._ghostCaps.length
+            ? idRow(esc(t('detail.ghost.caps')), esc(d._ghostCaps.join(', '))) : '')
+        + (d._ghostDesc ? idRow(esc(t('detail.ghost.desc')), esc(d._ghostDesc)) : '')
+        : '';
+
+    const identityHtml = istGeist
+        ? idRow('Host', esc(d.host || d.label))
+        + idRow('Type', '<b style="color:' + ti.col + '">' + ti.icon + ' ' + esc(ti.lbl) + '</b>')
+        + geisterHtml
+        :
           idRow('Host', esc(d.host || d.label))
         + idRow('Type', '<b style="color:' + ti.col + '">' + ti.icon + ' ' + esc(ti.lbl) + '</b>' + customMark)
         + idRow('IP', esc(d.ip || '\u2014'))
@@ -330,11 +358,13 @@ export function showDetail(panel, d, cy) {
         + '</div>'
         + offlineBanner
         + staleBanner
-        + actionBar
+        + (istGeist ? '' : actionBar)
         + statusSection
         + section(esc(t('detail.sec.identity'))) + identityHtml
-        + section(esc(t('detail.sec.metrics'))) + ringHtml + metricsHtml
-        + extraBlock
+        + (istGeist
+            ? '<div style="margin-top:8px;font-size:11px;color:var(--nt-muted);'
+                + 'line-height:1.5">' + esc(t('detail.ghost.hint')) + '</div>'
+            : section(esc(t('detail.sec.metrics'))) + ringHtml + metricsHtml + extraBlock)
         + (peers
             ? section(esc(t('detail.sec.connections')))
                 + '<div style="font-size:11px;color:var(--nt-text-2);line-height:1.6">' + peers + '</div>'

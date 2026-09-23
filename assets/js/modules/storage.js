@@ -32,6 +32,22 @@ export const NT_PORTLABELS_KEY = 'nt_' + PFX + 'portlabels';
 // §9: Ghost-Knoten (unmatched LLDP-Nachbarn) ein-/ausblenden. Default AUS —
 // in Netzen mit vielen unbekannten Geraeten wuerde die Karte sonst zuwuchern.
 export const NT_GHOSTS_KEY     = 'nt_' + PFX + 'ghosts';
+
+// Geister-Modus: 'off' | 'infra' | 'all'.
+//
+// Bis 5.3.2 stand dort '1' oder '0', und beides muss weiter funktionieren —
+// der Wert liegt im Browser jedes Benutzers und wird von keiner Migration
+// erreicht. '1' war "alle zeigen", also bleibt es das.
+export function loadGhostMode() {
+    let v = null;
+    try { v = localStorage.getItem(NT_GHOSTS_KEY); } catch (e) {}
+    if (v === 'all' || v === 'infra' || v === 'off') return v;
+    return v === '1' ? 'all' : 'off';
+}
+
+export function saveGhostMode(modus) {
+    try { localStorage.setItem(NT_GHOSTS_KEY, modus); } catch (e) {}
+}
 export const NT_LEGEND_COLLAPSED_KEY = 'nt_' + PFX + 'legend_collapsed';
 export const NT_PERF_KEY = 'nt_' + PFX + 'perf';
 export const NT_TAB_KEY        = 'nt_' + PFX + 'active_tab';

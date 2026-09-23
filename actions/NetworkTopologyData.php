@@ -286,6 +286,15 @@ class NetworkTopologyData extends NetworkTopologyController {
         $host_links         = $tags['links'];
         $host_parent        = $tags['parent'];
         $host_uplink        = $tags['uplink'] ?? [];
+        // nt:lldp reist IM Host mit, nicht als weiterer Parameter: der
+        // Kantenbau baut seine Namenstabelle ohnehin aus $hosts, und jede
+        // andere Stelle, die build() aufruft, bekommt die erklaerten Namen so
+        // automatisch mit — auch die Nachbarschaftssuche.
+        foreach ($tags['lldp'] ?? [] as $hid_alias => $namen) {
+            if (isset($hosts[$hid_alias])) {
+                $hosts[$hid_alias]['nt_aliases'] = $namen;
+            }
+        }
         // ── 2c. Integration-Links aus Zabbix Global-Macros ────────────────
         // Pattern: {$NT.INT.<NAME>.LABEL} / {$NT.INT.<NAME>.URL}. Beide
         // muessen gesetzt sein. URL-Templates duerfen Tokens enthalten:
@@ -908,15 +917,33 @@ class NetworkTopologyData extends NetworkTopologyController {
                 }
                 unset($it);
                 $metrics = MetricExtractor::extract($items);
+                // Erst die Tags, dann die Kanten: nt:lldp haengt an den Hosts
+                // und muss stehen, bevor der Kantenbau seine Namenstabelle
+                // baut. Danach auf Endpunkt-Paare eindampfen — die Suche
+                // braucht nichts weiter, und der Cache-Eintrag bleibt auch bei
+                // tausenden Kanten klein.
+                $tags = HostTagParser::parse($hosts);
+                foreach ($tags['lldp'] ?? [] as $hid_alias => $namen) {
+                    if (isset($hosts[$hid_alias])) {
+                        $hosts[$hid_alias]['nt_aliases'] = $namen;
+                    }
+                }
                 $lldp = LldpEdgeBuilder::build($hosts, $metrics['lldp_raw']);
-                // Slim to endpoint pairs — the BFS needs nothing else, and the
-                // APCu entry stays small even with thousands of edges.
                 foreach ($lldp['edges'] as $e) {
                     $edges[] = ['from' => (string) $e['from'], 'to' => (string) $e['to']];
                 }
-                $tags = HostTagParser::parse($hosts);
                 if ($tags['parent']) {
                     foreach (self::parentEdges($hosts, $tags['parent']) as $e) {
+                        $edges[] = ['from' => (string) $e['from'], 'to' => (string) $e['to']];
+                    }
+                }
+                // nt:uplink gehoert genauso hierher wie nt:parent. Sonst
+                // traegt die Hauptkarte die erklaerte Verbindung, der
+                // Host+Hops-Modus aber nicht — und das stumme Geraet bliebe
+                // genau die Insel, gegen die das Tag gebaut wurde. Ports und
+                // Metriken interessieren die Suche nicht, nur die Endpunkte.
+                if (!empty($tags['uplink'])) {
+                    foreach (LldpEdgeBuilder::uplinkEdges($hosts, $tags['uplink'], []) as $e) {
                         $edges[] = ['from' => (string) $e['from'], 'to' => (string) $e['to']];
                     }
                 }

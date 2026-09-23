@@ -24,11 +24,37 @@ is drawn.
 Two consequences worth knowing:
 
 - **Both endpoints must be monitored Zabbix hosts.** A neighbour that isn't in
-  Zabbix produces no edge.
+  Zabbix produces no edge — unless you switch on
+  [ghost nodes](#the-five-tools), which draw it as a placeholder so the gap is
+  at least visible.
 - **The reporter needs a queryable neighbour table.** A device that only *sends*
   LLDP but doesn't keep the neighbour table, or doesn't expose it over SNMP,
   **reports no neighbours itself** → no edges originate from it. It only appears
   when its neighbours report *it*.
+
+### When the neighbour is a MAC address and not a name
+
+Some devices answer with the neighbour's **base MAC** instead of its name. Aruba
+switches do this in the CDP cache: the same cable shows up twice, once as a name
+over LLDP and once as `00 11 22 AA BB 01` over CDP.
+
+From 5.3.2 the module recognises that shape, keeps it whole and normalises it, so
+the three spellings `00 11 22 AA BB 01`, `00:11:22:AA:BB:01` and `0011.22aa.bb01`
+are one device. Before that the value was cut at the first space, which left two
+hex digits — and every device whose MAC began with the same byte merged into a
+single node.
+
+It then tries to put a name to the address, from data already on hand:
+
+- **Same local port, both protocols.** If the reporting device names the neighbour
+  on that port over one protocol and gives a MAC on the other, both describe the
+  same cable, so it is the same device.
+- **Chassis id.** If another switch reported that MAC together with a name that
+  matched a host, the address is known from then on.
+
+Both refuse to guess. Two open rows on one port, or two hosts claiming one MAC,
+and no edge is drawn. What remains unresolved stays a ghost node, now labelled
+with the full address instead of two digits.
 
 ---
 
@@ -170,7 +196,7 @@ doubt, verify with the [test below](#the-test-that-settles-it)):
 
 | Vendor / line | SNMP + LLDP neighbour table? | For the module | Note |
 |---|---|---|---|
-| **HP Aruba** (AOS-Switch / AOS-CX) | ✓ full | **works** | standard LLDP-MIB |
+| **HP Aruba** (AOS-Switch / AOS-CX) | ✓ full | **works** | standard LLDP-MIB. The CDP cache answers with the neighbour's **MAC** instead of its name; from 5.3.2 the module resolves that back to the host (see above) |
 | **HP ProCurve** (older, e.g. 2500) | ⚠ partly send-only | limited | older series send LLDP but partly keep **no** queryable neighbour table |
 | **TP-Link Omada / JetStream** (*managed*) | ✓ | **works** | full NOS with SNMP + LLDP-MIB. Some models (confirmed: T2600G-28TS, HW v4) omit the TimeMark from the neighbour index; the bundled template handles that **from 5.3.1** — earlier versions discovered no items at all on those switches (issue #15) |
 | **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ no SNMP | **no edges** | the "dumb switch" case → add manually |
@@ -411,7 +437,7 @@ the statement "these two are connected" still holds.
 as a node — but without edges. It sits on the map as an **island**, even though half
 the traffic runs through it.
 
-### The four tools
+### The five tools
 
 **1. Host tag `nt:parent=<hostname>`** — the recommended route. Set a tag on the host
 naming the device it hangs off:
@@ -453,8 +479,29 @@ machines. Both are distinguishable on the map; the shared one is more strongly d
 > link is only an edge on the map. For "sits behind this firewall" use the tag; for
 > "there's a cable here that nobody reports" use the link.
 
-**4. Ghost nodes** cover the opposite case: when a neighbour reports a device that
-isn't monitored in Zabbix at all, it appears as a dashed placeholder (toggle in the
+**4. Host tag `nt:lldp=<name>`** — for the case where the map draws a ghost
+right next to the host it means:
+
+```
+nt:lldp = SW-CORE-OLD
+```
+
+The name a device sends over LLDP and the name it has in Zabbix are two
+different things, and they drift apart: a host renamed here but not there, an
+inventory name against a config name, a device that does not know its own
+hostname. The neighbours then report something Zabbix has never heard of. The
+tag declares the name on the wire, and the match resolves to `alias` at 55
+points, just below an exact hit — the only assumption left is the declaration
+itself.
+
+Repeatable, up to four names per host, and the domain may differ from the one
+reported. A declared name never displaces a real one: if a reported name matches
+some host's technical or visible name, that host wins. Two hosts claiming the
+same declared name draw nothing and show up as ambiguous in the LLDP-Q tab.
+
+**5. Ghost nodes** cover the opposite case, the one named at the top under
+[how edges come to exist](#how-edges-come-to-exist-the-mental-model): when a
+neighbour reports a device that isn't monitored in Zabbix at all, it appears as a dashed placeholder (toggle in the
 toolbar, off by default). That makes the gap **visible** instead of letting it vanish.
 
 ### Important for the failure simulation

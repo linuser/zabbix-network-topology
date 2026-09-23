@@ -131,6 +131,22 @@ check('erste Angabe gewinnt',
         ['tag' => 'nt:uplink', 'value' => 'lab-sw-02:2'],
     ]]])['uplink']['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => '1']);
 
+// ── nt:lldp: unter welchem Namen der Host auf dem Draht auftritt (#14) ─────
+echo "\n  HostTagParser — nt:lldp\n\n";
+
+$tagLldp = static function (array $werte): array {
+    $tags = array_map(static fn ($w) => ['tag' => 'nt:lldp', 'value' => $w], $werte);
+    return HostTagParser::parse(['h1' => ['tags' => $tags]])['lldp'];
+};
+
+check('ein erklaerter Name',        $tagLldp(['sw-core-01'])['h1'] ?? null, ['sw-core-01']);
+check('mehrere Namen erlaubt',      $tagLldp(['sw-core-01', 'sw-core-01.lan'])['h1'] ?? null,
+    ['sw-core-01', 'sw-core-01.lan']);
+check('Doppelte fallen weg',        $tagLldp(['sw-a', 'sw-a'])['h1'] ?? null, ['sw-a']);
+check('hoechstens vier',            count($tagLldp(['a', 'b', 'c', 'd', 'e'])['h1'] ?? []), 4);
+check('Steuerzeichen verworfen',    $tagLldp(["sw\x07a"]), []);
+check('zu lang verworfen',          $tagLldp([str_repeat('x', 200)]), []);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

@@ -16,7 +16,7 @@
 
 import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
     isGroupViewEffective,
-         NT_GHOSTS_KEY,
+         loadGhostMode, saveGhostMode,
          clearPositions, savePositions, savePinned, clearLinks, defaultLinkScope,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
@@ -429,17 +429,20 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     // Braucht einen Re-Render (es kommen Knoten + Kanten dazu bzw. fallen weg) —
     // anders als z.B. Port-Labels, die nur vorhandene Kanten stylen.
     const bGhosts = mkbtn('nt-btn-ghosts', '', null);
+    // Drei Stufen im Ring: aus, nur Infrastruktur, alle. Die mittlere ist die
+    // nuetzliche — an einem 48-Port-Switch sind fast alle Geister
+    // Arbeitsplatzrechner und verdecken den unueberwachten Switch daneben.
+    const _GHOST_RING = ['off', 'infra', 'all'];
     const _setGhostLabel = function() {
-        let on = false;
-        try { on = localStorage.getItem(NT_GHOSTS_KEY) === '1'; } catch (e) {}
-        bGhosts.textContent  = t('toolbar.ghosts', { state: on ? t('toolbar.on') : t('toolbar.off') });
-        bGhosts.style.opacity = on ? '1' : '0.5';
+        const modus = loadGhostMode();
+        bGhosts.textContent = t('toolbar.ghosts', { state: t('toolbar.ghosts.' + modus) });
+        bGhosts.style.opacity = modus === 'off' ? '0.5' : '1';
         bGhosts.title = t('toolbar.ghosts.tip');
     };
     _setGhostLabel();
     bGhosts.onclick = function() {
-        const nowOn = localStorage.getItem(NT_GHOSTS_KEY) !== '1';
-        try { localStorage.setItem(NT_GHOSTS_KEY, nowOn ? '1' : '0'); } catch (e) {}
+        const jetzt = loadGhostMode();
+        saveGhostMode(_GHOST_RING[(_GHOST_RING.indexOf(jetzt) + 1) % _GHOST_RING.length]);
         _setGhostLabel();
         const d = window._ntLastData || {};
         if (d.nodes && d.nodes.length) {

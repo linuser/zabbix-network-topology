@@ -27,10 +27,37 @@ den Namen auf einen **anderen Zabbix-Host** aufzulösen. Klappt das, entsteht ei
 Zwei Konsequenzen, die man kennen muss:
 
 - **Beide Endpunkte müssen überwachte Zabbix-Hosts sein.** Ein Nachbar, der nicht in Zabbix
-  ist, erzeugt keine Kante.
+  ist, erzeugt keine Kante — außer man schaltet die
+  [Ghost-Knoten](#die-fünf-werkzeuge) ein, die ihn als Platzhalter zeichnen, damit die
+  Lücke wenigstens sichtbar ist.
 - **Der Reporter braucht eine abfragbare Nachbar-Tabelle.** Ein Gerät, das LLDP nur *sendet*,
   aber die Nachbar-Tabelle nicht führt/nicht per SNMP herausgibt, meldet **selbst keine
   Nachbarn** → keine Kanten von ihm aus. Es erscheint nur, wenn seine Nachbarn *es* melden.
+
+### Wenn der Nachbar eine MAC-Adresse ist und kein Name
+
+Manche Geräte antworten mit der **Basis-MAC** des Nachbarn statt mit seinem Namen.
+Aruba-Switches tun das im CDP-Cache: Dasselbe Kabel taucht zweimal auf, einmal als
+Name über LLDP und einmal als `00 11 22 AA BB 01` über CDP.
+
+Seit 5.3.2 erkennt das Modul diese Form, lässt sie ganz und vereinheitlicht sie — die
+drei Schreibweisen `00 11 22 AA BB 01`, `00:11:22:AA:BB:01` und `0011.22aa.bb01` sind
+damit ein Gerät. Vorher wurde der Wert am ersten Leerzeichen abgeschnitten, übrig
+blieben zwei Hex-Ziffern, und jedes Gerät mit demselben ersten Byte fiel in denselben
+Knoten.
+
+Danach versucht es, der Adresse einen Namen zuzuordnen, aus Daten, die ohnehin
+vorliegen:
+
+- **Derselbe lokale Port, beide Protokolle.** Nennt das meldende Gerät den Nachbarn an
+  diesem Port über das eine Protokoll beim Namen und liefert über das andere eine MAC,
+  beschreiben beide dasselbe Kabel, also dasselbe Gerät.
+- **Chassis-ID.** Hat ein anderer Switch diese MAC zusammen mit einem Namen gemeldet,
+  der auf einen Host passte, ist die Adresse von da an bekannt.
+
+Beides rät nicht. Zwei offene Zeilen an einem Port oder zwei Hosts, die dieselbe MAC
+beanspruchen: keine Kante. Was offen bleibt, bleibt ein Geisterknoten — jetzt mit der
+vollständigen Adresse beschriftet statt mit zwei Ziffern.
 
 ---
 
@@ -144,7 +171,7 @@ mit dem [Test unten](#der-test-der-alles-entscheidet) verifizieren):
 
 | Vendor / Linie | SNMP + LLDP-Neighbor-Tabelle? | Fürs Modul | Hinweis |
 |---|---|---|---|
-| **HP Aruba** (AOS-Switch / AOS-CX) | ✓ voll | **funktioniert** | Standard-LLDP-MIB |
+| **HP Aruba** (AOS-Switch / AOS-CX) | ✓ voll | **funktioniert** | Standard-LLDP-MIB. Der CDP-Cache antwortet mit der **MAC** des Nachbarn statt mit dem Namen; seit 5.3.2 löst das Modul das wieder auf den Host auf (siehe oben) |
 | **HP ProCurve** (alt, z. B. 2500) | ⚠ teils nur Senden | eingeschränkt | Alt-Serien senden LLDP, führen aber teils **keine** abfragbare Nachbar-Tabelle |
 | **TP-Link Omada / JetStream** (*managed*) | ✓ | **funktioniert** | volles NOS mit SNMP + LLDP-MIB. Manche Modelle (bestätigt: T2600G-28TS, HW v4) lassen die TimeMark im Nachbar-Index weg; das mitgelieferte Template kommt damit **ab 5.3.1** zurecht — ältere Stände entdeckten auf diesen Switches gar keine Items (Issue #15) |
 | **TP-Link Easy Smart** (TL-SG2008P, …E) | ✗ kein SNMP | **keine Kanten** | „dumb switch"-Fall → manuell |
@@ -382,7 +409,7 @@ beiden hängen zusammen" stimmt aber trotzdem.
 Knoten — aber ohne Kanten. Sie liegt als **Insel** auf der Karte, obwohl der halbe Verkehr
 durch sie läuft.
 
-### Die vier Werkzeuge
+### Die fünf Werkzeuge
 
 **1. Host-Tag `nt:parent=<hostname>`** — der empfohlene Weg. Am Host ein Tag mit dem Namen des
 Geräts setzen, an dem er hängt:
@@ -423,8 +450,29 @@ unterscheidbar, die geteilte kräftiger gestrichelt.
 > Kante auf der Karte. Für „hängt hinter dieser Firewall" nimm das Tag, für „hier liegt ein Kabel,
 > das keiner meldet" den Link.
 
-**4. Ghost-Knoten** decken den umgekehrten Fall ab: Meldet ein Nachbar ein Gerät, das in Zabbix
-gar nicht überwacht wird, erscheint es als gestrichelter Platzhalter (Toggle in der Toolbar,
+**4. Host-Tag `nt:lldp=<name>`** — für den Fall, dass die Karte einen Geist direkt neben
+den Host zeichnet, den sie meint:
+
+```
+nt:lldp = SW-CORE-OLD
+```
+
+Der Name, den ein Gerät per LLDP aussendet, und der Name in Zabbix sind zwei verschiedene
+Dinge, und sie laufen auseinander: ein Host, der hier umbenannt wurde und dort nicht, ein
+Inventarname gegen einen Konfigurationsnamen, ein Gerät, das seinen Hostnamen gar nicht
+kennt. Die Nachbarn melden dann etwas, das es in Zabbix nicht gibt. Das Tag erklärt den
+Namen auf dem Draht; der Treffer heißt `alias` und zählt 55 Punkte, knapp unter einem
+exakten Treffer — die einzige Annahme ist die Erklärung selbst.
+
+Mehrfach erlaubt, bis zu vier Namen pro Host, und die Domain darf von der gemeldeten
+abweichen. Ein erklärter Name verdrängt nie einen echten: Passt ein gemeldeter Name auf den
+technischen oder den Anzeigenamen irgendeines Hosts, gewinnt dieser. Beanspruchen zwei Hosts
+denselben erklärten Namen, wird nichts gezeichnet und der Fall taucht im LLDP-Q-Tab als
+mehrdeutig auf.
+
+**5. Ghost-Knoten** decken den umgekehrten Fall ab, den oben unter
+[Wie Kanten entstehen](#wie-kanten-entstehen-das-mentale-modell) genannten: Meldet ein Nachbar
+ein Gerät, das in Zabbix gar nicht überwacht wird, erscheint es als gestrichelter Platzhalter (Toggle in der Toolbar,
 Default aus). So wird die Lücke **sichtbar**, statt zu verschwinden.
 
 ### Wichtig für die Ausfallsimulation

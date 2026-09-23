@@ -50,7 +50,7 @@ import { isFocusActive, filterToFocus, dropFocus, renderFocusBanner } from './fo
 import { toast, toastTruncatedOnce } from './toast.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
-import { NT_GROUP_CLUSTER_KEY, NT_GHOSTS_KEY } from './storage.js';
+import { NT_GROUP_CLUSTER_KEY, loadGhostMode } from './storage.js';
 
 // ── Cross-Module-Glue: setupToolbar lebt im Hauptmodul ─────────────────────
 // (es ist 228 Zeilen und ist eng mit render() und vielen Buttons verknüpft;
@@ -215,11 +215,15 @@ export function render(wrap, nodes, edges, dataUrl) {
     // Fetch (das Backend liefert pro Reporter die unaufgeloesten Namen).
     // Default AUS — in Netzen mit vielen Fremdgeraeten wuerde die Karte sonst
     // zuwuchern; der Toolbar-Toggle schaltet sie zu.
-    let _ghostsOn = false;
-    try { _ghostsOn = localStorage.getItem(NT_GHOSTS_KEY) === '1'; } catch (e) {}
-    if (_ghostsOn) {
+    // Drei Stufen statt an/aus: 'infra' zeigt nur, was ein Netz aufspannt —
+    // Switches, Router, Access Points und Geraete, die nichts ueber sich sagen.
+    // An einem Access-Switch mit 48 Ports sind die restlichen Geister
+    // Arbeitsplatzrechner, und die verdecken genau das, wofuer man die
+    // Anzeige einschaltet.
+    const _ghostMode = loadGhostMode();
+    if (_ghostMode !== 'off') {
         const _lq = (window._ntLastData && window._ntLastData.lldp_quality) || [];
-        const withGhosts = injectGhostNodes(nodes, edges, _lq);
+        const withGhosts = injectGhostNodes(nodes, edges, _lq, _ghostMode);
         nodes = withGhosts.nodes;
         edges = withGhosts.edges;
     }

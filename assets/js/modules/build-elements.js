@@ -72,12 +72,34 @@ export function injectInternetCloud(nodes, edges, layoutId) {
 // denselben Unbekannten melden → EIN Ghost-Knoten, mehrere Kanten.
 //
 // Mutiert die Eingabe-Arrays NICHT — gibt neue zurueck (wie injectInternetCloud).
-export function injectGhostNodes(nodes, edges, lldpQuality) {
+// Welche Faehigkeiten machen ein Geraet zu INFRASTRUKTUR? Genau die drei, die
+// ein Netz aufspannen. Telefone und Arbeitsplatzrechner melden 'Station' oder
+// 'Telephone' und gehoeren nicht dazu.
+const INFRA_CAPS = ['Bridge', 'Router', 'WLAN AP'];
+
+// Traegt dieser Geist etwas, das nach Infrastruktur aussieht?
+//
+// KEINE FAEHIGKEITEN HEISST BEHALTEN. Ein Geraet, das nichts meldet — oder
+// dessen Template die Spalte nicht holt —, ist unbekannt und nicht
+// "Arbeitsplatzrechner". Es wegzufiltern hiesse, genau die unueberwachten
+// Switches zu verstecken, wegen derer man die Geister einschaltet.
+function istInfrastruktur(geist) {
+    const caps = geist._ghostCaps || [];
+    if (!caps.length) return true;
+    return caps.some(function(c) { return INFRA_CAPS.indexOf(c) !== -1; });
+}
+
+// modus: 'all' (jeder Nachbar ohne Host) oder 'infra' (nur Switches, Router,
+// Access Points und Unbekannte). An einem Access-Switch mit 48 Ports haengen
+// sonst 48 Geister, und die Karte zeigt vor allem Arbeitsplatzrechner —
+// gemeldet mit Screenshot von einem Standort, an dem genau das passiert ist.
+export function injectGhostNodes(nodes, edges, lldpQuality, modus) {
     if (!lldpQuality || !lldpQuality.length) return { nodes: nodes, edges: edges };
 
     const known = {};
     nodes.forEach(function(n) { known[String(n.id)] = true; });
 
+    const nurInfra   = (modus === 'infra');
     const ghosts     = {};   // gid → Ghost-Node
     const ghostEdges = [];
     const edgeSeen   = {};
@@ -133,6 +155,19 @@ export function injectGhostNodes(nodes, edges, lldpQuality) {
             ghostEdges.push({ id: eid, source: reporter, target: gid, _isGhostEdge: true });
         });
     });
+
+    // Erst filtern, wenn ALLE Melder durch sind: die Faehigkeiten eines Geistes
+    // koennen vom zweiten Melder kommen, und wer zu frueh aussortiert, wirft
+    // einen Switch weg, weil der erste Melder nichts ueber ihn wusste.
+    if (nurInfra) {
+        Object.keys(ghosts).forEach(function(gid) {
+            if (istInfrastruktur(ghosts[gid])) return;
+            delete ghosts[gid];
+            for (let i = ghostEdges.length - 1; i >= 0; i--) {
+                if (ghostEdges[i].target === gid) ghostEdges.splice(i, 1);
+            }
+        });
+    }
 
     const list = Object.keys(ghosts).map(function(k) { return ghosts[k]; });
     if (!list.length) return { nodes: nodes, edges: edges };
@@ -206,6 +241,13 @@ export function buildNodeElements(nodes, perfMode) {
             nodeData._isGhost     = true;
             nodeData._ghostSrc    = n._ghostSrc    || [];
             nodeData._ghostSeenBy = n._ghostSeenBy || [];
+            // Hersteller, Faehigkeiten und MAC fehlten hier. Das Kontextmenue
+            // liest sie aus dem Knoten-Objekt und kam daran; das Detail-Panel
+            // liest data() und sah sie nie — es zeigte deshalb leere Felder
+            // fuer ein Geraet, ueber das wir durchaus etwas wissen.
+            nodeData._ghostDesc    = n._ghostDesc    || '';
+            nodeData._ghostCaps    = n._ghostCaps    || [];
+            nodeData._ghostChassis = n._ghostChassis || '';
         }
         // Aggregat-Marker durchreichen, damit context-menu sie erkennt
         if (n._isAggregate) {

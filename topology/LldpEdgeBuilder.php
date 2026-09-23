@@ -85,9 +85,21 @@ final class LldpEdgeBuilder {
 
         $name_map = [];
         $ip_map   = [];
+        // Namen, unter denen ein Host laut Tag nt:lldp auf dem DRAHT auftritt.
+        // Der Name in Zabbix und der ausgesendete Name sind zwei Dinge, und wo
+        // sie auseinanderlaufen, melden die Nachbarn etwas, das es in Zabbix
+        // nicht gibt: ein Geist neben dem Host, den er meint. Eigene Map, damit
+        // ein erklaerter Name einen ECHTEN Namen nie verdraengt.
+        $alias_map = [];
         foreach ($hosts as $hid => $h) {
             $name_map[strtolower($h['host'])] = $hid;
             $name_map[strtolower($h['name'])] = $hid;
+            foreach ($h['nt_aliases'] ?? [] as $alias) {
+                $alias = strtolower(trim((string) $alias));
+                if ($alias !== '') {
+                    $alias_map[$alias][(string) $hid] = $hid;
+                }
+            }
             foreach ($h['interfaces'] ?? [] as $iface) {
                 if (!empty($iface['ip'])) {
                     // KANDIDATENLISTE, nicht Ueberschreiben. Dieselbe private
@@ -101,6 +113,36 @@ final class LldpEdgeBuilder {
                 }
             }
         }
+        // Kurzform der erklaerten Namen: ein Nachbar kann denselben Namen mit
+        // einer anderen Domain melden als der, die im Tag steht.
+        $alias_short_map = [];
+        foreach ($alias_map as $alias => $hids) {
+            $kurz = explode('.', (string) $alias)[0];
+            foreach ($hids as $ahid) {
+                $alias_short_map[$kurz][(string) $ahid] = $ahid;
+            }
+        }
+
+        // Einen erklaerten Namen auf EINEN Host aufloesen. Gleiche Regel wie bei
+        // der IP: mehrere Anspruchsteller heisst keine Kante, sondern eine
+        // Meldung im Qualitaets-Tab. Zwei Hosts, die denselben Namen fuer sich
+        // beanspruchen, sind ein Konfigurationsfehler, und ihn zu raten hiesse,
+        // die Haelfte der Faelle falsch zu zeichnen.
+        $aliasTreffer = static function (string $name, bool $kurz = false)
+                use ($alias_map, $alias_short_map): array {
+            $name = strtolower($name);
+            $kandidaten = $kurz
+                ? ($alias_short_map[explode('.', $name)[0]] ?? [])
+                : ($alias_map[$name] ?? []);
+            if (count($kandidaten) === 1) {
+                return [reset($kandidaten), null];
+            }
+            if (count($kandidaten) > 1) {
+                return [null, array_values($kandidaten)];
+            }
+            return [null, null];
+        };
+
         // Eine IP auf EINEN Host aufloesen. Gibt [hostid, null] bei genau einem
         // Kandidaten, [null, [hostids]] bei mehreren und [null, null] wenn die
         // Adresse unbekannt ist. Mehrdeutig heisst: keine Kante. Dieselbe Regel
@@ -201,8 +243,18 @@ final class LldpEdgeBuilder {
                 if ($neighbor_full === '') continue;
                 $match_kind = '';
                 $ip_mehrdeutig = null;
+                $alias_mehrdeutig = null;
                 $rhid = $name_map[strtolower($neighbor_full)] ?? null;
                 if ($rhid) $match_kind = 'exact';
+                if (!$rhid) {
+                    [$treffer, $mehrere] = $aliasTreffer($neighbor_full);
+                    if ($treffer !== null) {
+                        $rhid = $treffer;
+                        $match_kind = 'alias';
+                    } elseif ($mehrere !== null) {
+                        $alias_mehrdeutig = $mehrere;
+                    }
+                }
                 if (!$rhid) {
                     [$treffer, $mehrere] = $ipTreffer($neighbor_full);
                     if ($treffer !== null) {
@@ -240,6 +292,30 @@ final class LldpEdgeBuilder {
                         if ($rhid) $match_kind = 'exact_clean';
                     }
 
+                    // 1b. Erklaerter Name, jetzt gegen die bereinigte Form —
+                    //     ein Nachbar kann den Namen mit Domain melden.
+                    if (!$rhid) {
+                        [$treffer, $mehrere] = $aliasTreffer($neighbor_raw);
+                        if ($treffer !== null) {
+                            $rhid = $treffer;
+                            $match_kind = 'alias';
+                        } elseif ($mehrere !== null) {
+                            $alias_mehrdeutig = $mehrere;
+                        }
+                    }
+
+                    // 1c. Erklaerter Name als Kurzform — der Nachbar meldet
+                    //     denselben Namen mit einer anderen Domain.
+                    if (!$rhid && $alias_mehrdeutig === null) {
+                        [$treffer, $mehrere] = $aliasTreffer($neighbor_raw, true);
+                        if ($treffer !== null) {
+                            $rhid = $treffer;
+                            $match_kind = 'alias';
+                        } elseif ($mehrere !== null) {
+                            $alias_mehrdeutig = $mehrere;
+                        }
+                    }
+
                     // 2. IP-Match (auch falls Klammern/Praefix entfernt wurden)
                     if (!$rhid) {
                         [$treffer, $mehrere] = $ipTreffer($neighbor_raw);
@@ -269,7 +345,10 @@ final class LldpEdgeBuilder {
                     // Eine mehrdeutige IP bricht hier ab: "192.168.1.10" wuerde
                     // sonst auf den Kurznamen "192" zurueckfallen und bei einem
                     // Host dieses Namens zufaellig treffen.
-                    if (!$rhid && $ip_mehrdeutig !== null) {
+                    if (!$rhid && $alias_mehrdeutig !== null) {
+                        $ambiguous_candidates = $alias_mehrdeutig;
+                    }
+                    if (!$rhid && $ambiguous_candidates === null && $ip_mehrdeutig !== null) {
                         $ambiguous_candidates = $ip_mehrdeutig;
                     }
                     if (!$rhid && $ambiguous_candidates === null) {
@@ -287,8 +366,8 @@ final class LldpEdgeBuilder {
                     }
                 }
 
-                if (!$rhid && $ambiguous_candidates === null && $ip_mehrdeutig !== null) {
-                    $ambiguous_candidates = $ip_mehrdeutig;
+                if (!$rhid && $ambiguous_candidates === null) {
+                    $ambiguous_candidates = $alias_mehrdeutig ?? $ip_mehrdeutig;
                 }
 
                 $rid = $item['hostid'];
@@ -970,8 +1049,17 @@ final class LldpEdgeBuilder {
 
             if (isset($vorhanden[$key])) {
                 // Schon gemeldet — nur ergaenzen, was fehlt.
+                // src ist HIER schon eine sortierte LISTE: build() hat die Map
+                // am Ende umgewandelt. Mit ['tag'] => true entstuende daraus
+                // ein gemischtes Array, und json_encode macht daraus ein
+                // Objekt statt einer Liste — die Quellen-Pille im Panel, der
+                // Tooltip, der GraphML-Export und der Geraetebericht pruefen
+                // alle auf eine Liste und schweigen dann einfach.
                 $idx = $vorhanden[$key];
-                $edges[$idx]['src']['tag'] = true;
+                if (is_array($edges[$idx]['src']) && !in_array('tag', $edges[$idx]['src'], true)) {
+                    $edges[$idx]['src'][] = 'tag';
+                    sort($edges[$idx]['src']);
+                }
                 if ($label !== '' && !isset($edges[$idx]['ports'][(string) $ziel])) {
                     $edges[$idx]['ports'][(string) $ziel] = $label;
                 }
@@ -1015,7 +1103,8 @@ final class LldpEdgeBuilder {
      */
     private static function matchRank(string $kind): int {
         switch ($kind) {
-            case 'exact':       return 8;
+            case 'exact':       return 9;
+            case 'alias':       return 8;
             case 'ip':          return 7;
             case 'chassis':     return 6;
             case 'exact_clean': return 5;
@@ -1069,6 +1158,9 @@ final class LldpEdgeBuilder {
     private static function confidence(array $e, array $hosts = [], array $rtt = []): int {
         $basis = [
             'exact'       => 60,
+            // Der gemeldete Name IST der erklaerte Name. Die einzige Annahme
+            // ist die Erklaerung selbst, und die hat ein Mensch getippt.
+            'alias'       => 55,
             'ip'          => 50,
             'exact_clean' => 50,
             'chassis'     => 50,

@@ -2,6 +2,162 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.3.2 — 2026-09-23
+
+### Updating from 5.3.1 — nothing to re-import
+
+No action was added or renamed, so **no rescan**: replace the module directory,
+`chown`, reload php-fpm. Reload the page once with a cache bypass, the bundle
+changed. **No template changed** in this release. Layouts, manual links, pins,
+notes and presets stay where they are.
+
+One new host tag is available, `nt:uplink` — see *Added*. Nothing breaks if you
+never set it.
+
+### Thanks
+
+**[@Shazral](https://github.com/Shazral)** opened
+[#16](https://github.com/linuser/zabbix-network-topology/issues/16) and proved,
+by walking both switches, that the thing the module blamed was not the problem.
+The walk output in that report is what turned a guess into a diagnosis.
+
+**A reporter who wrote by email** sent screenshots of a site where a ghost node
+called **F8** hung off five switches, then the Latest data list that explained
+it, then the vendor and firmware of every switch involved. Two of the fixes
+below came out of that thread, and the second one only became obvious from the
+item names in that list.
+
+**[@bartlomiejfornalczyk](https://github.com/bartlomiejfornalczyk)** reported
+[#17](https://github.com/linuser/zabbix-network-topology/issues/17) with the
+exact steps, and asked for
+[#18](https://github.com/linuser/zabbix-network-topology/issues/18) — which
+turned into `nt:uplink`.
+
+**[@lechu2375](https://github.com/lechu2375)** described the duplicate-address
+case in [#14](https://github.com/linuser/zabbix-network-topology/issues/14). The
+both fixes promised there are in this release: the duplicate address below, and
+the `nt:lldp` tag above.
+
+### Added
+
+- **`nt:uplink=<hostname>:<port>` — say which port a silent device hangs off.**
+  For everything that cannot report a neighbour: a UPS, a PDU, a printer, an
+  older camera. The tag draws the edge **and** hangs the counters of that very
+  port on it — traffic, errors, discards, link speed — because interface
+  counters are kept per ifIndex anyway and the only thing missing was someone
+  naming the port. Measured at the switch end; the silent device has nothing to
+  offer.
+
+  The port may be the ifIndex (`8`) or its name (`Gi1/0/8`,
+  `GigabitEthernet1/0/8`); spellings run through the same normalisation as a
+  reported neighbour port. What keeps it honest: its own match type `tag` at 45
+  points, never two-sided, and the detail panel names where it came from. A
+  human stated this link, no device confirmed it. If the device later starts
+  reporting after all, the edge is **completed**, not drawn twice.
+
+- **`nt:lldp=<name>` — the name a host uses on the wire.** Promised in
+  [#14](https://github.com/linuser/zabbix-network-topology/issues/14). The name a
+  device sends over LLDP and the name it carries in Zabbix are two different
+  things: a host renamed on one side only, an inventory name against a config
+  name, a device that does not know its own hostname. The neighbours then report
+  something Zabbix has never heard of, and the map draws a ghost right next to
+  the host it means. The tag declares the name, up to four per host, and the
+  reported domain may differ from the declared one. It resolves as `alias` at 55
+  points, just under an exact hit. A declared name never displaces a real one,
+  and two hosts claiming the same one draw nothing and are reported as
+  ambiguous.
+
+- **Ghost nodes have three steps now: off, network gear only, all.** The
+  toolbar button cycles through them. The middle one is the useful one: it keeps
+  switches, routers, access points and everything that says nothing about
+  itself, and drops what announces itself as a workstation or a phone. On an
+  access switch with 48 ports the rest of the ghosts are desktops, and they bury
+  the unmonitored switch next to them — which is what one turns ghosts on for.
+  A device that reports no capabilities at all counts as unknown and stays; it
+  is not a workstation just because it is quiet.
+
+- **Neighbours that report a MAC address instead of a name now resolve.** Two
+  routes, both from data already on hand: the same local port reporting the
+  neighbour by name over one protocol and by MAC over another — that is one
+  cable, so it is one device — and the chassis id another switch reported
+  together with a name. Both refuse to guess: several open rows on one port, or
+  two hosts claiming one MAC, and nothing is drawn.
+
+### Fixed
+
+- **Interface counters with keys that carry no MIB name were invisible**
+  ([#16](https://github.com/linuser/zabbix-network-topology/issues/16)). The
+  lookup required `Octets` in the item key and therefore never saw
+  `net.if.in[24]` — the shape used by eight official Zabbix templates (Cisco
+  Catalyst 3750V2, Nexus 9000, pfSense, OPNsense) and everything derived from
+  them. The map fell back to the host totals and explained itself with
+  "lldpRemLocalPortNum may not equal ifIndex", which sent the reporter off
+  walking both switches to prove the one thing that was already correct. The
+  hint now names both conditions. `net.if.in/out/speed/status[N]` and the errors
+  and discards variants are read; the bare number in the brackets is what tells
+  them from agent keys like `net.if.in[eth0]`.
+
+- **Devices whose MAC starts with the same byte collapsed into one ghost.** A
+  neighbour reported as a MAC arrived as `00 11 22 AA BB 01`, and the cleanup
+  that strips vendor suffixes cut at the first space — leaving two hex digits.
+  Every device sharing that byte became the same node, and the map drew a
+  distribution point that does not exist, with links to switches that have
+  nothing to do with each other. MAC-shaped values are now recognised, kept
+  whole and normalised, so `00 11 22 …`, `00:11:22:…` and `0011.22aa.bb01` are
+  one device and not three.
+
+- **One address on several hosts produced a link to the wrong one**
+  ([#14](https://github.com/linuser/zabbix-network-topology/issues/14)). The
+  address map overwrote, so the last host read in won, silently. With
+  192.168.1.10 in every second private network, a managed service provider got
+  an edge to a foreign tenant — at 60 points of confidence and with nothing in
+  the LLDP-Q tab to hint at it. Candidates are kept now: one candidate draws the
+  edge as before, several draw nothing and report the address as ambiguous with
+  every candidate named. A mismatched address also stops the name stages, which
+  would otherwise fall through to the short name `192`.
+
+- **A host named only with digits made the map a white page**
+  ([#17](https://github.com/linuser/zabbix-network-topology/issues/17)). PHP
+  turns a numeric array key into an int, and the function that strips the domain
+  off a name refuses an int under PHP 8. The request died halfway through, so
+  the browser got an empty body and reported `Unexpected end of JSON input`.
+  Found in a test two days before the report arrived, which says something about
+  what tests are for.
+
+- **Reset and Clear in the filter did nothing visible.** Both end up on a page
+  with no groups in the URL, which is exactly what the automatic restore of the
+  last selection reacts to — so the old selection came straight back. Both now
+  mark the selection as emptied on purpose, and the stored one is forgotten with
+  it. Clear also uses the multiselect's own API instead of imitating clicks on
+  its markup.
+
+- **The cluster toggle never showed the mode you picked.** It stored the choice
+  and redrew the map correctly, but label and check mark kept the state from
+  when the toolbar was built. A switch that does not show the choice has not
+  taken it, as far as anyone can tell.
+
+- **Ghost nodes piled up on one spot.** When saved positions are reused, ghosts
+  have none, and every one of them stayed at the origin. They also counted
+  towards the threshold that decides whether the saved arrangement still
+  applies, so enough of them silently replaced your own layout with a fresh
+  force run. Ghosts are out of that count now, anything without a position is
+  placed in a ring around the host that reports it, and the layouts finally
+  account for the **label** rather than the 44-pixel circle — names three times
+  wider than the node were what actually overlapped.
+
+- **The detail panel called an unmonitored device "Normal".** A ghost node got
+  the full host treatment: a green status pill and empty rows for CPU, memory
+  and ping — a statement nobody made, about a device Zabbix never asked. The map
+  itself had always known better and drew no severity ring. The panel now says
+  *not monitored* and shows what is actually known: which protocol saw it, which
+  hosts reported it, its MAC, its capabilities and its vendor string. Those last
+  three were already collected and reached the context menu, but never this
+  panel.
+
+- **A link measured at one end only fell back to the estimate.** If the first
+  endpoint carried an entry with just speed or errors, the other end's real
+  counters were ignored. The end with counters wins now.
+
 ## v5.3.1 — 2026-09-10
 
 ### Updating from 5.3 — one template to re-import

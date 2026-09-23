@@ -815,8 +815,60 @@ $rMix = LldpEdgeBuilder::build($hUp, [
 $eMix = LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']],
     $rMix['edges'], $trafficUp, [], $fehlerUp, [], $namenUp);
 check('schon gemeldet: eine Kante bleibt', count($eMix), 1);
-check('schon gemeldet: Quelle tag ergaenzt', isset($eMix[0]['src']['tag']) || in_array('tag', (array) $eMix[0]['src'], true), true);
+// GENAU die Listenform pruefen, nicht "irgendwie enthalten": als Map
+// geschrieben wuerde json_encode ein Objekt daraus machen, und Panel,
+// Tooltip, Export und Bericht pruefen alle auf eine Liste.
+check('schon gemeldet: src bleibt eine Liste', $eMix[0]['src'] ?? null, ['lldp', 'tag']);
 check('schon gemeldet: Namenstreffer bleibt', $eMix[0]['match'] ?? null, 'exact');
+// Zweimal dasselbe Tag darf die Quelle nicht verdoppeln.
+$eMix2 = LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']],
+    $eMix, $trafficUp, [], $fehlerUp, [], $namenUp);
+check('zweimal angewandt: keine doppelte Quelle', $eMix2[0]['src'] ?? null, ['lldp', 'tag']);
+
+// ── nt:lldp — der Host erklaert seinen Namen auf dem Draht (#14) ───────────
+//
+// Der Name in Zabbix und der ausgesendete Name muessen nicht zusammenpassen.
+// Wo sie auseinanderlaufen, stand bisher ein Geist neben genau dem Host, den
+// der Nachbar gemeint hat. Namen erfunden.
+echo "\n  LldpEdgeBuilder — nt:lldp\n\n";
+
+$hAl = [
+    'sw'   => ['host' => 'lab-sw-01', 'name' => 'lab-sw-01'],
+    'core' => ['host' => 'lab-core-01', 'name' => 'Core (Rack 3)',
+               'nt_aliases' => ['CORE-OLD-NAME', 'core-old-name.lan']],
+];
+$rAl = LldpEdgeBuilder::build($hAl, [
+    ['hostid' => 'sw', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'CORE-OLD-NAME', 'src' => 'lldp'],
+]);
+check('erklaerter Name -> Kante',   hasEdge($rAl['edges'], 'sw', 'core'), true);
+check('eigene Match-Art',           $rAl['edges'][0]['match'] ?? null, 'alias');
+check('Gross/Klein egal', count(LldpEdgeBuilder::build($hAl, [
+    ['hostid' => 'sw', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'core-old-name', 'src' => 'lldp'],
+])['edges']), 1);
+check('mit Domain gemeldet', count(LldpEdgeBuilder::build($hAl, [
+    ['hostid' => 'sw', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'CORE-OLD-NAME.example.test', 'src' => 'lldp'],
+])['edges']), 1);
+
+// Der echte Name gewinnt: ein Alias darf einen Host nicht verdraengen.
+$hAl2 = $hAl + ['fremd' => ['host' => 'lab-sw-99', 'name' => 'lab-sw-99',
+                            'nt_aliases' => ['lab-sw-01']]];
+$rAl2 = LldpEdgeBuilder::build($hAl2, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'lab-sw-01', 'src' => 'lldp'],
+]);
+check('echter Name schlaegt Alias', hasEdge($rAl2['edges'], 'core', 'sw'), true);
+check('und zwar als exact',         $rAl2['edges'][0]['match'] ?? null, 'exact');
+
+// Zwei Hosts beanspruchen denselben Namen: nichts zeichnen, aber melden.
+$hAl3 = [
+    'a' => ['host' => 'lab-a', 'name' => 'lab-a', 'nt_aliases' => ['doppelt']],
+    'b' => ['host' => 'lab-b', 'name' => 'lab-b', 'nt_aliases' => ['doppelt']],
+    'm' => ['host' => 'lab-melder', 'name' => 'lab-melder'],
+];
+$rAl3 = LldpEdgeBuilder::build($hAl3, [
+    ['hostid' => 'm', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'doppelt', 'src' => 'lldp'],
+]);
+check('zwei Anspruchsteller: keine Kante', count($rAl3['edges']), 0);
+check('zwei Anspruchsteller: gemeldet',    count($rAl3['quality']['m']['ambiguous'] ?? []), 1);
 
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
