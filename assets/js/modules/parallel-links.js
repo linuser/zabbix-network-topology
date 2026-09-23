@@ -71,6 +71,16 @@ function isMember(d) {
     return !!(d.isLLDP || d._isStaleEdge) && d.kind !== 'hosts';
 }
 
+// A member counts as down when it is no longer reported (stale) OR when its
+// port is operationally down. The second case is the one 5.3.2 taught the
+// backend to see (port_metrics.down per interface, not the host's ratio of
+// down ports), and it is the one that matters here: a LAG member whose cable
+// was pulled keeps being reported by the OTHER end for the whole stale TTL,
+// so the bundle would still read "x4, all fine" for fifteen minutes.
+function memberDown(d) {
+    return !!d._isStaleEdge || d.portDown === true;
+}
+
 function naturalCmp(a, b) {
     return String(a).localeCompare(String(b), undefined, { numeric: true });
 }
@@ -134,7 +144,16 @@ export function annotateBundles(elements) {
             bOut += (d.trafficOut || 0) * f;
             if ((d.capBps || 0) > 0) bCap += d.capBps; else capKnown = false;
         });
-        const down = n - live.length;
+        const down = members.filter(function(m) { return memberDown(m.data); }).length;
+        // The worst member decides the trunk's health colour, the totals
+        // decide its traffic colour. Red is reserved for "nothing left" —
+        // a bundle of four with one dead cable is degraded, not down, and
+        // says so with the amber glow plus "(1 down)".
+        let bErr = 0, bDrop = 0;
+        members.forEach(function(m) {
+            bErr  = Math.max(bErr,  m.data.ifaceErr  || 0);
+            bDrop = Math.max(bDrop, m.data.ifaceDrop || 0);
+        });
 
         const lead = members[0].data;
         const leadSrc = String(lead.source);
@@ -162,6 +181,8 @@ export function annotateBundles(elements) {
         lead.bundlePerLink  = anyMeasured;
         lead.bundleMeasured = measured;
         lead.bundleDown     = down;
+        lead.bundleErr      = bErr;
+        lead.bundleDrop     = bDrop;
         const shown = anyMeasured ? 1 : 0.5;   // same /2 as the edge labels
         lead.tLabel = bundleLabel(n, down, (bIn || bOut) ? ('↓' + fmt(bIn * shown) + '\n↑' + fmt(bOut * shown)) : '');
         if (down > 0) members[0].classes += ' nt-par-degraded';
@@ -240,5 +261,16 @@ export function trunkData(edge, force) {
         trafficIn: d.bundleIn || 0, trafficOut: d.bundleOut || 0,
         capBps: d.bundleCap || 0, perLink: !!d.bundlePerLink,
         portSrc: '', portTgt: '', _trunk: true,
+        // Health of the BUNDLE, not of the lead member: without this the
+        // trunk was drawn from the state of whichever cable happened to sort
+        // first, and a dead member three curves further along was invisible
+        // as soon as the map collapsed the bundle.
+        // All members down -> the link is gone, red. Some down -> degraded,
+        // and explicitly NOT red: the bundle still carries traffic. None
+        // down -> say nothing and let the host-level fallback decide, as it
+        // does for a single edge.
+        portDown: (d.bundleDown || 0) >= d.bundleSize ? true
+            : ((d.bundleDown || 0) > 0 ? false : d.portDown),
+        ifaceErr: d.bundleErr || 0, ifaceDrop: d.bundleDrop || 0,
     });
 }

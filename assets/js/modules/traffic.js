@@ -220,12 +220,15 @@ export function applyTrafficHeatmap(cy) {
         // ueber alle Interfaces des Hosts ist nur der Rueckfall, wenn es keine
         // Portzuordnung gibt — sie faerbte sonst jede Kante eines Switches rot,
         // auf dem die Haelfte der Ports schlicht ungenutzt ist.
-        const portDown = edge.data('portDown');
+        // Beim eingeklappten Buendel kommen diese drei aus trunkData() —
+        // aus ALLEN Membern, nicht aus dem fuehrenden. Sonst entschied ueber
+        // die Farbe des Trunks, welches Kabel zufaellig zuerst sortierte.
+        const portDown = ed.portDown;
         const ifDownRatio = (portDown === true || portDown === false)
             ? (portDown ? 1 : 0)
-            : (edge.data('ifaceDownRatio') || 0);
-        const ifErr  = edge.data('ifaceErr')  || 0;
-        const ifDrop = edge.data('ifaceDrop') || 0;
+            : (ed.ifaceDownRatio || 0);
+        const ifErr  = ed.ifaceErr  || 0;
+        const ifDrop = ed.ifaceDrop || 0;
 
         let w = t.w, col = t.col, dashPat = t.dash ? [4, 8] : [6, 5];
         let op = dark ? (t.dash ? 0.85 : 0.95) : (t.dash ? 0.75 : 0.9);

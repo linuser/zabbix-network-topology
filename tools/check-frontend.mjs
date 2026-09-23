@@ -188,6 +188,42 @@ if (layout) {
     pruefe('Geister ueberwiegen: frisch, mit Grund', layout.viele, 'cose/geister');
 }
 
+// Ein LAG-Member kann auf zwei Arten tot sein: nicht mehr gemeldet (stale)
+// oder gemeldet, aber der Port ist unten. Das Buendel muss BEIDES zaehlen —
+// die zweite Art haelt die Gegenseite fuer die Dauer der Stale-TTL am Leben,
+// und eingeklappt wuerde die Karte sonst "x4, alles gut" behaupten.
+console.log('\n  Parallele Links: ein totes Kabel faellt auf\n');
+const bund = szenario('bundle', { lang: 'en_US' }, `
+    const P = await import(${JSON.stringify(MODULE('parallel-links.js'))});
+    const member = (id, extra) => ({ data: Object.assign(
+        { id, source: 'core', target: 'acc', isLLDP: true, portSrc: 'Gi1/0/' + id,
+          trafficIn: 10, trafficOut: 5, perLink: true, capBps: 1e9 }, extra) });
+    const lauf = (extras) => {
+        const els = extras.map((e, i) => member(String(i + 1), e));
+        P.annotateBundles(els);
+        const lead = els[0].data;
+        const kante = { data: (k) => k === undefined ? lead : lead, hasClass: () => true };
+        const td = P.trunkData(kante);
+        return { label: lead.tLabel.split('\\n')[0], down: lead.bundleDown,
+                 portDown: td.portDown, err: td.ifaceErr };
+    };
+    console.log(JSON.stringify({
+        alleOk:   lauf([{}, {}, {}]),
+        einerAus: lauf([{}, { portDown: true }, {}]),
+        einerAlt: lauf([{}, { _isStaleEdge: true }, {}]),
+        alleAus:  lauf([{ portDown: true }, { portDown: true }]),
+        fehler:   lauf([{}, { ifaceErr: 42 }]),
+    }));
+`);
+if (bund) {
+    pruefe('alle Member laufen: nur die Anzahl',   bund.alleOk.label,   '\u00d73');
+    pruefe('Port unten: zaehlt als ausgefallen',   bund.einerAus.label, '\u00d73 (1 down)');
+    pruefe('Port unten: Trunk nicht komplett rot', bund.einerAus.portDown, false);
+    pruefe('nicht mehr gemeldet: zaehlt auch',     bund.einerAlt.label, '\u00d73 (1 down)');
+    pruefe('alle unten: Trunk ist rot',            bund.alleAus.portDown, true);
+    pruefe('Fehler eines Members erreicht den Trunk', bund.fehler.err,  42);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);
