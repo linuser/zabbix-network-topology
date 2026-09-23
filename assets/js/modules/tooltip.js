@@ -95,6 +95,11 @@ function drawSparkline(values, color, width, height) {
 
 export function showTip(evt, d) {
     const traffic = d.traffic || { in: 0, out: 0 };
+    // Ein Geist ist kein Host. Das Detail-Panel haelt sich seit 5.3.2 daran,
+    // der Tooltip tat es nicht: er zeigte CPU, Speicher und Ping als leere
+    // Striche und darunter "Lade Verlauf" — fuer ein Geraet, das gar nicht
+    // ueberwacht wird. Beim Screenshot fuer die Release-Notes aufgefallen.
+    const istGeist = !!d._isGhost;
 
     function bar(pct) {
         const filled = Math.round((pct || 0) / 100 * 8);
@@ -103,7 +108,12 @@ export function showTip(evt, d) {
             + '<span style="opacity:0.2">' + '\u2588'.repeat(Math.max(0, 8 - filled)) + '</span></span>';
     }
 
-    const rows = [
+    const rows = istGeist ? [
+        { col: '#94a3b8', lbl: t('tip.ghost.seen_via'),
+          val: '<b>' + esc(((d._ghostSrc || []).join(', ') || '\u2014').toUpperCase()) + '</b>' },
+        { col: '#94a3b8', lbl: t('tip.ghost.seen_by'),
+          val: esc((d._ghostSeenBy || []).join(', ') || '\u2014') },
+    ] : [
         { col: '#3b82f6', lbl: 'CPU',     val: d.cpu    != null ? bar(d.cpu)    + ' <b>' + d.cpu    + '%</b>' : '<span style="color:var(--nt-muted)">\u2014</span>' },
         { col: '#8b5cf6', lbl: 'Memory',  val: d.memory != null ? bar(d.memory) + ' <b>' + d.memory + '%</b>' : '<span style="color:var(--nt-muted)">\u2014</span>' },
         { col: '#22c55e', lbl: 'Traffic', val: '<b>\u2193 ' + fmt(traffic.in) + '</b>  <b>\u2191 ' + fmt(traffic.out) + '</b>' },
@@ -167,7 +177,10 @@ export function showTip(evt, d) {
                 return '<div style="font-size:10px;color:#f59e0b;margin-top:5px;padding-top:4px;border-top:1px solid var(--nt-line-soft)">'
                     + '\u23F1 ' + t('tip.problem_since', { t: '<b>' + esc(sinceStr) + '</b>' }) + '</div>';
             })() : '')
-            + (spark ? '' : '<div style="font-size:9px;color:var(--nt-faint);margin-top:4px">\u231B ' + esc(t('tip.loading_history')) + '</div>');
+            + (istGeist
+                ? '<div style="font-size:9px;color:var(--nt-faint);margin-top:4px">'
+                    + esc(t('tip.ghost.hint')) + '</div>'
+                : (spark ? '' : '<div style="font-size:9px;color:var(--nt-faint);margin-top:4px">\u231B ' + esc(t('tip.loading_history')) + '</div>'));
     }
 
     _syncTheme();
@@ -177,7 +190,7 @@ export function showTip(evt, d) {
     moveTip(evt);
 
     // Sparkline async nachladen
-    if (d.id && (d.cpu != null || d.ping != null)) {
+    if (!istGeist && d.id && (d.cpu != null || d.ping != null)) {
         fetchSparkData(String(d.id), d, function(spark) {
             if (_tip.style.display === 'block') {
                 _tip.innerHTML = buildHtml(spark);

@@ -145,6 +145,14 @@ the `nt:lldp` tag above.
   account for the **label** rather than the 44-pixel circle — names three times
   wider than the node were what actually overlapped.
 
+- **The tooltip did the same thing as the panel, one layer over.** Hovering a
+  ghost showed CPU, memory and ping as empty dashes and "loading history"
+  underneath — for a device Zabbix never asked, and it really did fire the
+  history request. It now names the protocol it was seen over and the host that
+  reported it, and says why there are no numbers. Found while taking a
+  screenshot for these release notes, which is its own small argument for
+  screenshots.
+
 - **The detail panel called an unmonitored device "Normal".** A ghost node got
   the full host treatment: a green status pill and empty rows for CPU, memory
   and ping — a statement nobody made, about a device Zabbix never asked. The map
