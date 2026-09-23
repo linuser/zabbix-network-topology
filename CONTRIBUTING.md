@@ -119,7 +119,20 @@ without it being clear why:
    invented.** No walk from anyone's network, not even slightly altered. People
    send us screenshots in confidence.
 
-7. **Nothing may slip into the module ZIP that doesn't belong there.** The module
+7. **The UI has to keep saying true things.** `npm run ci:frontend` renders the
+   detail panel, the tooltips, the ghost filter and the layout decision without
+   a browser and reads what comes out. Three reports in September 2026 lived
+   exactly there: a ghost node shown with a green "Normal" pill and empty CPU,
+   memory and ping rows; a tooltip that fetched history for it; and an "auto"
+   layout reusing a saved arrangement that covered 30 of 157 drawn nodes. Every
+   existing test stayed green through all three, because none of them had ever
+   looked at the output.
+
+   It is not a browser test. Whether the dashed pill reads well in the dark
+   theme is not something this gate knows — it checks *what* is there, which is
+   where those bugs were.
+
+8. **Nothing may slip into the module ZIP that doesn't belong there.** The module
    directory sits under the web root and is publicly reachable — shell scripts,
    `tools/`, `templates/`, source maps and the repository itself have no business
    there. `npm run ci:package` simulates the package contents and checks them.
@@ -130,7 +143,7 @@ without it being clear why:
    how `nt-uninstall.sh` ended up in the package — the list named only the
    scripts known at the time.
 
-8. **The two-layer logic decides what different users see.** Positions and manual
+9. **The two-layer logic decides what different users see.** Positions and manual
    links live both shared (`module.config`, only super admins write) and personal
    (`CProfile`, everyone for themselves). On read, **personal wins per node** —
    not as a whole, otherwise a single own save would hide the shared map forever.
@@ -146,7 +159,7 @@ without it being clear why:
    **What the gate does not cover:** the path server → database → permission
    check. That needs two logged-in users in one browser.
 
-9. **No German text may reach the UI.** Comments in this repository are German
+10. **No German text may reach the UI.** Comments in this repository are German
    and stay that way — but anything a user reads has to be English.
    `npm run ci:i18n` checks it.
 
@@ -361,7 +374,20 @@ ohne dass klar ist warum:
    ist erfunden.** Kein Walk aus einem fremden Netz, auch nicht leicht
    verändert. Wer uns Screenshots schickt, tut das im Vertrauen.
 
-7. **Nichts darf ins Modul-ZIP rutschen, was nicht hineingehört.** Das
+7. **Die Oberfläche muss weiter Wahres sagen.** `npm run ci:frontend` baut
+   Detail-Panel, Tooltips, Geisterfilter und Layout-Entscheidung ohne Browser
+   und liest, was herauskommt. Drei Meldungen im September 2026 lagen genau
+   dort: ein Geisterknoten mit grüner Pille „Normal" und leeren Feldern für
+   CPU, Speicher und Ping; ein Tooltip, der für ihn den Verlauf nachlud; und
+   ein „Auto"-Layout, das eine gespeicherte Anordnung für 30 von 157
+   gezeichneten Knoten wiederverwendete. Alle bestehenden Tests blieben dabei
+   grün, weil keiner je in die Ausgabe gesehen hat.
+
+   Ein Browser-Test ist es nicht. Ob die gestrichelte Pille im dunklen Theme
+   gut aussieht, weiß dieser Gate nicht — er prüft, *was* dasteht, und genau da
+   lagen die Fehler.
+
+8. **Nichts darf ins Modul-ZIP rutschen, was nicht hineingehört.** Das
    Modulverzeichnis liegt unter dem Web-Root und ist öffentlich abrufbar —
    Shell-Skripte, `tools/`, `templates/`, Source-Maps und das Repository selbst
    haben dort nichts verloren. `npm run ci:package` simuliert den Paketinhalt
@@ -373,7 +399,7 @@ ohne dass klar ist warum:
    `nt-uninstall.sh` ins Paket gerutscht — die Liste nannte nur die damals
    bekannten Skripte beim Namen.
 
-8. **Die Zwei-Ebenen-Logik entscheidet, was verschiedene Benutzer sehen.**
+9. **Die Zwei-Ebenen-Logik entscheidet, was verschiedene Benutzer sehen.**
    Positionen und manuelle Links liegen geteilt (`module.config`, nur
    Super-Admins schreiben) und persönlich (`CProfile`, jeder für sich). Beim
    Lesen gewinnt **persönlich pro Knoten** — nicht als Ganzes, sonst verdeckte
@@ -390,7 +416,7 @@ ohne dass klar ist warum:
    **Was das Gate nicht abdeckt:** den Weg Server → Datenbank → Rechteprüfung.
    Dafür braucht es zwei angemeldete Benutzer in einem Browser.
 
-9. **Kein deutscher Text darf ins UI.** Die Kommentare in diesem Repository sind
+10. **Kein deutscher Text darf ins UI.** Die Kommentare in diesem Repository sind
    deutsch und bleiben es — was ein Benutzer liest, muss aber englisch sein.
    `npm run ci:i18n` prüft das.
 

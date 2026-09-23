@@ -137,6 +137,17 @@ snmprec:
   script:
     - node tools/check-snmprec.mjs
 
+# Was die Oberflaeche AUSGIBT, nicht nur dass sie laedt. Drei Meldungen im
+# September 2026 lagen genau dort: ein Geisterknoten mit gruener Pille
+# "Normal" und leeren CPU-Feldern, ein Tooltip, der fuer ihn den Verlauf
+# nachlud, und ein "Auto"-Layout, das eine Anordnung fuer 30 von 157 Knoten
+# wiederverwendete. Kein Test wurde davon rot.
+frontend:
+  stage: test
+  image: node:22-alpine
+  script:
+    - node tools/check-frontend.mjs
+
 # Deutsche Texte, die im UI landen. Kommentare duerfen deutsch bleiben — das
 # Gate liest nur String-Literale, mit eigenem Scanner statt grep (Regex mit
 # Anfuehrungszeichen und Zeilenend-Kommentare brechen jede grep-Loesung).

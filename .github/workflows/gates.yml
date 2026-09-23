@@ -82,6 +82,8 @@ jobs:
         run: node tools/check-templates.mjs && node tools/check-template-logic.mjs
       - name: snmprec
         run: node tools/check-snmprec.mjs
+      - name: frontend
+        run: node tools/check-frontend.mjs
       - name: package
         run: node tools/check-package.mjs
       - name: layers

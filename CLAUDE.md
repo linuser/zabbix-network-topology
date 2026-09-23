@@ -20,12 +20,13 @@ npm run build        # esbuild -> assets/js/dist/nt-bundle.js (eingecheckt!)
 ./deploy.sh <server> all     # Hauptmodul + Widgets per SSH ausrollen
 ```
 
-**Die vollständige Gate-Kette — alle fünfzehn, nicht nur die Node-Gates:**
+**Die vollständige Gate-Kette — alle sechzehn, nicht nur die Node-Gates:**
 
 ```bash
 npm run build && npm run ci:lint-php && npm run ci:test && npm run ci:eslint \
   && npm run ci:xss && npm run ci:parity && npm run ci:templates \
-  && npm run ci:snmprec && npm run ci:package && npm run ci:layers \
+  && npm run ci:snmprec && npm run ci:frontend && npm run ci:package \
+  && npm run ci:layers \
   && npm run ci:i18n && npm run ci:pipeline && npm run ci:shellcheck \
   && npm run ci:audit && npm run ci:php-use
 ```
@@ -46,7 +47,7 @@ bei vollständig grünen Gates.
 `ci:lint-php` und `ci:test` brauchen `php` — **das ist installiert**
 (`/opt/homebrew/bin/php`). Sie zu überspringen hat schon einmal einen
 PHP-Fatal durchrutschen lassen (ein doppeltes `use` nach einem Merge, den git
-konfliktfrei zusammenführte). „Alle Gates grün" heißt fünfzehn, nicht neun.
+konfliktfrei zusammenführte). „Alle Gates grün" heißt sechzehn, nicht neun.
 
 Einzelnen Test fahren — kein PHPUnit, kein DB-Zugriff, reines PHP:
 
@@ -57,6 +58,15 @@ php tests/LldpEdgeBuilderTest.php
 `ci:bundle-drift` fehlt in der Kette oben, weil es nach `npm run build` nur
 prüft, ob das Bundle eingecheckt ist. **Das gebaute Bundle gehört in den
 Commit** — das Modul soll sich ohne Node installieren lassen.
+
+`ci:frontend` prüft, was die Oberfläche **ausgibt**. Die Module bauen ihre
+Inhalte als HTML-Zeichenkette oder als Datenstruktur, und beides lässt sich
+ohne Browser ansehen: Detail-Panel, Tooltip, Geisterfilter, Layout-Entscheidung.
+Drei Meldungen im September 2026 lagen genau dort — ein Geisterknoten mit
+grüner Pille „Normal", ein Tooltip, der für ihn den Verlauf nachlud, und ein
+„Auto"-Layout, das eine gespeicherte Anordnung für 30 von 157 gezeichneten
+Knoten wiederverwendete. Kein bestehender Test wurde davon rot, weil keiner je
+in die Ausgabe gesehen hat.
 
 ## Architektur
 
