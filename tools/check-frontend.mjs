@@ -342,6 +342,40 @@ if (legende) {
     pruefe('alternde Kante weiterhin drin',      legende.alternd, true);
 }
 
+// Was in einer exportierten Datei steht, ist Ausgabe der Oberflaeche — nur
+// sieht sie niemand beim Hinsehen. Deshalb hier: die Patchliste als CSV.
+console.log('\n  CSV: die Patchliste verlaesst den Browser\n');
+const csv = szenario('csv', { lang: 'en_US' }, `
+    const T = await import(${JSON.stringify(MODULE('render-table.js'))});
+    const nodes = [
+        { id: 'ap1', label: 'lab-ap-01', type: 'wireless', severity: 0, ip: '192.0.2.10' },
+        { id: 'sw1', label: 'lab-sw-01', type: 'switch',   severity: 0 },
+        // Ein Hostname, der in Excel eine Formel waere. Zabbix laesst so etwas
+        // als sichtbaren Namen zu, und LLDP-Nachbarn erst recht.
+        { id: 'boe', label: '=cmd|\\'/C calc\\'!A0', type: 'server', severity: 2 },
+    ];
+    const edges = [
+        { id: 'e1', from: 'ap1', to: 'sw1', ports: { ap1: 'eth0', sw1: 'Gi1/0/8' } },
+        { id: 'e2', from: 'boe', to: 'sw1', ports: { sw1: 'Gi1/0/9' }, stale: true },
+    ];
+    const text = T.hostsCsv(nodes, T.buildUplinks(nodes, edges));
+    console.log(JSON.stringify({
+        kopf:    text.split('\\n')[0],
+        ap:      text.split('\\n').find((z) => z.indexOf('lab-ap-01') === 0 || z.indexOf(',lab-ap-01,') > -1) || '',
+        boese:   (text.match(/^[^\\n]*calc[^\\n]*$/m) || [''])[0],
+    }));
+`);
+if (csv) {
+    pruefe('Kopfzeile trennt Geraet und Port',
+        /Connected to,Port,Last seen here/.test(csv.kopf), true);
+    pruefe('AP-Zeile nennt Switch und Port',
+        /lab-sw-01,Gi1\/0\/8/.test(csv.ap), true);
+    pruefe('alternder Eintrag ist filterbar',
+        /Gi1\/0\/9,yes/.test(csv.boese), true);
+    pruefe('Formel wird entschaerft',
+        /^Warning,'=cmd/.test(csv.boese), true);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

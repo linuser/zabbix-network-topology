@@ -117,6 +117,24 @@ export function uplinkText(hid) {
     return l[0].port ? l[0].name + ' \u00b7 ' + l[0].port : l[0].name;
 }
 
+/**
+ * Eine CSV-Zelle. Stand als lokale Funktion in _exportPivotCsv und wird jetzt
+ * von zwei Exporten gebraucht — eine zweite Kopie waere eine zweite Stelle,
+ * an der die Formel-Neutralisierung vergessen werden kann.
+ *
+ * CSV-Formel-Injection: eine Zelle, die mit = + - @ oder Tab/CR beginnt,
+ * fuehren Excel und LibreOffice als Formel aus ("=cmd|..." als sichtbarer
+ * Hostname). Ein fuehrendes ' macht sie zu Text. Reine Zahlen (auch negative
+ * wie -12.5) bleiben unangetastet.
+ */
+function csvCell(s) {
+    s = String(s == null ? '' : s);
+    if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s;
+    // RFC 4180: Anfuehrungszeichen verdoppeln, bei Komma/Quote/Umbruch klammern
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+}
+
 // Filter-State (lebt in dieser Modul-Closure, persistiert nicht zwischen Tab-Wechseln)
 let _filterStatuses = new Set([0, 1, 2, 3, 4, 5]);  // alle Severities default an
 // Mehrfach-Gruppenfilter: alle gesetzten Gruppen werden AND-verknuepft
@@ -589,6 +607,72 @@ function compare(a, b) {
     return 0;
 }
 
+/**
+ * Die sichtbare Hosts-Tabelle als CSV — gefiltert und sortiert wie auf dem
+ * Schirm, nicht der Rohbestand.
+ *
+ * WOFUER
+ * ------
+ * Mit der Spalte "Connected to" ist diese Tabelle eine Patchliste: welches
+ * Geraet haengt an welchem Switch, an welchem Port. Genau die will man
+ * ausdrucken und gegen die Dokumentation halten — und dafuer muss sie aus
+ * dem Browser heraus. Den CSV-Knopf gab es bisher nur im Items-Modus.
+ *
+ * Geraet und Port stehen in ZWEI Spalten, anders als in der Tabelle: dort
+ * ist "lab-sw-01 · Gi1/0/8" eine Zeile zum Lesen, in einer Tabellenkalkulation
+ * will man nach Switch gruppieren und nach Port sortieren.
+ */
+function exportHostsCsv() {
+    const text = hostsCsv((_renderNodes || []).filter(passesFilter).sort(compare));
+    const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = 'nt-hosts-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+/**
+ * Der Inhalt der Datei — ohne DOM, damit ci:frontend ihn lesen kann. Was in
+ * einer exportierten Datei steht, ist genauso Ausgabe der Oberflaeche wie
+ * das, was auf dem Schirm steht, und niemand sieht es beim Hinsehen.
+ */
+export function hostsCsv(nodes, uplinks) {
+    const ups = uplinks || _uplinks;
+    const kopf = ['Status', 'Host', 'Type', 'Group', 'IP',
+                  'Connected to', 'Port', 'Last seen here',
+                  'CPU %', 'Memory %', 'Ping ms', 'Traffic in bps', 'Traffic out bps',
+                  'Problems'];
+    const zeilen = [kopf.map(csvCell).join(',')];
+    nodes.forEach(function(n) {
+        const up = (ups[String(n.id)] || [])[0] || {};
+        const tr = n.traffic || {};
+        zeilen.push([
+            SEV_LBL[n.severity || 0] || '',
+            n.label || n.host || '',
+            TYPE_LBL[n.type] || n.type || '',
+            n._primaryGroup || '',
+            n.ip || '',
+            up.name || '',
+            up.port || '',
+            // Ein alternder Eintrag ist die Antwort auf "wo hing es zuletzt".
+            // In der Tabelle sagt das eine kleine Uhr; in einer Datei muss es
+            // ein Wert sein, nach dem sich filtern laesst.
+            up.stale ? 'yes' : '',
+            n.cpu == null ? '' : n.cpu,
+            n.memory == null ? '' : n.memory,
+            n.ping == null ? '' : n.ping,
+            tr.in  == null ? '' : Math.round(tr.in),
+            tr.out == null ? '' : Math.round(tr.out),
+            n.problems || 0,
+        ].map(csvCell).join(','));
+    });
+    return zeilen.join('\n') + '\n';
+}
+
 function buildFilterBar(nodes, groupNames, theme) {
     const bar = document.createElement('div');
     bar.id = 'nt-table-filterbar';
@@ -776,6 +860,19 @@ function buildFilterBar(nodes, groupNames, theme) {
         this.style.borderColor = theme.border;
     });
     bar.appendChild(search);
+
+    // CSV der sichtbaren Zeilen. Im Items-Modus gibt es das laengst; hier
+    // fehlte es, seit es diese Tabelle gibt.
+    const csvBtn = document.createElement('button');
+    csvBtn.type = 'button';
+    csvBtn.id = 'nt-table-csv';
+    csvBtn.textContent = '\u2b07 CSV';
+    csvBtn.title = t('table.csv_tip');
+    csvBtn.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
+        + ';border-radius:' + NT_R.sm + ';font-size:12px;background:' + theme.surface
+        + ';color:' + theme.text + ';font-family:inherit;cursor:pointer';
+    csvBtn.addEventListener('click', exportHostsCsv);
+    bar.appendChild(csvBtn);
 
     // Counter rechts
     const counter = document.createElement('div');
@@ -1487,18 +1584,6 @@ export function renderTable(wrap, nodes, edges) {
                 });
             }
 
-            function esc(s) {
-                s = String(s == null ? '' : s);
-                // CSV-Formel-Injection neutralisieren: Zellen die mit = + - @
-                // oder Tab/CR beginnen wuerde Excel/LibreOffice als Formel
-                // ausfuehren ("=cmd|..." im Host-Visiblename). Fuehrendes '
-                // macht sie zu Text. Reine Zahlen (auch negative wie -12.5
-                // von Temperatur-Items) bleiben unangetastet.
-                if (/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s;
-                // RFC 4180 Escaping: doublequote quotes, wrap if contains comma/quote/newline
-                if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-                return s;
-            }
             function fmt(v, unit) {
                 if (v == null || !isFinite(v)) return '';
                 // Numerisch mit Punkt als Dezimaltrenner (CSV-Standard, macht
@@ -1513,7 +1598,7 @@ export function renderTable(wrap, nodes, edges) {
             const header = ['Host'].concat(cols.map(function(c) {
                 return (c.label || c.key) + (c.unit ? ' (' + c.unit + ')' : '');
             })).concat(['Avg']);
-            const lines = [header.map(esc).join(',')];
+            const lines = [header.map(csvCell).join(',')];
 
             // Body: pro Host eine Zeile. Aggregat-Logik kommt aus utils.js
             // (aggregateValues) — war hier als Kopie dupliziert.
@@ -1529,7 +1614,7 @@ export function renderTable(wrap, nodes, edges) {
                 });
                 const avg = aggregateLocal(rowVals, 'avg');
                 const csvRow = [_itemsData.hosts[hid] || hid].concat(cells).concat([fmt(avg)]);
-                lines.push(csvRow.map(esc).join(','));
+                lines.push(csvRow.map(csvCell).join(','));
             });
 
             // Footer: Sum / Avg / P50 / P95 / P99 / Max
@@ -1548,7 +1633,7 @@ export function renderTable(wrap, nodes, edges) {
                         if (v != null) flat.push(v);
                     });
                 });
-                lines.push([lbl].concat(cells).concat([fmt(aggregateLocal(flat, mode))]).map(esc).join(','));
+                lines.push([lbl].concat(cells).concat([fmt(aggregateLocal(flat, mode))]).map(csvCell).join(','));
             });
 
             const csv = lines.join('\n') + '\n';
