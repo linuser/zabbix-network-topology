@@ -105,6 +105,7 @@ export default {
     'toolbar.ghosts.off':   'aus',
     'toolbar.ghosts.infra': 'ohne Endger\u00e4te',
     'toolbar.ghosts.all':   'alle',
+    'warn.ghosts_fresh_layout': 'Die Geisterknoten \u00fcberwiegen die \u00fcberwachten Hosts hier deutlich, deshalb wurde die Karte neu angeordnet \u2014 die gespeicherten Positionen decken nur einen kleinen Teil des Gezeichneten ab. Geister ausschalten oder ein Layout von Hand w\u00e4hlen holt sie zur\u00fcck.',
     'warn.ghost_filter_idle': 'Nichts zu filtern: keiner dieser Nachbarn sagt, was er ist. Die Angabe kommt aus lldpRemSysCapEnabled im LLDP-Template des Moduls \u2014 CDP liefert sie gar nicht.',
     'toolbar.ghosts.tip': 'LLDP/CDP-Nachbarn ohne eigenen Zabbix-Host als Geisterknoten zeigen — Geräte, die im Netz existieren, aber nicht überwacht werden. Details im LLDP-Q-Tab. Drei Stufen: aus, nur Netzger\u00e4te (Switches, Router, Access Points und alles, was nichts \u00fcber sich sagt), alle.',
     'rc.button':      '🔍 Root-Cause',

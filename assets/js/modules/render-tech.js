@@ -43,7 +43,7 @@ import {
 import { ensureBaseToolbar } from './tabs.js';
 import { updateKpi, refreshKpi } from './kpi.js';
 import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
-import { buildLayoutConfig } from './layouts.js';
+import { buildLayoutConfig, letzterLayoutGrund } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
 import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
 import { isFocusActive, filterToFocus, dropFocus, renderFocusBanner } from './focus-mode.js';
@@ -340,7 +340,16 @@ export function render(wrap, nodes, edges, dataUrl) {
                      positions: function(n) { return _seed[n.id()]; },
                      fit: false };
         })()
-        : buildLayoutConfig(loadLayout(), nodes, edges, false);
+        : (function() {
+            const cfg = buildLayoutConfig(loadLayout(), nodes, edges, false);
+            // Einmal sagen, wenn die eigene Anordnung gerade nicht gilt, weil
+            // die Geister sie weit ueberwiegen. Sonst sieht es aus wie eine
+            // Karte, die ihre Positionen vergessen hat.
+            if (letzterLayoutGrund() === 'geister') {
+                toastTruncatedOnce('geisterlayout', t('warn.ghosts_fresh_layout'));
+            }
+            return cfg;
+        })();
     // Im Performance-Modus kein Layout-Animate (bei 1000+ Knoten = Freeze).
     if (perfMode && _initialLayout) _initialLayout.animate = false;
 

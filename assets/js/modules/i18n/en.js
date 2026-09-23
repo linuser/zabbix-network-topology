@@ -100,6 +100,7 @@ export default {
     'toolbar.ghosts.off':   'off',
     'toolbar.ghosts.infra': 'without endpoints',
     'toolbar.ghosts.all':   'all',
+    'warn.ghosts_fresh_layout': 'Ghost nodes outnumber the monitored hosts here, so the map was laid out fresh \u2014 your saved positions cover only a small part of what is drawn. Turn ghosts off, or pick a layout by hand, to get them back.',
     'warn.ghost_filter_idle': 'Nothing to filter: none of these neighbours reports what it is. The capability comes from lldpRemSysCapEnabled, part of the module\u2019s LLDP template \u2014 CDP does not carry it at all.',
     'toolbar.ghosts.tip': 'Show LLDP/CDP neighbours that have no Zabbix host of their own — devices that exist on the network but are not monitored. Three steps: off, network gear only (switches, routers, access points and anything that says nothing about itself), all. Details in the LLDP-Q tab.',
     'rc.button':      '🔍 Root cause',

@@ -154,7 +154,17 @@ function buildFallbackPositions(nodes, edges, saved) {
 //
 // `forceFresh=true` überspringt den Preset-Versuch (wird vom Layout-Button
 // genutzt: "Layout neu rechnen" soll nicht die alten Positionen wiederverwenden).
+// Warum der letzte Aufruf NICHT das gespeicherte Preset genommen hat.
+// '' = kein Grund, 'geister' = zu viele Geister fuer eine Anordnung, die nur
+// die Hosts kennt. Der Renderer liest es direkt nach dem Aufruf.
+let _letzterGrund = '';
+
+export function letzterLayoutGrund() {
+    return _letzterGrund;
+}
+
 export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
+    _letzterGrund = '';
     if (layoutId === 'auto' && !forceFresh) {
         // Preset-Versuch: 80% der Nodes haben gespeicherte, plausible Positionen
         const sp = loadPositions();
@@ -171,7 +181,24 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
             const p = sp[id];
             return p && (Math.abs(p.x) > 1 || Math.abs(p.y) > 1);
         });
-        if (coverage >= 0.8 && hasNonZero) {
+        // WIE VIEL DER KARTE DECKT DIE GESPEICHERTE ANORDNUNG UEBERHAUPT AB?
+        //
+        // Die Abdeckung oben fragt nur nach den Hosts, und das ist richtig:
+        // Geister haben nie eine gespeicherte Position, und ihre Anwesenheit
+        // soll die eigene Anordnung nicht wegwerfen. Gezeichnet werden sie
+        // aber trotzdem. Gemeldet aus dem Feld: 30 Hosts, 127 Geister, und auf
+        // "Auto" liegt alles uebereinander, waehrend "Force" sauber aussieht.
+        //
+        // Der Ring um den meldenden Switch traegt acht Geister gut und vierzig
+        // nicht mehr. Ueberwiegen sie die Hosts deutlich, ist das Preset kein
+        // Preset mehr, sondern ein Drittel Karte mit zwei Dritteln Notbehelf —
+        // dann rechnet ein frischer Lauf das bessere Bild. Die Schwelle ist
+        // absichtlich hoch: wer seine Anordnung von Hand gelegt hat, soll sie
+        // nicht wegen ein paar Geistern verlieren.
+        const geister = nodes.length - ids.length;
+        const geisterUeberwiegen = ids.length > 0 && geister > ids.length * 2;
+
+        if (coverage >= 0.8 && hasNonZero && !geisterUeberwiegen) {
             const fallback = buildFallbackPositions(nodes, edges, sp);
             return {
                 name: 'preset',
@@ -179,6 +206,13 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
                 padding: 30
             };
         }
+        // Der Aufrufer soll es SAGEN koennen: eine Karte, die sich anders
+        // anordnet als beim letzten Mal, ohne dass jemand etwas geklickt hat,
+        // wird sonst fuer einen Fehler gehalten.
+        if (coverage >= 0.8 && hasNonZero && geisterUeberwiegen) {
+            _letzterGrund = 'geister';
+        }
+
         // Bei sparse Graphen (edges/nodes < 0.3) ist concentric besser als
         // cose, weil cose isolierte Nodes in einer Spalte stapelt.
         // Beide Seiten OHNE Geister zaehlen. ids ist oben schon gefiltert;
