@@ -49,20 +49,31 @@ final class LldpEdgeBuilder {
      * Obergrenze fuer LLDP/CDP-Kanten. NICHT gegen Unuebersichtlichkeit —
      * gegen einen PHP-Fatal.
      *
-     * NACHGEMESSEN, nicht geschaetzt: der Kantenbau braucht rund 5,2 KB
-     * Spitzenspeicher je Kante (400 Hosts / 9.600 Kanten -> 50 MB;
-     * 800 / 19.200 -> 99 MB, linear dazwischen). Zabbix verlangt fuer das
-     * Frontend mindestens 128 MB, und in diesem Prozess liegen daneben schon
-     * die Host- und Item-Listen. Der erste Messlauf ist genau daran
-     * gestorben: "Allowed memory size exhausted" — also eine WEISSE SEITE
-     * ohne Meldung, mitten im Kartenaufbau.
+     * NACHGEMESSEN, nicht geschaetzt. Messaufbau: synthetische Hosts, je 24
+     * gemeldete Nachbarn, Portnamen dabei, `memory_get_peak_usage(true)` um
+     * build() herum. Die Zahlen sind linear in der Kantenzahl:
      *
-     * 8.000 Kanten sind rund 41 MB und lassen dem Rest Luft. Die Zahl ist
-     * bewusst weit jenseits dessen, was eine lesbare Karte hat (die
-     * Obergrenze fuer manuelle Verbindungen liegt bei 2.000): sie soll nie
-     * greifen, und wenn doch, dann statt eines Absturzes.
+     *   2.400 Kanten -> 14 MB | 4.800 -> 28 MB | 8.000 -> 46 MB
+     *
+     * Das sind rund 5,9 KB je Kante — vor den parallelen Links (5.4.0) waren
+     * es 4,6 KB und bei 8.000 Kanten 36 MB. Ein Viertel mehr, und es ist
+     * bezahlt: Member-Schluessel, Reporter je Protokoll, Ports und Metrik je
+     * Kabelende.
+     *
+     * Zabbix verlangt fuer das Frontend mindestens 128 MB, und in diesem
+     * Prozess liegen daneben schon die Host- und Item-Listen — bei 800 Hosts
+     * und 19.200 gemeldeten Nachbarn stieg der Spitzenwert auf 60 MB, ohne
+     * dass eine Kante mehr entstand. Der erste Messlauf ueberhaupt ist genau
+     * daran gestorben: "Allowed memory size exhausted", also eine WEISSE
+     * SEITE ohne Meldung, mitten im Kartenaufbau.
+     *
+     * Deshalb 6.000 statt der frueheren 8.000: gemessen 38 MB, also wieder
+     * die Luft, fuer die die Zahl einmal gewaehlt wurde. Die Grenze soll nie
+     * greifen — eine lesbare Karte liegt weit darunter, die Obergrenze fuer
+     * manuelle Verbindungen bei 2.000 —, und wenn sie doch greift, sagt die
+     * Karte es an (`edges_truncated`, Toast) statt abzustuerzen.
      */
-    private const MAX_EDGES = 8000;
+    private const MAX_EDGES = 6000;
 
     /**
      * Wie viele Kanten die Obergrenze verworfen hat. Wer eine gekappte Karte
