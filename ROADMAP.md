@@ -93,9 +93,14 @@ Branch `feat/zabbix-8`: Guard (`nt-assign-guard.js`), 261 Zeilen Befundtext,
 auf zwei Installationen bestätigt. Merged **konfliktfrei** auf main, ist in
 Kombination mit den Widget-Änderungen aber **ungetestet**.
 
-**Blocker:** kein Zabbix-8.0-Image erreichbar (Docker Hub 403, auf app.fox1.de
-liegt nur 7.4). Ohne Testinstanz nicht verifizierbar, und ungetestet gehört es
-in kein Release.
+**Blocker:** kein Zabbix-8.0-Image erreichbar (Docker Hub antwortet mit 403),
+und auf dem vorhandenen Testserver liegt nur 7.4. Ohne Testinstanz nicht
+verifizierbar, und ungetestet gehört es in kein Release.
+
+**Was sich geändert hat:** Seit 09/2026 gibt es eine Entwicklungsumgebung mit
+simulierten SNMP-Geräten, in der ein Stack in Minuten steht. Ein zweiter mit 8.0
+ist damit derselbe Handgriff wie einer mit 7.4 — der Blocker ist eher ein
+Termin als ein Hindernis.
 
 ### 4. Layout-Import — neu entwerfen
 

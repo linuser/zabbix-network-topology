@@ -187,7 +187,9 @@ steht in [CONTRIBUTING.md](CONTRIBUTING.md) unter „Was die CI hart erzwingt".
 
 - **Docker-Images fehlen lokal**, Docker Hub antwortet mit 403.
   `tools/clean-install-test/` läuft deshalb nicht auf diesem Rechner, wohl aber
-  auf `app.fox1.de`, wo die Images liegen.
+  auf dem Testserver, wo die Images liegen. Welcher das ist, steht im
+  Gedächtnis, nicht hier: Infrastrukturnamen gehören nicht in eine Datei, die
+  auf GitHub liegt.
 - Beim Packen auf dem Mac `COPYFILE_DISABLE=1 tar …` setzen, sonst legt bsdtar
   zu jeder Datei ein AppleDouble-`._*` an — die landen sonst unter dem Web-Root.
 - Release-ZIPs mit `zip -rq` bauen, **ohne** `-X`: das ist der Weg, den
