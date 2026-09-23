@@ -16,6 +16,7 @@ namespace Modules\NetworkTopology\Topology;
  *   nt:show=<key>     zusaetzliche Item-Werte am Knoten einblenden
  *   nt:link=<label>|<url>   eigene Links ins Kontextmenue
  *   nt:parent=<host>  Traeger-Beziehung (VM->Hypervisor) -> hosts-Kante
+ *   nt:uplink=<host>:<port>  an welchem PORT welches Geraets dieser Host haengt
  *
  * Das ist Verarbeitung von Daten, die ein Mensch frei eintippt — inklusive der
  * Validierung, die verhindert, dass daraus etwas Gefaehrliches wird (nur
@@ -31,7 +32,7 @@ final class HostTagParser {
     /**
      * @param array $hosts  hostid => Host-Datensatz (mit 'tags')
      *
-     * @return array{icon_override: array, show_keys: array, links: array, parent: array}
+     * @return array{icon_override: array, show_keys: array, links: array, parent: array, uplink: array}
      */
     public static function parse(array $hosts): array {
         // ── 2b. TAG-SCAN: nt:icon, nt:show ────────────────────────────────
@@ -43,6 +44,7 @@ final class HostTagParser {
         $host_show_keys     = [];   // hid => ['system.cpu.util', 'vfs.fs.size[/,pused]', ...]
         $host_links         = [];   // hid => [{label, url}, ...]
         $host_parent        = [];   // hid => 'ParentHostname' (nt:parent-Tag → hosts-Kante)
+        $host_uplink        = [];   // hid => ['host' => 'sw-01', 'port' => 'Gi1/0/8']
         // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
         $allowed_icons = ['firewall', 'router', 'switch', 'wireless',
                           'server', 'storage', 'camera', 'printer',
@@ -112,6 +114,31 @@ final class HostTagParser {
                     if (preg_match('/[\x00-\x1F\x7F]/', $label)) continue;
 
                     $host_links[$hid][] = ['label' => $label, 'url' => $url];
+                } elseif ($name === 'nt:uplink' && $value !== '') {
+                    // AN WELCHEM PORT HAENGT DIESES GERAET.
+                    //
+                    // Fuer alles, was keinen Nachbarn melden kann: USV, PDU,
+                    // Drucker, aeltere Kameras. Der Admin weiss es, das Kabel
+                    // ist gesteckt, nur sagt es niemandem. Gemeldet als Wunsch
+                    // (#18) — und der Unterschied zu einer von Hand gezogenen
+                    // Verbindung ist der PORT: mit ihm haengen Verkehr,
+                    // Fehler, Discards und Portzustand an der Kante, weil das
+                    // Modul die Zaehler ohnehin je ifIndex vorhaelt.
+                    //
+                    // Getrennt wird am LETZTEN Doppelpunkt: Portnamen tragen
+                    // keinen, Hostnamen theoretisch schon (IPv6 als Name).
+                    if (!isset($host_uplink[$hid])) {
+                        $uv = trim($value);
+                        if ($uv !== '' && strlen($uv) <= 256
+                                && !preg_match('/[\x00-\x1F\x7F]/', $uv)) {
+                            $pos = strrpos($uv, ':');
+                            $ziel = $pos === false ? $uv : trim(substr($uv, 0, $pos));
+                            $port = $pos === false ? '' : trim(substr($uv, $pos + 1));
+                            if ($ziel !== '' && strlen($ziel) <= 128 && strlen($port) <= 64) {
+                                $host_uplink[$hid] = ['host' => $ziel, 'port' => $port];
+                            }
+                        }
+                    }
                 } elseif ($name === 'nt:parent' && $value !== '') {
                     // Containment/Hosting: dieser Host laeuft auf $value
                     // (Traeger-Host, z.B. Hypervisor). Erste Angabe gewinnt —
@@ -131,6 +158,7 @@ final class HostTagParser {
             'show_keys'     => $host_show_keys,
             'links'         => $host_links,
             'parent'        => $host_parent,
+            'uplink'        => $host_uplink,
         ];
     }
 }

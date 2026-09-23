@@ -762,6 +762,62 @@ $rIp4 = LldpEdgeBuilder::build($hIp4, [
 ]);
 check('kein Kurznamen-Treffer auf "192"', count($rIp4['edges']), 0);
 
+// ── nt:uplink — der Admin sagt, wo das Kabel steckt (#18) ──────────────────
+//
+// Eine USV meldet keinen Nachbarn. Der Port am Switch ist trotzdem bekannt,
+// und mit ihm haengen Verkehr und Fehler an der Kante. Namen erfunden.
+echo "\n  LldpEdgeBuilder — nt:uplink\n\n";
+
+$hUp = [
+    'sw'  => ['host' => 'lab-sw-01', 'name' => 'lab-sw-01'],
+    'ups' => ['host' => 'lab-ups-01', 'name' => 'USV Serverraum'],
+    'pdu' => ['host' => 'lab-pdu-01', 'name' => 'lab-pdu-01'],
+];
+$namenUp  = ['sw' => ['8' => 'Gi1/0/8', '9' => 'Gi1/0/9']];
+$trafficUp = ['sw' => ['8' => ['in' => 120000.0, 'out' => 90000.0]]];
+$fehlerUp  = ['sw' => ['8' => 0.25]];
+
+$eUp = LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']],
+    [], $trafficUp, [], $fehlerUp, [], $namenUp);
+check('nt:uplink: Kante entsteht',        count($eUp), 1);
+check('nt:uplink: Richtung Switch->Geraet', [$eUp[0]['from'], $eUp[0]['to']], ['sw', 'ups']);
+check('nt:uplink: Port am Switch-Ende',   $eUp[0]['ports']['sw'] ?? null, 'Gi1/0/8');
+check('nt:uplink: Verkehr an DIESEM Port', $eUp[0]['port_metrics']['sw']['in'] ?? null, 120000.0);
+check('nt:uplink: Fehler an DIESEM Port',  $eUp[0]['port_metrics']['sw']['errors'] ?? null, 0.25);
+check('nt:uplink: eigene Match-Art',      $eUp[0]['match'] ?? null, 'tag');
+check('nt:uplink: NICHT beidseitig bestaetigt', $eUp[0]['confirmed'] ?? null, false);
+
+// Der Port darf auch der nackte ifIndex sein.
+$eUp2 = LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-sw-01', 'port' => '8']],
+    [], $trafficUp, [], [], [], $namenUp);
+check('ifIndex statt Name: Portlabel aus ifName', $eUp2[0]['ports']['sw'] ?? null, 'Gi1/0/8');
+check('ifIndex statt Name: Metrik da',            $eUp2[0]['port_metrics']['sw']['out'] ?? null, 90000.0);
+
+// Anzeigename als Ziel, andere Schreibweise des Ports.
+$eUp3 = LldpEdgeBuilder::uplinkEdges($hUp, ['pdu' => ['host' => 'LAB-SW-01', 'port' => 'GigabitEthernet1/0/9']],
+    [], [], [], [], [], $namenUp);
+check('Gross/Klein + lange Portform',  $eUp3[0]['port_idx']['sw'] ?? null, '9');
+
+// Unbekannter Host, Selbstbezug, unbekannter Port.
+check('unbekannter Host: keine Kante',
+    count(LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'gibt-es-nicht', 'port' => '8']], [])), 0);
+check('Selbstbezug: keine Kante',
+    count(LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-ups-01', 'port' => '8']], [])), 0);
+$eUp4 = LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-sw-01', 'port' => 'Gi9/9/9']],
+    [], $trafficUp, [], [], [], $namenUp);
+check('unbekannter Port: Kante ja, Metrik nein', count($eUp4), 1);
+check('unbekannter Port: keine Portmetrik',      $eUp4[0]['port_metrics'] ?? null, []);
+
+// Meldet das Geraet spaeter doch selbst: ERGAENZEN, nicht verdoppeln.
+$rMix = LldpEdgeBuilder::build($hUp, [
+    ['hostid' => 'sw', 'key_' => 'lldpRemSysName[0.8.1]', 'lastvalue' => 'lab-ups-01', 'src' => 'lldp'],
+]);
+$eMix = LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']],
+    $rMix['edges'], $trafficUp, [], $fehlerUp, [], $namenUp);
+check('schon gemeldet: eine Kante bleibt', count($eMix), 1);
+check('schon gemeldet: Quelle tag ergaenzt', isset($eMix[0]['src']['tag']) || in_array('tag', (array) $eMix[0]['src'], true), true);
+check('schon gemeldet: Namenstreffer bleibt', $eMix[0]['match'] ?? null, 'exact');
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

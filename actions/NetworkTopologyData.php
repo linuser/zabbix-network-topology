@@ -277,7 +277,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         $host_ack_acked    = $prob['ack_acked'];
         $host_problem_list = $prob['problem_list'];
 
-        // ── 2b. TAG-SCAN: nt:icon, nt:show, nt:link, nt:parent ────────────
+        // ── 2b. TAG-SCAN: nt:icon, nt:show, nt:link, nt:parent, nt:uplink ─
         // Tag-Auswertung ausgelagert nach topology/HostTagParser.php (Review §6).
         // Hosts rein, vier Maps raus — rein, kein API-Call, einzeln testbar.
         $tags               = HostTagParser::parse($hosts);
@@ -285,6 +285,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         $host_show_keys     = $tags['show_keys'];
         $host_links         = $tags['links'];
         $host_parent        = $tags['parent'];
+        $host_uplink        = $tags['uplink'] ?? [];
         // ── 2c. Integration-Links aus Zabbix Global-Macros ────────────────
         // Pattern: {$NT.INT.<NAME>.LABEL} / {$NT.INT.<NAME>.URL}. Beide
         // muessen gesetzt sein. URL-Templates duerfen Tokens enthalten:
@@ -510,6 +511,18 @@ class NetworkTopologyData extends NetworkTopologyController {
                               // Confidence-Score (siehe rttAbschlag).
                               $metrics['ping'] ?? []);
         $edges          = $lldp['edges'];
+        // ── 5a0. ERKLAERTE UPLINKS (nt:uplink-Tag) ────────────────────────
+        // Geraete ohne Nachbarprotokoll — USV, PDU, Drucker — haengen an einem
+        // Port, den nur der Admin kennt. Das Tag traegt ihn nach, und weil die
+        // Portzaehler ohnehin nach ifIndex vorliegen, ist die Kante damit
+        // gemessen statt bloss gezeichnet. Direkt nach dem LLDP-Bau, damit
+        // eine schon gemeldete Verbindung ERGAENZT und nicht verdoppelt wird.
+        if ($host_uplink) {
+            $edges = LldpEdgeBuilder::uplinkEdges($hosts, $host_uplink, $edges,
+                $metrics['port_traffic'], $metrics['port_speed'],
+                $metrics['port_errors'] ?? [], $metrics['port_discards'] ?? [],
+                $metrics['port_names'] ?? []);
+        }
         $lldp_quality   = $lldp['quality'];
         $lldp_unmatched = $lldp['unmatched'];
         $lldp_host_caps = $lldp['host_caps'] ?? [];

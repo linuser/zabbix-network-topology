@@ -434,6 +434,7 @@ export default {
     'edge.match.exact': 'the reported name is exactly the host name.',
     'edge.match.exact_clean': 'the name matched after a vendor suffix was stripped.',
     'edge.match.ip': 'the neighbour reported an IP that belongs to this host.',
+    'edge.match.tag': 'declared on the host with nt:uplink \u2014 stated by an admin, not reported by a device. The port figures next to it are measured.',
     'edge.match.chassis': 'the neighbour reported a MAC address that another switch had already reported together with this host\'s name.',
     'edge.match.port': 'the neighbour reported only a MAC address, but this host reports the same port as the other end of the cable.',
     'edge.match.ip_derived': 'an IP was inferred from a name pattern such as ip-10-0-0-5 \u2014 a guess.',

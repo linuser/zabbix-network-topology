@@ -382,7 +382,7 @@ beiden hängen zusammen" stimmt aber trotzdem.
 Knoten — aber ohne Kanten. Sie liegt als **Insel** auf der Karte, obwohl der halbe Verkehr
 durch sie läuft.
 
-### Die drei Werkzeuge
+### Die vier Werkzeuge
 
 **1. Host-Tag `nt:parent=<hostname>`** — der empfohlene Weg. Am Host ein Tag mit dem Namen des
 Geräts setzen, an dem er hängt:
@@ -396,7 +396,25 @@ Gedacht für Träger-Beziehungen (VM→Hypervisor, Container→Node), funktionie
 „dieser Host hängt hinter dieser Firewall". Die Ausfallsimulation behandelt es als **harte
 Abhängigkeit**: Fällt der Parent, fällt der Child — unabhängig vom Netzpfad.
 
-**2. Manuelle Links** im Star-Mode direkt in der Karte ziehen. Seit 5.0 **serverseitig**, in zwei
+**2. Host-Tag `nt:uplink=<hostname>:<port>`** — dieselbe Idee, eine Stufe genauer:
+
+```
+nt:uplink = dell-sw-01:Gi1/0/8
+```
+
+Für Geräte, die überhaupt keinen Nachbarn melden können — eine USV, eine PDU, ein Drucker, eine
+ältere Kamera. Das Tag zeichnet die Kante **und** hängt die Zähler genau dieses Ports daran:
+Verkehr, Fehler, Discards und Geschwindigkeit, wie bei einer LLDP-Kante, weil das Modul die
+Interface-Zähler ohnehin je ifIndex vorhält. Gemessen wird am Switch-Ende — das stumme Gerät gibt
+nichts her.
+
+Der Port darf der ifIndex sein (`8`) oder sein Name (`Gi1/0/8`, `GigabitEthernet1/0/8`);
+Schreibweisen werden genauso normalisiert wie bei einem gemeldeten Nachbar-Port. Die Kante nennt
+im Detail-Panel ihre Herkunft und trägt eine geringere Sicherheit als eine gemeldete: Ein Mensch
+hat sie behauptet, kein Gerät hat sie bestätigt. Meldet das Gerät später doch, wird die Kante
+**ergänzt** und nicht verdoppelt.
+
+**3. Manuelle Links** im Star-Mode direkt in der Karte ziehen. Seit 5.0 **serverseitig**, in zwei
 Ebenen: Zeichnet ein **Super-Admin**, gilt die Kante für alle. Zeichnet jemand anderes, ist sie
 seine persönliche Notiz — folgt ihm aber über Browser und Rechner hinweg. In der Karte sind beide
 unterscheidbar, die geteilte kräftiger gestrichelt.
@@ -405,7 +423,7 @@ unterscheidbar, die geteilte kräftiger gestrichelt.
 > Kante auf der Karte. Für „hängt hinter dieser Firewall" nimm das Tag, für „hier liegt ein Kabel,
 > das keiner meldet" den Link.
 
-**3. Ghost-Knoten** decken den umgekehrten Fall ab: Meldet ein Nachbar ein Gerät, das in Zabbix
+**4. Ghost-Knoten** decken den umgekehrten Fall ab: Meldet ein Nachbar ein Gerät, das in Zabbix
 gar nicht überwacht wird, erscheint es als gestrichelter Platzhalter (Toggle in der Toolbar,
 Default aus). So wird die Lücke **sichtbar**, statt zu verschwinden.
 

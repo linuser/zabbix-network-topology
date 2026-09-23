@@ -107,6 +107,30 @@ check('ftp://-URL wird verworfen',        count($r['links']['h3'] ?? []), 0);
 echo "\nLink-Cap\n";
 check('max 6 Links pro Host (7 angeboten)', count($r['links']['h4'] ?? []), 6);
 
+// ── nt:uplink: an welchem Port welches Geraets (#18) ───────────────────────
+echo "\n  HostTagParser — nt:uplink\n\n";
+
+$tagUp = static function (string $wert): array {
+    return HostTagParser::parse(['h1' => ['tags' => [['tag' => 'nt:uplink', 'value' => $wert]]]])['uplink'];
+};
+
+check('Host und Port getrennt',
+    $tagUp('lab-sw-01:Gi1/0/8')['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']);
+check('Leerzeichen werden gekappt',
+    $tagUp('  lab-sw-01 : Gi1/0/8 ')['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']);
+check('ohne Port bleibt der Port leer',
+    $tagUp('lab-sw-01')['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => '']);
+// Getrennt wird am LETZTEN Doppelpunkt — ein Name mit Doppelpunkten bleibt heil.
+check('letzter Doppelpunkt trennt',
+    $tagUp('fd00::1:8')['h1'] ?? null, ['host' => 'fd00::1', 'port' => '8']);
+check('Steuerzeichen werden verworfen', $tagUp("lab-sw-01:\x07Gi1"), []);
+check('zu lang wird verworfen',         $tagUp(str_repeat('x', 300)), []);
+check('erste Angabe gewinnt',
+    HostTagParser::parse(['h1' => ['tags' => [
+        ['tag' => 'nt:uplink', 'value' => 'lab-sw-01:1'],
+        ['tag' => 'nt:uplink', 'value' => 'lab-sw-02:2'],
+    ]]])['uplink']['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => '1']);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

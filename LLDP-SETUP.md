@@ -411,7 +411,7 @@ the statement "these two are connected" still holds.
 as a node — but without edges. It sits on the map as an **island**, even though half
 the traffic runs through it.
 
-### The three tools
+### The four tools
 
 **1. Host tag `nt:parent=<hostname>`** — the recommended route. Set a tag on the host
 naming the device it hangs off:
@@ -426,7 +426,25 @@ works just as well for "this host sits behind this firewall". The failure simula
 treats it as a **hard dependency**: if the parent goes, the child goes — regardless
 of the network path.
 
-**2. Manual links** drawn straight on the map in star mode. Since 5.0 **server-side**,
+**2. Host tag `nt:uplink=<hostname>:<port>`** — same idea, one level more precise:
+
+```
+nt:uplink = dell-sw-01:Gi1/0/8
+```
+
+Use it for devices that cannot report a neighbour at all — a UPS, a PDU, a printer,
+an older camera. The tag draws the edge **and** hangs the counters of that very port
+on it: traffic, errors, discards and link speed, exactly as on an LLDP edge, because
+the module keeps interface counters per ifIndex anyway. Measured at the switch end —
+the silent device has nothing to offer.
+
+The port may be the ifIndex (`8`) or its name (`Gi1/0/8`, `GigabitEthernet1/0/8`);
+spellings are normalised the same way as a reported neighbour port. The edge names
+its origin in the detail panel and carries a lower confidence than a reported one:
+a human stated it, no device confirmed it. If the device later starts reporting after
+all, the edge is **completed**, not duplicated.
+
+**3. Manual links** drawn straight on the map in star mode. Since 5.0 **server-side**,
 in two layers: when a **Super admin** draws, the edge applies to everyone. When
 anyone else draws, it's their personal note — but it follows them across browsers and
 machines. Both are distinguishable on the map; the shared one is more strongly dashed.
@@ -435,7 +453,7 @@ machines. Both are distinguishable on the map; the shared one is more strongly d
 > link is only an edge on the map. For "sits behind this firewall" use the tag; for
 > "there's a cable here that nobody reports" use the link.
 
-**3. Ghost nodes** cover the opposite case: when a neighbour reports a device that
+**4. Ghost nodes** cover the opposite case: when a neighbour reports a device that
 isn't monitored in Zabbix at all, it appears as a dashed placeholder (toggle in the
 toolbar, off by default). That makes the gap **visible** instead of letting it vanish.
 

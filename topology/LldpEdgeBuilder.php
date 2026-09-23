@@ -863,6 +863,151 @@ final class LldpEdgeBuilder {
         return [$idx, $port, $port_idx, $remote_port];
     }
 
+    /**
+     * Kanten aus dem Tag nt:uplink=<host>:<port>.
+     *
+     * WOFUER
+     * ------
+     * Eine USV, eine PDU, ein Drucker: angeschlossen, aber stumm. Sie melden
+     * keinen Nachbarn, also zeichnet die Karte auch keine Verbindung — obwohl
+     * der Admin genau weiss, in welchem Port das Kabel steckt. Bisher blieb
+     * nur die von Hand gezogene Verbindung, und die traegt keinen Port.
+     *
+     * DER PORT IST DER PUNKT. Mit ihm bekommt die Kante alles, was eine
+     * LLDP-Kante auch hat: Verkehr, Fehler, Discards und Geschwindigkeit an
+     * genau diesem Port, denn die Zaehler liegen ohnehin nach ifIndex vor. Die
+     * Verbindung ist damit nicht nur gezeichnet, sondern gemessen — gemessen
+     * wird das Switch-Ende, das stumme Geraet gibt nichts her.
+     *
+     * WAS SIE NICHT IST: ein Beleg. Ein Mensch hat sie behauptet; kein Geraet
+     * hat sie bestaetigt. Deshalb eine eigene Match-Art ('tag'), keine
+     * beidseitige Bestaetigung und eine Sicherheit, die das ausdrueckt.
+     *
+     * Der Port darf der ifIndex selbst sein ("8") oder ein Name ("Gi1/0/8");
+     * Namen werden ueber dieselbe Aufloesung wie beim LLDP-Nachbarn auf einen
+     * ifIndex gebracht, inklusive Schreibweisen-Normalisierung.
+     *
+     * Gibt es die Kante schon (das Geraet spricht doch LLDP, oder die
+     * Gegenseite meldet es), wird sie ERGAENZT statt verdoppelt: die Messung
+     * ist dieselbe, und zwei Linien zwischen denselben Knoten waeren eine
+     * Aussage ueber das Netz, die niemand gemacht hat.
+     *
+     * @param array $uplinks hostid => ['host' => <Name>, 'port' => <Port|''>]
+     */
+    public static function uplinkEdges(array $hosts, array $uplinks, array $edges,
+            array $port_traffic = [], array $port_speed = [], array $port_errors = [],
+            array $port_discards = [], array $port_names = []): array {
+        if (!$uplinks) {
+            return $edges;
+        }
+        // Namensaufloesung wie bei nt:parent: technischer Name gewinnt.
+        $name_to_id = [];
+        foreach ($hosts as $hid => $h) {
+            $vis = strtolower(trim((string) ($h['name'] ?? '')));
+            if ($vis !== '' && !isset($name_to_id[$vis])) {
+                $name_to_id[$vis] = $hid;
+            }
+        }
+        foreach ($hosts as $hid => $h) {
+            $tech = strtolower(trim((string) ($h['host'] ?? '')));
+            if ($tech !== '') {
+                $name_to_id[$tech] = $hid;
+            }
+        }
+
+        $vorhanden = [];   // "a-b" => Index in $edges
+        foreach ($edges as $i => $e) {
+            $paar = [(string) ($e['from'] ?? ''), (string) ($e['to'] ?? '')];
+            sort($paar);
+            $vorhanden[implode('-', $paar)] = $i;
+        }
+
+        foreach ($uplinks as $hid => $angabe) {
+            $ziel = $name_to_id[strtolower((string) $angabe['host'])] ?? null;
+            if ($ziel === null || (string) $ziel === (string) $hid) {
+                continue;
+            }
+
+            // Port auf einen ifIndex des ZIELS bringen.
+            $port  = trim((string) ($angabe['port'] ?? ''));
+            $ifidx = '';
+            $label = '';
+            if ($port !== '') {
+                if (preg_match('/^\d+$/', $port)) {
+                    $ifidx = $port;
+                    $label = $port_names[(string) $ziel][$port] ?? $port;
+                } else {
+                    $auf = self::resolveRemotePort($port, $port_names[(string) $ziel] ?? []);
+                    $ifidx = $auf !== null ? $auf[0] : '';
+                    $label = $port;
+                }
+                $label = self::capLabel($label);
+            }
+
+            $metrik = null;
+            if ($ifidx !== '') {
+                if (isset($port_traffic[(string) $ziel][$ifidx])) {
+                    $pt = $port_traffic[(string) $ziel][$ifidx];
+                    $metrik = ['in' => round($pt['in']), 'out' => round($pt['out'])];
+                }
+                if (isset($port_speed[(string) $ziel][$ifidx]) && $port_speed[(string) $ziel][$ifidx] > 0) {
+                    $metrik ??= [];
+                    $metrik['speed'] = round($port_speed[(string) $ziel][$ifidx]);
+                }
+                if (isset($port_errors[(string) $ziel][$ifidx])) {
+                    $metrik ??= [];
+                    $metrik['errors'] = round((float) $port_errors[(string) $ziel][$ifidx], 3);
+                }
+                if (isset($port_discards[(string) $ziel][$ifidx])) {
+                    $metrik ??= [];
+                    $metrik['discards'] = round((float) $port_discards[(string) $ziel][$ifidx], 3);
+                }
+            }
+
+            $paar = [(string) $ziel, (string) $hid];
+            sort($paar);
+            $key = implode('-', $paar);
+
+            if (isset($vorhanden[$key])) {
+                // Schon gemeldet — nur ergaenzen, was fehlt.
+                $idx = $vorhanden[$key];
+                $edges[$idx]['src']['tag'] = true;
+                if ($label !== '' && !isset($edges[$idx]['ports'][(string) $ziel])) {
+                    $edges[$idx]['ports'][(string) $ziel] = $label;
+                }
+                if ($ifidx !== '' && !isset($edges[$idx]['port_idx'][(string) $ziel])) {
+                    $edges[$idx]['port_idx'][(string) $ziel] = $ifidx;
+                }
+                if ($metrik !== null && !isset($edges[$idx]['port_metrics'][(string) $ziel])) {
+                    $edges[$idx]['port_metrics'][(string) $ziel] = $metrik;
+                }
+                continue;
+            }
+
+            $kante = [
+                'id'    => 'u' . count($edges),
+                'from'  => $ziel,
+                'to'    => $hid,
+                'iface' => 'nt:uplink',
+                'src'   => ['tag'],
+                // Kein Melder: niemand hat diese Kante gesehen, jemand hat sie
+                // erklaert. 'reporters' leer zu lassen haelt 'confirmed' falsch.
+                'reporters'    => [],
+                'confirmed'    => false,
+                'match'        => 'tag',
+                'port_match'   => '',
+                'ports'        => $label !== '' ? [(string) $ziel => $label] : [],
+                'port_idx'     => $ifidx !== '' ? [(string) $ziel => $ifidx] : [],
+                'port_metrics' => $metrik !== null ? [(string) $ziel => $metrik] : [],
+            ];
+            $kante['confidence'] = self::confidence($kante, $hosts);
+            $edges[] = $kante;
+            $vorhanden[$key] = count($edges) - 1;
+        }
+
+        return $edges;
+    }
+
     /** Port-Label auf 24 Zeichen kappen (einheitlich fuer lokalen + Remote-Port). */
     /**
      * Rang einer Match-Art. Hoeher = besserer Beleg.
@@ -870,10 +1015,11 @@ final class LldpEdgeBuilder {
      */
     private static function matchRank(string $kind): int {
         switch ($kind) {
-            case 'exact':       return 7;
-            case 'ip':          return 6;
-            case 'chassis':     return 5;
-            case 'exact_clean': return 4;
+            case 'exact':       return 8;
+            case 'ip':          return 7;
+            case 'chassis':     return 6;
+            case 'exact_clean': return 5;
+            case 'tag':         return 4;
             case 'port':        return 3;
             case 'ip_derived':  return 2;
             case 'short':       return 1;
@@ -926,6 +1072,10 @@ final class LldpEdgeBuilder {
             'ip'          => 50,
             'exact_clean' => 50,
             'chassis'     => 50,
+            // Von Hand erklaert (nt:uplink). Kein Geraet hat sie bestaetigt,
+            // aber auch nichts daran ist geraten — jemand weiss, wo das Kabel
+            // steckt. Zwischen "IP getroffen" und "nur der Kurzname".
+            'tag'         => 45,
             'port'        => 40,
             'ip_derived'  => 35,
             'short'       => 30,

@@ -439,6 +439,7 @@ export default {
     'edge.match.exact': 'der gemeldete Name ist genau der Hostname.',
     'edge.match.exact_clean': 'der Name passte erst nach Abschneiden eines Zusatzes.',
     'edge.match.ip': 'der Nachbar nannte eine IP, die zu diesem Host geh\u00f6rt.',
+    'edge.match.tag': 'am Host per nt:uplink erkl\u00e4rt \u2014 von einem Menschen behauptet, nicht von einem Ger\u00e4t gemeldet. Die Portwerte daneben sind gemessen.',
     'edge.match.chassis': 'der Nachbar meldete eine MAC-Adresse, die ein anderer Switch schon zusammen mit dem Namen dieses Hosts gemeldet hatte.',
     'edge.match.port': 'der Nachbar meldete nur eine MAC-Adresse, aber dieser Host meldet denselben Port als anderes Ende des Kabels.',
     'edge.match.ip_derived': 'eine IP wurde aus einem Namensmuster wie ip-10-0-0-5 abgeleitet \u2014 geraten.',

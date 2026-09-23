@@ -148,6 +148,7 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - `nt:link=<label>|<url>` — custom link in the context menu (repeatable)
 - `nt:show=<key>` — extra item value in the tooltip
 - `nt:parent=<hostname>` — declare a carrier host (VM→hypervisor, container→node). Draws a directed **hosts** edge, and the what-if simulation treats it as a **hard dependency**: if the parent dies, the child dies — regardless of the network path.
+- `nt:uplink=<hostname>:<port>` — say which **port** of which device this host hangs off. For everything that cannot report a neighbour: UPS, PDU, printer, older cameras. Draws the edge *and* pulls the counters of that port onto it — traffic, errors, discards, link speed — because the module keeps them per ifIndex anyway. The port may be the ifIndex (`8`) or its name (`Gi1/0/8`).
 
 **More UI**
 
@@ -346,6 +347,7 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - `nt:link=<label>|<url>` — Custom-Link im Kontextmenü (mehrfach möglich)
 - `nt:show=<key>` — zusätzlicher Item-Wert im Tooltip
 - `nt:parent=<hostname>` — Träger-Host deklarieren (VM→Hypervisor, Container→Node). Zeichnet eine gerichtete **hosts**-Kante und gilt der What-if-Simulation als **harte Abhängigkeit**: fällt der Parent aus, fällt der Child — unabhängig vom Netzpfad.
+- `nt:uplink=<hostname>:<port>` — an welchem **Port** welches Geräts dieser Host hängt. Für alles, was keinen Nachbarn melden kann: USV, PDU, Drucker, ältere Kameras. Zeichnet die Kante *und* hängt die Zähler dieses Ports daran — Verkehr, Fehler, Discards, Geschwindigkeit —, weil das Modul sie ohnehin je ifIndex vorhält. Der Port darf der ifIndex sein (`8`) oder sein Name (`Gi1/0/8`).
 
 **Weitere UI**
 
