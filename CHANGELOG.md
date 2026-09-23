@@ -2,12 +2,33 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
-## Unreleased
+## v5.4.0 — 2026-09-23
 
-### Updating — nothing to re-import
+### Updating from 5.3.2 — nothing to re-import
 
-No action and no template changed. Reload the page once with a cache bypass,
-the bundle changed.
+No action was added or renamed, so **no rescan**: replace the module directory,
+`chown`, reload php-fpm. Reload the page once with a cache bypass — the bundle
+changed, and this release changes what the map draws. **No template changed.**
+Layouts, manual links, pins, notes and presets stay where they are.
+
+**What will look different immediately:** a device pair connected by several
+cables is now several lines. On a meshed core that is a visible change, and
+*View → All parallel links: off* puts it back to one line per pair, marked
+`×N`. Nothing is hidden either way — the count is on the line.
+
+### Thanks
+
+**[@christos-diamantis](https://github.com/christos-diamantis)** reported
+[#20](https://github.com/linuser/zabbix-network-topology/issues/20) and then
+built it: [#21](https://github.com/linuser/zabbix-network-topology/pull/21) is
+his, including the tests that pin the matching rules. His default — fan out
+when zoomed in, bundle in the overview — replaced the one the roadmap had
+sketched, and it is the better answer.
+
+**A reporter who wrote by email** sent the screenshots behind four of the
+fixes below: the 4.3 Gb/s that is a counter ceiling, red links on a switch
+whose ports are merely unused, a port named on one side only, and a map where
+30 hosts and 127 unmonitored neighbours piled up on each other.
 
 ### Added
 
@@ -36,6 +57,32 @@ the bundle changed.
 - The dashboard widget keeps one line per device pair — the tile is too small
   for a fan.
 
+- **"Connected to" — the port a device hangs on, as a column.** The hosts table
+  carries device and port of the far end, and sorts and filters by them. That
+  turns it into a patch list: which access point sits on which switch port,
+  printable, and out through the new CSV button. Infrastructure sorts first,
+  an ageing link is marked with a clock (for a device that is already gone,
+  the port it hung on last is exactly the question), several cables stay one
+  line with "+2 more". The table search knows `port:Gi1/0/8` as a field.
+
+- **CSV export for the hosts table.** It existed only in Items mode. Exports
+  what is on screen — filtered, sorted, visible rows — with device and port in
+  two separate columns, because a spreadsheet wants to group by switch, and
+  "Last seen here" as a value one can filter on.
+
+- **The port in the connection list of the host panel.** One click on the
+  device, and the list says `eth0 → Gi1/0/8` per connection. It survives the
+  device going away, because edges age instead of vanishing.
+
+- **A change notification says which cable.** A lost bundle member used to be
+  announced as "link A ↔ B disappeared", which is false while the other
+  members carry it. Now: *cable core Gi1/0/1 ↔ acc Te1/1/1 gone — 3 of 4 still
+  up*, and when the last one dies, *the link is down*. A single line keeps the
+  shorter wording.
+
+- **The legend knows the bundle**: the `×N` line and the amber glow of a
+  bundle with a dead cable, drawn with the same symbols the map uses.
+
 ### How members are matched
 
 Both ends of one cable report it, often with labels that do not compare
@@ -45,6 +92,78 @@ member when the **same device** already reported **every** existing member
 **over the same protocol** on other ports. The number of lines is exact; what
 can be wrong with incomparable labels is which far-end port is paired with
 which near-end port — never how many cables are drawn.
+
+### Changed
+
+- **The ghost filter step is called what it does.** "Network gear only" became
+  "without endpoints", and when nothing can be dropped — because not one
+  neighbour reports its capabilities, which is normal for CDP — the map says
+  so once per session instead of leaving a step that looks broken.
+
+- **The cluster toggle dims itself** when the map has fewer than two host
+  groups, instead of silently doing nothing.
+
+- **The upper limit for LLDP/CDP edges is 6000 instead of 8000.** It exists to
+  prevent a PHP fatal — a white page mid-render — not clutter, and a member
+  edge costs more than the merged one did: measured 5.9 KB against 4.6 KB,
+  46 MB against 36 MB at 8000 edges. 6000 restores the headroom the number was
+  chosen for. It is still far past any readable map, and when it does bite,
+  the map says so.
+
+### Fixed
+
+- **`ifSpeed 4294967295` is not a link speed.** It is 2³²−1, the ceiling of a
+  32-bit counter: a 10G port reports it and puts the truth in `ifHighSpeed`.
+  The panel said "0.0 % of 4.3 Gb/s", and every utilisation percentage on such
+  a link was wrong with it. The value is discarded; without `ifHighSpeed` the
+  speed stays unknown rather than invented.
+
+- **A red link meant the host, not the link.** The colour came from the ratio
+  of down interfaces across both endpoints, so a switch with 17 of 31 ports
+  unused but administratively up painted every one of its links red — next to
+  a panel showing 0.00 errors for the actual port. The operational state of
+  the port the edge hangs on now decides where it is known; the host-wide
+  ratio survives only as the fallback for edges without a port mapping.
+
+- **A port named on one side only.** One end showed `29`, the other `Port 9` —
+  the reporter's raw ifIndex against the text the neighbour announces. A
+  resolved neighbour port now takes that interface's own `ifName`, and a
+  host's own label wins over what the far side claims about it.
+
+- **Layout "auto" stopped reusing an arrangement that covers a third of the
+  map.** With 30 hosts and 127 unmonitored neighbours, the saved positions
+  covered 30 of 157 drawn nodes and the rest landed in rings around their
+  reporting switch. Where ghosts outnumber hosts more than two to one, auto
+  computes a fresh layout and says once why.
+
+- **A ghost node is no longer treated as a host** in the tooltip, the detail
+  panel and on its edges: no severity pill, no history request for an id that
+  belongs to no host.
+
+- **A replugged bundle member is reported as moved**, not as one cable gone
+  and another arrived — and no ghost line is left next to the cable it is.
+
+- **`nt:uplink` finds its member by port, not by spelling**: `Gi1/0/2` in the
+  tag matches `GigabitEthernet1/0/2` on the edge.
+
+- **A bundle counts a cable whose port is down**, not only one that stopped
+  being reported — on the line, in the member list, and in the trunk's colour.
+  The two counts used to disagree.
+
+### For contributors
+
+- **`tools/devnet/`** — a compose stack with Zabbix 7.0, Postgres and
+  **snmpsim**: simulated SNMP devices, one `.snmprec` file per device, all
+  values invented. Everything interesting in this module hangs off SNMP
+  values, and a bug report can be translated into a file and reproduced in
+  minutes. `npm run ci:snmprec` checks the format, because snmpsim answers a
+  file it does not understand with "No Such Instance" and no error at all.
+
+- **`npm run ci:frontend`** — a gate that reads what the interface *says*,
+  without a browser: detail panel, tooltip, ghost filter, layout decision,
+  bundle label, notification text, legend, and the CSV export. Three bug
+  reports in September 2026 lived exactly there, and no existing test went red
+  for any of them, because none had ever looked at the output.
 
 ## v5.3.2 — 2026-09-23
 

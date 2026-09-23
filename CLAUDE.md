@@ -82,7 +82,7 @@ Drei Schichten, und die Trennung ist der Punkt:
   deshalb testbar. Hier lebt alles Interessante: `LldpEdgeBuilder` (Kanten aus
   SNMP-Nachbartabellen), `NodeBuilder`, `ManualLinks`, `SharedLayerFilter`.
 - **`assets/js/` → ein Bundle.** `network-topology.js` ist nur Orchestrator;
-  der Renderer liegt in `modules/render-*.js` (10 davon, 52 Module insgesamt). Cytoscape.js für den
+  der Renderer liegt in `modules/render-*.js` (10 davon, 53 Module insgesamt). Cytoscape.js für den
   Graphen, Leaflet für Geo.
 
 ### Zwei-Ebenen-Speicherung
@@ -97,6 +97,26 @@ Beim Lesen gilt:
 
 `npm run ci:layers` prüft das mit gestellten Daten, jedes Szenario in einem
 eigenen Prozess (`storage.js` liest die Konfiguration beim Import).
+
+### Kantenidentität ist das Portpaar, nicht das Hostpaar
+
+Seit 5.4.0 liefert der Backend **eine Kante je Kabel**. Drei Schichten setzten
+vorher das Hostpaar als Identität voraus, und alle drei mussten mit:
+`LldpEdgeBuilder::findMember()`, `TopoDiff::keys()` (Schlüssel `a|b#<port>`
+neben den Paarschlüsseln, die die Rückfälle weiter brauchen) und `edgeSeen` in
+`build-elements.js`.
+
+**Die teure Fehlerart ist die falsche Aufspaltung, nicht das übersehene
+Kabel:** dieselbe Leitung, von beiden Enden mit unvergleichbaren Bezeichnungen
+gemeldet, darf nicht doppelt erscheinen. Deshalb öffnet ein Bericht erst dann
+ein neues Mitglied, wenn dasselbe Gerät über dasselbe Protokoll schon jedes
+bekannte Mitglied auf anderen Ports gemeldet hat. Wer hier etwas ändert,
+prüft beide Richtungen — `tests/LldpEdgeBuilderTest.php` hat für jede eine
+Gegenprobe.
+
+`parallel-links.js` zeichnet das Ergebnis. Der Trunk ist das **umgestylte
+erste Mitglied**, keine synthetische Kante: eine synthetische zählte jeder
+`cy.edges()`-Aufrufer mit — KPI, Export, What-if, Pfadsuche.
 
 ### Die absichtlichen Duplikate
 

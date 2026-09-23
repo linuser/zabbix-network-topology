@@ -115,6 +115,8 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - **Item pivot** — any item key pattern as columns
 - **Manual links** between hosts and the **map layout** — stored server-side in two layers: a Super admin curates the map everyone sees, anyone else deviates personally. Notes and pins still live in `localStorage`. Both layers store the *complete* state, so a save that would overwrite someone else's concurrent change is **rejected instead of applied** — you get a notice and reload rather than silently losing the other person's work
 - **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](LLDP-SETUP.md))
+- **Parallel links (LAG, bonding, several cables)** — one edge per cable, each with its own ports, counters and state. Zoomed in they fan out, in the overview they collapse into one line marked `×N` with the totals and an amber glow while a member is down. A failed member is a reported change of its own: *cable core Gi1/0/1 ↔ acc Te1/1/1 gone — 3 of 4 still up*
+- **"Connected to" — which port a device hangs on** — the hosts table carries the far-end device and port, sorts and filters by them (`port:Gi1/0/8`) and exports as CSV: a patch list you can print and hold against the documentation. It survives the device going away, because edges age instead of vanishing — so for a dead access point it names the port it hung on last
 - **Configurable colour scales** — Super admins set the thresholds and colours for both link scales (absolute traffic with weathermap off, utilisation % with it on) under *View → Color scales*; changes preview live, are stored in the module config and apply to all users. The colour guide shows the scale of the active mode and marks a customised one
 
 **Key figures and unmonitored devices**
@@ -313,6 +315,8 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - **Item-Pivot** — beliebiges Item-Key-Pattern als Spalten
 - **Manuelle Links** zwischen Hosts und **Kartenanordnung** — serverseitig, in zwei Ebenen: ein Super-Admin pflegt die für alle sichtbare Karte, jeder andere weicht persönlich davon ab. Notizen und Pins liegen weiterhin im `localStorage`. Beide Ebenen speichern den *vollständigen* Zustand; ein Speichern, das die gleichzeitige Änderung eines anderen überschreiben würde, wird deshalb **abgelehnt statt ausgeführt** — mit Hinweis und Neuladen, statt die Arbeit des anderen stillschweigend zu verlieren
 - **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](LLDP-SETUP.md#port-to-port--per-link-weathermap))
+- **Parallele Links (LAG, Bonding, mehrere Kabel)** — eine Kante je Kabel, jede mit eigenen Ports, Zählern und Zustand. Hineingezoomt fächern sie auf, in der Übersicht klappen sie zu einer Linie mit `×N` zusammen, mit den Summen und bernsteinfarbener Glut, solange ein Member ausgefallen ist. Ein ausgefallenes Kabel ist eine eigene Meldung: *cable core Gi1/0/1 ↔ acc Te1/1/1 gone — 3 of 4 still up*
+- **„Connected to" — an welchem Port ein Gerät hängt** — die Hosts-Tabelle trägt Gerät und Port der Gegenseite, sortiert und filtert danach (`port:Gi1/0/8`) und exportiert als CSV: eine Patchliste zum Ausdrucken und gegen die Dokumentation halten. Sie überlebt das Verschwinden des Geräts, weil Kanten altern statt zu verschwinden — bei einem toten Access Point steht dort der Port, an dem er zuletzt hing
 - **Konfigurierbare Farbskalen** — Super-Admins setzen Schwellen und Farben beider Kantenskalen (absoluter Traffic bei Weathermap aus, Auslastung in % bei an) unter *View → Farbskalen…*; Änderungen sind sofort als Vorschau sichtbar, liegen in der Modul-Config und gelten für alle. Der Farbcode zeigt die Skala des aktiven Modus und kennzeichnet eine angepasste
 
 **Kennzahlen und unüberwachte Geräte**
@@ -462,11 +466,11 @@ geschrieben wurde.
 
 ```
 network_topology/
-├── manifest.json              module manifest, 17 actions / Modul-Manifest
+├── manifest.json              module manifest, 18 actions / Modul-Manifest
 ├── Module.php                 menu registration / Menü-Eintrag
 ├── views/
 │   └── network.topology.view.php   HTML container + JS loader
-├── actions/                        17 registered actions + 2 shared classes
+├── actions/                        18 registered actions + 2 shared classes
 │   ├── NetworkTopologyView.php                  renders the page (layout.htmlpage)
 │   ├── NetworkTopologyData.php                  nodes + edges + traffic + LLDP/CDP + health
 │   ├── NetworkTopologyHistory.php               trigger events for a time window
@@ -486,13 +490,14 @@ network_topology/
 │   ├── NetworkTopologyPortScan.php              port probe on click (WRITE-ish: network side effect)
 │   ├── NetworkTopologyController.php            base class, not an action: CSRF, throttling, JSON
 │   └── NtCache.php                              helper, not an action: topology baseline cache (APCu)
-├── topology/                       HostMetadata · HostTagParser · LldpEdgeBuilder · ManualLinks · MetricExtractor
-│                                   NodeBuilder · NodePositions · ProblemLoader · Revision · SharedLayerFilter
+├── topology/                       ColorScales · HopScope · HostMetadata · HostTagParser · LldpEdgeBuilder
+│                                   ManualLinks · MetricExtractor · NodeBuilder · NodePositions · ProblemLoader
+│                                   Revision · SharedLayerFilter · TopoDiff
 └── assets/
     ├── css/network-topology.css
     └── js/
         ├── network-topology.js     main: tab switching, init, refresh loop
-        └── modules/                45 ES modules
+        └── modules/                53 ES modules + 2 language files
 ```
 
 Key frontend modules: `build-elements.js` (Cytoscape node/edge builder) · `render-tech.js` / `render-mgmt.js` / `render-table.js` / `render-geo.js` (the four views) · `items-pivot.js` (pivot table) · `whatif.js` + `root-cause.js` (failure simulation) · `traffic.js` (weathermap) · `aggregation.js` (group view) · `query.js` (table query language) · `storage.js` (user-scoped localStorage) · `utils.js` (`esc()`, formatters) · `i18n.js` + `i18n/{de,en}.js`.

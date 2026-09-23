@@ -346,6 +346,31 @@ Kommen Werte zurück → Port-zu-Port geht. Ob der Index-`<LokalPort>` als
 > mit *geschätzter* Node-Summe; für den direkten Farbvergleich zwischen Kanten also den
 > %-Modus nutzen.
 
+### Mehrere Kabel zwischen denselben zwei Geräten (LAG, Bonding)
+
+Seit **v5.4.0** ist jedes Kabel eine eigene Kante. Ob sie sich auseinander
+halten lassen, entscheidet der **lokale Port** jeder Meldung — und der ist die
+mittlere Zahl des LLDP-Index. Ein Switch, der Port-zu-Port-Kanten liefert,
+liefert damit auch getrennte Mitglieder. Zusätzlich einzustellen ist nichts.
+
+Zwei Dinge folgen daraus, beide besser vorher gewusst als hinterher:
+
+- **Ohne brauchbaren lokalen Port** — gar keine Port-zu-Port-Daten, oder
+  Nachbarn über `nt:parent` beziehungsweise einen manuellen Link erklärt —
+  bleibt es bei **einer** Kante je Paar wie bisher. Das sind keine Kabel.
+- **Die Schreibweisen müssen nicht zusammenpassen.** Ein Ende sagt `10101`,
+  das andere `GigabitEthernet1/0/1`. Das Modul spaltet daraufhin kein Kabel in
+  zwei: eine Meldung öffnet erst dann ein neues Mitglied, wenn dasselbe Gerät
+  über dasselbe Protokoll schon jedes bekannte Mitglied auf anderen Ports
+  gemeldet hat. Die **Anzahl** der Linien stimmt also auch bei unvergleichbaren
+  Bezeichnungen; danebenliegen kann die Paarung, welcher Gegenport zu welchem
+  eigenen Port gehört.
+
+Für die Zähler je Mitglied gilt dieselbe Regel wie oben für die Weathermap: es
+gibt sie, wo der lokale LLDP-Port dem `ifIndex` entspricht, unter dem der
+Switch zählt. Wo nicht, zeigt das Bündel trotzdem die richtige Anzahl Kabel —
+es misst sie nur gemeinsam statt einzeln.
+
 ---
 
 ## Warum fehlen Kanten? (Troubleshooting)

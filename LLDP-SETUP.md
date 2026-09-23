@@ -373,6 +373,31 @@ Values coming back → port-to-port works. Whether the index `<LocalPort>` exist
 > *measured* per-link figure sit next to edges with an *estimated* node total. For
 > comparing colours between edges, use % mode.
 
+### Several cables between the same two devices (LAG, bonding)
+
+Since **v5.4.0** each cable is its own edge. What decides whether they can be
+told apart is the **local port** of each report — which is the middle number of
+the LLDP index, so a switch that produces port-to-port edges produces separate
+members as well. Nothing extra has to be configured.
+
+Two things follow from that, and both are worth knowing before they surprise
+you:
+
+- **Without a usable local port** — no port-to-port data at all, or neighbours
+  declared through `nt:parent` or a manual link — the pair keeps **one** edge,
+  as before. Those are not cables.
+- **Spellings need not match.** One end may say `10101` and the other
+  `GigabitEthernet1/0/1`. The module does not split a cable in two over that:
+  a report only opens a new member once the same device has reported every
+  known member over the same protocol on other ports. The **number** of lines
+  is therefore exact even with incomparable labels; what can be off is which
+  far-end port is paired with which near-end port.
+
+Per-member counters follow the same rule as the weathermap above: they exist
+where the LLDP local port matches the `ifIndex` the switch counts under. Where
+it does not, the bundle still shows the right number of cables — it just
+measures them together instead of individually.
+
 ---
 
 ## Why are edges missing? (Troubleshooting)

@@ -132,6 +132,12 @@ without it being clear why:
    theme is not something this gate knows — it checks *what* is there, which is
    where those bugs were.
 
+   It has grown with 5.4.0 and now also reads the bundle label ("×3 (1 down)"),
+   the change notifications ("3 of 4 still up"), the legend and the CSV export
+   — including a host named `=cmd|'/C calc'!A0`, which has to come out of the
+   export neutralised. **What lands in an exported file is output too**, and
+   nobody sees it by looking at the screen.
+
 8. **Nothing may slip into the module ZIP that doesn't belong there.** The module
    directory sits under the web root and is publicly reachable — shell scripts,
    `tools/`, `templates/`, source maps and the repository itself have no business
@@ -386,6 +392,12 @@ ohne dass klar ist warum:
    Ein Browser-Test ist es nicht. Ob die gestrichelte Pille im dunklen Theme
    gut aussieht, weiß dieser Gate nicht — er prüft, *was* dasteht, und genau da
    lagen die Fehler.
+
+   Mit 5.4.0 ist er gewachsen und liest zusätzlich das Bündel-Label
+   („×3 (1 down)"), die Änderungsmeldungen („3 of 4 still up"), die Legende und
+   den CSV-Export — darin ein Host namens `=cmd|'/C calc'!A0`, der entschärft
+   aus der Datei kommen muss. **Was in einer exportierten Datei steht, ist
+   genauso Ausgabe**, nur sieht es beim Hinsehen niemand.
 
 8. **Nichts darf ins Modul-ZIP rutschen, was nicht hineingehört.** Das
    Modulverzeichnis liegt unter dem Web-Root und ist öffentlich abrufbar —
