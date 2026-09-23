@@ -413,6 +413,21 @@ export function buildEdgeElements(edges, nodes) {
             if (pmRaw.errors   !== undefined) portErr  = pmRaw.errors;
             if (pmRaw.discards !== undefined) portDrop = pmRaw.discards;
         }
+        // IST DIESER PORT UNTEN? Nicht: wie viele Ports des Gehaeuses sind es.
+        //
+        // Die Kantenfarbe hing an einem Anteil ueber ALLE Interfaces beider
+        // Hosts, und ab der Haelfte wurde sie rot. Auf einem Access-Switch, wo
+        // die Haelfte der Ports ungenutzt (aber aktiv) ist, faerbte das jede
+        // Verbindung des Geraets rot — gemeldet mit Screenshot: "Ports down 17
+        // (55%)" neben einer Kante mit 0 Fehlern und 0 Discards. Die Farbe log
+        // damit an genau der Stelle, an der man ihr glauben soll.
+        //
+        // Wissen wir es fuer die Ports DIESER Kante, entscheiden die. Nur wenn
+        // keine Portzuordnung existiert, bleibt die Hostsumme als Rueckfall.
+        let portDown = null;
+        [pmSrc, pmTgt].forEach(function(pm2) {
+            if (pm2 && pm2.down !== undefined) portDown = portDown || pm2.down === true;
+        });
         if (pm) {
             perLink = true;
             // in/out konsistent aus Sicht des SRC-Knotens: pm ist nach Reporter-
@@ -468,6 +483,8 @@ export function buildEdgeElements(edges, nodes) {
                     // mit vielen unbenutzten Ports jede Edge rot faerben.
                     ifaceDown: downCnt, ifaceErr: errorsRate, ifaceDrop: discardsRate,
                     ifaceDownRatio: downRatio,
+                    // true/false = an DIESEM Port gemessen, null = unbekannt.
+                    portDown: portDown,
                     // Link-Kapazitaet in bps (0 = unbekannt) fuer Weathermap;
                     // perLink=true → echte Port-Metrik statt Node-Schaetzung
                     capBps: eCap, perLink: perLink,

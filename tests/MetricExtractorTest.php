@@ -259,6 +259,38 @@ check('net.if.type zaehlt nicht als Traffic',  $mN['traffic']['s1']['out']      
 check('Agent net.if.in[eth0]: kein Port',      isset($mN['port_traffic']['s2']),               false);
 check('Agent net.if.in[eth0]: Host-Traffic',   $mN['traffic']['s2']['in']             ?? null, 700.0);
 
+// ── ifSpeed am 32-Bit-Anschlag ist keine Geschwindigkeit ───────────────────
+//
+// 4294967295 = 2^32-1. RFC 2863: liegt die Geschwindigkeit darueber, traegt
+// ifSpeed den Maximalwert und die Wahrheit steht in ifHighSpeed. Gemeldet aus
+// dem Feld: "der Link hat 10 Gb/s, im Panel steht 4.3 Gb/s".
+echo "\n  MetricExtractor — ifSpeed-Anschlag\n\n";
+
+$mCap = MetricExtractor::extract([
+    ['hostid' => 's1', 'key_' => 'ifSpeed[1]',     'name' => 'Speed 1', 'lastvalue' => '4294967295'],
+    ['hostid' => 's1', 'key_' => 'ifSpeed[2]',     'name' => 'Speed 2', 'lastvalue' => '1000000000'],
+    ['hostid' => 's2', 'key_' => 'ifSpeed[1]',     'name' => 'Speed 1', 'lastvalue' => '4294967295'],
+    ['hostid' => 's2', 'key_' => 'ifHighSpeed[1]', 'name' => 'HighSpeed 1', 'lastvalue' => '10000'],
+]);
+check('Anschlag wird verworfen',      isset($mCap['port_speed']['s1']['1']), false);
+check('echter Wert bleibt',           $mCap['port_speed']['s1']['2'] ?? null, 1.0e9);
+check('ifHighSpeed gewinnt (10 Gb/s)', $mCap['port_speed']['s2']['1'] ?? null, 1.0e10);
+check('Host-Speed ohne Anschlag',      $mCap['speed']['s1'] ?? null, 1.0e9);
+
+// ── Portzustand je ifIndex ────────────────────────────────────────────────
+echo "\n  MetricExtractor — Portzustand je Port\n\n";
+
+$mSt = MetricExtractor::extract([
+    ['hostid' => 's1', 'key_' => 'ifOperStatus[1]',  'name' => 'Oper 1',  'lastvalue' => '1'],
+    ['hostid' => 's1', 'key_' => 'ifOperStatus[2]',  'name' => 'Oper 2',  'lastvalue' => '2'],
+    ['hostid' => 's1', 'key_' => 'ifAdminStatus[2]', 'name' => 'Admin 2', 'lastvalue' => '1'],
+    ['hostid' => 's1', 'key_' => 'ifOperStatus[3]',  'name' => 'Oper 3',  'lastvalue' => '2'],
+    ['hostid' => 's1', 'key_' => 'ifAdminStatus[3]', 'name' => 'Admin 3', 'lastvalue' => '2'],
+]);
+check('Port 1 ist oben',                  $mSt['port_status']['s1']['1'] ?? null, false);
+check('Port 2 ist unten',                 $mSt['port_status']['s1']['2'] ?? null, true);
+check('admin-down taucht nicht auf',      isset($mSt['port_status']['s1']['3']), false);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

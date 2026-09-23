@@ -870,6 +870,43 @@ $rAl3 = LldpEdgeBuilder::build($hAl3, [
 check('zwei Anspruchsteller: keine Kante', count($rAl3['edges']), 0);
 check('zwei Anspruchsteller: gemeldet',    count($rAl3['quality']['m']['ambiguous'] ?? []), 1);
 
+// ── Portzustand und Portname an der Kante ─────────────────────────────────
+//
+// Zwei Meldungen aus einer Mail: die Kante war rot, obwohl der Port laeuft
+// (die Farbe kam aus der Hostsumme), und der Portname stand nur auf einer
+// Seite. Namen erfunden.
+echo "\n  LldpEdgeBuilder — Portzustand und Portname\n\n";
+
+$hPs = [
+    'a' => ['host' => 'lab-sw-a', 'name' => 'lab-sw-a'],
+    'b' => ['host' => 'lab-sw-b', 'name' => 'lab-sw-b'],
+];
+$namenPs = ['a' => ['29' => 'Gi1/0/29'], 'b' => ['9' => 'Gi1/0/9']];
+$rPs = LldpEdgeBuilder::build($hPs, [
+    ['hostid' => 'a', 'key_' => 'lldpRemSysName[0.29.1]', 'lastvalue' => 'lab-sw-b', 'src' => 'lldp'],
+    ['hostid' => 'b', 'key_' => 'lldpRemSysName[0.9.1]',  'lastvalue' => 'lab-sw-a', 'src' => 'lldp'],
+], ['a' => ['0.29.1' => ['desc' => 'Port 9']], 'b' => ['0.9.1' => ['desc' => 'Port 29']]],
+    [], [], [], [], [], $namenPs, [],
+    ['a' => ['29' => false], 'b' => ['9' => false]]);
+$ePs = findEdge($rPs['edges'], 'a', 'b') ?? [];
+check('eigener Portname auf BEIDEN Seiten', [$ePs['ports']['a'] ?? null, $ePs['ports']['b'] ?? null],
+    ['Gi1/0/29', 'Gi1/0/9']);
+check('Port a laeuft',  $ePs['port_metrics']['a']['down'] ?? null, false);
+check('Port b laeuft',  $ePs['port_metrics']['b']['down'] ?? null, false);
+
+// Ist der Port wirklich unten, steht es auch da.
+$rPs2 = LldpEdgeBuilder::build($hPs, [
+    ['hostid' => 'a', 'key_' => 'lldpRemSysName[0.29.1]', 'lastvalue' => 'lab-sw-b', 'src' => 'lldp'],
+], [], [], [], [], [], [], $namenPs, [], ['a' => ['29' => true]]);
+check('Port unten wird gemeldet', (findEdge($rPs2['edges'], 'a', 'b') ?? [])['port_metrics']['a']['down'] ?? null, true);
+
+// Ohne Angabe bleibt das Feld weg — unbekannt ist nicht "laeuft".
+$rPs3 = LldpEdgeBuilder::build($hPs, [
+    ['hostid' => 'a', 'key_' => 'lldpRemSysName[0.29.1]', 'lastvalue' => 'lab-sw-b', 'src' => 'lldp'],
+], [], [], [], [], [], [], $namenPs);
+check('unbekannt bleibt unbekannt',
+    isset((findEdge($rPs3['edges'], 'a', 'b') ?? [])['port_metrics']['a']['down']), false);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

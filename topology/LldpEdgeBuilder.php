@@ -79,7 +79,7 @@ final class LldpEdgeBuilder {
     public static function build(array $hosts, array $lldp_raw,
             array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
             array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
-            array $port_names = [], array $rtt = []): array {
+            array $port_names = [], array $rtt = [], array $port_status = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         self::$truncated = 0;
 
@@ -501,6 +501,12 @@ final class LldpEdgeBuilder {
                     $my_metrics ??= [];
                     $my_metrics['discards'] = round((float) $port_discards[$rid][$pidx], 3);
                 }
+                // Zustand DIESES Ports. Die Kantenfarbe soll sich daran halten
+                // und nicht an der Hostsumme ueber alle Interfaces.
+                if (isset($port_status[$rid][$pidx])) {
+                    $my_metrics ??= [];
+                    $my_metrics['down'] = (bool) $port_status[$rid][$pidx];
+                }
             }
 
             // Den gemeldeten Nachbar-Port auf ein Interface DES NACHBARN
@@ -528,6 +534,17 @@ final class LldpEdgeBuilder {
                     if (isset($port_discards[$rhid][$fidx])) {
                         $far_metrics ??= [];
                         $far_metrics['discards'] = round((float) $port_discards[$rhid][$fidx], 3);
+                    }
+                    if (isset($port_status[$rhid][$fidx])) {
+                        $far_metrics ??= [];
+                        $far_metrics['down'] = (bool) $port_status[$rhid][$fidx];
+                    }
+                    // Der Name, den der Nachbar SELBST fuer diesen Port fuehrt,
+                    // schlaegt den angekuendigten Text: "Gi1/0/9" ist brauchbarer
+                    // als "Port 9", und es ist seine eigene Auskunft statt der des
+                    // Gegenuebers.
+                    if (($port_names[$rhid][$fidx] ?? '') !== '') {
+                        $remote_port = self::capLabel((string) $port_names[$rhid][$fidx]);
                     }
                 }
             }
@@ -594,7 +611,12 @@ final class LldpEdgeBuilder {
                 if (!isset($edges[$eidx]['src'][$src])) {
                     $edges[$eidx]['src'][$src] = true;
                 }
-                if ($port !== '' && !isset($edges[$eidx]['ports'][(string) $rid])) {
+                // Der EIGENE lokale Port ueberschreibt, was die Gegenseite
+                // ueber ihn behauptet hat. Bisher gewann, was zuerst eintraf —
+                // auf einer Kante stand dann "29" (roher ifIndex des Melders)
+                // und "Port 9" (Text des Nachbarn), und es sah aus, als kenne
+                // das Modul nur eine Seite. Gemeldet mit Screenshot.
+                if ($port !== '') {
                     $edges[$eidx]['ports'][(string) $rid] = $port;
                 }
                 if ($port_idx !== '' && !isset($edges[$eidx]['port_idx'][(string) $rid])) {

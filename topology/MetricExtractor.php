@@ -56,6 +56,7 @@ final class MetricExtractor {
         //   discards_rate Summe in+out Discards/sec ueber alle Interfaces
         //   iface_count   Anzahl beobachteter Interfaces (Kontext)
         $host_iface     = [];   // hid => ['down'=>N, 'errors'=>X, 'discards'=>X, 'count'=>N]
+        $port_status    = [];   // hid => [ifIndex => true(=down) | false(=up)]
         $iface_oper     = [];   // hid => [ifaceParam => operStatus]  (Roh-Sammlung)
         $iface_admin    = [];   // hid => [ifaceParam => adminStatus] (fuer Korrelation)
         $host_speed     = [];   // hid => max Link-Speed in bps (Weathermap-Kapazitaet)
@@ -161,7 +162,7 @@ final class MetricExtractor {
                     $sp = self::highSpeedBps($val);
                     if ($sp > 0) $port_speed[$hid][$sm[1]] = $sp;
                 } elseif (preg_match('/ifSpeed[.\[](\d+)/', $key, $sm)) {
-                    $sp = (float) $val;
+                    $sp = self::speedBps($val);
                     if ($sp > 0 && !isset($port_speed[$hid][$sm[1]])) $port_speed[$hid][$sm[1]] = $sp;
                 }
             }
@@ -272,7 +273,7 @@ final class MetricExtractor {
                 }
             } elseif (strpos($key, 'ifSpeed') !== false) {
                 // ifSpeed = bps direkt (32bit-Counter, capped bei ~4.3G)
-                $sp = (float) $val;
+                $sp = self::speedBps($val);
                 if ($sp > 0 && (!isset($host_speed[$hid]) || $sp > $host_speed[$hid])) {
                     $host_speed[$hid] = $sp;
                 }
@@ -382,7 +383,17 @@ final class MetricExtractor {
                 $admin = $iface_admin[$hid][$param] ?? 1;
                 if ($admin === 2) continue;   // admin-down: gewollt, kein Issue
                 $host_iface[$hid]['count']++;
-                if ($oper === 2 || $oper === 7) $host_iface[$hid]['down']++;
+                $down = ($oper === 2 || $oper === 7);
+                if ($down) $host_iface[$hid]['down']++;
+                // ZUSAETZLICH je Port merken. Die Hostsumme beantwortet "wie
+                // geht es dem Geraet"; fuer die Farbe einer KANTE ist sie die
+                // falsche Groesse. Ein Access-Switch, auf dem die Haelfte der
+                // Ports ungenutzt (aber aktiv) ist, faerbte bisher jede seiner
+                // Verbindungen rot — gemeldet mit Screenshot, "Ports down 17
+                // (55%)" neben einer Verbindung mit 0 Fehlern.
+                if (preg_match('/^\d+$/', (string) $param)) {
+                    $port_status[$hid][(string) $param] = $down;
+                }
             }
         }
 
@@ -606,6 +617,7 @@ final class MetricExtractor {
             'port_errors'   => $port_errors,
             'port_discards' => $port_discards,
             'port_names'    => $port_names,
+            'port_status'   => $port_status,
             'lldp_ports'   => $lldp_ports,
             'lldp_meta'    => $lldp_meta,
         ];
@@ -719,6 +731,25 @@ final class MetricExtractor {
             return $m[1];
         }
         return '';
+    }
+
+    /**
+     * ifSpeed → bps, aber 4294967295 ist KEINE Geschwindigkeit.
+     *
+     * Der Wert ist 2^32-1, also der Anschlag des 32-Bit-Zaehlers. RFC 2863
+     * sagt es ausdruecklich: liegt die Geschwindigkeit darueber, traegt
+     * ifSpeed den Maximalwert und die Wahrheit steht in ifHighSpeed. Ein
+     * 10G-Port meldet also exakt diese Zahl.
+     *
+     * Gemeldet aus dem Feld: "der Link hat 10 Gb/s, im Panel steht 4.3 Gb/s".
+     * Wir nahmen den Anschlag fuer bare Muenze, und weil die Auslastung gegen
+     * diese Zahl gerechnet wird, waren auch alle Prozentwerte falsch — zu
+     * hoch, nicht zu niedrig. Ohne ifHighSpeed bleibt die Geschwindigkeit
+     * lieber unbekannt als erfunden.
+     */
+    private static function speedBps($val): float {
+        $sp = (float) $val;
+        return ($sp >= 4294967295.0) ? 0.0 : $sp;
     }
 
     private static function highSpeedBps($val): float {

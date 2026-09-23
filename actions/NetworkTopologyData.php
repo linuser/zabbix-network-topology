@@ -518,7 +518,10 @@ class NetworkTopologyData extends NetworkTopologyController {
                               $metrics['port_names'] ?? [],
                               // Laufzeiten fuer die Plausibilitaetspruefung im
                               // Confidence-Score (siehe rttAbschlag).
-                              $metrics['ping'] ?? []);
+                              $metrics['ping'] ?? [],
+                              // Zustand je Port: die Kantenfarbe soll den Port
+                              // meinen und nicht den Durchschnitt des Gehaeuses.
+                              $metrics['port_status'] ?? []);
         $edges          = $lldp['edges'];
         // ── 5a0. ERKLAERTE UPLINKS (nt:uplink-Tag) ────────────────────────
         // Geraete ohne Nachbarprotokoll — USV, PDU, Drucker — haengen an einem

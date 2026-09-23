@@ -207,7 +207,14 @@ export function applyTrafficHeatmap(cy) {
         //                      Count weiterhin)
         //   errors > T       → orange (CRC, framing etc.)
         //   discards > T     → orange dashed (queue full)
-        const ifDownRatio = edge.data('ifaceDownRatio') || 0;
+        // Kennen wir den Zustand der Ports DIESER Kante, gilt er. Die Quote
+        // ueber alle Interfaces des Hosts ist nur der Rueckfall, wenn es keine
+        // Portzuordnung gibt — sie faerbte sonst jede Kante eines Switches rot,
+        // auf dem die Haelfte der Ports schlicht ungenutzt ist.
+        const portDown = edge.data('portDown');
+        const ifDownRatio = (portDown === true || portDown === false)
+            ? (portDown ? 1 : 0)
+            : (edge.data('ifaceDownRatio') || 0);
         const ifErr  = edge.data('ifaceErr')  || 0;
         const ifDrop = edge.data('ifaceDrop') || 0;
 
