@@ -1108,10 +1108,18 @@ final class LldpEdgeBuilder {
                 // Between parallel links: the one on the declared port, else
                 // the first. Adding the tag to every member would claim a
                 // port on each of them that only one of them has.
-                $idx = $vorhanden[$key][0];
+                // Das Label wird dabei normalisiert verglichen, der ifIndex
+                // nicht: "Gi1/0/8" im Tag und "GigabitEthernet1/0/8" auf der
+                // Kante sind derselbe Port, und byteweise vergleichen hiesse,
+                // beim ersten Member zu landen — also womoeglich am falschen
+                // Kabel des Buendels.
+                $idx  = $vorhanden[$key][0];
+                $norm = $label !== '' ? self::normPort($label) : '';
                 foreach ($vorhanden[$key] as $cand) {
-                    if (($ifidx !== '' && ($edges[$cand]['port_idx'][(string) $ziel] ?? '') === $ifidx)
-                            || ($label !== '' && ($edges[$cand]['ports'][(string) $ziel] ?? '') === $label)) {
+                    $kidx = (string) ($edges[$cand]['port_idx'][(string) $ziel] ?? '');
+                    $klab = (string) ($edges[$cand]['ports'][(string) $ziel] ?? '');
+                    if (($ifidx !== '' && $kidx === $ifidx)
+                            || ($norm !== '' && $klab !== '' && self::normPort($klab) === $norm)) {
                         $idx = $cand;
                         break;
                     }

@@ -995,6 +995,14 @@ $tagged = array_values(array_filter($eUp, static fn($e) => in_array('tag', $e['s
 check('uplink: keine neue Kante',                  count($eUp), 2);
 check('uplink: am Member mit dem Port',            $tagged[0]['ports']['core'] ?? null, 'Gi1/0/2');
 
+// Dasselbe Tag in Langform: "GigabitEthernet1/0/2" ist derselbe Port wie
+// "Gi1/0/2" auf der Kante. Byteweise verglichen landete das Tag am ersten
+// Member — also am falschen Kabel.
+$eUpL = LldpEdgeBuilder::uplinkEdges($hLag,
+    ['acc' => ['host' => 'core', 'port' => 'GigabitEthernet1/0/2']], $rLag['edges']);
+$taggedL = array_values(array_filter($eUpL, static fn($e) => in_array('tag', $e['src'], true)));
+check('uplink: Langform trifft denselben Member',  $taggedL[0]['ports']['core'] ?? null, 'Gi1/0/2');
+
 // Regel 3 in findMember() ordnet zu, OHNE die Ports vergleichen zu koennen:
 // ein Bericht, den dieser Melder mit diesem Protokoll noch nicht abgegeben
 // hat, gehoert "wohl" zu einem der bekannten Kabel. Meldet core zwei Member
