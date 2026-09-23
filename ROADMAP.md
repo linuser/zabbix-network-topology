@@ -187,7 +187,47 @@ Zugangsdaten. Etwa ein Tag mit Tests. Die Portnamen sind erst seit 5.3.1
 verlässlich: `ifName`, `ifDescr` und `ifAlias` wurden vorher gar nicht
 abgefragt.
 
-### 6. „An welchem Port hängt das Ding?" — als Suche und als Liste
+### 6. Parallele Verbindungen (LAG) — eine Kante je Kabel
+
+Gemeldet von Christos Diamantis in
+[#20](https://github.com/linuser/zabbix-network-topology/issues/20), und er hat
+in allen Punkten recht. Hängen zwei Geräte mit mehreren Kabeln aneinander — ein
+LACP-Bündel, zwei parallele Uplinks —, zeichnet die Karte **eine** Linie.
+
+**Was dahinter steckt, ist keine Zeichenfrage, sondern die Identität einer
+Kante.** Sie ist heute „A–B", und drei Schichten setzen das voraus:
+
+- `LldpEdgeBuilder`: `$edge_key` aus dem sortierten Hostpaar
+- `TopoDiff`: derselbe Schlüssel, deshalb ist ein ausgefallenes Bündelmitglied
+  **keine gemeldete Änderung**
+- `build-elements.js`: dedupliziert ebenfalls nach Paar, würde parallele Kanten
+  also selbst dann verschlucken, wenn das Backend sie lieferte
+
+**Die Folgen im Betrieb**, und die dritte ist die ernsteste:
+
+1. Nur ein Portpaar wird angezeigt, bei 4×10G also eines von vier.
+2. Verkehr und Auslastung sind die Zähler **eines** Mitglieds — ein 4×10G-Bündel
+   wird gegen 10G gemessen und sieht ausgelastet aus, wenn es das nicht ist.
+3. Fällt ein Mitglied aus, ändert sich auf der Karte **nichts**. Die Linie steht,
+   weil die übrigen Mitglieder sie halten.
+
+**Der Umbau:** Schlüssel wird das ungeordnete Portpaar, normalisiert wie beim
+Portabgleich. Dieselbe Leitung kommt von beiden Enden herein und muss weiterhin
+zu EINER Kante werden. Rückfälle: nur lokaler Port bekannt → Schlüssel aus
+Melder plus Port; gar kein Port (`nt:parent`, manuelle Links, UniFi-`uplink.id`)
+→ Paar wie bisher, das sind keine Kabel.
+
+**Die Darstellung** bewusst nicht als Parallellinien per Voreinstellung: In
+vermaschten Kernen liegen sechs Kabel zwischen zwei Switches, und sechs Linien
+sind unleserlicher als eine. Stattdessen eine Linie mit **×N**, die Mitglieder
+im Kanten-Panel mit Portpaar, Zustand und Verkehr je Kabel, und ein
+teilausgefallenes Bündel sieht man der Linie an. Parallellinien als Option für
+zwei, drei Kabel.
+
+**Aufwand:** groß, und zwar über die ganze Kette — Diff, Export, Aggregation,
+What-if, Statistik. Deshalb 5.4.0 und nicht 5.3.x.
+
+### 7. „An welchem Port hängt das Ding?" — als Suche und als Liste
 
 Nutzerwunsch vom September 2026, und der ehrlichste Satz dazu steht in seiner
 Mail: **das war der Grund, aus dem er die Karte überhaupt gesucht hat.**
@@ -224,7 +264,7 @@ die Geister-Zeilen kommen fast geschenkt dazu.
 aber für Geräte, die gar nichts melden — dort beantwortet sie die
 Forwarding-Tabelle des Switches statt LLDP.
 
-### 7. Endgeräte bündeln — ein Knoten statt achtundvierzig
+### 8. Endgeräte bündeln — ein Knoten statt achtundvierzig
 
 Nutzerwunsch vom September 2026, per Mail, mit Screenshot. Die zweite Hälfte
 dessen, was in 5.3.2 als Filter gebaut wurde: Geister lassen sich jetzt auf
