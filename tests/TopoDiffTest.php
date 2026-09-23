@@ -303,6 +303,28 @@ check('2 -> 1 Kabel: nichts added',            count($dDown['added']), 0);
 check('2 -> 1 Kabel: der ausgefallene removed', $dDown['removed'][0]['k'] ?? null, 'h1|h2#i2');
 check('2 -> 1 Kabel: kein moved',              count($dDown['moved']), 0);
 
+// Ein Member wird UMGESTECKT: auf h1 von Port 2 auf Port 3, das andere Ende
+// bleibt. Das Kabel ist dasselbe, also eine Bewegung — nicht weg und neu.
+// Feld fuer Feld verglichen brach die Pruefung beim ersten Unterschied ab und
+// hielt es fuer ein anderes Kabel; die Alterung legte dann fuer 900 s eine
+// Geisterlinie neben das Kabel, das sie selbst ist.
+$sMove = TopoDiff::snapshot([$lag2[0], $idxEdge('h1', 'h2', '3', '50')], $label);
+$dMove = TopoDiff::compare($sLag, $sMove);
+check('Member umgesteckt: als Bewegung',       count($dMove['moved']), 1);
+check('Member umgesteckt: nichts added',       count($dMove['added']), 0);
+check('Member umgesteckt: nichts removed',     count($dMove['removed']), 0);
+check('Member umgesteckt: nennt den Host',     $dMove['moved'][0]['ports'][0]['host'] ?? null, 'SW01');
+check('Member umgesteckt: alter Port',         $dMove['moved'][0]['ports'][0]['from'] ?? null, 'p2');
+check('Member umgesteckt: neuer Port',         $dMove['moved'][0]['ports'][0]['to'] ?? null, 'p3');
+$aMove = TopoDiff::ageOut($sLag, $sMove, 1000, 3600);
+check('Member umgesteckt: keine Geisterlinie', count($aMove['stale']), 0);
+
+// Beide Enden anders: das ist wirklich ein anderes Kabel.
+$sAnders = TopoDiff::snapshot([$lag2[0], $idxEdge('h1', 'h2', '3', '51')], $label);
+$dAnders = TopoDiff::compare($sLag, $sAnders);
+check('anderes Kabel: added und removed',
+    [count($dAnders['added']), count($dAnders['removed']), count($dAnders['moved'])], [1, 1, 0]);
+
 // Eine hosts-Kante (nt:parent) macht eine physische nicht "parallel".
 $kH = TopoDiff::keys([$lag2[0], ['from' => 'h1', 'to' => 'h2', '_type' => 'hosts']]);
 check('hosts-Kante zaehlt nicht als Member',   $kH[0], 'h1|h2');

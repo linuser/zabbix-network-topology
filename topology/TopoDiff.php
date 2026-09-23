@@ -202,16 +202,43 @@ class TopoDiff {
         return $out;
     }
 
-    /** Do two entries of the same pair describe the same cable? */
+    /**
+     * Do two entries of the same pair describe the same cable?
+     *
+     * EIN KABEL HAT ZWEI ENDEN, UND EINS DAVON REICHT
+     * -----------------------------------------------
+     * Geprueft wird je Ende, nicht Feld fuer Feld. Wird ein Bündelmitglied
+     * am einen Ende umgesteckt, aendert sich dort der Port — am anderen
+     * Ende steckt dasselbe Kabel weiter im selben Port, und genau das ist
+     * der Beleg, dass es dasselbe ist.
+     *
+     * Zuerst verglichen wurde stattdessen Feld fuer Feld mit Rueckgabe beim
+     * ERSTEN vergleichbaren: ein Umstecken auf Seite A endete damit sofort
+     * bei "anderes Kabel". Der Diff meldete dann "Kante weg" plus "Kante
+     * neu" statt einer Bewegung, und die Alterung legte fuer die Dauer der
+     * TTL eine Geisterlinie neben das Kabel, das sie selbst ist.
+     *
+     * Zwei Mitglieder desselben Paars koennen sich ein Ende nicht teilen —
+     * ein Port traegt ein Kabel. Ein Treffer an einem Ende ist deshalb
+     * eindeutig. Der ifIndex hat Vorrang, der Name ist nur Rueckfall.
+     */
     private static function sameLink(array $a, array $b): bool {
         if (!array_key_exists('pa', $a)) {
             return false;   // Altbestand ohne Ports: nicht entscheidbar
         }
-        foreach (['ia', 'ib', 'pa', 'pb'] as $f) {
-            $x = (string) ($a[$f] ?? '');
-            $y = (string) ($b[$f] ?? '');
+        foreach ([['ia', 'pa'], ['ib', 'pb']] as [$ifeld, $pfeld]) {
+            $x = (string) ($a[$ifeld] ?? '');
+            $y = (string) ($b[$ifeld] ?? '');
             if ($x !== '' && $y !== '') {
-                return $x === $y;
+                if ($x === $y) {
+                    return true;
+                }
+                continue;   // Index entscheidet; der Name darf ihn nicht ueberstimmen
+            }
+            $x = (string) ($a[$pfeld] ?? '');
+            $y = (string) ($b[$pfeld] ?? '');
+            if ($x !== '' && $y !== '' && $x === $y) {
+                return true;
             }
         }
         return false;
