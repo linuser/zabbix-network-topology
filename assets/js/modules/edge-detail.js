@@ -40,7 +40,7 @@ import { el, fmt } from './utils.js';
 import { hideDetail } from './detail-panel.js';
 import { t } from './i18n.js';
 import { utilizationColor, utilizationPct } from './traffic.js';
-import { bundleMembers, trunkData } from './parallel-links.js';
+import { bundleMembers, trunkData, memberDown } from './parallel-links.js';
 
 // Schwellen wie in traffic.js — Errors/Discards sind nach Zabbix-Preprocessing
 // 'change per second', 1 Error/s ist bereits viel.
@@ -315,7 +315,10 @@ function memberSection(panel, ed, s, istTrunk) {
     const members = bundleMembers(ed).toArray().sort(function(a, b) {
         return (a.data('bundleIdx') || 0) - (b.data('bundleIdx') || 0);
     });
-    const down = members.filter(function(m) { return m.data('_isStaleEdge'); }).length;
+    // Dieselbe Regel wie im Buendel-Label, sonst sagt die Linie "(1 down)"
+    // und die Liste darunter zaehlt null: ein Member ist auch dann tot, wenn
+    // er noch gemeldet wird, sein Port aber unten ist.
+    const down = members.filter(function(m) { return memberDown(m.data()); }).length;
     section(panel, t('parlinks.sec', { n: members.length })
         + (down ? ' \u00B7 ' + t('parlinks.down', { n: down }) : ''));
 

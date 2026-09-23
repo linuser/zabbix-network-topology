@@ -77,7 +77,7 @@ function isMember(d) {
 // down ports), and it is the one that matters here: a LAG member whose cable
 // was pulled keeps being reported by the OTHER end for the whole stale TTL,
 // so the bundle would still read "x4, all fine" for fifteen minutes.
-function memberDown(d) {
+export function memberDown(d) {
     return !!d._isStaleEdge || d.portDown === true;
 }
 
