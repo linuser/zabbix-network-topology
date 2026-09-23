@@ -27,6 +27,8 @@
 // last bound. The tier arrays below are built from it; line width grows
 // linearly across the tiers from 2 to 8 px, the label color is the line
 // color slightly darkened.
+import { trunkData, bundleLabel } from './parallel-links.js';
+
 export const DEFAULT_SCALES = {
     traffic: { bounds: [10e3, 100e3, 1e6, 10e6],
                colors: ['#22c55e', '#06b6d4', '#3b82f6', '#f97316', '#ef4444'] },
@@ -181,8 +183,15 @@ export function applyTrafficHeatmap(cy) {
         // Inline-Styles ueber den (bewusst dezenten) Ghost-Style aus dem
         // Stylesheet legen. Also auslassen.
         if (edge.data('_isGhostEdge')) return;
-        const tIn  = edge.data('trafficIn')  || 0;
-        const tOut = edge.data('trafficOut') || 0;
+        // Same for an ageing edge: nothing measured, and its dotted style is
+        // the statement. It matters most inside a LAG, where a failed member
+        // must stand out from the live ones next to it.
+        if (edge.data('_isStaleEdge')) return;
+        // A collapsed bundle is coloured from its TOTALS (parallel-links.js).
+        const trunk = edge.hasClass('nt-trunk');
+        const ed = trunk ? trunkData(edge) : edge.data();
+        const tIn  = ed.trafficIn  || 0;
+        const tOut = ed.trafficOut || 0;
         const total = Math.max(tIn, tOut);   // Spitzenwert entscheidet
         let t = trafficTier(total);
 
@@ -191,7 +200,7 @@ export function applyTrafficHeatmap(cy) {
         // absolute Skala zurueck. Zusaetzlich zeigt das Edge-Label die %.
         let wmPct = null;
         if (_weathermap) {
-            wmPct = utilizationPct(edge.data());
+            wmPct = utilizationPct(ed);
             if (wmPct !== null) {
                 const u = utilizationTier(wmPct);
                 t = { w: u.w, col: u.col, tcol: u.col, dash: total <= 0 };
@@ -228,6 +237,17 @@ export function applyTrafficHeatmap(cy) {
             w = Math.max(w, 3); col = '#f59e0b'; dashPat = [3, 5]; op = 0.9;
         }
 
+        // A trunk is n cables: thicker, so it reads as a bundle at a glance —
+        // but only a little. On a meshed core with ×6/×7 between every pair,
+        // full-width bars would be the next kind of clutter; the ×N label
+        // says how many.
+        const n = edge.data('bundleSize') || 1;
+        // Fanned out, the members stay thin: at the full 8 px of the top tier
+        // the curves, 14 px apart, merge into one band. The colour still
+        // carries the utilisation.
+        if (trunk) w = Math.min(w + Math.min(1.5 * (n - 1), 3), 10);
+        else if (n > 1) w = Math.min(w, 3);
+
         edge.style('width',      w);
         edge.style('line-color', col);
         edge.style('color',      t.tcol);
@@ -237,7 +257,17 @@ export function applyTrafficHeatmap(cy) {
 
         // Label: im Weathermap-Modus die Auslastung inline, sonst zurueck
         // auf das Stylesheet-Mapping (data(tLabel) mit Traffic-Werten).
-        if (_weathermap && wmPct !== null && total > 0) {
+        // In a bundle only the lead is labelled, with the bundle's figure.
+        const lead = n > 1 && edge.data('bundleIdx') === 0;
+        if (n > 1 && !lead) {
+            edge.style('label', '');
+        } else if (_weathermap && lead) {
+            const bd = trunkData(edge, true);
+            const bPct = utilizationPct(bd);
+            const moving = (bd.trafficIn || 0) > 0 || (bd.trafficOut || 0) > 0;
+            edge.style('label', bundleLabel(n, edge.data('bundleDown') || 0,
+                bPct !== null && moving ? formatUtilization(bPct) : ''));
+        } else if (_weathermap && wmPct !== null && total > 0) {
             edge.style('label', formatUtilization(wmPct));
         } else {
             edge.removeStyle('label');

@@ -906,6 +906,94 @@ $rPs3 = LldpEdgeBuilder::build($hPs, [
 ], [], [], [], [], [], [], $namenPs);
 check('unbekannt bleibt unbekannt',
     isset((findEdge($rPs3['edges'], 'a', 'b') ?? [])['port_metrics']['a']['down']), false);
+// ── Parallele Links (LAG, Bonding, mehrere Kabel) ──────────────────────────
+// Bis 5.3 wurde ein Hostpaar zu EINER Kante zusammengefasst, first-wins: ein
+// LAG zeigte einen Port und die Zaehler eines Members, und ein ausgefallener
+// Member war unsichtbar. Jetzt ist jedes Kabel eine eigene Kante.
+echo "\n  LldpEdgeBuilder — parallele Links\n\n";
+
+$hLag = ['core' => ['host' => 'core', 'name' => 'core'], 'acc' => ['host' => 'acc', 'name' => 'acc']];
+$namesLag = ['core' => ['1' => 'Gi1/0/1', '2' => 'Gi1/0/2'],
+             'acc'  => ['49' => 'Te1/1/1', '50' => 'Te1/1/2']];
+// Die Gegenseite meldet in UMGEKEHRTER Reihenfolge und in Langform — die
+// Zuordnung muss ueber die Ports laufen, nicht ueber die Reihenfolge.
+$rawLag = [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]',  'lastvalue' => 'acc',  'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.2.1]',  'lastvalue' => 'acc',  'src' => 'lldp'],
+    ['hostid' => 'acc',  'key_' => 'lldpRemSysName[0.50.1]', 'lastvalue' => 'core', 'src' => 'lldp'],
+    ['hostid' => 'acc',  'key_' => 'lldpRemSysName[0.49.1]', 'lastvalue' => 'core', 'src' => 'lldp'],
+];
+$portsLag = [
+    'core' => ['0.1.1' => ['desc' => 'Te1/1/1'], '0.2.1' => ['desc' => 'Te1/1/2']],
+    'acc'  => ['0.49.1' => ['desc' => 'GigabitEthernet1/0/1'], '0.50.1' => ['desc' => 'GigabitEthernet1/0/2']],
+];
+$trafLag = ['core' => ['1' => ['in' => 100.0, 'out' => 10.0], '2' => ['in' => 200.0, 'out' => 20.0]]];
+$rLag = LldpEdgeBuilder::build($hLag, $rawLag, $portsLag, $trafLag, [], [], [], [], $namesLag);
+$byCorePort = [];
+foreach ($rLag['edges'] as $e) {
+    $byCorePort[$e['ports']['core'] ?? '?'] = $e;
+}
+check('LAG: zwei Kabel -> zwei Kanten',            count($rLag['edges']), 2);
+check('LAG: Member 1 beidseitig bestaetigt',       $byCorePort['Gi1/0/1']['confirmed'] ?? null, true);
+check('LAG: Member 2 beidseitig bestaetigt',       $byCorePort['Gi1/0/2']['confirmed'] ?? null, true);
+check('LAG: Member 1 Gegenport richtig gepaart',   $byCorePort['Gi1/0/1']['port_idx']['acc'] ?? null, '49');
+check('LAG: Member 2 Gegenport richtig gepaart',   $byCorePort['Gi1/0/2']['port_idx']['acc'] ?? null, '50');
+check('LAG: eigene Zaehler je Member (1)',         $byCorePort['Gi1/0/1']['port_metrics']['core']['in'] ?? null, 100.0);
+check('LAG: eigene Zaehler je Member (2)',         $byCorePort['Gi1/0/2']['port_metrics']['core']['in'] ?? null, 200.0);
+check('LAG: verschiedene Kanten-IDs',
+    ($byCorePort['Gi1/0/1']['id'] ?? 'x') !== ($byCorePort['Gi1/0/2']['id'] ?? 'x'), true);
+
+// Die teure Fehlerart ist die FALSCHE Aufspaltung: ein Kabel, von beiden
+// Enden mit unvergleichbaren Labels gemeldet, darf nicht doppelt erscheinen.
+$rawInc = [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'acc',  'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.2.1]', 'lastvalue' => 'acc',  'src' => 'lldp'],
+    ['hostid' => 'acc',  'key_' => 'lldpRemSysName[0.7.1]', 'lastvalue' => 'core', 'src' => 'lldp'],
+    ['hostid' => 'acc',  'key_' => 'lldpRemSysName[0.8.1]', 'lastvalue' => 'core', 'src' => 'lldp'],
+];
+$rInc = LldpEdgeBuilder::build($hLag, $rawInc,
+    ['acc' => ['0.7.1' => ['desc' => 'uplink one'], '0.8.1' => ['desc' => 'uplink two']]]);
+check('unvergleichbare Labels: trotzdem zwei, nicht vier', count($rInc['edges']), 2);
+check('unvergleichbare Labels: beide bestaetigt',
+    count(array_filter($rInc['edges'], static fn($e) => $e['confirmed'] === true)), 2);
+
+// Ein Kabel beidseitig: bleibt eine Kante, auch mit unvergleichbaren Labels.
+$rOne = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'acc',  'src' => 'lldp'],
+    ['hostid' => 'acc',  'key_' => 'lldpRemSysName[0.7.1]', 'lastvalue' => 'core', 'src' => 'lldp'],
+]);
+check('ein Kabel, zwei Melder: eine Kante',        count($rOne['edges']), 1);
+
+// LLDP und CDP nummerieren denselben lokalen Port verschieden
+// (lldpRemLocalPortNum 1, cdpCacheIfIndex 10101) — dasselbe Kabel.
+$rMix = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]',   'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'cdpCacheDeviceId[10101.1]', 'lastvalue' => 'acc', 'src' => 'cdp'],
+]);
+check('LLDP+CDP, andere Nummerierung: eine Kante', count($rMix['edges']), 1);
+check('LLDP+CDP: beide Quellen an der Kante',      $rMix['edges'][0]['src'] ?? null, ['cdp', 'lldp']);
+
+// Zwei Eintraege desselben Ports (z.B. neuer lldpRemIndex nach Flap):
+// derselbe Port, also dasselbe Kabel.
+$rSame = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.2]', 'lastvalue' => 'acc', 'src' => 'lldp'],
+]);
+check('gleicher Port, neuer RemIndex: eine Kante', count($rSame['edges']), 1);
+
+// Ohne Port-Bezug (Comma-Liste, kein Bracket): altes Verhalten, eine Kante.
+$rNoPort = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName', 'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName', 'lastvalue' => 'acc', 'src' => 'cdp'],
+]);
+check('ohne Port: eine Kante wie bisher',          count($rNoPort['edges']), 1);
+
+// nt:uplink auf einem Member-Port landet an DIESEM Member.
+$eUp = LldpEdgeBuilder::uplinkEdges($hLag, ['acc' => ['host' => 'core', 'port' => '2']],
+    $rLag['edges']);
+$tagged = array_values(array_filter($eUp, static fn($e) => in_array('tag', $e['src'], true)));
+check('uplink: keine neue Kante',                  count($eUp), 2);
+check('uplink: am Member mit dem Port',            $tagged[0]['ports']['core'] ?? null, 'Gi1/0/2');
 
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"

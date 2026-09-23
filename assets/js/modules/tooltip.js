@@ -274,6 +274,18 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                 + '</div>'
             : '';
 
+        // Parallel links: which member this is, or — collapsed — how many
+        // cables the trunk stands for and how many of them are down.
+        const bn = edgeData.bundleSize || 0;
+        const bundleRow = bn > 1
+            ? '<div style="font-size:10px;color:var(--nt-text-2);margin-bottom:5px">'
+                + esc(edgeData._trunk
+                    ? t('parlinks.tip.trunk', { n: bn }) + ((edgeData.bundleDown || 0) > 0
+                        ? ' \u00B7 ' + t('parlinks.down', { n: edgeData.bundleDown }) : '')
+                    : t('parlinks.tip.member', { i: (edgeData.bundleIdx || 0) + 1, n: bn }))
+                + '</div>'
+            : '';
+
         // Auslastung wenn Kapazitaet bekannt (Weathermap-Basis).
         const capBps = edgeData.capBps || 0;
         let utilPart = '';
@@ -341,7 +353,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
 
         if (!haveData && (sparkSrc || sparkTgt)) {
             // Daten geholt, aber keine Traffic-Items vorhanden
-            return header + portRow + liveRow + healthRow + '<div style="font-size:10px;color:var(--nt-muted);margin-top:4px">'
+            return header + bundleRow + portRow + liveRow + healthRow + '<div style="font-size:10px;color:var(--nt-muted);margin-top:4px">'
                 + esc(t('tip.no_traffic_history')) + '</div>';
         }
 
@@ -359,7 +371,7 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
                 + '</div>'
             : '<div style="font-size:9px;color:var(--nt-faint);margin-top:4px">⌛ ' + esc(t('tip.loading_history')) + '</div>';
 
-        return header + portRow + liveRow + healthRow + sparkBlock;
+        return header + bundleRow + portRow + liveRow + healthRow + sparkBlock;
     }
 
     _syncTheme();

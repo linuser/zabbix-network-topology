@@ -49,12 +49,11 @@ class TopoDiff {
      * @return array   "idA|idB" => ['a'=>label, 'b'=>label, 'pa'=>port, 'pb'=>port]
      */
     public static function snapshot(array $edges, callable $host_label): array {
-        $out = [];
+        $out  = [];
+        $keys = self::keys($edges);
 
-        foreach ($edges as $e) {
-            // Die Internet-Wolke ist virtuell und wird pro Render neu
-            // injiziert — sie waere sonst bei jedem Layoutwechsel "neu".
-            if (!empty($e['_isInternetEdge'])) {
+        foreach ($edges as $i => $e) {
+            if ($keys[$i] === null) {
                 continue;
             }
 
@@ -63,7 +62,7 @@ class TopoDiff {
             $ports = is_array($e['ports'] ?? null) ? $e['ports'] : [];
             $idx   = is_array($e['port_idx'] ?? null) ? $e['port_idx'] : [];
 
-            $out[$pair[0] . '|' . $pair[1]] = [
+            $out[$keys[$i]] = [
                 'a'  => $host_label($pair[0]),
                 'b'  => $host_label($pair[1]),
                 // Ports seitenrichtig: pa gehoert zu pair[0], pb zu pair[1].
@@ -85,6 +84,137 @@ class TopoDiff {
         }
 
         return $out;
+    }
+
+    /**
+     * Baseline key per edge, index-parallel to $edges; null = not tracked.
+     *
+     * A single link between two hosts keeps the key it always had,
+     * "idA|idB" — so existing baselines, and the port-move detection that
+     * relies on the key staying put when a cable is replugged, work as
+     * before. PARALLEL links (a LAG, several cables) each get their own key,
+     * "idA|idB#<port>": otherwise they would overwrite one another here, and
+     * a failed LAG member could never be reported or drawn as ageing.
+     *
+     * The suffix is the member's port, ifIndex first (stable across label
+     * changes, same reasoning as in movedPorts()).
+     *
+     * @return array<int|string, ?string>
+     */
+    public static function keys(array $edges): array {
+        $pairs = [];
+        $count = [];
+        foreach ($edges as $i => $e) {
+            // Die Internet-Wolke ist virtuell und wird pro Render neu
+            // injiziert — sie waere sonst bei jedem Layoutwechsel "neu".
+            if (!empty($e['_isInternetEdge'])) {
+                $pairs[$i] = null;
+                continue;
+            }
+            $pair = [(string) ($e['from'] ?? ''), (string) ($e['to'] ?? '')];
+            sort($pair);
+            $pk = $pair[0] . '|' . $pair[1];
+            $pairs[$i] = [$pk, $pair];
+            // A hosting edge (nt:parent) is not a cable and does not make a
+            // physical link "parallel".
+            if (($e['_type'] ?? '') !== 'hosts') {
+                $count[$pk] = ($count[$pk] ?? 0) + 1;
+            }
+        }
+
+        $out   = [];
+        $taken = [];
+        foreach ($edges as $i => $e) {
+            if ($pairs[$i] === null) {
+                $out[$i] = null;
+                continue;
+            }
+            [$pk, $pair] = $pairs[$i];
+            if (($count[$pk] ?? 0) <= 1 || ($e['_type'] ?? '') === 'hosts') {
+                $out[$i] = $pk;
+                continue;
+            }
+            $ports = is_array($e['ports'] ?? null) ? $e['ports'] : [];
+            $idx   = is_array($e['port_idx'] ?? null) ? $e['port_idx'] : [];
+            $sfx = '';
+            foreach ([['i', $idx, 0], ['j', $idx, 1], ['p', $ports, 0], ['q', $ports, 1]] as [$tag, $src, $side]) {
+                $v = (string) ($src[$pair[$side]] ?? '');
+                if ($v !== '') {
+                    $sfx = $tag . $v;
+                    break;
+                }
+            }
+            $k = $pk . '#' . $sfx;
+            for ($n = 2; isset($taken[$k]); $n++) {
+                $k = $pk . '#' . $sfx . '~' . $n;
+            }
+            $taken[$k] = true;
+            $out[$i] = $k;
+        }
+        return $out;
+    }
+
+    /** The host-pair part of a key: "idA|idB#i3" -> "idA|idB". */
+    public static function pairKey(string $k): string {
+        $p = strpos($k, '#');
+        return $p === false ? $k : substr($k, 0, $p);
+    }
+
+    /**
+     * Carry baseline entries over to the key their link has NOW.
+     *
+     * The key of a link changes when a second cable joins it ("a|b" becomes
+     * "a|b#i1" and "a|b#i2") or when a LAG shrinks back to one. It is the
+     * same cable, and without this step the diff would report it as removed
+     * and added in one go — and the ageing would put its old key back on the
+     * map as a stale line next to the very link it is.
+     *
+     * Only renamed when the current key is absent from the baseline and the
+     * ports prove the identity (sameLink). Anything else stays as it was.
+     */
+    private static function reconcile(array $baseline, array $current): array {
+        $by_pair = [];
+        foreach ($current as $ck => $_) {
+            $by_pair[self::pairKey((string) $ck)][] = (string) $ck;
+        }
+        $out   = [];
+        $taken = [];
+        foreach ($baseline as $k => $e) {
+            $pk = self::pairKey((string) $k);
+            if (isset($current[$k]) || !is_array($e) || !isset($by_pair[$pk])) {
+                $out[$k] = $e;
+                continue;
+            }
+            $neu = null;
+            foreach ($by_pair[$pk] as $ck) {
+                if (!isset($baseline[$ck]) && !isset($taken[$ck]) && self::sameLink($e, $current[$ck])) {
+                    $neu = $ck;
+                    break;
+                }
+            }
+            if ($neu === null) {
+                $out[$k] = $e;
+            } else {
+                $out[$neu]   = $e;
+                $taken[$neu] = true;
+            }
+        }
+        return $out;
+    }
+
+    /** Do two entries of the same pair describe the same cable? */
+    private static function sameLink(array $a, array $b): bool {
+        if (!array_key_exists('pa', $a)) {
+            return false;   // Altbestand ohne Ports: nicht entscheidbar
+        }
+        foreach (['ia', 'ib', 'pa', 'pb'] as $f) {
+            $x = (string) ($a[$f] ?? '');
+            $y = (string) ($b[$f] ?? '');
+            if ($x !== '' && $y !== '') {
+                return $x === $y;
+            }
+        }
+        return false;
     }
 
     /**
@@ -119,6 +249,9 @@ class TopoDiff {
     public static function ageOut(?array $baseline, array $current, int $now, int $ttl): array {
         $store = [];
         $stale = [];
+        if ($baseline !== null) {
+            $baseline = self::reconcile($baseline, $current);
+        }
 
         foreach ($current as $k => $e) {
             $e['seen'] = $now;
@@ -180,6 +313,7 @@ class TopoDiff {
         if (!is_array($baseline)) {
             return $res;
         }
+        $baseline = self::reconcile($baseline, $current);
 
         foreach ($current as $k => $now) {
             // Ein alternder Eintrag zaehlt hier als NICHT vorhanden: die Kante

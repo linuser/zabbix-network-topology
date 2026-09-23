@@ -174,7 +174,14 @@ final class LldpEdgeBuilder {
         }
 
         $edges          = [];
+        // Host pair "a-b" => list of edge indices. One entry per physical
+        // link: a LAG or a set of parallel cables is SEVERAL edges between
+        // the same two hosts, not one. See findMember().
         $seen_edges     = [];
+        // Per edge index: hostid => [port key => true], and the set of
+        // "reporter|protocol" that already reported it. Internal only.
+        $member_keys    = [];
+        $member_rep     = [];
         $lldp_unmatched = [];
 
         // Capabilities der GETROFFENEN Nachbarn: hostid → ['Bridge','Router',…].
@@ -515,6 +522,7 @@ final class LldpEdgeBuilder {
             // gemeldete Port auf dem vermuteten Host existiert.
             $far_metrics = null;
             $port_match  = '';
+            $fidx        = '';
             if ($remote_port !== '' && !empty($port_names[$rhid])) {
                 $auf = self::resolveRemotePort($remote_port, $port_names[$rhid]);
                 if ($auf !== null) {
@@ -558,12 +566,19 @@ final class LldpEdgeBuilder {
             // die Kanten, die wir behalten, VOLLSTAENDIGER. Hier
             // abzubrechen wuerde also nichts sparen und stattdessen
             // halbfertige Kanten hinterlassen.
-            if (!isset($seen_edges[$edge_key]) && count($edges) >= self::MAX_EDGES) {
+            $lkeys = self::portKeys($port, $port_idx);
+            $rkeys = self::portKeys($remote_port, $fidx);
+            $eidx  = self::findMember($seen_edges[$edge_key] ?? [], $member_keys, $member_rep,
+                                      (string) $rid, (string) $rhid, $src, $lkeys, $rkeys);
+            if ($eidx === null && count($edges) >= self::MAX_EDGES) {
                 self::$truncated++;
                 continue;
             }
-            if (!isset($seen_edges[$edge_key])) {
-                $seen_edges[$edge_key] = count($edges);
+            if ($eidx === null) {
+                $eidx = count($edges);
+                $seen_edges[$edge_key][] = $eidx;
+                $member_keys[$eidx] = [(string) $rid => $lkeys, (string) $rhid => $rkeys];
+                $member_rep[$eidx]  = [(string) $rid . '|' . $src => true];
                 // ports: lokaler Port am Reporter-Ende + Remote-Port am
                 // Nachbar-Ende. Meldet die Gegenseite dieselbe Edge, ergaenzt
                 // der Merge-Zweig unten ihre Sicht (first-wins).
@@ -596,7 +611,9 @@ final class LldpEdgeBuilder {
                 // Edge schon bekannt (z.B. von LLDP) — Source/Ports/Metrik
                 // ergaenzen, wenn jetzt CDP oder die Gegenseite dieselbe
                 // Verbindung meldet (merge-Logik, first-wins pro Feld).
-                $eidx = $seen_edges[$edge_key];
+                $member_keys[$eidx][(string) $rid]  = ($member_keys[$eidx][(string) $rid] ?? []) + $lkeys;
+                $member_keys[$eidx][(string) $rhid] = ($member_keys[$eidx][(string) $rhid] ?? []) + $rkeys;
+                $member_rep[$eidx][(string) $rid . '|' . $src] = true;
                 // Dieser Zweig WUSSTE schon immer, dass die Kante ein
                 // zweites Mal gemeldet wird — er hat es nur nie
                 // aufgeschrieben. Genau hier entsteht die Bestaetigung.
@@ -1016,11 +1033,11 @@ final class LldpEdgeBuilder {
             }
         }
 
-        $vorhanden = [];   // "a-b" => Index in $edges
+        $vorhanden = [];   // "a-b" => [Index in $edges, ...] — parallel links
         foreach ($edges as $i => $e) {
             $paar = [(string) ($e['from'] ?? ''), (string) ($e['to'] ?? '')];
             sort($paar);
-            $vorhanden[implode('-', $paar)] = $i;
+            $vorhanden[implode('-', $paar)][] = $i;
         }
 
         foreach ($uplinks as $hid => $angabe) {
@@ -1077,7 +1094,17 @@ final class LldpEdgeBuilder {
                 // Objekt statt einer Liste — die Quellen-Pille im Panel, der
                 // Tooltip, der GraphML-Export und der Geraetebericht pruefen
                 // alle auf eine Liste und schweigen dann einfach.
-                $idx = $vorhanden[$key];
+                // Between parallel links: the one on the declared port, else
+                // the first. Adding the tag to every member would claim a
+                // port on each of them that only one of them has.
+                $idx = $vorhanden[$key][0];
+                foreach ($vorhanden[$key] as $cand) {
+                    if (($ifidx !== '' && ($edges[$cand]['port_idx'][(string) $ziel] ?? '') === $ifidx)
+                            || ($label !== '' && ($edges[$cand]['ports'][(string) $ziel] ?? '') === $label)) {
+                        $idx = $cand;
+                        break;
+                    }
+                }
                 if (is_array($edges[$idx]['src']) && !in_array('tag', $edges[$idx]['src'], true)) {
                     $edges[$idx]['src'][] = 'tag';
                     sort($edges[$idx]['src']);
@@ -1112,7 +1139,7 @@ final class LldpEdgeBuilder {
             ];
             $kante['confidence'] = self::confidence($kante, $hosts);
             $edges[] = $kante;
-            $vorhanden[$key] = count($edges) - 1;
+            $vorhanden[$key][] = count($edges) - 1;
         }
 
         return $edges;
@@ -1334,6 +1361,74 @@ final class LldpEdgeBuilder {
      * Die Liste ist nach Laenge sortiert und bricht beim ersten Treffer ab —
      * sonst machte "ethernet" aus "gigabitethernet1/0/1" ein "gigabiteth...".
      */
+    /**
+     * Identity keys of ONE end of a link: the ifIndex where known, the
+     * normalised label otherwise (both, when both are known). Two reports
+     * name the same cable end if they share any key.
+     */
+    private static function portKeys(string $label, string $ifidx): array {
+        $k = [];
+        if ($ifidx !== '') {
+            $k['i:' . $ifidx] = true;
+        }
+        if ($label !== '') {
+            $k['n:' . self::normPort($label)] = true;
+        }
+        return $k;
+    }
+
+    /**
+     * Which existing edge between this host pair does a report belong to?
+     * Returns its index, or null for "a further physical link".
+     *
+     * PARALLEL LINKS
+     * --------------
+     * Until 5.3 every pair had exactly one edge, and a second report for the
+     * same pair was merged first-wins. For a LAG that meant: one member's
+     * port, one member's counters, and a failed member was invisible. Now
+     * each cable is its own edge; the frontend fans them out.
+     *
+     * THE DANGER IS THE FALSE SPLIT, NOT THE MISSED ONE
+     * ------------------------------------------------
+     * Both ends report the same cable, often with labels that do not compare
+     * ("10101" here, "GigabitEthernet1/0/1" there), and LLDP and CDP may
+     * number the same local port differently. A naive "different port =
+     * different link" would draw every such cable twice. Hence the order:
+     *
+     *   1. a shared port key at either end -> same link
+     *   2. the report carries no local port at all -> old behaviour, merge
+     *   3. an edge this reporter has NOT yet reported with this protocol
+     *      -> same link (the other end's view, or the other protocol's)
+     *   4. only when this reporter already reported every existing edge with
+     *      this protocol, on other ports, is it really a further cable.
+     *
+     * The count is therefore exact: it is the number of distinct local
+     * ports one device reports for the neighbour over one protocol. What
+     * can go wrong in (3) is the PAIRING of member ends when labels are
+     * incomparable — never the number of lines drawn.
+     */
+    private static function findMember(array $members, array $keys, array $rep,
+            string $rid, string $rhid, string $src, array $lkeys, array $rkeys): ?int {
+        if (!$members) {
+            return null;
+        }
+        foreach ($members as $m) {
+            if (array_intersect_key($keys[$m][$rid] ?? [], $lkeys)
+                    || array_intersect_key($keys[$m][$rhid] ?? [], $rkeys)) {
+                return $m;
+            }
+        }
+        if (!$lkeys) {
+            return $members[0];
+        }
+        foreach ($members as $m) {
+            if (!isset($rep[$m][$rid . '|' . $src])) {
+                return $m;
+            }
+        }
+        return null;
+    }
+
     private static function normPort(string $p): string {
         $p = preg_replace('/\s+/', '', strtolower(trim($p)));
         $syn = [

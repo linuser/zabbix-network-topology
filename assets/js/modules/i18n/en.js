@@ -96,6 +96,13 @@ export default {
     // Port labels + root cause
     'toolbar.portlabels':     'Port labels: {state}',
     'toolbar.portlabels.tip': "Show the reporter's LLDP port at the edge ends (best effort from the item key)",
+    'toolbar.parlinks':       'All parallel links: {state}',
+    'toolbar.parlinks.tip':   'Several links between the same two devices (LAG, bonding, parallel cables). On: one line per cable when zoomed in, each with its own ports, traffic and state; bundled into one line marked \u00d7N when zoomed out. Off: always one line with \u00d7N, the total traffic against the total capacity, amber when a member is down \u2014 for maps with many links between the same devices.',
+    'parlinks.down':          '{n} down',
+    'parlinks.tip.trunk':     '{n} parallel links, bundled',
+    'parlinks.tip.member':    'Link {i} of {n} between these devices',
+    'parlinks.sec':           'Parallel links ({n})',
+    'parlinks.row.tip':       'Show this link',
     'toolbar.ghosts':     '👻 Ghost nodes: {state}',
     'toolbar.ghosts.off':   'off',
     'toolbar.ghosts.infra': 'without endpoints',

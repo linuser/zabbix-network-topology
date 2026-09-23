@@ -263,6 +263,50 @@ $dk = TopoDiff::compare($e1, TopoDiff::snapshot([$edge('h1','h3')], $label));
 check('added traegt den Schluessel',           $dk['added'][0]['k'] ?? null,   'h1|h3');
 check('removed traegt den Schluessel',         $dk['removed'][0]['k'] ?? null, 'h1|h2');
 
+echo "\nParallele Links (LAG)\n";
+
+$idxEdge = static function (string $a, string $b, string $ia, string $ib) use ($edge): array {
+    $e = $edge($a, $b, 'p' . $ia, 'p' . $ib);
+    $e['port_idx'] = [$a => $ia, $b => $ib];
+    return $e;
+};
+$lag2 = [$idxEdge('h1', 'h2', '1', '49'), $idxEdge('h1', 'h2', '2', '50')];
+$sLag = TopoDiff::snapshot($lag2, $label);
+check('zwei Member -> zwei Eintraege',         count($sLag), 2);
+check('Member-Schluessel tragen den Port',     array_keys($sLag), ['h1|h2#i1', 'h1|h2#i2']);
+check('pairKey schneidet den Port ab',         TopoDiff::pairKey('h1|h2#i1'), 'h1|h2');
+check('Einzelkante behaelt den alten Schluessel',
+    array_keys(TopoDiff::snapshot([$lag2[0]], $label)), ['h1|h2']);
+
+// Ein Member faellt aus: genau dieser verschwindet, nichts "umgesteckt".
+$sLag1 = TopoDiff::snapshot([$lag2[0], $lag2[1], $idxEdge('h1', 'h3', '5', '6')], $label);
+$dL = TopoDiff::compare($sLag1, TopoDiff::snapshot([$lag2[0], $idxEdge('h1', 'h3', '5', '6')], $label));
+check('Member weg: ein removed',               count($dL['removed']), 1);
+check('Member weg: der richtige',              $dL['removed'][0]['k'] ?? null, 'h1|h2#i2');
+check('Member weg: kein moved',                count($dL['moved']), 0);
+check('Member weg: kein added',                count($dL['added']), 0);
+
+// Aus einem Kabel werden zwei: das alte ist dasselbe Kabel unter neuem
+// Schluessel — nur das zweite ist neu.
+$dUp = TopoDiff::compare(TopoDiff::snapshot([$lag2[0]], $label), $sLag);
+check('1 -> 2 Kabel: nur eins added',          count($dUp['added']), 1);
+check('1 -> 2 Kabel: das neue',                $dUp['added'][0]['k'] ?? null, 'h1|h2#i2');
+check('1 -> 2 Kabel: nichts removed',          count($dUp['removed']), 0);
+
+// Und die Alterung zieht das alte "h1|h2" nicht als Geisterlinie zurueck.
+$aUp = TopoDiff::ageOut(TopoDiff::snapshot([$lag2[0]], $label), $sLag, 1000, 3600);
+check('1 -> 2 Kabel: keine alternde Kante',    count($aUp['stale']), 0);
+
+// Rueckweg: 2 -> 1, der verbleibende ist kein neues Kabel.
+$dDown = TopoDiff::compare($sLag, TopoDiff::snapshot([$lag2[0]], $label));
+check('2 -> 1 Kabel: nichts added',            count($dDown['added']), 0);
+check('2 -> 1 Kabel: der ausgefallene removed', $dDown['removed'][0]['k'] ?? null, 'h1|h2#i2');
+check('2 -> 1 Kabel: kein moved',              count($dDown['moved']), 0);
+
+// Eine hosts-Kante (nt:parent) macht eine physische nicht "parallel".
+$kH = TopoDiff::keys([$lag2[0], ['from' => 'h1', 'to' => 'h2', '_type' => 'hosts']]);
+check('hosts-Kante zaehlt nicht als Member',   $kH[0], 'h1|h2');
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

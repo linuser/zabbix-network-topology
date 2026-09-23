@@ -101,6 +101,13 @@ export default {
     // Port-Labels + Root-Cause
     'toolbar.portlabels':     'Port-Labels: {state}',
     'toolbar.portlabels.tip': 'LLDP-Port des Reporters an den Edge-Enden anzeigen (Best-Effort aus dem Item-Key)',
+    'toolbar.parlinks':       'Alle parallelen Links: {state}',
+    'toolbar.parlinks.tip':   'Mehrere Verbindungen zwischen denselben zwei Ger\u00e4ten (LAG, Bonding, parallele Kabel). An: beim Hineinzoomen eine Linie pro Kabel, jede mit eigenen Ports, eigenem Traffic und Zustand; in der \u00dcbersicht geb\u00fcndelt zu einer Linie mit \u00d7N. Aus: immer eine Linie mit \u00d7N, Gesamttraffic gegen Gesamtkapazit\u00e4t, bernsteinfarben wenn ein Member ausgefallen ist \u2014 f\u00fcr Karten mit vielen Links zwischen denselben Ger\u00e4ten.',
+    'parlinks.down':          '{n} ausgefallen',
+    'parlinks.tip.trunk':     '{n} parallele Links, geb\u00fcndelt',
+    'parlinks.tip.member':    'Link {i} von {n} zwischen diesen Ger\u00e4ten',
+    'parlinks.sec':           'Parallele Links ({n})',
+    'parlinks.row.tip':       'Diesen Link anzeigen',
     'toolbar.ghosts':     '👻 Ghost-Knoten: {state}',
     'toolbar.ghosts.off':   'aus',
     'toolbar.ghosts.infra': 'ohne Endger\u00e4te',

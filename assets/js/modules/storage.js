@@ -29,6 +29,9 @@ const NT_LINKS_KEY      = 'nt_' + PFX + 'manual_links';
 export const NT_LLDP_KEY       = 'nt_' + PFX + 'lldp_visible';
 export const NT_WEATHERMAP_KEY = 'nt_' + PFX + 'weathermap';
 export const NT_PORTLABELS_KEY = 'nt_' + PFX + 'portlabels';
+// Parallel links (LAG, several cables): '1' all links (fan when zoomed in),
+// '0' always one line with ×N. See parallel-links.js.
+export const NT_PARLINKS_KEY   = 'nt_' + PFX + 'parlinks';
 // §9: Ghost-Knoten (unmatched LLDP-Nachbarn) ein-/ausblenden. Default AUS —
 // in Netzen mit vielen unbekannten Geraeten wuerde die Karte sonst zuwuchern.
 export const NT_GHOSTS_KEY     = 'nt_' + PFX + 'ghosts';

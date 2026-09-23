@@ -766,11 +766,15 @@ class NetworkTopologyData extends NetworkTopologyController {
         NtCache::set('topo_baseline', $cache_parts, $aged['store'], 7 * 86400);
 
         // Neu aufgetauchte Kanten markieren — Gegenstueck zur Alterung.
+        // Same keys as the snapshot — with parallel links "a|b" alone no
+        // longer names one edge.
         $jetzt = time();
-        foreach ($edges as &$_ne) {
-            $pp = [(string) ($_ne['from'] ?? ''), (string) ($_ne['to'] ?? '')];
-            sort($pp);
-            $st = $aged['store'][$pp[0] . '|' . $pp[1]] ?? null;
+        $_keys = TopoDiff::keys($edges);
+        foreach ($edges as $_i => &$_ne) {
+            if ($_keys[$_i] === null) {
+                continue;
+            }
+            $st = $aged['store'][$_keys[$_i]] ?? null;
             if (is_array($st) && !empty($st['first']) && ($jetzt - (int) $st['first']) <= self::NEW_TTL) {
                 $_ne['fresh'] = true;
             }
@@ -788,7 +792,8 @@ class NetworkTopologyData extends NetworkTopologyController {
             }
             $i = 0;
             foreach ($aged['stale'] as $k => $alt_e) {
-                [$ka, $kb] = array_pad(explode('|', (string) $k, 2), 2, '');
+                // A LAG member's key carries its port: "a|b#i3".
+                [$ka, $kb] = array_pad(explode('|', TopoDiff::pairKey((string) $k), 2), 2, '');
                 if ($ka === '' || $kb === '' || !isset($sichtbar[$ka], $sichtbar[$kb])) {
                     continue;
                 }

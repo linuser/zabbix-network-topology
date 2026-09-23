@@ -40,6 +40,7 @@ import { el, fmt } from './utils.js';
 import { hideDetail } from './detail-panel.js';
 import { t } from './i18n.js';
 import { utilizationColor, utilizationPct } from './traffic.js';
+import { bundleMembers, trunkData } from './parallel-links.js';
 
 // Schwellen wie in traffic.js — Errors/Discards sind nach Zabbix-Preprocessing
 // 'change per second', 1 Error/s ist bereits viel.
@@ -82,8 +83,11 @@ function hint(parent, text) {
  * `ed` ist das Cytoscape-Edge-Objekt, nicht nur .data() — die Endpunkte kommen
  * ueber source()/target(), deren Labels stehen nicht an der Kante.
  */
-export function showEdgeDetail(panel, ed) {
-    const d  = ed.data();
+export function showEdgeDetail(panel, ed, asMember) {
+    // Collapsed bundle: the trunk's totals, not the lead member's own values
+    // — unless a member row asked for exactly this member.
+    const d  = asMember ? ed.data() : trunkData(ed);
+    const istTrunk = !!d._trunk;
     const s  = ed.source(), tg = ed.target();
     const sLbl = (s && s.data('label')) || (s && s.id()) || '?';
     const tLbl = (tg && tg.data('label')) || (tg && tg.id()) || '?';
@@ -176,9 +180,12 @@ export function showEdgeDetail(panel, ed) {
     panel.appendChild(srcRow);
 
     // ── Ports ───────────────────────────────────────────────────────────────
+    // A trunk has no port of its own — its members are listed below.
     const pS = d.portSrc || '', pT = d.portTgt || '';
-    section(panel, t('edge.sec.ports'));
-    if (pS || pT) {
+    if (!istTrunk) section(panel, t('edge.sec.ports'));
+    if (istTrunk) {
+        // nothing here, see memberSection()
+    } else if (pS || pT) {
         row(panel, sLbl, null, el('b', '', pS || '?'));
         row(panel, tLbl, null, el('b', '', pT || '?'));
     } else {
@@ -212,7 +219,7 @@ export function showEdgeDetail(panel, ed) {
             w.appendChild(el('b', '', fmt(pair[2])));
             live.appendChild(w);
         });
-        live.appendChild(d.perLink
+        live.appendChild((istTrunk ? d.bundleMeasured : d.perLink)
             ? pill(t('edge.metric.perlink'),  '#16a34a', t('edge.metric.perlink.tip'))
             : pill(t('edge.metric.estimate'), '#f59e0b', t('edge.metric.estimate.tip')));
         panel.appendChild(live);
@@ -233,6 +240,8 @@ export function showEdgeDetail(panel, ed) {
         // Schaetzung aus wie eine Messung am Port.
         if (!d.perLink && (pS || pT)) hint(panel, t('edge.metric.why_estimate'));
     }
+
+    if ((d.bundleSize || 0) > 1) memberSection(panel, ed, s, istTrunk);
 
     // ── Interface-Zustand ───────────────────────────────────────────────────
     //
@@ -291,4 +300,61 @@ export function showEdgeDetail(panel, ed) {
                 row(panel, m[0], null, v);
             });
     }
+}
+
+/**
+ * The members of a parallel-link bundle (LAG, several cables), one row each:
+ * ports, traffic, utilisation, and whether it is still reported. A click on
+ * a row opens that member's own panel — the place for its full details.
+ *
+ * Ports are shown in the orientation of the panel's title (lead source
+ * first): a member reported from the other end has source and target
+ * swapped, and its ports would otherwise appear the wrong way round.
+ */
+function memberSection(panel, ed, s, istTrunk) {
+    const members = bundleMembers(ed).toArray().sort(function(a, b) {
+        return (a.data('bundleIdx') || 0) - (b.data('bundleIdx') || 0);
+    });
+    const down = members.filter(function(m) { return m.data('_isStaleEdge'); }).length;
+    section(panel, t('parlinks.sec', { n: members.length })
+        + (down ? ' \u00B7 ' + t('parlinks.down', { n: down }) : ''));
+
+    members.forEach(function(m) {
+        const md = m.data();
+        const same = s && m.source().id() === s.id();
+        const pa = (same ? md.portSrc : md.portTgt) || '?';
+        const pb = (same ? md.portTgt : md.portSrc) || '?';
+        // Two lines: ports get the full width (they are the identification),
+        // the figures go underneath.
+        const r = el('div',
+            'font-size:11px;padding:3px 5px;margin:0 -5px 1px;border-radius:4px;cursor:pointer'
+            + (!istTrunk && m.id() === ed.id() ? ';background:var(--nt-line-soft,#f1f5f9)' : ''));
+        const top = el('div', 'display:flex;gap:6px;align-items:baseline');
+        const ports = el('span', 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap');
+        ports.appendChild(el('b', '', pa));
+        ports.appendChild(el('span', 'color:var(--nt-muted,#94a3b8);margin:0 4px', '\u2194'));
+        ports.appendChild(el('b', '', pb));
+        top.appendChild(ports);
+        r.appendChild(top);
+
+        if (md._isStaleEdge) {
+            const l2 = el('div', 'margin-top:1px');
+            l2.appendChild(pill(t('edge.src.stale'), '#c2410c', t('edge.src.stale.tip')));
+            r.appendChild(l2);
+        } else {
+            const pct = utilizationPct(md);
+            if (pct !== null) {
+                top.appendChild(el('b', 'color:' + utilizationColor(pct), pct.toFixed(0) + '%'));
+            }
+            r.appendChild(el('div', 'font-size:10px;color:var(--nt-muted,#94a3b8)',
+                '\u2193 ' + fmt(md.trafficIn || 0) + '   \u2191 ' + fmt(md.trafficOut || 0)
+                + (md.capBps ? '   \u00B7 ' + fmt(md.capBps) : '')));
+        }
+        r.title = t('parlinks.row.tip');
+        r.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showEdgeDetail(panel, m, true);
+        });
+        panel.appendChild(r);
+    });
 }
