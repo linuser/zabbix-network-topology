@@ -192,12 +192,26 @@ without it being clear why:
    the first `//` breaks the second; anchoring comments to line starts misses
    the first.
 
+11. **A used class has to be imported.** `npm run ci:php-use` closes the hole
+    `ci:lint-php` cannot see: `php -l` checks syntax, and the syntax was fine.
+    **Functions fall back to the global namespace, classes do not** — so a
+    `CWebUser::$data` without its `use` resolves only at runtime, and then it
+    does not. That one whited out a production page with every gate green.
+
+12. **Dependencies with known holes must not ship.** `npm run ci:audit` runs
+    `npm audit --audit-level=moderate`. It is the only gate that depends on
+    something **outside this repository**: the advisory database is queried
+    live, so it can turn red without a line having changed here — and green
+    again the same way. It used to run only in the pipeline, which meant the
+    result arrived by mail instead of before the push.
+
 Run everything locally:
 
 ```bash
 npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
-  && npm run ci:templates && npm run ci:package && npm run ci:layers \
-  && npm run ci:i18n && npm run ci:pipeline
+  && npm run ci:templates && npm run ci:snmprec && npm run ci:frontend \
+  && npm run ci:package && npm run ci:layers && npm run ci:i18n \
+  && npm run ci:pipeline && npm run ci:php-use && npm run ci:audit
 ```
 
 > Three gates are missing from that chain because they need tools not everyone
@@ -459,12 +473,27 @@ ohne dass klar ist warum:
    trägt. Wer beim ersten `//` abschneidet, zerlegt das zweite; wer Kommentare
    am Zeilenanfang verankert, übersieht das erste.
 
+11. **Eine benutzte Klasse muss importiert sein.** `npm run ci:php-use`
+    schließt die Lücke, die `ci:lint-php` strukturell nicht sieht: `php -l`
+    prüft Syntax, und die war einwandfrei. **Funktionen fallen auf den
+    globalen Namensraum zurück, Klassen nicht** — ein `CWebUser::$data` ohne
+    `use` löst sich also erst zur Laufzeit auf, und dann nicht. Genau das hat
+    eine Produktionsseite weiß gemacht, bei vollständig grünen Gates.
+
+12. **Abhängigkeiten mit bekannten Lücken dürfen nicht mit raus.**
+    `npm run ci:audit` fährt `npm audit --audit-level=moderate`. Es ist das
+    einzige Gate, das von etwas **außerhalb des Repositories** abhängt: die
+    Advisory-Datenbank wird live gefragt. Es kann also rot werden, ohne dass
+    sich hier eine Zeile geändert hat — und genauso wieder grün. Vorher lief
+    es nur in der Pipeline, und das Ergebnis kam per Mail statt vor dem Push.
+
 Alles zusammen lokal prüfen:
 
 ```bash
 npm run build && npm run ci:eslint && npm run ci:xss && npm run ci:parity \
-  && npm run ci:templates && npm run ci:package && npm run ci:layers \
-  && npm run ci:i18n && npm run ci:pipeline
+  && npm run ci:templates && npm run ci:snmprec && npm run ci:frontend \
+  && npm run ci:package && npm run ci:layers && npm run ci:i18n \
+  && npm run ci:pipeline && npm run ci:php-use && npm run ci:audit
 ```
 
 > Drei Gates fehlen in dieser Kette, weil sie Werkzeuge brauchen, die nicht

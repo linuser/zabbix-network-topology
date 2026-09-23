@@ -18,7 +18,7 @@
 #
 # WAS DIESES SKRIPT NICHT ANFASST
 # -------------------------------
-# Host-Tags (nt:parent, nt:icon, nt:label, nt:note, nt:link, nt:show), die
+# Host-Tags (nt:parent, nt:icon, nt:link, nt:show, nt:lldp, nt:uplink), die
 # importierten Templates, den Cron fuer tools/topo-change-sender.sh und den
 # dafuer angelegten Monitoring-User. Das sind Daten, die jemand selbst angelegt
 # hat — nt:parent beschreibt die eigene Infrastruktur, nicht unsere. Sie

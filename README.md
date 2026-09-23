@@ -145,8 +145,6 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 **Custom host tags**
 
 - `nt:icon=<type>` — override the device type (firewall/router/switch/server/storage/…)
-- `nt:label=<text>` — alternative display name
-- `nt:note=<text>` — note sticker on the node
 - `nt:link=<label>|<url>` — custom link in the context menu (repeatable)
 - `nt:show=<key>` — extra item value in the tooltip
 - `nt:parent=<hostname>` — declare a carrier host (VM→hypervisor, container→node). Draws a directed **hosts** edge, and the what-if simulation treats it as a **hard dependency**: if the parent dies, the child dies — regardless of the network path.
@@ -347,8 +345,6 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 **Custom-Tags am Host**
 
 - `nt:icon=<typ>` — Device-Type überschreiben (firewall/router/switch/server/storage/…)
-- `nt:label=<text>` — alternativer Anzeigename
-- `nt:note=<text>` — Notiz-Sticker am Knoten
 - `nt:link=<label>|<url>` — Custom-Link im Kontextmenü (mehrfach möglich)
 - `nt:show=<key>` — zusätzlicher Item-Wert im Tooltip
 - `nt:parent=<hostname>` — Träger-Host deklarieren (VM→Hypervisor, Container→Node). Zeichnet eine gerichtete **hosts**-Kante und gilt der What-if-Simulation als **harte Abhängigkeit**: fällt der Parent aus, fällt der Child — unabhängig vom Netzpfad.
@@ -488,6 +484,7 @@ network_topology/
 │   ├── NetworkTopologyLinks.php                 manual edges (WRITE, shared = super admin)
 │   ├── NetworkTopologyPositions.php             map layout (WRITE, shared = super admin)
 │   ├── NetworkTopologyPortScan.php              port probe on click (WRITE-ish: network side effect)
+│   ├── NetworkTopologyScales.php                link colour scales (WRITE, shared = super admin)
 │   ├── NetworkTopologyController.php            base class, not an action: CSRF, throttling, JSON
 │   └── NtCache.php                              helper, not an action: topology baseline cache (APCu)
 ├── topology/                       ColorScales · HopScope · HostMetadata · HostTagParser · LldpEdgeBuilder
