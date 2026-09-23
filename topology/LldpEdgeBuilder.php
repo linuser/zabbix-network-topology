@@ -1366,21 +1366,6 @@ final class LldpEdgeBuilder {
     }
 
     /**
-     * Portnamen auf eine Vergleichsform bringen.
-     *
-     *   "GigabitEthernet1/0/1"  ->  "gi1/0/1"
-     *   "Gi1/0/1"               ->  "gi1/0/1"
-     *   "Te 1/1/4"              ->  "te1/1/4"
-     *   "ether1"                ->  "ether1"
-     *
-     * Nur Kleinschreibung, Leerzeichen weg und die gaengigen Langformen auf
-     * ihre uebliche Kurzform. BEWUSST KEIN Abschneiden von Ziffern oder
-     * Trennern: "1/0/1" und "1/0/11" duerfen nie zusammenfallen.
-     *
-     * Die Liste ist nach Laenge sortiert und bricht beim ersten Treffer ab —
-     * sonst machte "ethernet" aus "gigabitethernet1/0/1" ein "gigabiteth...".
-     */
-    /**
      * Identity keys of ONE end of a link: the ifIndex where known, the
      * normalised label otherwise (both, when both are known). Two reports
      * name the same cable end if they share any key.
@@ -1448,6 +1433,21 @@ final class LldpEdgeBuilder {
         return null;
     }
 
+    /**
+     * Portnamen auf eine Vergleichsform bringen.
+     *
+     *   "GigabitEthernet1/0/1"  ->  "gi1/0/1"
+     *   "Gi1/0/1"               ->  "gi1/0/1"
+     *   "Te 1/1/4"              ->  "te1/1/4"
+     *   "ether1"                ->  "ether1"
+     *
+     * Nur Kleinschreibung, Leerzeichen weg und die gaengigen Langformen auf
+     * ihre uebliche Kurzform. BEWUSST KEIN Abschneiden von Ziffern oder
+     * Trennern: "1/0/1" und "1/0/11" duerfen nie zusammenfallen.
+     *
+     * Die Liste ist nach Laenge sortiert und bricht beim ersten Treffer ab —
+     * sonst machte "ethernet" aus "gigabitethernet1/0/1" ein "gigabiteth...".
+     */
     private static function normPort(string $p): string {
         $p = preg_replace('/\s+/', '', strtolower(trim($p)));
         $syn = [

@@ -21,6 +21,7 @@ und schreibt hin, was er gefunden hat.
 | **Unmanaged Devices** | **Fertig — heißen „Ghost Nodes"** (`build-elements.js`, §9). LLDP/CDP-Nachbarn, die auf keinen überwachten Host auflösen, aus `lldp_quality[].unmatched`. Mehrere Melder desselben Unbekannten ergeben **einen** Knoten mit mehreren Kanten. Umschalter „👻 Ghost nodes" im Technical-Tab, standardmäßig aus. |
 | **Mini Map bei großen Topologien** | **Fertig** (`minimap.js`, 164 Zeilen). SVG unten rechts, severity-farbige Punkte, Viewport-Rechteck, Klick schwenkt die Karte, Aktualisierung auf zoom/pan (80 ms entprellt) plus alle 5 s. |
 | **Cluster-Knoten zusammenfassen** | **Fertig** (`aggregation.js`, 106 Zeilen). `aggregateByGroup()` verschmilzt alle Hosts einer Gruppe zu einem Pseudo-Knoten, Kanten zwischen Gruppen werden zu Aggregat-Kanten. Reine Funktion ohne Seiteneffekte. Umschalter „🗂 Group". Nicht zu verwechseln mit `group-cluster-layout.js` — das ordnet Gruppen räumlich an, ohne zu verschmelzen. |
+| **Parallele Links / LAG** | **Fertig in 5.4.0** (`parallel-links.js`, `LldpEdgeBuilder::findMember()`). Ein Kabel = eine Kante, je eigene Ports, Zähler und Zustand. Hineingezoomt aufgefächert, in der Übersicht zu einer Linie mit ×N zusammengeklappt. Beigesteuert von Christos Diamantis, [#21](https://github.com/linuser/zabbix-network-topology/pull/21). Siehe Punkt 6 unten. |
 | **Presets (Positionen, Pins, Notizen, Links)** | Vorhanden. Achtung: Positionen wurden bis zur Korrektur still verschluckt, weil `applyPreset()` in den localStorage schrieb, den seit der Server-Umstellung nur noch die Migration liest. |
 
 ---
@@ -187,45 +188,36 @@ Zugangsdaten. Etwa ein Tag mit Tests. Die Portnamen sind erst seit 5.3.1
 verlässlich: `ifName`, `ifDescr` und `ifAlias` wurden vorher gar nicht
 abgefragt.
 
-### 6. Parallele Verbindungen (LAG) — eine Kante je Kabel
+### 6. Parallele Verbindungen (LAG) — erledigt in 5.4.0
 
 Gemeldet von Christos Diamantis in
 [#20](https://github.com/linuser/zabbix-network-topology/issues/20), und er hat
-in allen Punkten recht. Hängen zwei Geräte mit mehreren Kabeln aneinander — ein
-LACP-Bündel, zwei parallele Uplinks —, zeichnet die Karte **eine** Linie.
+den Umbau in
+[#21](https://github.com/linuser/zabbix-network-topology/pull/21) gleich selbst
+beigesteuert. Hingen zwei Geräte mit mehreren Kabeln aneinander, zeichnete die
+Karte **eine** Linie — weil die Identität einer Kante das Hostpaar war, in drei
+Schichten unabhängig voneinander vorausgesetzt (`LldpEdgeBuilder`, `TopoDiff`,
+`build-elements.js`).
 
-**Was dahinter steckt, ist keine Zeichenfrage, sondern die Identität einer
-Kante.** Sie ist heute „A–B", und drei Schichten setzen das voraus:
+**Die ernsteste Folge war nicht die fehlende Linie:** Fiel ein Mitglied aus,
+änderte sich auf der Karte nichts, weil die übrigen sie hielten. Dazu kam der
+Verkehr eines einzigen Mitglieds, gegen dessen Kapazität gemessen — ein
+4×10G-Bündel sah ausgelastet aus, wenn es das nicht war.
 
-- `LldpEdgeBuilder`: `$edge_key` aus dem sortierten Hostpaar
-- `TopoDiff`: derselbe Schlüssel, deshalb ist ein ausgefallenes Bündelmitglied
-  **keine gemeldete Änderung**
-- `build-elements.js`: dedupliziert ebenfalls nach Paar, würde parallele Kanten
-  also selbst dann verschlucken, wenn das Backend sie lieferte
+**Was daraus wurde:** Schlüssel ist das Portpaar, normalisiert wie beim
+Portabgleich (`findMember()`); ohne Portbezug bleibt es beim Paar, denn
+`nt:parent`, manuelle Links und UniFi-`uplink.id` sind keine Kabel. Die teure
+Fehlerart ist dabei nicht das übersehene Kabel, sondern die falsche
+Aufspaltung: dieselbe Leitung, von beiden Enden mit unvergleichbaren
+Bezeichnungen gemeldet, darf nicht doppelt erscheinen.
 
-**Die Folgen im Betrieb**, und die dritte ist die ernsteste:
-
-1. Nur ein Portpaar wird angezeigt, bei 4×10G also eines von vier.
-2. Verkehr und Auslastung sind die Zähler **eines** Mitglieds — ein 4×10G-Bündel
-   wird gegen 10G gemessen und sieht ausgelastet aus, wenn es das nicht ist.
-3. Fällt ein Mitglied aus, ändert sich auf der Karte **nichts**. Die Linie steht,
-   weil die übrigen Mitglieder sie halten.
-
-**Der Umbau:** Schlüssel wird das ungeordnete Portpaar, normalisiert wie beim
-Portabgleich. Dieselbe Leitung kommt von beiden Enden herein und muss weiterhin
-zu EINER Kante werden. Rückfälle: nur lokaler Port bekannt → Schlüssel aus
-Melder plus Port; gar kein Port (`nt:parent`, manuelle Links, UniFi-`uplink.id`)
-→ Paar wie bisher, das sind keine Kabel.
-
-**Die Darstellung** bewusst nicht als Parallellinien per Voreinstellung: In
-vermaschten Kernen liegen sechs Kabel zwischen zwei Switches, und sechs Linien
-sind unleserlicher als eine. Stattdessen eine Linie mit **×N**, die Mitglieder
-im Kanten-Panel mit Portpaar, Zustand und Verkehr je Kabel, und ein
-teilausgefallenes Bündel sieht man der Linie an. Parallellinien als Option für
-zwei, drei Kabel.
-
-**Aufwand:** groß, und zwar über die ganze Kette — Diff, Export, Aggregation,
-What-if, Statistik. Deshalb 5.4.0 und nicht 5.3.x.
+**Bei der Darstellung hatte dieser Eintrag ursprünglich das Gegenteil
+vorgeschlagen** — eine Linie mit ×N als Voreinstellung, Parallellinien nur als
+Option. Umgesetzt ist die bessere Lösung: hineingezoomt fächert das Bündel auf,
+in der Übersicht klappt es zu einer Linie mit ×N zusammen. Das bedient beide
+Fälle ohne Schalter — aufgefächerte Bündel auf einer herausgezoomten Karte
+erzeugen genau dort mehr Linien, wo ein großer Standort ohnehin zu viele hat.
+Wer dauerhaft zusammengeklappt will, schaltet „All parallel links" ab.
 
 ### 7. „An welchem Port hängt das Ding?" — als Suche und als Liste
 
