@@ -995,6 +995,25 @@ $tagged = array_values(array_filter($eUp, static fn($e) => in_array('tag', $e['s
 check('uplink: keine neue Kante',                  count($eUp), 2);
 check('uplink: am Member mit dem Port',            $tagged[0]['ports']['core'] ?? null, 'Gi1/0/2');
 
+// Regel 3 in findMember() ordnet zu, OHNE die Ports vergleichen zu koennen:
+// ein Bericht, den dieser Melder mit diesem Protokoll noch nicht abgegeben
+// hat, gehoert "wohl" zu einem der bekannten Kabel. Meldet core zwei Member
+// per LLDP und ein DRITTES Kabel nur per CDP, faellt der CDP-Bericht damit
+// auf Member 1 — und das Ueberschreiben des eigenen Portnamens wuerde dort
+// "Gi1/0/3" eintragen. Der ifIndex auf der Kante sagt, dass das nicht sein
+// kann.
+$rMix = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.2.1]', 'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'cdpCacheDeviceId[3.1]', 'lastvalue' => 'acc', 'src' => 'cdp'],
+], [], [], [], [], [], [],
+    ['core' => ['1' => 'Gi1/0/1', '2' => 'Gi1/0/2', '3' => 'Gi1/0/3']]);
+$mixPorts = array_map(static fn($e) => $e['ports']['core'] ?? null, $rMix['edges']);
+sort($mixPorts);
+check('Member-Label: fremder Port stempelt nicht um', $mixPorts, ['Gi1/0/1', 'Gi1/0/2']);
+check('Member-Label: eigener ifIndex bleibt stehen',
+    $rMix['edges'][0]['port_idx']['core'] ?? null, '1');
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

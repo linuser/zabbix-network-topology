@@ -633,7 +633,18 @@ final class LldpEdgeBuilder {
                 // auf einer Kante stand dann "29" (roher ifIndex des Melders)
                 // und "Port 9" (Text des Nachbarn), und es sah aus, als kenne
                 // das Modul nur eine Seite. Gemeldet mit Screenshot.
-                if ($port !== '') {
+                // Seit es mehrere Kanten je Hostpaar gibt, ist "die Kante"
+                // aber nicht mehr eindeutig: findMember() ordnet in Regel 3
+                // zu, OHNE die Ports vergleichen zu koennen. Traegt die Kante
+                // fuer uns bereits einen anderen eigenen ifIndex, ist das ein
+                // anderes Kabel desselben Buendels — und das Ueberschreiben
+                // wuerde unser Label auf das falsche Mitglied stempeln.
+                // Indizes vergleichen sich verlaesslich, Labels nicht; ohne
+                // Index auf einer der beiden Seiten bleibt es deshalb beim
+                // bereits belegten Namen.
+                $eigen_idx = (string) ($edges[$eidx]['port_idx'][(string) $rid] ?? '');
+                $selber_port = $eigen_idx === '' || $eigen_idx === $port_idx;
+                if ($port !== '' && $selber_port) {
                     $edges[$eidx]['ports'][(string) $rid] = $port;
                 }
                 if ($port_idx !== '' && !isset($edges[$eidx]['port_idx'][(string) $rid])) {
