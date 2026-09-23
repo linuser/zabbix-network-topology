@@ -2,7 +2,7 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
-## v5.4.0 — 2026-09-23
+## v5.4.0 — 2026-09-24
 
 ### Updating from 5.3.2 — nothing to re-import
 

@@ -210,6 +210,20 @@ Replace the `network_topology` directory with the new version, `chown`, reload p
 > - **Reload the page with a cache bypass** (Ctrl/Cmd + Shift + R) once. The bundle changed substantially; a normal reload may still serve the cached one, and you would be looking at the old UI while wondering why nothing changed.
 > - **The map now follows your Zabbix theme.** If your profile is set to a dark theme, the map renders dark from the first load. There is no switch — that is the point. Nothing is stored, nothing to migrate.
 
+> **From 5.3.2 to 5.4.0:** **no new actions and no template change** — replace
+> the directory, `chown`, reload php-fpm; "Scan directory" is not needed.
+> Reload the page once with a cache bypass, the bundle changed. Three things
+> worth knowing:
+>
+> - **A device pair with several cables is now several lines**, each with its
+>   own ports and counters, bundled into one line marked `×N` when zoomed out.
+>   *View → All parallel links: off* keeps it at one line per pair.
+> - **The first refresh announces every bundle member but one as new.** Once,
+>   per user: the change baseline knew one key per pair and now knows one per
+>   cable.
+> - **The widgets run on 7.0 LTS too**, contrary to what earlier versions of
+>   this file said.
+
 > **From 5.3.1 to 5.3.2:** **no new actions and no template change** — replace the directory, `chown`, reload php-fpm; "Scan directory" is not needed. Reload the page once with a cache bypass, the bundle changed. Two things worth knowing, neither of which requires action:
 >
 > - **The ghost toggle has three steps now:** off, network gear only, all. Whoever had it on lands on *all* and sees exactly what they saw before; one more click keeps only switches, routers, access points and devices that say nothing about themselves.
@@ -258,7 +272,7 @@ with their own target directories; install those from the release ZIPs, or
 extract them the same way into `$UI/network_topology_widget` and friends.
 
 Pin to a release instead of tracking `main` with
-`git -C /opt/nt-src checkout v5.3.2`.
+`git -C /opt/nt-src checkout v5.4.0`.
 
 #### Upgrading from 4.x to 5.0
 
@@ -532,6 +546,19 @@ Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm
 > - **Einmal mit Cache-Umgehung neu laden** (Strg/Cmd + Umschalt + R). Das Bundle hat sich stark geändert; ein normales Neuladen liefert unter Umständen weiter das zwischengespeicherte, und man sieht die alte Oberfläche und wundert sich.
 > - **Die Karte folgt jetzt deinem Zabbix-Theme.** Steht im Profil ein dunkles Theme, zeichnet die Karte ab dem ersten Aufruf dunkel. Einen Schalter gibt es nicht — das ist die Absicht. Es wird nichts gespeichert, es ist nichts zu migrieren.
 
+> **Von 5.3.2 auf 5.4.0:** **keine neuen Actions und kein Template-Wechsel** —
+> Verzeichnis ersetzen, `chown`, php-fpm neu laden; „Scan directory" ist nicht
+> nötig. Einmal mit Cache-Umgehung neu laden, das Bundle hat sich geändert.
+> Drei Dinge zur Kenntnis:
+>
+> - **Ein Gerätepaar mit mehreren Kabeln ist jetzt mehrere Linien**, jede mit
+>   eigenen Ports und Zählern, herausgezoomt zu einer Linie mit `×N`
+>   gebündelt. *View → All parallel links: off* bleibt bei einer Linie je Paar.
+> - **Die erste Aktualisierung meldet alle Bündelmitglieder bis auf eines als
+>   neu.** Einmalig, pro Benutzer: die Vergleichsbasis kannte einen Schlüssel
+>   je Paar und kennt jetzt einen je Kabel.
+> - **Die Widgets laufen auch auf 7.0 LTS**, anders als es hier früher stand.
+
 > **Von 5.3.1 auf 5.3.2:** **keine neuen Actions und kein Template-Wechsel** — Verzeichnis ersetzen, `chown`, php-fpm neu laden; „Scan directory" ist nicht nötig. Einmal mit Cache-Umgehung neu laden, das Bundle hat sich geändert. Zwei Dinge zur Kenntnis, beide ohne Handlungsbedarf:
 >
 > - **Der Ghost-Schalter hat jetzt drei Stufen:** aus, nur Netzgeräte, alle. Wer ihn an hatte, landet auf *alle* und sieht genau das, was er vorher sah; ein Klick weiter bleiben nur Switches, Router, Access Points und Geräte, die nichts über sich sagen.
@@ -582,7 +609,7 @@ oder auf demselben Weg nach `$UI/network_topology_widget` und so weiter
 entpacken.
 
 Statt `main` zu folgen, lässt sich mit
-`git -C /opt/nt-src checkout v5.3.2` auf ein Release festnageln.
+`git -C /opt/nt-src checkout v5.4.0` auf ein Release festnageln.
 
 #### Umstieg von 4.x auf 5.0
 
