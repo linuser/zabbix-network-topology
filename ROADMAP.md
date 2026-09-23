@@ -182,6 +182,40 @@ Zugangsdaten. Etwa ein Tag mit Tests. Die Portnamen sind erst seit 5.3.1
 verlässlich: `ifName`, `ifDescr` und `ifAlias` wurden vorher gar nicht
 abgefragt.
 
+### 6. Endgeräte bündeln — ein Knoten statt achtundvierzig
+
+Nutzerwunsch vom September 2026, per Mail, mit Screenshot. Die zweite Hälfte
+dessen, was in 5.3.2 als Filter gebaut wurde: Geister lassen sich jetzt auf
+Netzgeräte beschränken (`aus → nur Netzgeräte → alle`), aber wer sie
+tatsächlich **alle** sehen will, bekommt an einem Access-Switch mit 48 Ports
+auch 48 Knoten.
+
+**Die Idee:** Geister, die nur an EINEM Switch hängen und nichts weiter
+melden, werden zu einem Knoten zusammengefasst — „34 Endgeräte" — der sich per
+Klick aufklappt. Dasselbe Muster wie die Gruppen-Aggregate, die es schon gibt.
+
+**Was dafür spricht:** Die Information bleibt vollständig, nur die Fläche
+schrumpft. Der Filter aus 5.3.2 wirft Geräte weg; das Bündeln nicht.
+
+**Was daran teuer ist**, und weshalb es nicht im selben Zug entstand:
+
+1. **Positionen.** Ein Bündel hat eine Position, seine Kinder haben beim
+   Aufklappen keine. Dieselbe Falle, die bei den Geistern zum Stapel auf (0,0)
+   geführt hat — gelöst ist sie dort über den Ring um den Melder, hier bräuchte
+   es dasselbe noch einmal für den Aufklappzustand.
+2. **Aufklappzustand speichern.** Pro Karte oder pro Benutzer? Die Karte kennt
+   bereits zwei Ebenen (geteilt und persönlich), und ein dritter Zustand, der
+   sich anders verhält als beide, wäre eine Erklärung wert.
+3. **Export und Bericht.** GraphML, Geräte-Bericht und die KPI-Zeile zählen
+   Knoten. Ein Bündel darf dort nicht als ein Gerät durchgehen.
+4. **Was ist ein Endgerät?** Die Antwort steckt schon in `INFRA_CAPS`
+   (`build-elements.js`), aber ein Gerät ohne gemeldete Fähigkeiten gilt dort
+   bewusst als unbekannt und wird behalten. Beim Bündeln wäre dieselbe
+   Entscheidung strenger zu treffen, sonst bündelt man Switches.
+
+**Aufwand:** reines Frontend, aber kein Nachmittag. Ein Tag für das Bündeln
+selbst, ein weiterer für Positionen, Export und Zählung.
+
 ## Später
 
 ### VLAN-Ansicht
