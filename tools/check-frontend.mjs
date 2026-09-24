@@ -376,6 +376,47 @@ if (csv) {
         /^Warning,'=cmd/.test(csv.boese), true);
 }
 
+// Was der Nutzer liest, wenn der Server NICHT antwortet wie erwartet. Genau
+// hier lag Issue #22: nginx schickte bei Zeitueberschreitung eine
+// HTML-Seite, das Frontend parste sie als JSON, und im Fehlerkasten stand
+// "Unexpected token '<'" — waehrend das Problem eine zu grosse Auswahl war.
+console.log('\n  Fehlerfall: der Server antwortet nicht mit Daten\n');
+const fehlerfall = szenario('fetchjson', { lang: 'en_US' }, `
+    const J = await import(${JSON.stringify(MODULE('fetch-json.js'))});
+    const antwort = (status, body, ok) => () => Promise.resolve({
+        ok: ok !== undefined ? ok : (status >= 200 && status < 300),
+        status: status,
+        text: () => Promise.resolve(body),
+    });
+    const hole = async (status, body, ok) => {
+        globalThis.fetch = antwort(status, body, ok);
+        try { await J.fetchJson('x'); return { ok: true }; }
+        catch (e) { return { kind: e.ntKind, msg: e.message }; }
+    };
+    console.log(JSON.stringify({
+        timeout: await hole(504, '<html> <head><title>504 Gateway Time-out</title>'),
+        auth:    await hole(401, '<html>login</html>'),
+        http:    await hole(500, 'boom'),
+        parse:   await hole(200, '<html> <h1>Fatal error</h1>'),
+        gut:     await hole(200, '{"nodes":[]}'),
+    }));
+`);
+if (fehlerfall) {
+    pruefe('Zeitueberschreitung heisst Zeitueberschreitung',
+        fehlerfall.timeout.kind, 'timeout');
+    pruefe('und nennt die Ursache, nicht JSON',
+        /took too long|too large|hops/.test(fehlerfall.timeout.msg || ''), true);
+    pruefe('kein Wort von "Unexpected token"',
+        /Unexpected token|not valid JSON/.test(fehlerfall.timeout.msg || ''), false);
+    pruefe('401: Sitzung abgelaufen, Seite neu laden',
+        [fehlerfall.auth.kind, /Reload/.test(fehlerfall.auth.msg || '')], ['auth', true]);
+    pruefe('anderer HTTP-Fehler nennt den Code',
+        [fehlerfall.http.kind, /500/.test(fehlerfall.http.msg || '')], ['http', true]);
+    pruefe('200 ohne JSON: sagt, womit es anfing',
+        [fehlerfall.parse.kind, /Fatal error/.test(fehlerfall.parse.msg || '')], ['parse', true]);
+    pruefe('echtes JSON kommt durch',        fehlerfall.gut.ok, true);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

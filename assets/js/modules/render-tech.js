@@ -52,6 +52,7 @@ import { toast, toastTruncatedOnce } from './toast.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
 import { NT_GROUP_CLUSTER_KEY, loadGhostMode } from './storage.js';
+import { fetchJson } from './fetch-json.js';
 
 // ── Cross-Module-Glue: setupToolbar lebt im Hauptmodul ─────────────────────
 // (es ist 228 Zeilen und ist eng mit render() und vielen Buttons verknüpft;
@@ -688,11 +689,7 @@ export function render(wrap, nodes, edges, dataUrl) {
         // Pause waehrend Drag — sonst zerlegt der Refresh den User-Workflow
         // (Position springt zurueck weil neue Daten alte Positionen ueberschreiben).
         if (window._ntDragActive) return;
-        fetch(dataUrl, {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-            .then(function(r) { return r.json(); })
+        fetchJson(dataUrl)
             .then(function(data) {
                 // Backend-Fehler (data.error) oder leere Antwort → Badge zeigen,
                 // letzten guten Stand behalten statt still zu ueberschreiben.

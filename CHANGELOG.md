@@ -2,6 +2,35 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## Unreleased
+
+### Fixed
+
+- **Host + hops no longer runs into a gateway timeout, and says so when it
+  cuts.** Reported as
+  [#22](https://github.com/linuser/zabbix-network-topology/issues/22): six
+  hops from one switch reach practically every device on a campus network,
+  and the enrichment pipeline — items, last values, triggers, problems — ran
+  over all of them in one request. nginx answered with its 504 page, the
+  frontend parsed that page as JSON, and the map showed
+  `Unexpected token '<', "<html> <h"... is not valid JSON`.
+
+  Two separate mistakes, fixed separately:
+
+  - **The scope has a budget now** (400 hosts), and it is spent **ring by
+    ring**: hops 1..k complete, then stop. Half a shell is not a
+    neighbourhood, it is an arbitrary cut. The map says which hop it got to —
+    *"Only 3 of 6 hops shown — 400 devices is the limit for this view."*
+    The group selection has capped at 100 groups and reported it for a while;
+    hop mode simply never had a limit.
+  - **A failed request says what failed.** `fetchJson()` looks at the status
+    before parsing: 504/502/408 becomes "the request took too long, the
+    selection is probably too large", 401/403 becomes "not signed in any
+    more, reload the page", anything else names its code, and a 200 that is
+    not JSON quotes what the answer began with. Fifteen call sites went
+    through `fetch().then(r => r.json())` and would have produced the same
+    parser error; they all use the helper now.
+
 ## v5.4.0 — 2026-09-24
 
 ### Updating from 5.3.2 — nothing to re-import

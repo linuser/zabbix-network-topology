@@ -22,6 +22,7 @@
 
 import { esc, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
+import { fetchJson } from './fetch-json.js';
 
 // Check-Definitionen (exportiert — der Audit-Report in export.js rendert
 // dieselbe Tabelle und importiert sie von hier statt eigener Kopie).
@@ -48,8 +49,7 @@ export function fetchComplianceData() {
     params.append('action', 'network.topology.compliance');
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
-    return fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(function(r) { return r.json(); })
+    return fetchJson(url)
         .then(function(d) { return (d && !d.error) ? d : null; })
         .catch(function() { return null; });
 }
