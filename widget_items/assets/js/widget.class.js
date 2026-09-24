@@ -28,6 +28,32 @@
  * nicht vertrauenswuerdig.
  */
 
+// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
+if (!window.NtFetchJson) {
+    window.NtFetchJson = function (url, opts) {
+        return fetch(url, opts).then(
+            function (r) {
+                var s = r.status;
+                if (!r.ok) {
+                    throw new Error((s === 502 || s === 503 || s === 504)
+                        ? 'The server did not answer in time (HTTP ' + s + '). The request was probably too large \u2014 select fewer host groups.'
+                        : 'The server answered with HTTP ' + s + (r.statusText ? ' ' + r.statusText : ''));
+                }
+                return r.text().then(function (body) {
+                    try {
+                        return JSON.parse(body);
+                    } catch (e) {
+                        throw new Error('The server sent a web page instead of data \u2014 the session may have expired, or PHP failed. Reload the page.');
+                    }
+                });
+            },
+            function () {
+                throw new Error('The server could not be reached. Check the network connection and reload the page.');
+            }
+        );
+    };
+}
+
 class WidgetNetworkTopologyItems extends CWidget {
 
     onInitialize() {
@@ -103,11 +129,10 @@ class WidgetNetworkTopologyItems extends CWidget {
             params.append('groupids[]', String(this._groupids[i]));
         }
 
-        return fetch('zabbix.php?' + params.toString(), {
+        return window.NtFetchJson('zabbix.php?' + params.toString(), {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
-            .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data && data.error) { self._renderMsg(String(data.error)); return; }
                 self._render(data || {});

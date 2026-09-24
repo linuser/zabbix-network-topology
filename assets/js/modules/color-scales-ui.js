@@ -20,6 +20,7 @@ import { el, fmt } from './utils.js';
 import { MAX_SCALE_COLORS, getColorScales, hasCustomScales, normalizeScales,
          applyColorScales, applyTrafficHeatmap } from './traffic.js';
 import { refreshBottomLegend } from './legend.js';
+import { fetchJson } from './http.js';
 
 const UNITS = [['b/s', 1], ['Kb/s', 1e3], ['Mb/s', 1e6], ['Gb/s', 1e9]];
 
@@ -40,14 +41,13 @@ function post(fields) {
     const body = new URLSearchParams();
     Object.keys(fields).forEach(function(k) { body.set(k, fields[k]); });
     body.set('nt_csrf', cfg.scales_csrf || '');
-    return fetch(cfg.scales_url || 'zabbix.php?action=network.topology.scales', {
+    return fetchJson(cfg.scales_url || 'zabbix.php?action=network.topology.scales', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'X-Requested-With': 'XMLHttpRequest',
                    'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString()
     })
-    .then(function(r) { return r.json(); })
     .then(function(d) {
         if (!d || d.error) throw new Error((d && d.error) || 'unknown');
         return d;

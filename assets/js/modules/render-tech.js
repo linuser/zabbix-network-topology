@@ -49,6 +49,7 @@ import { buildCytoscapeStyle } from './render-tech-style.js';
 import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
 import { isFocusActive, filterToFocus, dropFocus, renderFocusBanner } from './focus-mode.js';
 import { toast, toastTruncatedOnce } from './toast.js';
+import { fetchJson } from './http.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
 import { NT_GROUP_CLUSTER_KEY, loadGhostMode } from './storage.js';
@@ -75,7 +76,9 @@ function _clearRefreshWarn() {
     const b = document.getElementById('nt-refresh-warn');
     if (b) b.remove();
 }
-function _markRefresh(ok) {
+// err: the fetchJson() error, if any — its message goes into the badge's
+// tooltip, so a 504 is told apart from an expired session without devtools.
+function _markRefresh(ok, err) {
     if (ok) { _clearRefreshWarn(); return; }
     _refreshFails++;
     if (_refreshFails < 2) return;
@@ -91,7 +94,8 @@ function _markRefresh(ok) {
         wrap.appendChild(b);
     }
     b.textContent = t('tech.refresh_stale');
-    b.title = t('tech.refresh_stale.tip', { n: _refreshFails });
+    b.title = t('tech.refresh_stale.tip', { n: _refreshFails })
+        + (err && err.message ? '\n' + err.message : '');
 }
 
 // ── ntShowExportOverlay: wird vom Export-Menü in setupToolbar aufgerufen ──
@@ -688,11 +692,10 @@ export function render(wrap, nodes, edges, dataUrl) {
         // Pause waehrend Drag — sonst zerlegt der Refresh den User-Workflow
         // (Position springt zurueck weil neue Daten alte Positionen ueberschreiben).
         if (window._ntDragActive) return;
-        fetch(dataUrl, {
+        fetchJson(dataUrl, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
-            .then(function(r) { return r.json(); })
             .then(function(data) {
                 // Backend-Fehler (data.error) oder leere Antwort → Badge zeigen,
                 // letzten guten Stand behalten statt still zu ueberschreiben.
@@ -780,6 +783,6 @@ export function render(wrap, nodes, edges, dataUrl) {
                 // rechnen (nicht-verbose: keine Toast-Flut alle 30s).
                 if (isRootCauseActive()) runRootCause(window._ntCy, false);
             })
-            .catch(function() { _markRefresh(false); });   // Netz-/Parse-Fehler → Badge
+            .catch(function(err) { _markRefresh(false, err); });   // Netz-/HTTP-/Parse-Fehler → Badge
     }, 30000);
 }

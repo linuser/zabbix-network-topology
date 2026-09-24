@@ -74,6 +74,9 @@ without it being clear why:
      reproduce. Since 5.4.0 those four copies are **generated** from
      `tools/widget-shared.js` by `npm run build`, and the gate compares them
      against that source as well — four identically wrong copies used to pass.
+   - The **JSON fetch helper** (`window.NtFetchJson`), the ES5 counterpart of
+     `assets/js/modules/http.js`, in all **five** widget files including
+     `widget_items`. Same source file, same generation, same comparison.
      Edit the source, not the copies; each block carries a marker saying so.
 
    Change one site, change the other. The gate names the file that stepped out
@@ -352,6 +355,9 @@ ohne dass klar ist warum:
      (`npm run build`), und der Gate vergleicht sie zusätzlich gegen die
      Quelle — vier gleich falsche Kopien gingen vorher durch. Bearbeitet wird
      die Quelle; über jedem Block steht eine Marke, die das sagt.
+   - Der **JSON-Abruf** (`window.NtFetchJson`), das ES5-Gegenstück zu
+     `assets/js/modules/http.js`, in allen **fünf** Widget-Dateien, auch
+     `widget_items`. Dieselbe Quelle, dieselbe Erzeugung, derselbe Vergleich.
 
    Wer eine der Stellen ändert, ändert die andere mit. Das Gate sagt genau,
    welche Datei ausschert.

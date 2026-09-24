@@ -15,6 +15,7 @@ import { esc, buildBaseUrl, aggregateValues } from './utils.js';
 // 't' bereits die lokale Theme-Variable — ein direkter t-Import wuerde dort
 // verschattet.
 import { t as tr } from './i18n.js';
+import { fetchJson } from './http.js';
 
 const PRESETS = [
     // Filesystem
@@ -114,11 +115,10 @@ function _fetchAndRenderSparklines(container, baseUrl, theme) {
         params.append('action', 'network.topology.item_history');
         chunk.forEach(function(iid) { params.append('itemids[]', iid); });
         const url = baseUrl + 'zabbix.php?' + params.toString();
-        fetch(url, {
+        fetchJson(url, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
-            .then(function(r) { return r.json(); })
             .then(function(byIid) {
                 if (!byIid || byIid.error) return;
                 Object.keys(byIid).forEach(function(iid) {
@@ -272,11 +272,10 @@ export async function fetchItemsPivot(pattern) {
 
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
     try {
-        const resp = await fetch(url, {
+        const data = await fetchJson(url, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
-        const data = await resp.json();
         if (data.error) {
             console.warn('Items fetch error:', data.error);
             return { error: data.error };
@@ -309,11 +308,10 @@ function fetchPatternSuggestions() {
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
 
-    const promise = fetch(url, {
+    const promise = fetchJson(url, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         })
-        .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {
                 // Error-Response NICHT cachen — naechster Aufruf soll retry
@@ -679,11 +677,10 @@ export function buildPivotToolbar(onApply, theme) {
             params.append('pattern', p);
             groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
             const seq = ++_probeSeq;
-            fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(), {
+            fetchJson(buildBaseUrl() + 'zabbix.php?' + params.toString(), {
                 credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
-                .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (seq !== _probeSeq) return;   // outdated
                     // Farbe in JEDEM Pfad zuruecksetzen — nach einem 0-Treffer

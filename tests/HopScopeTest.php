@@ -109,6 +109,52 @@ check('malformed manual link entries are ignored',
     scope('core', 1, $edges, [['s' => 'core'], ['t' => 'x'], []]),
     ['core', 'fw', 'sw1']);
 
+echo "\n== Host cap ==\n\n";
+
+// Star-of-stars: core -> a1..a3 (ring 1), each aN -> bN1..bN3 (ring 2).
+$ring = [];
+foreach ([1, 2, 3] as $a) {
+    $ring[] = ['from' => 'core', 'to' => "a$a"];
+    foreach ([1, 2, 3] as $b) {
+        $ring[] = ['from' => "a$a", 'to' => "b$a$b"];
+    }
+}
+$dist = HopScope::distances('core', 2, $ring);
+
+check('distances: BFS order, start first',
+    array_slice(array_map('strval', array_keys($dist)), 0, 4), ['core', 'a1', 'a2', 'a3']);
+
+check('distances: ring 2 at distance 2',
+    $dist['b23'] ?? null, 2);
+
+$c = HopScope::cap($dist, 100);
+check('under the cap: nothing dropped',
+    [$c['truncated'], $c['total'], count($c['hostids']), $c['complete_hops']], [false, 13, 13, 2]);
+
+$c = HopScope::cap($dist, 6);
+check('cap cuts inside ring 2: 6 of 13 kept',
+    [$c['truncated'], $c['total'], count($c['hostids'])], [true, 13, 6]);
+check('cap keeps the nearest: all of ring 1 present',
+    array_slice($c['hostids'], 0, 4), ['core', 'a1', 'a2', 'a3']);
+check('cap inside ring 2: complete up to 1 hop',
+    $c['complete_hops'], 1);
+
+$c = HopScope::cap($dist, 4);
+check('cap exactly at the ring boundary: still complete up to 1 hop',
+    [$c['truncated'], $c['complete_hops']], [true, 1]);
+
+$c = HopScope::cap($dist, 2);
+check('cap inside ring 1: complete up to 0 hops',
+    [$c['truncated'], $c['complete_hops'], $c['hostids']], [true, 0, ['core', 'a1']]);
+
+$c = HopScope::cap(HopScope::distances('101', 1, [['from' => 101, 'to' => 102]]), 1);
+check('numeric ids come out as strings after the cap',
+    $c['hostids'], ['101']);
+
+$c = HopScope::cap([], 10);
+check('empty scope: empty result, not truncated',
+    [$c['hostids'], $c['total'], $c['truncated']], [[], 0, false]);
+
 echo "\n";
 if ($failures > 0) {
     echo "HopScopeTest: {$failures} FAILURE(S)\n";

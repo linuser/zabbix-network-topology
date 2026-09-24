@@ -122,6 +122,22 @@ class NetworkTopologyData extends NetworkTopologyController {
     private const MAX_HOPS = 6;
 
     /**
+     * Host+hops mode: upper bound for the number of hosts in the scope.
+     *
+     * The group mode has MAX_GROUPS; the hop mode had nothing, and on a large
+     * network six hops reach practically every device. The whole pipeline
+     * then ran over all of them in ONE request, nginx cut it off after its
+     * 60 s default, and the browser was left with an HTML error page.
+     * HopScope::cap() keeps the nearest hosts, so the map stays correct
+     * around the focus host and only the outer rings are missing — the
+     * response says so (scope_truncated), the client shows a warning.
+     *
+     * 1000 is far past what a hop map can show legibly and well below the
+     * 5000 hosts at which HOSTS_PER_ITEM_CHUNK was measured.
+     */
+    private const MAX_HOP_HOSTS = 1000;
+
+    /**
      * TTL of the discovered edge graph (host+hops mode). LLDP tables change
      * on the scale of minutes, and the graph is rebuilt per user anyway —
      * 60 s makes repeated hop queries (banner +/− clicks, 30 s refresh)
@@ -171,9 +187,11 @@ class NetworkTopologyData extends NetworkTopologyController {
         $hops      = max(1, min(self::MAX_HOPS, (int) $this->getInput('hops', 1)));
         $host_mode = ($hostid !== '' && $hostid !== '0');
         $scope_hostids = [];
+        $scope_info    = null;
 
         if ($host_mode) {
-            $scope_hostids = $this->hopScope($hostid, $hops);
+            $scope_info    = $this->hopScope($hostid, $hops);
+            $scope_hostids = $scope_info['hostids'];
             if (!$scope_hostids) {
                 // Focus host not visible/monitored for this user — same
                 // response shape as an empty group selection.
@@ -216,7 +234,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         //                   Eintrag, muessen aber verschieden warnen.
         $cached = NtCache::get('data_payload', $cache_parts);
         if (is_array($cached)) {
-            $this->respondData($cached, $cache_parts, $requested_groups, count($groupids), $_t0, true);
+            $this->respondData($cached, $cache_parts, $requested_groups, count($groupids), $_t0, true, $scope_info);
             return;
         }
 
@@ -703,7 +721,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         ];
         NtCache::set('data_payload', $cache_parts, $core, self::CACHE_TTL);
 
-        $this->respondData($core, $cache_parts, $requested_groups, count($groupids), $_t0, false);
+        $this->respondData($core, $cache_parts, $requested_groups, count($groupids), $_t0, false, $scope_info);
     }
 
     /**
@@ -724,9 +742,13 @@ class NetworkTopologyData extends NetworkTopologyController {
      * @param int   $processed_groups Anzahl NACH dem Kuerzen (0 in host mode)
      * @param float $t0               Startzeit fuer die Diagnose
      * @param bool  $cache_hit        kam der Kern aus dem Cache?
+     * @param array|null $scope_info  host+hops mode: HopScope::cap() result,
+     *                                null in group mode. Computed on every
+     *                                call, not cached — the cached core only
+     *                                holds the capped result.
      */
     private function respondData(array $core, array $cache_parts, int $requested_groups,
-            int $processed_groups, float $t0, bool $cache_hit): void {
+            int $processed_groups, float $t0, bool $cache_hit, ?array $scope_info = null): void {
 
         $nodes = $core['nodes'] ?? [];
         $edges = $core['edges'] ?? [];
@@ -865,6 +887,14 @@ class NetworkTopologyData extends NetworkTopologyController {
              'truncated'       => $requested_groups > self::MAX_GROUPS,
              'requested_count' => $requested_groups,
              'processed_count' => $processed_groups,
+             // Host+hops mode: the hop scope hit MAX_HOP_HOSTS. A different
+             // statement from 'truncated' (host groups) — own fields, own
+             // warning. scope_complete_hops = every host up to that distance
+             // is on the map.
+             'scope_truncated'     => $scope_info !== null && $scope_info['truncated'],
+             'scope_total'         => $scope_info !== null ? $scope_info['total'] : 0,
+             'scope_shown'         => $scope_info !== null ? count($scope_info['hostids']) : 0,
+             'scope_complete_hops' => $scope_info !== null ? $scope_info['complete_hops'] : 0,
              // Review §12: versionierter, dokumentierter API-Contract. Additiv,
              // bestehende Top-Level-Felder bleiben unveraendert.
              'api_version'     => self::API_VERSION,
@@ -893,9 +923,10 @@ class NetworkTopologyData extends NetworkTopologyController {
      * do not re-discover; manual links are merged in fresh on every call —
      * they are cheap to load and the personal layer changes in-session.
      *
-     * @return array hostids within $hops of $hostid (incl. itself), filtered
-     *               to hosts visible to this user; empty if the focus host
-     *               itself is not visible/monitored.
+     * @return array HopScope::cap() result — hostids within $hops of $hostid
+     *               (incl. itself), nearest first, filtered to hosts visible
+     *               to this user and cut to MAX_HOP_HOSTS; hostids is empty
+     *               if the focus host itself is not visible/monitored.
      */
     private function hopScope(string $hostid, int $hops): array {
         $graph = NtCache::get('edge_graph', []);
@@ -964,18 +995,22 @@ class NetworkTopologyData extends NetworkTopologyController {
         }
 
         if (!isset($graph['visible'][$hostid])) {
-            return [];
+            return HopScope::cap([], self::MAX_HOP_HOSTS);
         }
         $links = array_merge(ManualLinks::loadShared(), ManualLinks::loadPersonal());
-        $scope = HopScope::neighborhood($hostid, $hops, $graph['edges'], $links);
+        $dist  = HopScope::distances($hostid, $hops, $graph['edges'], $links);
 
         // Manual links may reference nodes that are no monitored hosts (ghost
         // or otherwise stale ids) — they may act as bridges in the BFS, but
         // must not reach host.get: a non-numeric id there is an API error,
         // and an invisible one would leak through the permission model.
-        return array_values(array_filter($scope, static function ($id) use ($graph) {
-            return isset($graph['visible'][$id]);
-        }));
+        // Filter BEFORE the cap, so bridges do not eat into it; array_filter
+        // keeps the BFS order cap() depends on.
+        $dist = array_filter($dist, static function ($id) use ($graph) {
+            return isset($graph['visible'][(string) $id]);
+        }, ARRAY_FILTER_USE_KEY);
+
+        return HopScope::cap($dist, self::MAX_HOP_HOSTS);
     }
 
     /**

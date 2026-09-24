@@ -9,6 +9,7 @@
 
 import { esc, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
+import { fetchJson } from './http.js';
 
 function _bytes(n) {
     if (n < 1024) return n + ' B';
@@ -137,11 +138,10 @@ export function renderDiag(wrap) {
     wrap.appendChild(root);
 
     const url = buildBaseUrl() + 'zabbix.php?action=network.topology.diag';
-    fetch(url, {
+    fetchJson(url, {
         credentials: 'same-origin',
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-        .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {
                 summaryBody.innerHTML = '<div style="color:#dc2626">' + esc(data.error) + '</div>';

@@ -24,6 +24,7 @@ import { isFocusActive, getFocusId, getFocusHops,
          setFocus, clearFocus } from './focus-mode.js';
 import { t } from './i18n.js';
 import { isDark } from './utils.js';
+import { fetchJson } from './http.js';
 
 // Attached to <body> like the tooltip → color tokens via .nt-float; the dark
 // class is taken over from #nt-root in _showCtxAt().
@@ -90,7 +91,7 @@ function _createMaintenance(hostId, durationSec, durLabel, hostLabel) {
     params.append('hostids[]', hostId);
     params.append('duration', String(durationSec));
     params.append('nt_csrf', (window.NT_CONFIG && window.NT_CONFIG.csrf_token) || '');
-    fetch(base + 'zabbix.php', {
+    fetchJson(base + 'zabbix.php', {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -99,7 +100,6 @@ function _createMaintenance(hostId, durationSec, durLabel, hostLabel) {
         },
         body: params.toString()
     })
-        .then(function(r) { return r.json(); })
         .then(function(res) {
             if (res && res.ok) {
                 toast(t('maint.ok', { host: hostLabel, dur: durLabel }), 'info');
@@ -127,7 +127,7 @@ function _probePorts(hostId, hostLabel) {
 
     toast(t('scan.running', { host: hostLabel }), 'info', 4000);
 
-    fetch(base + 'zabbix.php', {
+    fetchJson(base + 'zabbix.php', {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -136,7 +136,6 @@ function _probePorts(hostId, hostLabel) {
         },
         body: params.toString()
     })
-        .then(function(r) { return r.json(); })
         .then(function(res) {
             if (!res || !res.ok) {
                 toast(t('scan.fail', { msg: (res && res.error) || '?' }), 'warn');
