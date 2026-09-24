@@ -32,6 +32,10 @@
             "class": "NetworkTopologyDiscoverPatterns",
             "layout": "layout.json"
         },
+        "network.topology.update_check": {
+            "class": "NetworkTopologyUpdateCheck",
+            "layout": "layout.json"
+        },
         "network.topology.diag": {
             "class": "NetworkTopologyDiag",
             "layout": "layout.json"

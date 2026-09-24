@@ -42,7 +42,12 @@ services:
       - "10051:10051"
 
   web:
-    image: docker.io/zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+    # Eigenes Image statt des offiziellen: es bringt kein APCu mit, und ohne
+    # APCu ist NtCache ein No-Op — dann gibt es keine Topologie-Baseline, also
+    # keine Aenderungsmeldungen, keine alternden Kanten und einen leeren
+    # Diag-Tab. Das Entwicklungsnetz konnte damit ausgerechnet das nicht
+    # nachstellen, was 5.4.0 ausmacht. Siehe web/Dockerfile.
+    build: ./web
     container_name: devnetz-web
     restart: unless-stopped
     environment:

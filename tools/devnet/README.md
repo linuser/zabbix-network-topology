@@ -64,6 +64,23 @@ Two rules that cost an afternoon each when broken, and both are now enforced by
 - **Hex values without `0x`.** `4x|001122aabb01` is right, `4x|0x001122aabb01`
   is silently unreadable, and the whole subtree below it disappears.
 
+## Why the web container is built here
+
+The official `zabbix-web` image ships without APCu — and `NtCache` is a no-op
+without it. That is not just a missing cache: the topology **baseline** lives
+there. Without it the diff never reports a change ("cable gone", "replugged"),
+edges never age into dashed ex-links, and the Diag tab shows an empty ring
+buffer.
+
+So this network could not reproduce the very things 5.4.0 is about. Noticed
+while trying to capture the notification for a failed LAG member: it never
+came, and the module was not the reason. `web/Dockerfile` adds the extension,
+nothing else.
+
+The PHP version is pinned by the base image (php85 today). When Zabbix moves
+it, the package name here has to move with it — the build then fails, which is
+the right direction for that kind of surprise: loud, not silent.
+
 ## Two notes on snmpsim
 
 - The package is `snmpsim-lextudio`, and **1.1.1 is the last version** — higher
@@ -75,5 +92,11 @@ Two rules that cost an afternoon each when broken, and both are now enforced by
 
 - Counters do not move: the values in the files are static, so "per second"
   comes out as zero. snmpsim's `numeric` variation module can count for us.
+- A port that is **down** exists (`tplink-lldp.snmprec` has `ifOperStatus` 2 on
+  interface 7), but the module only sees it when the host carries matching
+  `net.if.status[<ifIndex>]` items. The bundled LLDP template does not create
+  them — add them by hand, or link an interface template, and the LAG between
+  `lab-tplink-01` and `lab-switch-24` turns into the one picture worth having:
+  `×2 (1 down)`.
 - A second instance on 7.4 for the widgets, and one on 8.0 to finally test the
   branch that has been waiting for a test instance.

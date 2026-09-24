@@ -7,7 +7,7 @@
 // Nur sichtbar fuer Admins (NT_CONFIG.can_edit). Backend prueft das nochmal,
 // aber wir blenden den Tab im Frontend gleich aus.
 
-import { esc, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
+import { esc, el, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
 
 function _bytes(n) {
@@ -95,6 +95,21 @@ function _buildLog(entries, theme) {
         }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
+/**
+ * Link auf die Releases-Seite. Die URL kommt aus der Antwort und ist damit
+ * fremder Text — die Action laesst nur https://github.com/… durch, hier
+ * landet sie ueber setAttribute statt in einer HTML-Zeichenkette.
+ */
+function releaseLink(url, theme) {
+    const a = document.createElement('a');
+    a.setAttribute('href', String(url || 'https://github.com/linuser/zabbix-network-topology/releases'));
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+    a.style.color = theme.accent;
+    a.textContent = t('diag.update.open');
+    return a;
+}
+
 export function renderDiag(wrap) {
     if (window._ntCy)         { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     if (window._ntEdgeAnim)   { clearInterval(window._ntEdgeAnim);     window._ntEdgeAnim     = null; }
@@ -114,6 +129,83 @@ export function renderDiag(wrap) {
         + t('diag.intro')
         + '</div>';
     root.appendChild(head);
+
+    // ── "Gibt es ein Update?" ──────────────────────────────────────────
+    //
+    // Auf Knopfdruck, nie von allein. Der Klick ist die Einwilligung: ein
+    // Modul, das ungefragt nach Hause telefoniert, ist in vielen Haeusern
+    // ein Richtlinienverstoss, und in einem abgeschotteten Netz eine
+    // Abfrage, die ins Leere laeuft. Deshalb steht hier ein Knopf und kein
+    // Hintergrundtakt — und deshalb ist "nicht erreichbar" hier eine
+    // Antwort und keine Fehlermeldung.
+    //
+    // Der Abschnitt liegt im Diag-Tab, weil den ohnehin nur Super-Admins
+    // sehen — und nur wer das Modul austauschen kann, soll den Hinweis
+    // bekommen.
+    const updWrap = document.createElement('div');
+    updWrap.style.marginBottom = '24px';
+    // Ueberschrift ueber el(): der Text geht durch textContent. Die
+    // Nachbarabschnitte dieses Tabs setzen innerHTML, das ist Bestand —
+    // neue Stellen kommen ohne aus, sonst waechst die ESLint-Baseline.
+    updWrap.appendChild(el('h3',
+        'margin:0 0 8px;font-size:13px;color:' + theme.sub
+        + ';text-transform:uppercase;letter-spacing:0.04em',
+        t('diag.update.title')));
+    const updRow = document.createElement('div');
+    updRow.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+    const updBtn = document.createElement('button');
+    updBtn.type = 'button';
+    updBtn.textContent = t('diag.update.check');
+    updBtn.style.cssText = 'padding:4px 12px;border:1px solid ' + theme.border
+        + ';border-radius:4px;background:' + theme.surface + ';color:' + theme.text
+        + ';font-size:12px;font-family:inherit;cursor:pointer';
+    const updOut = document.createElement('div');
+    updOut.style.cssText = 'font-size:12px;color:' + theme.sub;
+    updOut.textContent = t('diag.update.idle');
+    updRow.appendChild(updBtn);
+    updRow.appendChild(updOut);
+    updWrap.appendChild(updRow);
+    root.appendChild(updWrap);
+
+    updBtn.addEventListener('click', function() {
+        updBtn.disabled = true;
+        updOut.textContent = t('diag.update.checking');
+        fetch(buildBaseUrl() + 'zabbix.php?action=network.topology.update_check', {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                updBtn.disabled = false;
+                // Kein Unterschied zwischen DNS, Firewall, Proxy und einem
+                // Fehler bei GitHub: fuer den Fragenden ist die Antwort
+                // dieselbe, und Innenleben hilft ihm nicht weiter.
+                while (updOut.firstChild) updOut.removeChild(updOut.firstChild);
+                if (d.error === 'unreachable' || d.error === 'unreadable') {
+                    updOut.appendChild(document.createTextNode(t('diag.update.unreachable') + ' '));
+                    updOut.appendChild(releaseLink(d.url, theme));
+                    return;
+                }
+                if (d.error) {
+                    updOut.textContent = String(d.error);
+                    return;
+                }
+                if (d.newer) {
+                    updOut.appendChild(el('b', '', t('diag.update.available', { v: d.latest || '?' })));
+                    updOut.appendChild(document.createTextNode(
+                        ' ' + t('diag.update.you_have', { v: d.current || '?' })
+                        + (d.published ? ' \u00b7 ' + d.published : '') + ' '));
+                    updOut.appendChild(releaseLink(d.url, theme));
+                }
+                else {
+                    updOut.textContent = t('diag.update.current', { v: d.current || '?' });
+                }
+            })
+            .catch(function() {
+                updBtn.disabled = false;
+                updOut.textContent = t('diag.update.unreachable');
+            });
+    });
 
     const summaryWrap = document.createElement('div');
     summaryWrap.style.marginBottom = '24px';
