@@ -13,7 +13,6 @@
 
 import { esc, mkTabTheme, buildBaseUrl, fmt, linkCapacity, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
-import { fetchJson } from './fetch-json.js';
 
 const RANGES = [
     { lbl: t('stats.range_days', { n: 7 }),  days: 7 },
@@ -345,7 +344,8 @@ export function renderStats(wrap, nodes) {
         trigBox.querySelector('[data-slot="triggers"]').textContent = '…';
 
         const seq = ++_seq;
-        fetchJson(url)
+        fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (seq !== _seq) return;   // outdated response
                 if (data.error) {
@@ -439,7 +439,9 @@ export function renderStats(wrap, nodes) {
         fcStatus.textContent = t('fc.loading', { days: _fcDays });
         fcSlot.innerHTML = '';
         const seq = ++_fcSeq;
-        fetchJson(buildBaseUrl() + 'zabbix.php?' + params.toString())
+        fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(),
+              { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (seq !== _fcSeq || !fcSlot.isConnected) return;
                 if (data.error) {
@@ -583,7 +585,9 @@ export function renderStats(wrap, nodes) {
         rfStatus.textContent = t('fc.loading', { days: _fcDays });
         rfSlot.innerHTML = '';
         const seq = ++_rfSeq;
-        fetchJson(buildBaseUrl() + 'zabbix.php?' + params.toString())
+        fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(),
+              { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (seq !== _rfSeq || !rfSlot.isConnected) return;
                 if (data.error) {

@@ -15,7 +15,6 @@ import { esc, buildBaseUrl, aggregateValues } from './utils.js';
 // 't' bereits die lokale Theme-Variable — ein direkter t-Import wuerde dort
 // verschattet.
 import { t as tr } from './i18n.js';
-import { fetchJson } from './fetch-json.js';
 
 const PRESETS = [
     // Filesystem
@@ -115,7 +114,11 @@ function _fetchAndRenderSparklines(container, baseUrl, theme) {
         params.append('action', 'network.topology.item_history');
         chunk.forEach(function(iid) { params.append('itemids[]', iid); });
         const url = baseUrl + 'zabbix.php?' + params.toString();
-        fetchJson(url)
+        fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function(r) { return r.json(); })
             .then(function(byIid) {
                 if (!byIid || byIid.error) return;
                 Object.keys(byIid).forEach(function(iid) {
@@ -306,7 +309,11 @@ function fetchPatternSuggestions() {
     groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
 
-    const promise = fetchJson(url)
+    const promise = fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {
                 // Error-Response NICHT cachen — naechster Aufruf soll retry
@@ -672,7 +679,11 @@ export function buildPivotToolbar(onApply, theme) {
             params.append('pattern', p);
             groupids.forEach(function(g) { params.append('groupids[]', String(g)); });
             const seq = ++_probeSeq;
-            fetchJson(buildBaseUrl() + 'zabbix.php?' + params.toString())
+            fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (seq !== _probeSeq) return;   // outdated
                     // Farbe in JEDEM Pfad zuruecksetzen — nach einem 0-Treffer

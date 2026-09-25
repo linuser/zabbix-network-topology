@@ -30,31 +30,6 @@ final class HopScope {
      *               itself. $start not appearing in any edge yields [$start].
      */
     public static function neighborhood(string $start, int $hops, array $edges, array $links = []): array {
-        return self::scope($start, $hops, $edges, $links)['hostids'];
-    }
-
-    /**
-     * Wie neighborhood(), aber mit BUDGET und Rechenschaft darüber.
-     *
-     * WARUM ES DAS BRAUCHT
-     * --------------------
-     * Sechs Hops von einem Switch erreichen auf einem Campus praktisch jedes
-     * Gerät. Die Gruppenauswahl kappt bei 100 Gruppen und sagt es; der
-     * Hop-Modus kappte gar nicht, und die anschliessende Anreicherung (Items,
-     * Lastvalues, Trigger, Probleme) lief über alles — bis nginx nach 60 s
-     * eine HTML-Fehlerseite schickte. Gemeldet in #22.
-     *
-     * Gekappt wird RINGWEISE, nicht an einer beliebigen Stelle der Liste: wer
-     * "Host plus sechs Hops" waehlt und 400 Geraete bekommt, soll die Hops 1
-     * bis k VOLLSTAENDIG sehen und erfahren, dass bei k Schluss war. Eine
-     * halbe Kugelschale ist keine Nachbarschaft, sondern ein Zufallsschnitt.
-     *
-     * @param int $budget Obergrenze fuer die Hostzahl; 0 = unbegrenzt.
-     *
-     * @return array{hostids: array, hops_done: int, cut: bool}
-     */
-    public static function scope(string $start, int $hops, array $edges,
-            array $links = [], int $budget = 0): array {
         $adj = [];
         $add = static function ($a, $b) use (&$adj): void {
             $a = (string) $a;
@@ -72,50 +47,29 @@ final class HopScope {
             $add($l['s'] ?? '', $l['t'] ?? '');
         }
 
-        // Ringweise statt mit einer Warteschlange: nur so laesst sich vor dem
-        // naechsten Hop fragen, ob er noch ins Budget passt. Die Kosten sind
-        // dieselben, jeder Knoten wird einmal angesehen.
-        $depth     = [$start => 0];
-        $ring      = [$start];
-        $hops_done = 0;
-
-        for ($d = 0; $d < $hops && $ring; $d++) {
-            $naechster = [];
-            foreach ($ring as $cur) {
-                foreach (array_keys($adj[$cur] ?? []) as $nb) {
-                    $nb = (string) $nb;
-                    if (isset($depth[$nb])) {
-                        continue;
-                    }
-                    $depth[$nb] = $d + 1;
-                    $naechster[] = $nb;
+        // depth[id] = hop distance to $start; expand only below the limit.
+        // Queue via index pointer — array_shift() is O(n) per call and this
+        // can see thousands of nodes on large installs.
+        $depth = [$start => 0];
+        $queue = [$start];
+        for ($qi = 0; $qi < count($queue); $qi++) {
+            $cur = $queue[$qi];
+            $d   = $depth[$cur];
+            if ($d >= $hops) {
+                continue;
+            }
+            foreach (array_keys($adj[$cur] ?? []) as $nb) {
+                $nb = (string) $nb;
+                if (isset($depth[$nb])) {
+                    continue;
                 }
+                $depth[$nb] = $d + 1;
+                $queue[] = $nb;
             }
-            if (!$naechster) {
-                break;
-            }
-            // Passt der ganze Ring nicht mehr, gilt er als nicht gelaufen:
-            // die bis hierher gefundenen Hops bleiben vollstaendig.
-            if ($budget > 0 && count($depth) > $budget) {
-                foreach ($naechster as $nb) {
-                    unset($depth[$nb]);
-                }
-                return [
-                    'hostids'   => array_map('strval', array_keys($depth)),
-                    'hops_done' => $hops_done,
-                    'cut'       => true,
-                ];
-            }
-            $ring = $naechster;
-            $hops_done = $d + 1;
         }
 
         // PHP silently casts numeric-string array keys to int — map back so
         // the documented string contract holds regardless of id shape.
-        return [
-            'hostids'   => array_map('strval', array_keys($depth)),
-            'hops_done' => $hops_done,
-            'cut'       => false,
-        ];
+        return array_map('strval', array_keys($depth));
     }
 }

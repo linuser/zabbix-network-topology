@@ -13,7 +13,6 @@
 // (v3.6 → v4.0) wurde sie auf eine reine Orchestrierungs-Schicht reduziert.
 
 import { esc } from './modules/utils.js';
-import { fetchJson } from './modules/fetch-json.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce, toast } from './modules/toast.js';
 import { hideTip } from './modules/tooltip.js';
@@ -385,11 +384,8 @@ function init() {
         cfg.selected_groupids.forEach(function(id) { params.append('groupids[]', id); });
     }
     const url = cfg.data_url + '&' + params;
-    // fetchJson statt fetch().json(): eine HTML-Fehlerseite (nginx-504 bei zu
-    // grosser Auswahl, Zabbix-Anmeldung nach Sitzungsende) wurde hier frueher
-    // als JSON geparst, und der Nutzer las "Unexpected token '<'" statt
-    // "zu lange gedauert". Gemeldet als #22.
-    fetchJson(url)
+    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
             spin.style.display = 'none';
             // Das Backend hat die Gruppenauswahl gekappt (MAX_GROUPS). Sichtbar
@@ -409,18 +405,6 @@ function init() {
             if (data.edges_truncated) {
                 toastTruncatedOnce('edges:' + data.edges_truncated,
                     t('warn.edges_truncated', { n: data.edges_truncated }));
-            }
-            // Hop-Modus: die Nachbarschaft wurde ringweise gekappt. Das ist
-            // die dritte Art von Unvollstaendigkeit und braucht deshalb einen
-            // eigenen Satz — hier fehlen nicht Kanten und nicht Gruppen,
-            // sondern die aeusseren Hops.
-            if (data.scope_cut) {
-                toastTruncatedOnce('scope:' + data.scope_hops_done + '/' + data.scope_hops_asked,
-                    t('warn.scope_cut', {
-                        done: data.scope_hops_done,
-                        asked: data.scope_hops_asked,
-                        hosts: data.scope_hosts
-                    }));
             }
             // lldp_quality mit durchreichen — der LLDP-Q-Tab liest es aus
             // _ntLastData (ohne dieses Feld waere der Tab immer leer).

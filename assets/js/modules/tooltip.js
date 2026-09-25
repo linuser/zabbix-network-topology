@@ -12,7 +12,6 @@
 import { esc, fmt, fmtItemValue, isDark } from './utils.js';
 import { utilizationColor, utilizationPct } from './traffic.js';
 import { t } from './i18n.js';
-import { fetchJson } from './fetch-json.js';
 
 // The tooltip is attached to <body>, not inside #nt-root: it inherits neither
 // the color tokens nor the dark class. .nt-float brings the tokens along
@@ -48,7 +47,8 @@ function fetchSparkData(hostid, d, onDone) {
     const sparkUrl = cfg.data_url.replace('network.topology.data', 'network.topology.spark')
         + '&hostids%5B%5D=' + encodeURIComponent(hostid);
 
-    fetchJson(sparkUrl)
+    fetch(sparkUrl, { credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'} })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
             const h = data[String(hostid)] || {};
             const result = {
@@ -393,7 +393,8 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
     const url = cfg.data_url.replace('network.topology.data', 'network.topology.spark')
         + '&hostids%5B%5D=' + encodeURIComponent(srcId)
         + '&hostids%5B%5D=' + encodeURIComponent(tgtId);
-    fetchJson(url)
+    fetch(url, { credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'} })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
             const s = data[String(srcId)] || null;
             const t = data[String(tgtId)] || null;

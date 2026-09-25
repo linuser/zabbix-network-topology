@@ -9,7 +9,6 @@
 
 import { esc, el, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
-import { fetchJson } from './fetch-json.js';
 
 function _bytes(n) {
     if (n < 1024) return n + ' B';
@@ -171,7 +170,11 @@ export function renderDiag(wrap) {
     updBtn.addEventListener('click', function() {
         updBtn.disabled = true;
         updOut.textContent = t('diag.update.checking');
-        fetchJson(buildBaseUrl() + 'zabbix.php?action=network.topology.update_check')
+        fetch(buildBaseUrl() + 'zabbix.php?action=network.topology.update_check', {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function(r) { return r.json(); })
             .then(function(d) {
                 updBtn.disabled = false;
                 // Kein Unterschied zwischen DNS, Firewall, Proxy und einem
@@ -226,7 +229,11 @@ export function renderDiag(wrap) {
     wrap.appendChild(root);
 
     const url = buildBaseUrl() + 'zabbix.php?action=network.topology.diag';
-    fetchJson(url)
+    fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+        .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.error) {
                 summaryBody.innerHTML = '<div style="color:#dc2626">' + esc(data.error) + '</div>';
