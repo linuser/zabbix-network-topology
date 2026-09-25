@@ -537,6 +537,8 @@ export default {
     'http.status': 'The server answered with HTTP {status} {text}',
     'http.not_json': 'The server sent a web page instead of map data — the session may have expired, or PHP failed. Reload the page; if it keeps happening, check the web server error log.',
     'http.network': 'The server could not be reached. Check the network connection and reload the page.',
+    'http.denied': 'No permission for this request any more (HTTP {status}). Usually the session has expired — reload the page and sign in again.',
+    'http.body_start': 'The answer began with: {start}',
     'agg.no_group': '— No group —',
     'minimap.tip': 'Minimap — click to navigate',
 

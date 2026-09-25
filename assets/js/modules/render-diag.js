@@ -171,11 +171,7 @@ export function renderDiag(wrap) {
     updBtn.addEventListener('click', function() {
         updBtn.disabled = true;
         updOut.textContent = t('diag.update.checking');
-        fetch(buildBaseUrl() + 'zabbix.php?action=network.topology.update_check', {
-            credentials: 'same-origin',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-            .then(function(r) { return r.json(); })
+        fetchJson(buildBaseUrl() + 'zabbix.php?action=network.topology.update_check')
             .then(function(d) {
                 updBtn.disabled = false;
                 // Kein Unterschied zwischen DNS, Firewall, Proxy und einem
@@ -202,9 +198,19 @@ export function renderDiag(wrap) {
                     updOut.textContent = t('diag.update.current', { v: d.current || '?' });
                 }
             })
-            .catch(function() {
+            .catch(function(err) {
                 updBtn.disabled = false;
-                updOut.textContent = t('diag.update.unreachable');
+                // Zwei verschiedene Fehlschlaege, und nur einer davon ist
+                // absichtlich wortkarg: dass GitHub von diesem Server aus
+                // nicht erreichbar ist, kommt als {error:'unreachable'} in
+                // einer gelungenen Antwort an — ob DNS, Firewall oder Proxy,
+                // sagen wir bewusst nicht. Scheitert dagegen die eigene
+                // Abfrage, waere "GitHub nicht erreichbar" schlicht falsch:
+                // dann hat das eigene Zabbix geantwortet, und fetchJson weiss
+                // womit.
+                updOut.textContent = (err && err.message)
+                    ? err.message
+                    : t('diag.update.unreachable');
             });
     });
 

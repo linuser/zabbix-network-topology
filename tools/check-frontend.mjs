@@ -376,6 +376,62 @@ if (csv) {
         /^Warning,'=cmd/.test(csv.boese), true);
 }
 
+// Was der Nutzer liest, wenn der Server NICHT mit Daten antwortet. Genau hier
+// lag #22: nginx schickte bei Zeitueberschreitung seine HTML-Seite, das
+// Frontend parste sie als JSON, und im Kasten stand "Unexpected token '<'" —
+// waehrend das Problem eine zu grosse Auswahl war. Der Fix kam als PR #23 mit
+// einer Pruefung im Browser; hier steht er als Gate, damit die Saetze auch
+// dann noch stimmen, wenn niemand mehr von Hand nachsieht.
+console.log('\n  Fehlerfall: der Server antwortet nicht mit Daten\n');
+const fehlerfall = szenario('http', { lang: 'en_US' }, `
+    const J = await import(${JSON.stringify(MODULE('http.js'))});
+    const antwort = (status, body) => () => Promise.resolve({
+        ok: status >= 200 && status < 300,
+        status: status,
+        statusText: '',
+        text: () => Promise.resolve(body),
+    });
+    const hole = async (status, body) => {
+        globalThis.fetch = status === 0
+            ? () => Promise.reject(new TypeError('Failed to fetch'))
+            : antwort(status, body);
+        try { await J.fetchJson('x'); return { ok: true }; }
+        catch (e) { return { status: e.status, msg: e.message }; }
+    };
+    // Und einmal ohne eigene Optionen: die Vorgabe muss den Kopf setzen, den
+    // requireAjax() auf jeder lesenden Action verlangt.
+    let gesehen = null;
+    globalThis.fetch = (u, o) => { gesehen = o; return antwort(200, '{}')(); };
+    await J.fetchJson('x');
+    console.log(JSON.stringify({
+        timeout: await hole(504, '<html> <head><title>504 Gateway Time-out</title>'),
+        denied:  await hole(403, '<html>login</html>'),
+        http:    await hole(500, 'boom'),
+        parse:   await hole(200, '<html> <h1>PHP Fatal error: memory</h1>'),
+        netz:    await hole(0, ''),
+        gut:     await hole(200, '{"nodes":[]}'),
+        kopf:    (gesehen && gesehen.headers) ? gesehen.headers['X-Requested-With'] : null,
+    }));
+`);
+if (fehlerfall) {
+    pruefe('Zeitueberschreitung heisst Zeitueberschreitung',
+        /did not answer in time|too large|fewer hops/.test(fehlerfall.timeout.msg || ''), true);
+    pruefe('kein Wort von "Unexpected token"',
+        /Unexpected token|not valid JSON/.test(fehlerfall.timeout.msg || ''), false);
+    pruefe('403: Sitzung abgelaufen, neu anmelden',
+        [fehlerfall.denied.status, /sign in again/.test(fehlerfall.denied.msg || '')], [403, true]);
+    pruefe('anderer HTTP-Fehler nennt den Code',
+        [fehlerfall.http.status, /500/.test(fehlerfall.http.msg || '')], [500, true]);
+    pruefe('200 ohne JSON: sagt, womit es anfing',
+        /began with: html .*PHP Fatal error/.test(fehlerfall.parse.msg || ''), true);
+    pruefe('und ohne spitze Klammern darin',
+        /[<>]/.test(fehlerfall.parse.msg || ''), false);
+    pruefe('Server nicht erreichbar ist ein eigener Fall',
+        /could not be reached/.test(fehlerfall.netz.msg || ''), true);
+    pruefe('echtes JSON kommt durch',        fehlerfall.gut.ok, true);
+    pruefe('X-Requested-With auch ohne Optionen', fehlerfall.kopf, 'XMLHttpRequest');
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

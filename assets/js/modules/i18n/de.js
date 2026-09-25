@@ -542,6 +542,8 @@ export default {
     'http.status': 'Der Server antwortete mit HTTP {status} {text}',
     'http.not_json': 'Der Server hat eine Webseite statt Kartendaten geschickt — vielleicht ist die Sitzung abgelaufen, oder PHP ist ausgestiegen. Seite neu laden; passiert es wieder, das Fehlerprotokoll des Webservers prüfen.',
     'http.network': 'Der Server ist nicht erreichbar. Netzwerkverbindung prüfen und die Seite neu laden.',
+    'http.denied': 'Keine Berechtigung mehr für diese Abfrage (HTTP {status}). Meist ist die Sitzung abgelaufen — Seite neu laden und erneut anmelden.',
+    'http.body_start': 'Die Antwort begann mit: {start}',
     'agg.no_group': '— Ohne Gruppe —',
     'minimap.tip': 'Minimap — klicken zum Navigieren',
 

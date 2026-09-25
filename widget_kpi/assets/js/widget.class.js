@@ -54,15 +54,27 @@ if (!window.NtFetchJson) {
             function (r) {
                 var s = r.status;
                 if (!r.ok) {
-                    throw new Error((s === 502 || s === 503 || s === 504)
-                        ? 'The server did not answer in time (HTTP ' + s + '). The request was probably too large \u2014 select fewer host groups.'
-                        : 'The server answered with HTTP ' + s + (r.statusText ? ' ' + r.statusText : ''));
+                    if (s === 502 || s === 503 || s === 504) {
+                        throw new Error('The server did not answer in time (HTTP ' + s + '). The request was probably too large \u2014 select fewer host groups.');
+                    }
+                    // Auf einem Dashboard faellt eine abgelaufene Sitzung
+                    // zuerst hier auf: die Kacheln laden im Hintergrund weiter,
+                    // waehrend niemand mehr angemeldet ist.
+                    if (s === 401 || s === 403) {
+                        throw new Error('No permission for this request any more (HTTP ' + s + '). Usually the session has expired \u2014 reload the page and sign in again.');
+                    }
+                    throw new Error('The server answered with HTTP ' + s + (r.statusText ? ' ' + r.statusText : ''));
                 }
                 return r.text().then(function (body) {
                     try {
                         return JSON.parse(body);
                     } catch (e) {
-                        throw new Error('The server sent a web page instead of data \u2014 the session may have expired, or PHP failed. Reload the page.');
+                        // Der Anfang der Antwort sagt, wo man nachsieht: nginx,
+                        // Anmeldeseite oder PHP-Fatal. Spitze Klammern fallen
+                        // weg, der Text kann in einer Kachel landen.
+                        var anf = String(body).replace(/[<>&"']/g, ' ').replace(/\s+/g, ' ').replace(/^ /, '').substring(0, 60);
+                        throw new Error('The server sent a web page instead of data \u2014 the session may have expired, or PHP failed. Reload the page.'
+                            + (anf ? ' The answer began with: ' + anf : ''));
                     }
                 });
             },
