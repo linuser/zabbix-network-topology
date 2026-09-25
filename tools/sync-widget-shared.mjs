@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// sync-widget-shared.mjs — schreibt den geteilten Datenzugriff aus
-// tools/widget-shared.js in die vier Widget-Dateien.
+// sync-widget-shared.mjs — schreibt den geteilten Widget-Code aus
+// tools/widget-shared.js in die Widget-Dateien (NtFetchJson in alle fuenf,
+// NtWidgetData in vier).
 //
 // WARUM ERZEUGEN STATT NACHLADEN
 // ------------------------------
@@ -23,52 +24,65 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const QUELLE = join(ROOT, 'tools/widget-shared.js');
-const ZIELE = [
+const VIER = [
     'widget/assets/js/widget.class.js',
     'widget_health/assets/js/widget.class.js',
     'widget_table/assets/js/widget.class.js',
     'widget_kpi/assets/js/widget.class.js',
 ];
-// Derselbe Ausdruck wie in check-parity.mjs — zwei Ausdruecke waeren zwei
-// Stellen, an denen sich die Blockgrenze verschieben kann.
-const BLOCK = /if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/;
+// Zwei Bloecke, verschiedene Ziele: NtFetchJson braucht auch widget_items
+// (eigene Action, derselbe 504), NtWidgetData ist auf network.topology.data
+// zugeschnitten und gehoert dort nicht hin.
+//
+// Die Ausdruecke stehen wortgleich in check-parity.mjs — zwei Ausdruecke
+// waeren zwei Stellen, an denen sich die Blockgrenze verschieben kann.
+const BLOCKS = [
+    { name: 'NtFetchJson',  re: /if \(!window\.NtFetchJson\) \{[\s\S]*?\n\}\n/,
+      ziele: [...VIER, 'widget_items/assets/js/widget.class.js'] },
+    { name: 'NtWidgetData', re: /if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/,
+      ziele: VIER },
+];
 const MARKE = '// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.\n';
 
 const pruefen = process.argv.includes('--pruefen');
 
 const quelle = readFileSync(QUELLE, 'utf8');
-const m = quelle.match(BLOCK);
-if (!m) {
-    console.error('✗ tools/widget-shared.js enthaelt keinen NtWidgetData-Block.');
-    process.exit(1);
-}
-const block = m[0];
 
 let abweichend = 0;
 let geschrieben = 0;
-for (const rel of ZIELE) {
-    const pfad = join(ROOT, rel);
-    const alt = readFileSync(pfad, 'utf8');
-    const treffer = alt.match(BLOCK);
-    if (!treffer) {
-        console.error(`✗ ${rel}: Block nicht gefunden`);
+for (const { name, re, ziele } of BLOCKS) {
+    const m = quelle.match(re);
+    if (!m) {
+        console.error(`✗ tools/widget-shared.js enthaelt keinen ${name}-Block.`);
         process.exit(1);
     }
-    // Marke direkt ueber dem Block, aber AUSSERHALB davon: sie darf den
-    // Vergleich nicht veraendern.
-    const mitMarke = alt.includes(MARKE)
-        ? alt
-        : alt.replace(BLOCK, MARKE + block);
-    const neu = mitMarke.replace(BLOCK, block);
-    if (neu === alt) continue;
-    abweichend++;
-    if (pruefen) {
-        console.error(`✗ ${rel}: weicht von tools/widget-shared.js ab`);
-        continue;
+    const block = m[0];
+    for (const rel of ziele) {
+        const pfad = join(ROOT, rel);
+        const alt = readFileSync(pfad, 'utf8');
+        const treffer = alt.match(re);
+        if (!treffer) {
+            console.error(`✗ ${rel}: ${name}-Block nicht gefunden`);
+            process.exit(1);
+        }
+        // Marke direkt ueber dem Block, aber AUSSERHALB davon: sie darf den
+        // Vergleich nicht veraendern. Pro Block pruefen, nicht pro Datei —
+        // mit zwei Bloecken haette die Marke des ersten sonst die des
+        // zweiten verhindert.
+        const vorher = alt.slice(0, treffer.index);
+        const neu = vorher.endsWith(MARKE)
+            ? alt.replace(re, () => block)
+            : alt.replace(re, () => MARKE + block);
+        if (neu === alt) continue;
+        abweichend++;
+        if (pruefen) {
+            console.error(`✗ ${rel}: ${name} weicht von tools/widget-shared.js ab`);
+            continue;
+        }
+        writeFileSync(pfad, neu);
+        geschrieben++;
+        console.log(`  → ${rel} (${name})`);
     }
-    writeFileSync(pfad, neu);
-    geschrieben++;
-    console.log(`  → ${rel}`);
 }
 
 if (pruefen && abweichend > 0) {
@@ -76,5 +90,5 @@ if (pruefen && abweichend > 0) {
     process.exit(1);
 }
 console.log(pruefen
-    ? '✓ geteilter Datenzugriff: vier Kopien wie die Quelle.'
-    : `✓ geteilter Datenzugriff verteilt (${geschrieben} Datei(en) geaendert).`);
+    ? '✓ geteilter Widget-Code: alle Kopien wie die Quelle.'
+    : `✓ geteilter Widget-Code verteilt (${geschrieben} Block/Bloecke geaendert).`);

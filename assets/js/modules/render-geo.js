@@ -22,6 +22,7 @@ import { SEV_COL, SEV_LBL } from './severity.js';
 import { loadGeoProvider, saveGeoProvider } from './storage.js';
 import { GEO_PROVIDERS, getProvider } from './geo-providers.js';
 import { t } from './i18n.js';
+import { fetchJson } from './http.js';
 
 let _map         = null;   // Leaflet-Map-Instance
 let _markerLayer = null;   // LayerGroup für Host-Marker
@@ -378,11 +379,10 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
     if (dataUrl && window._ntRefreshOn !== false) {
         window._ntGeoRefreshTimer = setInterval(function() {
             if (window._ntRefreshOn === false || !_map) return;
-            fetch(dataUrl, {
+            fetchJson(dataUrl, {
                 credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
-                .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (!data || !data.nodes) return;
                     window._ntLastData = window._ntLastData || {};

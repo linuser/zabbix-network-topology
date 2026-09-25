@@ -31,6 +31,32 @@
  * Widgets. Definiert wird nur einmal; welches Widget zuerst laedt, ist egal.
  */
 // ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
+if (!window.NtFetchJson) {
+    window.NtFetchJson = function (url, opts) {
+        return fetch(url, opts).then(
+            function (r) {
+                var s = r.status;
+                if (!r.ok) {
+                    throw new Error((s === 502 || s === 503 || s === 504)
+                        ? 'The server did not answer in time (HTTP ' + s + '). The request was probably too large \u2014 select fewer host groups.'
+                        : 'The server answered with HTTP ' + s + (r.statusText ? ' ' + r.statusText : ''));
+                }
+                return r.text().then(function (body) {
+                    try {
+                        return JSON.parse(body);
+                    } catch (e) {
+                        throw new Error('The server sent a web page instead of data \u2014 the session may have expired, or PHP failed. Reload the page.');
+                    }
+                });
+            },
+            function () {
+                throw new Error('The server could not be reached. Check the network connection and reload the page.');
+            }
+        );
+    };
+}
+
+// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
 if (!window.NtWidgetData) {
     window.NtWidgetData = (function () {
         var cache = {};
@@ -56,10 +82,10 @@ if (!window.NtWidgetData) {
             // die Widgets nicht. Server liefert nur die GETEILTE Ebene.
             params.append('manual_links', '1');
 
-            var p = fetch('zabbix.php?' + params.toString(), {
+            var p = window.NtFetchJson('zabbix.php?' + params.toString(), {
                 credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            }).then(function (r) { return r.json(); });
+            });
 
             p.catch(function () {
                 if (cache[key] && cache[key].p === p) { delete cache[key]; }

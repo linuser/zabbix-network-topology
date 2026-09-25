@@ -5,6 +5,8 @@
 // eingeschoben, damit mehrere Zabbix-User am selben Browser sich nicht in die
 // Quere kommen. Bei fehlender user_id Fallback auf alte ungeprefixte Keys.
 
+import { fetchJson } from './http.js';
+
 function userPrefix() {
     const cfg = window.NT_CONFIG;
     const uid = cfg && cfg.user_id ? String(cfg.user_id) : '';
@@ -318,14 +320,13 @@ function _postPositions(scope, views) {
     body.set('nt_csrf', cfg.positions_csrf || '');
     body.set('base', _rev[_revKey('positions', scope)] || '');
 
-    return fetch(url, {
+    return fetchJson(url, {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest',
                    'Content-Type': 'application/x-www-form-urlencoded' },
         credentials: 'same-origin',
         body: body.toString()
     })
-    .then(function(r) { return r.json(); })
     .then(function(d) {
         // Siehe _persist: zwischenzeitlich hat jemand anderes geschrieben.
         if (d && d.conflict) {
@@ -621,14 +622,13 @@ function _postLinks(scope, links) {
     body.set('nt_csrf', cfg.links_csrf || '');
     body.set('base', _rev[_revKey('links', scope)] || '');
 
-    return fetch(url, {
+    return fetchJson(url, {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest',
                    'Content-Type': 'application/x-www-form-urlencoded' },
         credentials: 'same-origin',
         body: body.toString()
     })
-    .then(function(r) { return r.json(); })
     .then(function(d) {
         // Jemand anderes war schneller. Der Server hat NICHT geschrieben und
         // schickt den aktuellen Stand mit — damit setzt der Client neu auf,

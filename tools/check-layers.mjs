@@ -49,7 +49,13 @@ function scenario(name, cfg, body, setup) {
         };
         globalThis.window = globalThis;
         globalThis.NT_CONFIG = ${JSON.stringify(cfg)};
-        globalThis.fetch = () => Promise.resolve({ json: () => Promise.resolve({ ok: true }) });
+        // Echte Response-Objekte, keine {json()}-Attrappe: storage.js geht
+        // ueber fetchJson() (modules/http.js), und das prueft r.ok und liest
+        // r.text(). Eine Attrappe ohne beides liess jeden Speichervorgang
+        // als Fehler enden, und die Konflikt-Szenarien fielen.
+        globalThis.__json = (d) => new Response(JSON.stringify(d), {
+            status: 200, headers: { 'Content-Type': 'application/json' } });
+        globalThis.fetch = () => Promise.resolve(__json({ ok: true }));
         globalThis.document = { addEventListener() {} };
 
         // Vor dem Import, nicht danach: storage.js liest NT_CONFIG in IIFEs beim
@@ -217,7 +223,7 @@ const KONFLIKT = (payload) => `
             ? Object.assign({ conflict: true, error: 'x', revision: 'r2' }, ${JSON.stringify(payload)})
             : { ok: true, revision: 'r3' };
         erste = false;
-        return Promise.resolve({ json: () => Promise.resolve(d) });
+        return Promise.resolve(__json(d));
     };
 `;
 
@@ -281,12 +287,12 @@ const SERVER = `
         return new Promise((res) => setTimeout(() => {
             if (base !== serverRev) {
                 globalThis.__konflikte.push('Fahrt ' + lauf + ': base=' + base + ' server=' + serverRev);
-                return res({ json: () => Promise.resolve({
+                return res(__json({
                     conflict: true, error: 'x', revision: serverRev,
-                    positions: { '4': { h1: { x: 10, y: 10 } } } }) });
+                    positions: { '4': { h1: { x: 10, y: 10 } } } }));
             }
             serverRev = 'r' + lauf;
-            res({ json: () => Promise.resolve({ ok: true, revision: serverRev }) });
+            res(__json({ ok: true, revision: serverRev }));
         }, 40));
     };
 `;

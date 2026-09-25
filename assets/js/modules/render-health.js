@@ -21,6 +21,7 @@
 
 import { esc, mkTabTheme, buildBaseUrl, isDark, clearWrap } from './utils.js';
 import { t } from './i18n.js';
+import { fetchJson } from './http.js';
 
 const STALE_S = 300;
 const COL_OK   = '#16a34a';   // 85-100
@@ -140,9 +141,8 @@ function _loadScoreHistory(box, theme) {
     const params = new URLSearchParams();
     params.append('action', 'network.topology.health_history');
     params.append('days', String(HIST_DAYS));
-    fetch(buildBaseUrl() + 'zabbix.php?' + params.toString(),
+    fetchJson(buildBaseUrl() + 'zabbix.php?' + params.toString(),
           { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(function(r) { return r.json(); })
         .then(function(data) {
             if (!box.isConnected) return;
             if (data.error || !data.item_found || !(data.avg || []).length) {

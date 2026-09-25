@@ -15,6 +15,7 @@
 import { esc } from './modules/utils.js';
 import { t } from './modules/i18n.js';
 import { toastTruncatedOnce, toast } from './modules/toast.js';
+import { fetchJson } from './modules/http.js';
 import { hideTip } from './modules/tooltip.js';
 import { destroyGroupHulls } from './modules/group-hulls.js';
 import { NT_TAB_KEY, loadLastGroups, saveLastGroups, loadPositions,
@@ -384,9 +385,13 @@ function init() {
         cfg.selected_groupids.forEach(function(id) { params.append('groupids[]', id); });
     }
     const url = cfg.data_url + '&' + params;
-    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(function(r) { return r.json(); })
+    fetchJson(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function(data) {
+            // {error: ...} kommt mit HTTP 200 (throttle(), Rechte). Vorher
+            // lief das in eine leere Karte ohne jeden Hinweis.
+            if (!data || typeof data !== 'object' || data.error) {
+                throw new Error(data && data.error ? String(data.error) : t('http.not_json'));
+            }
             spin.style.display = 'none';
             // Das Backend hat die Gruppenauswahl gekappt (MAX_GROUPS). Sichtbar
             // machen, statt ein unvollstaendiges Bild als vollstaendig zu zeigen
@@ -402,6 +407,17 @@ function init() {
             // dort fehlen ganze Hosts, hier fehlen Verbindungen ZWISCHEN
             // gezeichneten Hosts. Wer das verwechselt, sucht an der falschen
             // Stelle. Deshalb eigener Schluessel und eigener Toast.
+            // Host+hops mode: the scope hit MAX_HOP_HOSTS. The nearest hosts
+            // are there, the outer rings are not — say up to where it holds.
+            if (data.scope_truncated) {
+                toastTruncatedOnce('scope:' + cfg.selected_hostid + '/' + (cfg.hops || 1) + '/' + data.scope_total,
+                    t(data.scope_complete_hops > 0 ? 'warn.hop_truncated' : 'warn.hop_truncated_ring', {
+                        hops: cfg.hops || 1,
+                        total: data.scope_total,
+                        shown: data.scope_shown,
+                        complete: data.scope_complete_hops
+                    }));
+            }
             if (data.edges_truncated) {
                 toastTruncatedOnce('edges:' + data.edges_truncated,
                     t('warn.edges_truncated', { n: data.edges_truncated }));

@@ -90,7 +90,7 @@ Drei Schichten, und die Trennung ist der Punkt:
   deshalb testbar. Hier lebt alles Interessante: `LldpEdgeBuilder` (Kanten aus
   SNMP-Nachbartabellen), `NodeBuilder`, `ManualLinks`, `SharedLayerFilter`.
 - **`assets/js/` → ein Bundle.** `network-topology.js` ist nur Orchestrator;
-  der Renderer liegt in `modules/render-*.js` (10 davon, 53 Module insgesamt). Cytoscape.js für den
+  der Renderer liegt in `modules/render-*.js` (10 davon, 54 Module insgesamt). Cytoscape.js für den
   Graphen, Leaflet für Geo.
 
 ### Zwei-Ebenen-Speicherung
@@ -136,10 +136,15 @@ jsLoader kennt keine ES-Module. Zwei Dinge existieren deshalb zweimal, und
 - der **geteilte Datenzugriff** `window.NtWidgetData` — byteweise identisch in
   vier Widget-Dateien. `widget_items` gehört bewusst nicht dazu, es holt seine
   Daten über eine andere Action.
+- der **JSON-Abruf** `window.NtFetchJson` — das ES5-Gegenstück zu
+  `modules/http.js`, in **allen fünf** Widget-Dateien (auch `widget_items`).
+  Prüft HTTP-Status und Body, bevor geparst wird. Ein nacktes `r.json()`
+  gehört weder ins Hauptmodul noch in ein Widget: bei einem 504 von nginx
+  stand sonst nur „is not valid JSON" da.
 
-**Beim Datenzugriff ist das Duplikat seit 5.4.0 erzeugt**, nicht gepflegt: die
+**Beim Widget-Code ist das Duplikat seit 5.4.0 erzeugt**, nicht gepflegt: die
 Quelle ist `tools/widget-shared.js`, `node tools/sync-widget-shared.mjs`
-schreibt sie in die vier Dateien (läuft in `npm run build`), und `ci:parity`
+schreibt beide Blöcke in ihre Dateien (läuft in `npm run build`), und `ci:parity`
 vergleicht die Kopien zusätzlich **gegen die Quelle** — vier gleich falsche
 Kopien gingen vorher durch. Bearbeitet wird nur noch die Quelle; über jedem
 Block steht eine Marke, die das sagt.

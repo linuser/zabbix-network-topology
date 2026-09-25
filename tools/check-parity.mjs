@@ -18,8 +18,8 @@
 //      Hostgroup auf der Karte und im Dashboard verschiedene Scores, und niemand
 //      merkt, welcher stimmt.
 //
-//   2. Der geteilte Datenzugriff (window.NtWidgetData). Er liegt in vier
-//      Widget-Dateien und muss byte-identisch sein: liefe eine Kopie mit anderem
+//   2. Der geteilte Widget-Code: window.NtWidgetData in vier Widget-Dateien,
+//      window.NtFetchJson in allen fuenf. Beide muessen byte-identisch sein: liefe eine Kopie mit anderem
 //      TTL oder anderem Cache-Schluessel, haette das Dashboard je nach
 //      Ladereihenfolge ein anderes Verhalten — der schlimmste Fehlertyp,
 //      weil er nicht reproduzierbar ist.
@@ -121,59 +121,71 @@ if (extraction_ok) {
     }
 }
 
-// ── 2. Geteilter Datenzugriff ───────────────────────────────────────────────
+// ── 2. Geteilter Widget-Code ────────────────────────────────────────────────
+//
+// Zwei Bloecke aus tools/widget-shared.js: NtFetchJson (alle fuenf Widgets,
+// seit dem 504-Befund im Hop-Modus) und NtWidgetData (vier — widget_items
+// holt ueber eine andere Action). Die Ausdruecke stehen wortgleich in
+// sync-widget-shared.mjs.
 
-console.log('\nGeteilter Datenzugriff (window.NtWidgetData)');
-
-const SHARED_FILES = [
+const VIER = [
     'widget/assets/js/widget.class.js',
     'widget_health/assets/js/widget.class.js',
     'widget_table/assets/js/widget.class.js',
     'widget_kpi/assets/js/widget.class.js'
 ];
-
-const hashes = new Map();
-for (const path of SHARED_FILES) {
-    const src = read(path);
-    const m = src.match(/if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/);
-    if (!m) {
-        fail(`${path}: Block nicht gefunden`);
-        continue;
-    }
-    const h = createHash('sha256').update(m[0]).digest('hex').slice(0, 12);
-    if (!hashes.has(h)) hashes.set(h, []);
-    hashes.get(h).push(path);
-}
+const BLOCKS = [
+    { name: 'NtFetchJson',  re: /if \(!window\.NtFetchJson\) \{[\s\S]*?\n\}\n/,
+      files: [...VIER, 'widget_items/assets/js/widget.class.js'] },
+    { name: 'NtWidgetData', re: /if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/,
+      files: VIER },
+];
 
 // Zusaetzlich gegen die QUELLE. Bis 5.4.0 pruefte dieser Gate nur, dass die
 // vier Kopien untereinander gleich sind — vier gleich falsche Kopien waeren
 // durchgegangen, und bearbeitet wurden sie einzeln. Seit es
 // tools/widget-shared.js gibt, ist eine davon die Wahrheit.
 const QUELLE = 'tools/widget-shared.js';
-let quellHash = null;
-{
-    const m = read(QUELLE).match(/if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/);
-    if (!m) {
+const quelle = read(QUELLE);
+
+for (const { name, re, files } of BLOCKS) {
+    console.log(`\nGeteilter Widget-Code (window.${name})`);
+
+    const hashes = new Map();
+    for (const path of files) {
+        const m = read(path).match(re);
+        if (!m) {
+            fail(`${path}: Block nicht gefunden`);
+            continue;
+        }
+        const h = createHash('sha256').update(m[0]).digest('hex').slice(0, 12);
+        if (!hashes.has(h)) hashes.set(h, []);
+        hashes.get(h).push(path);
+    }
+
+    let quellHash = null;
+    const qm = quelle.match(re);
+    if (!qm) {
         fail(`${QUELLE}: Block nicht gefunden`);
     }
     else {
-        quellHash = createHash('sha256').update(m[0]).digest('hex').slice(0, 12);
+        quellHash = createHash('sha256').update(qm[0]).digest('hex').slice(0, 12);
     }
-}
 
-if (hashes.size === 1 && [...hashes.values()][0].length === SHARED_FILES.length) {
-    const h = [...hashes.keys()][0];
-    if (quellHash !== null && h !== quellHash) {
-        fail(`Kopien sind untereinander gleich (${h}), weichen aber von ${QUELLE} ab (${quellHash}) — npm run build schreibt sie zurecht`);
+    if (hashes.size === 1 && [...hashes.values()][0].length === files.length) {
+        const h = [...hashes.keys()][0];
+        if (quellHash !== null && h !== quellHash) {
+            fail(`Kopien sind untereinander gleich (${h}), weichen aber von ${QUELLE} ab (${quellHash}) — npm run build schreibt sie zurecht`);
+        }
+        else {
+            pass(`in allen ${files.length} Dateien identisch und wie ${QUELLE} (${h})`);
+        }
     }
-    else {
-        pass(`in allen ${SHARED_FILES.length} Dateien identisch und wie ${QUELLE} (${h})`);
-    }
-}
-else if (hashes.size > 1) {
-    fail('Blöcke laufen auseinander:');
-    for (const [h, files] of hashes) {
-        console.log(`         ${h}  ${files.join(', ')}`);
+    else if (hashes.size > 1) {
+        fail('Blöcke laufen auseinander:');
+        for (const [h, fs] of hashes) {
+            console.log(`         ${h}  ${fs.join(', ')}`);
+        }
     }
 }
 

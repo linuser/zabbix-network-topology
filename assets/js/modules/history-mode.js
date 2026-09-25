@@ -24,6 +24,7 @@
 //     Severities aus _ntHistoryActive
 
 import { t } from './i18n.js';
+import { fetchJson } from './http.js';
 
 let _active = false;
 let _bar = null;
@@ -124,11 +125,10 @@ async function fetchHistory(rangeSec) {
 
     const url = buildBaseUrl() + 'zabbix.php?' + params.toString();
     try {
-        const resp = await fetch(url, {
+        const data = await fetchJson(url, {
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
         });
-        const data = await resp.json();
         if (data.error) {
             console.warn('History fetch error:', data.error);
             return null;

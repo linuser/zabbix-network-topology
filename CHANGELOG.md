@@ -2,6 +2,63 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## Unreleased
+
+### Updating — nothing to re-import
+
+No action was added or renamed, so **no rescan**: replace the module directory,
+`chown`, reload php-fpm. Reload the page once with a cache bypass — the bundle
+and all five widget scripts changed. **No template changed.**
+
+### Fixed
+
+- **Host + hops on a large network ended in "is not valid JSON".** Six hops
+  from one switch reach practically every device on a campus or WAN, and the
+  hop mode had no counterpart to the 100-group cap of the group mode. The whole
+  pipeline ran over every host in one request until nginx gave up with a 504,
+  and the map showed `Unexpected token '<', "<html> <h"... is not valid JSON`.
+  Reported against 5.3.0 by a customer install; 5.4.0 was still affected, and
+  a little more so, because the hop search has found more links since 5.3.1
+  (`uplink.id`, MNDP, MAC matching).
+  - The hop scope is now capped at **1,000 hosts, nearest first**. The search
+    runs outward ring by ring, so every ring inside the cut is complete, and
+    only the outer ones are missing.
+  - The map says so: *"6 hops reach 4213 hosts — only the nearest 1000 are
+    shown. The map is complete up to 3 hops."* Hosts the user cannot see are
+    removed before the cap and do not use it up.
+  - The response carries `scope_truncated`, `scope_total`, `scope_shown` and
+    `scope_complete_hops` (additive; group mode reports `false`/`0`).
+
+- **Every request says why it failed.** No fetch in the module checked the
+  HTTP status before parsing, so a 504, an expired session or a PHP error
+  all arrived as the same JSON parse error. All 22 calls in the main module
+  now go through one helper that tells four cases apart — server unreachable,
+  gateway timeout (502/503/504, with the advice to ask for less), another HTTP
+  error, and a web page where data was expected. The initial load now also
+  shows an `{error: …}` reply such as *Too many requests* instead of drawing
+  an empty map, and the *stale* badge of the 30 s refresh names the reason in
+  its tooltip.
+
+### Widgets
+
+- **The same error handling on the dashboard.** All five widgets fetch through
+  `window.NtFetchJson`, the ES5 counterpart of the main module's helper —
+  `widget_items` included, which has its own action and had the same bare
+  `r.json()`.
+
+### For contributors
+
+- `tools/widget-shared.js` now holds **two** blocks: `NtFetchJson` goes into all
+  five widget files, `NtWidgetData` into four as before.
+  `tools/sync-widget-shared.mjs` and `ci:parity` handle both, each against the
+  source.
+- `assets/js/modules/http.js` exports `fetchJson()`. A bare `r.json()` has no
+  place left in the module.
+- `HopScope::distances()` (hostid → hop distance, nearest first) and
+  `HopScope::cap()`; `neighborhood()` is unchanged. Covered in
+  `tests/HopScopeTest.php`.
+- `app.error` in `i18n/de.js` was English ("Error:"); it is German now.
+
 ## v5.4.0 — 2026-09-24
 
 ### Updating from 5.3.2 — nothing to re-import
