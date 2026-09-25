@@ -21,9 +21,18 @@
 #   5. chown root:root
 #   6. Reload php-fpm
 #
-# Nach dem Deploy MUSS in der Zabbix-UI:
+# Nach dem Deploy in der Zabbix-UI:
 #   Administration → General → Modules → Scan directory
-# aufgerufen werden, damit Zabbix die neuen/geaenderten Actions erkennt.
+#
+# Das ist noetig fuer ein Modul, das Zabbix noch NIE gesehen hat — bei der
+# Erstinstallation also, und fuer jedes der fuenf Widgets, die eigene Module
+# sind. Fuer neue ACTIONS in einem schon registrierten Modul ist es NICHT
+# noetig: CModuleManager::loadManifest() liest manifest.json bei jeder
+# Anfrage von der Platte, in der Tabelle 'module' stehen nur Pfad, Status und
+# Konfiguration. Hier stand jahrelang "MUSS ... damit Zabbix die neuen
+# Actions erkennt"; am 2026-09-02 auf 7.4 gemessen und am 2026-09-25 im
+# Quelltext von 7.0.30 nachgelesen, stimmt das so nicht. Schaden tut der
+# Klick trotzdem keinen, deshalb steht er weiter als Schritt 1.
 
 set -euo pipefail
 

@@ -4,19 +4,27 @@ Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
 ## v5.4.1 — 2026-09-25
 
-### Updating from 5.4.0 — "Scan directory" is mandatory this time
+### Updating from 5.4.0 — replace the directory, and that is all
 
-**One action was added** (`network.topology.update_check`), and Zabbix only
-learns about it through **Administration → General → Modules → Scan
-directory**. Without it the map works, but the new button in the Diag tab
-answers "Unknown action". This is the one step a patch release normally does
-not have — the version number says *patch* because nothing in the map
-changed, not because the update is a pure file copy.
+One action was added (`network.topology.update_check`), and the rule written
+down here for years said that makes **"Scan directory"** mandatory. It does
+not, and this release is the one where that got checked properly:
+`CModuleManager::loadManifest()` reads `manifest.json` **from disk on every
+request**, and the `module` table holds only the path, the status and the
+config. "Scan directory" reconciles module *directories* with that table — a
+new action inside a module that is already registered is not a new directory.
+Confirmed twice: measured on 7.4 on 2026-09-02, and read in the 7.0.30 source
+for this release.
 
-So: replace the module directory, `chown`, reload php-fpm, **Scan
-directory**. Reload the page once with a cache bypass — the bundle and all
-five widget scripts changed. **No template changed**, and layouts, manual
-links, pins, notes and presets stay where they are.
+So: replace the module directory, `chown`, reload php-fpm. If the new button
+in the Diag tab should answer "Unknown action" anyway, *Administration →
+General → Modules → Scan directory* is the fallback — it costs one click and
+breaks nothing.
+
+Reload the page once with a cache bypass — the bundle **and all five widget
+scripts** changed, and a dashboard will happily serve a cached widget script.
+**No template changed**, and layouts, manual links, pins, notes and presets
+stay where they are.
 
 ### Added
 

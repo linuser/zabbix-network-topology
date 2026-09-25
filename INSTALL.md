@@ -201,15 +201,16 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 ### Update
 
-Replace the `network_topology` directory with the new version, `chown`, reload php-fpm, **Scan directory**. The map layout and manual links are stored server-side and survive regardless; pins, notes and presets live in the browser `localStorage`. After an update that adds new actions, "Scan directory" is **mandatory**.
+Replace the `network_topology` directory with the new version, `chown`, reload php-fpm. The map layout and manual links are stored server-side and survive regardless; pins, notes and presets live in the browser `localStorage`.
 
-> **From 5.4.0 to 5.4.1:** **one new action** (`network.topology.update_check`)
-> — "Scan directory" is **mandatory**, although the version number only moves
-> in the patch place. Without it everything works except the new *Check for
-> updates* button in the Diag tab, which answers "Unknown action". No template
-> changed. Reload the page once with a cache bypass: the bundle **and all five
-> widget scripts** changed, and a dashboard serving a cached widget script
-> keeps the old error handling.
+**"Scan directory" is for new module *directories*, not for new actions.** This page said the opposite for a long time, and it is wrong: `CModuleManager::loadManifest()` reads `manifest.json` from disk on every request, and the `module` table stores only the path, the status and the config. So a version that adds actions to a module Zabbix already knows works the moment the files are in place — measured on 7.4 on 2026-09-02 and read in the 7.0.30 source on 2026-09-25. What *does* need "Scan directory" is a module Zabbix has never seen: the five widgets are separate modules, so installing one for the first time needs it. When in doubt, run it — one click, and it breaks nothing.
+
+> **From 5.4.0 to 5.4.1:** one new action (`network.topology.update_check`),
+> and **no "Scan directory" needed** — see the note above on why a new action
+> inside an existing module does not require one. Replace the directory,
+> `chown`, reload php-fpm. No template changed. Reload the page once with a
+> cache bypass: the bundle **and all five widget scripts** changed, and a
+> dashboard serving a cached widget script keeps the old error handling.
 
 > **From 5.0 to 5.1:** three actions were added (`links`, `positions`, `portscan`). Without "Scan directory" the map still loads, but manual links and the saved node layout stop with "Unknown action". `nt-install.sh update` points this out whenever it finds new actions; `nt-install.sh check` reports the installed version and the widgets present.
 
@@ -545,16 +546,17 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 ### Update
 
-Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
+Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`.
 
-> **Von 5.4.0 auf 5.4.1:** **Eine neue Action** (`network.topology.update_check`)
-> — „Scan directory" ist **Pflicht**, obwohl sich die Versionsnummer nur an der
-> Patch-Stelle bewegt. Ohne sie funktioniert alles außer dem neuen Knopf
-> *Check for updates* im Diag-Tab, der mit „Unknown action" stehen bleibt. Kein
-> Template hat sich geändert. Einmal mit Cache-Umgehung neu laden: das Bundle
-> **und alle fünf Widget-Skripte** haben sich geändert, und ein Dashboard, das
-> ein zwischengespeichertes Widget-Skript ausliefert, behält die alte
-> Fehlerbehandlung.
+**„Scan directory" ist für neue Modul-*Verzeichnisse* da, nicht für neue Actions.** Hier stand lange das Gegenteil, und das ist falsch: `CModuleManager::loadManifest()` liest `manifest.json` bei jeder Anfrage von der Platte, und in der Tabelle `module` stehen nur Pfad, Status und Konfiguration. Eine Version, die einem bereits registrierten Modul Actions hinzufügt, funktioniert also, sobald die Dateien liegen — am 2026-09-02 auf 7.4 gemessen und am 2026-09-25 im Quelltext von 7.0.30 nachgelesen. **Nötig** ist „Scan directory" für ein Modul, das Zabbix noch nie gesehen hat: die fünf Widgets sind eigene Module, ihre Erstinstallation braucht es. Im Zweifel einfach ausführen — ein Klick, und es macht nichts kaputt.
+
+> **Von 5.4.0 auf 5.4.1:** eine neue Action (`network.topology.update_check`),
+> und **kein „Scan directory" nötig** — eine neue Action in einem Modul, das
+> Zabbix schon kennt, verlangt keines. Verzeichnis ersetzen, `chown`, php-fpm
+> neu laden. Kein Template hat sich geändert. Einmal mit Cache-Umgehung neu
+> laden: das Bundle **und alle fünf Widget-Skripte** haben sich geändert, und
+> ein Dashboard, das ein zwischengespeichertes Widget-Skript ausliefert,
+> behält die alte Fehlerbehandlung.
 
 > **Von 5.0 auf 5.1:** Es sind drei Actions dazugekommen (`links`, `positions`, `portscan`). Ohne „Scan directory" lädt die Karte zwar, aber manuelle Verbindungen und die gespeicherte Knotenanordnung bleiben mit „Unknown action" stehen. `nt-install.sh update` sagt es beim Update dazu, sobald es neue Actions findet; `nt-install.sh check` zeigt die installierte Version und die vorhandenen Widgets.
 
