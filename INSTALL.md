@@ -203,6 +203,14 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 Replace the `network_topology` directory with the new version, `chown`, reload php-fpm, **Scan directory**. The map layout and manual links are stored server-side and survive regardless; pins, notes and presets live in the browser `localStorage`. After an update that adds new actions, "Scan directory" is **mandatory**.
 
+> **From 5.4.0 to 5.4.1:** **one new action** (`network.topology.update_check`)
+> — "Scan directory" is **mandatory**, although the version number only moves
+> in the patch place. Without it everything works except the new *Check for
+> updates* button in the Diag tab, which answers "Unknown action". No template
+> changed. Reload the page once with a cache bypass: the bundle **and all five
+> widget scripts** changed, and a dashboard serving a cached widget script
+> keeps the old error handling.
+
 > **From 5.0 to 5.1:** three actions were added (`links`, `positions`, `portscan`). Without "Scan directory" the map still loads, but manual links and the saved node layout stop with "Unknown action". `nt-install.sh update` points this out whenever it finds new actions; `nt-install.sh check` reports the installed version and the widgets present.
 
 > **From 5.2 to 5.3:** **no new actions** — replacing the directory, `chown` and a php-fpm reload is all it takes, and "Scan directory" is optional here. Two things to know afterwards:
@@ -538,6 +546,15 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 ### Update
 
 Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload, **Scan directory**. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`. Nach einem Update mit neuen Actions ist „Scan directory" **Pflicht**.
+
+> **Von 5.4.0 auf 5.4.1:** **Eine neue Action** (`network.topology.update_check`)
+> — „Scan directory" ist **Pflicht**, obwohl sich die Versionsnummer nur an der
+> Patch-Stelle bewegt. Ohne sie funktioniert alles außer dem neuen Knopf
+> *Check for updates* im Diag-Tab, der mit „Unknown action" stehen bleibt. Kein
+> Template hat sich geändert. Einmal mit Cache-Umgehung neu laden: das Bundle
+> **und alle fünf Widget-Skripte** haben sich geändert, und ein Dashboard, das
+> ein zwischengespeichertes Widget-Skript ausliefert, behält die alte
+> Fehlerbehandlung.
 
 > **Von 5.0 auf 5.1:** Es sind drei Actions dazugekommen (`links`, `positions`, `portscan`). Ohne „Scan directory" lädt die Karte zwar, aber manuelle Verbindungen und die gespeicherte Knotenanordnung bleiben mit „Unknown action" stehen. `nt-install.sh update` sagt es beim Update dazu, sobald es neue Actions findet; `nt-install.sh check` zeigt die installierte Version und die vorhandenen Widgets.
 

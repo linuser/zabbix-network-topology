@@ -2,13 +2,38 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
-## Unreleased
+## v5.4.1 — 2026-09-25
 
-### Updating — nothing to re-import
+### Updating from 5.4.0 — "Scan directory" is mandatory this time
 
-No action was added or renamed, so **no rescan**: replace the module directory,
-`chown`, reload php-fpm. Reload the page once with a cache bypass — the bundle
-and all five widget scripts changed. **No template changed.**
+**One action was added** (`network.topology.update_check`), and Zabbix only
+learns about it through **Administration → General → Modules → Scan
+directory**. Without it the map works, but the new button in the Diag tab
+answers "Unknown action". This is the one step a patch release normally does
+not have — the version number says *patch* because nothing in the map
+changed, not because the update is a pure file copy.
+
+So: replace the module directory, `chown`, reload php-fpm, **Scan
+directory**. Reload the page once with a cache bypass — the bundle and all
+five widget scripts changed. **No template changed**, and layouts, manual
+links, pins, notes and presets stay where they are.
+
+### Added
+
+- **"Is there an update?" — a button, never a background call.** The Diag tab
+  can now ask the project's release API whether a newer version exists, and
+  it only asks when someone clicks. A monitoring module that phones home
+  unasked is a trust problem: plenty of installations forbid outgoing traffic
+  by policy, and an isolated one would carry a permanent, pointless warning.
+  The click is the consent — which is also why there is no setting, no cache
+  and no schedule to reason about.
+
+  What goes out is a bare GET: no parameters, no version, no installation id.
+  GitHub sees an IP and a user agent, and that is the whole of it. Super
+  admins only — they are the ones who can replace the module, and the only
+  ones who should be able to cause outgoing traffic with a click. A tag that
+  cannot be read is reported as "not determinable" rather than guessed at,
+  and a pre-release is never offered to someone running a final version.
 
 ### Fixed
 
@@ -58,6 +83,24 @@ and all five widget scripts changed. **No template changed.**
   `HopScope::cap()`; `neighborhood()` is unchanged. Covered in
   `tests/HopScopeTest.php`.
 - `app.error` in `i18n/de.js` was English ("Error:"); it is German now.
+- `fetchJson()` defaults to `credentials: 'same-origin'` and the
+  `X-Requested-With` header; call sites that set them keep precedence. Every
+  read action has `requireAjax()`, and a missing header comes back as
+  `{"error":"AJAX only"}` — status 200, valid JSON, invisible to any helper.
+- The five outcomes of a failed request are checked in `ci:frontend`,
+  including the assertion that "Unexpected token" appears in none of them.
+
+### Thanks
+
+**[@christos-diamantis](https://github.com/christos-diamantis)** again, and
+this time within a minute: he filed
+[#22](https://github.com/linuser/zabbix-network-topology/issues/22) and
+opened [#23](https://github.com/linuser/zabbix-network-topology/pull/23) with
+the fix in the same breath — the second time in three days that a report
+arrived with its patch attached. His branch is the one that shipped. It
+reaches more call sites than the version written here in parallel, it carries
+the helper into the widgets, and it found an English string sitting in
+`i18n/de.js`, which is precisely the gap no gate here can see.
 
 ## v5.4.0 — 2026-09-24
 

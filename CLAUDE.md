@@ -80,13 +80,13 @@ in die Ausgabe gesehen hat.
 
 Drei Schichten, und die Trennung ist der Punkt:
 
-- **`actions/` (20 Controller)** — HTTP-Rand. Rate-Limiting, CSRF, Rechte,
+- **`actions/` (21 Controller)** — HTTP-Rand. Rate-Limiting, CSRF, Rechte,
   JSON. `NetworkTopologyData` ist der teuerste und wichtigste: er baut den
   gesamten Graphen. `NetworkTopologyView` rendert die Seite **und** legt die
   Konfiguration als `NT_CONFIG` ins DOM — unter anderem die manuellen
   Verbindungen. Widgets haben keinen solchen View-Controller; was nur dort
   liegt, sehen sie nie.
-- **`topology/` (13 Klassen)** — reine Logik ohne Zabbix-Abhängigkeiten,
+- **`topology/` (14 Klassen)** — reine Logik ohne Zabbix-Abhängigkeiten,
   deshalb testbar. Hier lebt alles Interessante: `LldpEdgeBuilder` (Kanten aus
   SNMP-Nachbartabellen), `NodeBuilder`, `ManualLinks`, `SharedLayerFilter`.
 - **`assets/js/` → ein Bundle.** `network-topology.js` ist nur Orchestrator;
