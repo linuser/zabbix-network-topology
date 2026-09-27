@@ -247,6 +247,31 @@ const OID = {
     lldpRemPortId: '1.0.8802.1.1.2.1.4.1.1.7',
     lldpRemPortDesc: '1.0.8802.1.1.2.1.4.1.1.8',
     lldpRemSysName: '1.0.8802.1.1.2.1.4.1.1.9',
+    lldpRemSysDesc: '1.0.8802.1.1.2.1.4.1.1.10',
+    lldpRemSysCapEnabled: '1.0.8802.1.1.2.1.4.1.1.12',
+};
+
+// lldpRemSysCapEnabled, erstes Byte, Bits nach IEEE 802.1AB:
+// 0x20 Bridge, 0x10 WLAN-AP, 0x08 Router, 0x04 Telefon.
+//
+// Dass diese beiden OIDs anfangs FEHLTEN, hat erst der Lauf im Cluster
+// gezeigt: 1.186 Items blieben ohne Wert, weil das Template sie abfragt und
+// niemand sie beantwortete. Das Modul liest beide — SysDesc als Hersteller
+// und Modell, die Faehigkeiten fuer die Geraeteart, also Symbol und
+// Einordnung. Ohne sie waere der Lasttest eine Karte aus lauter unbekannten
+// Kaesten gewesen und haette etwas anderes gemessen als eine echte.
+const FAEHIGKEIT = {
+    kern:      '2800',   // Bridge + Router
+    verteiler: '2800',
+    zugang:    '2000',   // nur Bridge
+    geist:     '1000',   // WLAN-AP — die Geister sind Accesspoints
+};
+
+const SYSBESCHREIBUNG = {
+    kern:      'GENERATED core switch (erzeuge-geraete.mjs)',
+    verteiler: 'GENERATED distribution switch (erzeuge-geraete.mjs)',
+    zugang:    'GENERATED access switch (erzeuge-geraete.mjs)',
+    geist:     'GENERATED wireless access point (erzeuge-geraete.mjs)',
 };
 
 const portName = (g, nr) => (g.rolle === 'zugang' ? `Gi1/0/${nr}` : `Te1/0/${nr}`);
@@ -313,6 +338,9 @@ function snmprec(g, seed) {
         setze(`${OID.lldpRemPortId}.0.${n.port}.${i + 1}`, 4, fernPort);
         setze(`${OID.lldpRemPortDesc}.0.${n.port}.${i + 1}`, 4, fernPort);
         setze(`${OID.lldpRemSysName}.0.${n.port}.${i + 1}`, 4, fernName);
+        const fernRolle = n.fern ? n.fern.rolle : 'geist';
+        setze(`${OID.lldpRemSysDesc}.0.${n.port}.${i + 1}`, 4, SYSBESCHREIBUNG[fernRolle]);
+        setze(`${OID.lldpRemSysCapEnabled}.0.${n.port}.${i + 1}`, '4x', FAEHIGKEIT[fernRolle]);
     });
 
     return [...zeilen.keys()].sort(oidVergleich).map((o) => zeilen.get(o)).join('\n') + '\n';
