@@ -17,6 +17,26 @@ function _bytes(n) {
     return (n / 1024 / 1024).toFixed(1) + ' MB';
 }
 
+// Spitzenverbrauch, und wie nah er an der Grenze lag. Beides nebeneinander,
+// weil die eine Zahl ohne die andere nichts sagt: 38 MB sind harmlos bei 128
+// und der sichere Absturz bei 48. Ein ueberschrittenes memory_limit ist eine
+// WEISSE SEITE ohne Meldung — wer das kommen sehen will, muss den Abstand
+// sehen, nicht den Verbrauch.
+function _mem(e) {
+    if (!e.mem_peak_kb) return '';
+    const peak  = _bytes(e.mem_peak_kb * 1024);
+    const grenze = e.mem_limit_kb ? _bytes(e.mem_limit_kb * 1024) : '∞';
+    return peak + ' / ' + grenze;
+}
+
+// Was der Kantenbau allein hinzugefuegt hat, je Kante. Genau diese Zahl steht
+// im MAX_EDGES-Docblock und war bis zum ersten Lasttest von Hand gemessen.
+function _proKante(e) {
+    const kanten = e.counts && e.counts.edges;
+    if (!kanten || !e.mem_edges_kb) return '';
+    return (e.mem_edges_kb / kanten).toFixed(1) + ' KB/edge';
+}
+
 function _ago(ts) {
     const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
     if (sec < 60)    return sec + 's';
@@ -75,6 +95,9 @@ function _buildLog(entries, theme) {
         const cacheLbl = e.cache_hit
             ? '<span style="color:#16a34a">HIT</span>'
             : '<span style="color:' + theme.subSoft + '">—</span>';
+        // Ab drei Vierteln der Grenze wird es eng genug, um es zu faerben.
+        const memAnteil = (e.mem_limit_kb && e.mem_peak_kb) ? e.mem_peak_kb / e.mem_limit_kb : 0;
+        const memCol = memAnteil > 0.9 ? '#dc2626' : memAnteil > 0.75 ? '#f59e0b' : theme.sub;
         const countsStr = e.counts
             ? Object.keys(e.counts).map(function(k) { return k + ':' + e.counts[k]; }).join(', ')
             : '';
@@ -85,13 +108,15 @@ function _buildLog(entries, theme) {
                 + (e.elapsed_ms || 0).toFixed(1) + ' ms</td>'
             + '<td style="padding:4px 12px;text-align:right;font-family:monospace">' + _bytes(e.bytes || 0) + '</td>'
             + '<td style="padding:4px 12px;text-align:center">' + cacheLbl + '</td>'
+            + '<td style="padding:4px 12px;text-align:right;font-family:monospace;color:' + memCol + '">'
+                + esc(_mem(e)) + '</td>'
             + '<td style="padding:4px 12px;color:' + theme.sub + ';font-family:monospace;font-size:11px">'
-                + esc(countsStr) + '</td>'
+                + esc([countsStr, _proKante(e)].filter(Boolean).join(' · ')) + '</td>'
             + '</tr>';
     }).join('');
     return '<table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
-        + [t('diag.col.ago'), 'Action', t('diag.col.latency'), 'Size', 'Cache', 'Counts'].map(function(h) {
+        + [t('diag.col.ago'), 'Action', t('diag.col.latency'), 'Size', 'Cache', 'Memory', 'Counts'].map(function(h) {
             return '<th style="padding:6px 12px;text-align:left;color:' + theme.sub + ';font-weight:600">' + h + '</th>';
         }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }

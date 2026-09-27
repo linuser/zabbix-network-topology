@@ -529,6 +529,14 @@ class NetworkTopologyData extends NetworkTopologyController {
         // Kanten + Qualitaetsstatistik raus — rein, kein API-Call, testbar.
         // §3 Port-zu-Port: Remote-Port + Per-Interface-Traffic mitgeben, damit die
         // Kanten Port-Labels (beide Enden) und Per-Link-Auslastung tragen.
+        // Spitzenverbrauch VOR dem Kantenbau festhalten. Der Wert allein
+        // taugt nicht: in diesem Prozess liegen die Host- und Item-Listen
+        // schon daneben, und genau die verwaeschen die Frage, was eine Kante
+        // kostet. Die Differenz zum Spitzenwert am Ende ist die Zahl, die im
+        // MAX_EDGES-Docblock steht (5,9 KB je Kante) — bisher einmal von Hand
+        // gemessen und seitdem geglaubt. Zwei Aufrufe von memory_get_*, das
+        // kostet nichts und ist ohne Messlauf ohnehin nur ein Diag-Eintrag.
+        $_mem_vor_kanten = memory_get_peak_usage(true);
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
                               $metrics['lldp_meta'] ?? [],
@@ -901,14 +909,46 @@ class NetworkTopologyData extends NetworkTopologyController {
              'generated_at'    => time(),
              'capabilities'    => $this->capabilities()]
         );
+        $_mem_peak = memory_get_peak_usage(true);
         NetworkTopologyDiag::record([
             'action'     => 'data',
             'elapsed_ms' => round((microtime(true) - $t0) * 1000, 1),
             'bytes'      => strlen($_payload),
             'cache_hit'  => $cache_hit,
             'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],
+            // Der Spitzenwert und wie nah er an der Grenze lag. Ein Absturz
+            // wegen "Allowed memory size exhausted" ist eine WEISSE SEITE
+            // ohne Meldung; wer vorher sehen will, dass es eng wird, braucht
+            // beide Zahlen nebeneinander und nicht nur die eine.
+            'mem_peak_kb'  => (int) round($_mem_peak / 1024),
+            'mem_limit_kb' => self::speicherGrenzeKb(),
+            // Nur der Anteil, den der Kantenbau hinzugefuegt hat — geteilt
+            // durch die Kantenzahl ist das die Groesse, an der MAX_EDGES
+            // haengt.
+            'mem_edges_kb' => (int) round(max(0, $_mem_peak - $_mem_vor_kanten) / 1024),
         ]);
         $this->jsonResponseRaw($_payload);
+    }
+
+    /**
+     * memory_limit in KB, oder 0 wenn unbegrenzt.
+     *
+     * Die Angabe kommt als "128M", "1G" oder "-1" zurueck — ein blosses
+     * (int) daraus macht aus 128M die Zahl 128, und der Diag-Eintrag behauptet
+     * dann eine Grenze von 128 KB.
+     */
+    private static function speicherGrenzeKb(): int {
+        $roh = trim((string) ini_get('memory_limit'));
+        if ($roh === '' || $roh === '-1') {
+            return 0;
+        }
+        $zahl = (float) $roh;
+        switch (strtoupper(substr($roh, -1))) {
+            case 'G': return (int) round($zahl * 1024 * 1024);
+            case 'M': return (int) round($zahl * 1024);
+            case 'K': return (int) round($zahl);
+            default:  return (int) round($zahl / 1024);
+        }
     }
 
     /**

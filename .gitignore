@@ -15,3 +15,8 @@ assets/js/dist/*.map
 tools/clean-install-test/module/
 tools/devnet/.env
 tools/devnet/modul/
+
+# Erzeugte Geraete fuer den Lasttest — Masse, keine Belege.
+# Die Belege stehen in tools/devnet/geraete/ und gehoeren in den Commit,
+# das hier erzeugt "node tools/devnet/erzeuge-geraete.mjs" in Sekunden neu.
+tools/devnet/geraete-generiert/

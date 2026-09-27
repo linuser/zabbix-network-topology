@@ -20,11 +20,17 @@
 //   3. Hex-Werte  Tag 4x/6x: nur Hex-Ziffern und Leerzeichen, KEIN 0x
 //   4. Doppelte   dieselbe OID zweimal
 //
-// Aufruf: node tools/check-snmprec.mjs
+// Aufruf: node tools/check-snmprec.mjs [verzeichnis]
+//
+// Ohne Argument prueft es die Belege in tools/devnet/geraete. Mit Argument
+// jedes andere Verzeichnis — erzeuge-geraete.mjs ruft es so fuer seine
+// Ausgabe auf. Die Regeln stehen deshalb weiter nur hier: eine zweite Liste
+// waere eine zweite Stelle, die auseinanderlaeuft, und genau das ist bei den
+// Paket-Ausschluessen schon passiert (siehe build-module.sh).
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const VERZEICHNIS = 'tools/devnet/geraete';
+const VERZEICHNIS = process.argv[2] || 'tools/devnet/geraete';
 const ZEILE = /^([0-9]+(?:\.[0-9]+)*)\|([0-9]+x?e?)\|(.*)$/;
 
 function oidTeile(oid) {

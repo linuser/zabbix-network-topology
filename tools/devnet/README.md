@@ -50,6 +50,52 @@ That imports the module's LLDP template, links it to every `lab-*` host and
 shortens the polling intervals, because nobody wants to wait an hour for the
 next discovery run while debugging.
 
+## Many devices at once — the load test
+
+The files above are **evidence**: one per real report, and their value is that
+each reproduces exactly one incident. For "does this hold up at 200 devices?"
+they are useless, and writing 200 by hand is neither feasible nor sensible.
+
+```bash
+node tools/devnet/erzeuge-geraete.mjs --anzahl 200
+node tools/devnet/erzeuge-geraete.mjs --anzahl 50 --lag-anteil 0.3 --seed 7
+```
+
+They land in `geraete-generiert/`, which is **not** checked in — a generated
+file next to the evidence is a file someone will eventually maintain as if a
+bug report hung on it, or delete as if it were disposable. Same seed, same
+output, so a measurement can be repeated.
+
+The shape is core / distribution / access, because that is the topology where
+"host + 6 hops" runs into the whole network — the case from
+[#22](https://github.com/linuser/zabbix-network-topology/issues/22). A flat
+chain would be easier to generate and would measure the opposite.
+
+**The point is `soll.json`, written alongside**: which device hangs on which
+port of which other one, *before* the module works it out. That turns a run
+from a speed measurement into a correctness measurement — a false split or a
+false merge shows up as a difference against a known answer. With five devices
+you see that by eye; with two hundred you do not, and the false split is the
+expensive failure mode (see CLAUDE.md).
+
+| Option | Meaning |
+|---|---|
+| `--anzahl` | devices in total |
+| `--zugang-je-verteiler` | access switches per distribution switch |
+| `--lag-anteil` | share of connections built as a bundle of 2–4 cables |
+| `--geister-anteil` | share of devices reporting a neighbour that has no host |
+| `--einseitig-anteil` | share of cables reported from **one** end only |
+| `--seed` | repeat a run exactly |
+
+The generator checks its own output with `tools/check-snmprec.mjs` — the same
+gate the evidence goes through, not a second copy of the rules.
+
+**Before measuring, check the queue.** `ZBX_STARTSNMPPOLLERS` is 4 in the
+compose file. Two hundred devices on a one-minute interval fill the queue with
+that, and then the number on the screen is Zabbix's backlog, not the module's
+cost. Raise the pollers, wait for *Administration → Queue* to be empty, and
+only then look at the Diag tab.
+
 ## Writing a new device
 
 A line is `OID|TAG|VALUE`. Tag 4 is an octet string, `4x` the same thing in hex,
