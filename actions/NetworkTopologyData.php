@@ -134,6 +134,37 @@ class NetworkTopologyData extends NetworkTopologyController {
      *
      * 1000 is far past what a hop map can show legibly and well below the
      * 5000 hosts at which HOSTS_PER_ITEM_CHUNK was measured.
+     *
+     * MEASURED 2026-09-27, and the number survives — but not for the reason
+     * it was chosen. A 2000-host tree (branching 4, depth 6) was built on the
+     * load-test cluster from nt:parent tags, and the enrichment calls were
+     * timed against it:
+     *
+     *   100 hosts  2.07 s      1000 hosts  3.14 s      2000 hosts  4.15 s
+     *
+     * Twenty times the hosts for twice the time. THE HOST COUNT IS NOT THE
+     * COST. Those hosts carry five items each; the 200 SNMP hosts next to
+     * them carry 57.5, and there the picture changes: item.get follows the
+     * ITEM count (11,495 items 1.42 s, 10,000 items 1.51 s — the same, at a
+     * tenth of the hosts), and history.get follows it too, sub-linearly:
+     *
+     *   500 items 1.63 s   1500 items 2.37 s   3000 items 3.03 s   6537 items 3.86 s
+     *
+     * Extrapolated to a campus host at 57.5 items: 1000 hosts are 57,500
+     * items, around 16 s of history plus 7 s of item.get, so 25-30 s in the
+     * API alone on the four shared cores of the test VM — and 2000 hosts land
+     * near 50 s, which is where nginx's 60 s begins to matter. That is
+     * exactly the report in #22.
+     *
+     * So the honest form of this limit is "about 60,000 items", and 1000
+     * hosts is that number divided by a typical switch. On beefier hardware
+     * it is conservative; for a host with 200 items it is already too high.
+     * If it ever needs to move, move it against items, not hosts.
+     *
+     * The cut itself was verified against the same tree: 6 hops reach 2000,
+     * 1000 are shown, and complete_hops comes back as 4 — the last ring that
+     * fits whole, since the cumulative count goes 341 at hop 4 and 1365 at
+     * hop 5.
      */
     private const MAX_HOP_HOSTS = 1000;
 
