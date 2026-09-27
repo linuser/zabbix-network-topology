@@ -36,7 +36,7 @@ spec:
           args:
             - /skripte/devnet/erzeuge-geraete.mjs
             - --anzahl
-            - "200"
+            - "1000"
             - --lag-anteil
             - "0.15"
             - --geister-anteil

@@ -174,9 +174,6 @@ function baueNetz(w, zufall) {
         for (let k = 0; k < kabelZahl; k++) {
             const pa = a.naechsterPort++;
             const pb = b.naechsterPort++;
-            if (pa > a.ports || pb > b.ports) {
-                throw new Error(`${a.name}/${b.name}: Ports alle — --zugang-je-verteiler senken`);
-            }
             // Bei einseitigen Kabeln meldet nur A. Das ist der Fall, in dem
             // das Modul dieselbe Leitung aus einer einzigen Richtung erkennen
             // muss, und er kommt in echten Netzen dauernd vor (ein Ende ohne
@@ -217,11 +214,26 @@ function baueNetz(w, zufall) {
     for (const g of geraete) {
         if (g.rolle === 'kern' || zufall() >= w['geister-anteil']) continue;
         const port = g.naechsterPort++;
-        if (port > g.ports) continue;
         const name = `gen-ap-${String(geister.length + 1).padStart(4, '0')}`;
         g.nachbarn.push({ port, fernName: name, fern_port: 'eth0', fernMac: mac(9000 + geister.length) });
         geister.push({ name, an: g.name, port: portName(g, port) });
     }
+
+    // Portzahl ERST JETZT festlegen, aus der tatsaechlichen Belegung.
+    //
+    // Vorher stand sie fest je Rolle, und bei 1000 Geraeten brach der Lauf
+    // ab: 77 Verteiler haengen an zwei Kernen, das sind ueber hundert Kabel
+    // je Kern — an einem Geraet mit 48 Ports. Die feste Zahl war die
+    // Annahme, ein Kern sei ein Switch; ein Kern, der 77 Verteiler traegt,
+    // ist ein Chassis und hat entsprechend viele. Die Belegung bestimmt also
+    // das Geraet, nicht umgekehrt.
+    //
+    // Ein paar freie Ports bleiben: ein Switch, auf dem JEDER Port belegt
+    // ist, kommt in echten Netzen kaum vor, und die Karte faerbt unbenutzte
+    // Ports anders — dieser Zweig soll beruehrt werden.
+    geraete.forEach(function(g) {
+        g.ports = Math.max(ROLLE[g.rolle].ports, g.naechsterPort - 1 + 4);
+    });
 
     return { geraete, kanten, geister, verteilerZahl };
 }

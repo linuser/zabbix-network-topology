@@ -40,6 +40,7 @@ const STANDARD = {
     'ip-basis': '',
     namensraum: 'nt-last',
     'snmp-port': 1161,
+    gruppen: '',
 };
 
 const HILFE = `
@@ -51,6 +52,12 @@ erzeuge-manifeste.mjs — Services und Hostliste aus soll.json
   --ziel PFAD          Ausgabeverzeichnis         (${STANDARD.ziel})
   --namensraum NAME    Kubernetes-Namespace       (${STANDARD.namensraum})
   --snmp-port N        Port des snmpsim-Pods      (${STANDARD['snmp-port']})
+  --gruppen A:200,B:300,C:500
+                       Hosts auf mehrere Zabbix-Gruppen aufteilen, in
+                       dieser Reihenfolge. Damit laesst sich dieselbe
+                       Installation bei 200, 500 und 1000 Hosts messen,
+                       indem man eine, zwei oder drei Gruppen auswaehlt —
+                       ohne sie dreimal aufzubauen.
 
 Die Service-CIDR steht auf dem Node in der kube-apiserver-Konfiguration
 (k3s: --service-cidr, Standard 10.43.0.0/16). Eine Basis ausserhalb davon
@@ -151,6 +158,20 @@ function main() {
         return 2;
     }
 
+    // "A:200,B:300" -> Liste von Gruppennamen, einer je Host.
+    const gruppenPlan = [];
+    if (w.gruppen) {
+        w.gruppen.split(',').forEach(function(teil) {
+            const p2 = teil.split(':');
+            const name = (p2[0] || '').trim();
+            const anzahl = Number(p2[1]);
+            if (!name || !Number.isFinite(anzahl) || anzahl < 1) {
+                throw new Error(`--gruppen: "${teil}" ist kein NAME:ANZAHL`);
+            }
+            for (let i = 0; i < anzahl; i++) gruppenPlan.push(name);
+        });
+    }
+
     const basis = zuZahl(w['ip-basis']);
     const hosts = [];
     let yaml = `# ERZEUGT von tools/devnet/k8s/erzeuge-manifeste.mjs — nicht bearbeiten.\n`
@@ -168,7 +189,9 @@ function main() {
             // Die Gruppe trennt die Lasttest-Hosts von allem anderen. Ohne
             // das zieht eine Kartenansicht "alle Gruppen" die zweihundert
             // mit, und jede andere Messung im selben Zabbix ist hinueber.
-            gruppe: 'Lasttest',
+            // Mit --gruppen wird zusaetzlich AUFGETEILT, damit sich dieselbe
+            // Installation bei verschiedenen Groessen messen laesst.
+            gruppe: gruppenPlan[i] || 'Lasttest',
         });
     });
 

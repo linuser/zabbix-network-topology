@@ -82,16 +82,42 @@ def main() -> int:
         print('geloescht:', len(vorhanden))
         return 0
 
-    gruppe = daten['hosts'][0].get('gruppe', 'Lasttest')
-    gefunden = call('hostgroup.get', {'filter': {'name': [gruppe]}, 'output': ['groupid']})
-    groupid = (gefunden[0]['groupid'] if gefunden
-               else call('hostgroup.create', {'name': gruppe})['groupids'][0])
-    print('Gruppe "%s": %s' % (gruppe, groupid))
+    # Jede vorkommende Gruppe holen oder anlegen. Mehrere sind der Normalfall,
+    # seit sich derselbe Aufbau bei 200, 500 und 1000 Hosts messen laesst,
+    # indem man eine, zwei oder drei Gruppen auswaehlt.
+    gruppen = {}
+    for name in sorted({h.get('gruppe', 'Lasttest') for h in hosts}):
+        gefunden = call('hostgroup.get', {'filter': {'name': [name]}, 'output': ['groupid']})
+        gruppen[name] = (gefunden[0]['groupid'] if gefunden
+                         else call('hostgroup.create', {'name': name})['groupids'][0])
+        print('Gruppe "%s": %s' % (name, gruppen[name]))
+
+    # Bestehende Hosts koennen in der FALSCHEN Gruppe stehen, wenn sich die
+    # Aufteilung geaendert hat. Sie deshalb zu loeschen und neu anzulegen
+    # waere die grobe Loesung — und bei 1000 Hosts eine, die zwischendurch
+    # abbrechen kann. Korrigieren ist billiger und wiederholbar.
+    umgruppiert = 0
+    if vorhanden:
+        ist = {h['host']: [g['groupid'] for g in h['hostgroups']] for h in
+               call('host.get', {'hostids': list(vorhanden.values()),
+                                 'output': ['hostid', 'host'],
+                                 'selectHostGroups': ['groupid']})}
+        for h in hosts:
+            if h['host'] not in vorhanden:
+                continue
+            soll = gruppen[h.get('gruppe', 'Lasttest')]
+            if soll not in ist.get(h['host'], []):
+                call('host.update', {'hostid': vorhanden[h['host']],
+                                     'groups': [{'groupid': soll}]})
+                umgruppiert += 1
+        if umgruppiert:
+            print('Gruppe korrigiert bei:', umgruppiert)
 
     neu = 0
     for h in hosts:
         if h['host'] in vorhanden:
             continue
+        groupid = gruppen[h.get('gruppe', 'Lasttest')]
         call('host.create', {
             'host': h['host'],
             'groups': [{'groupid': groupid}],
@@ -113,7 +139,7 @@ def main() -> int:
         if neu % 25 == 0:
             print('  %d angelegt …' % neu)
 
-    print('angelegt: %d, schon da: %d' % (neu, len(vorhanden)))
+    print('angelegt: %d, schon da: %d, umgruppiert: %d' % (neu, len(vorhanden), umgruppiert))
     print('\nJetzt das Template verlinken:')
     print('  python3 tools/devnet/setup.py --token-datei %s --url %s'
           % (args.token_datei, args.url))
