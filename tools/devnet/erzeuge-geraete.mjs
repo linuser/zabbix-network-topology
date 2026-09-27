@@ -32,7 +32,15 @@
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+
+// Nachbarskript ueber die eigene Lage finden, nicht ueber das
+// Arbeitsverzeichnis. Mit einem relativen Pfad lief der Selbsttest nur aus
+// dem Wurzelverzeichnis des Repositories, und im Pod des Lasttests liegt das
+// Skript ohnehin woanders. Schlimmer war die Meldung: "der Generator hat
+// ungueltige Dateien geschrieben", obwohl nur der Pruefer fehlte.
+const PRUEFER = fileURLToPath(new URL('../check-snmprec.mjs', import.meta.url));
 
 // ── Parameter ──────────────────────────────────────────────────────────────
 
@@ -358,10 +366,14 @@ function main() {
     // Die Ausgabe gegen denselben Gate halten, der die Belege prueft. Ein
     // Generator, der unlesbare Dateien schreibt, faellt sonst erst auf, wenn
     // die Discovery nichts findet — und man sucht im Modul.
-    const geprueft = spawnSync(process.execPath, ['tools/check-snmprec.mjs', w.ziel],
-        { encoding: 'utf8' });
+    const geprueft = spawnSync(process.execPath, [PRUEFER, w.ziel], { encoding: 'utf8' });
     process.stdout.write(geprueft.stdout || '');
     process.stderr.write(geprueft.stderr || '');
+    if (geprueft.error || geprueft.status === null) {
+        console.error(`\n✖ Selbsttest nicht gelaufen: ${PRUEFER} — ${geprueft.error?.message || 'abgebrochen'}`);
+        console.error('  Die Dateien liegen trotzdem, sind aber UNGEPRUEFT.');
+        return 1;
+    }
     if (geprueft.status !== 0) {
         console.error('\n✖ Der Generator hat ungueltige Dateien geschrieben.');
         return 1;
