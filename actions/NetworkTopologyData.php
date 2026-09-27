@@ -149,6 +149,14 @@ class NetworkTopologyData extends NetworkTopologyController {
      * sah plausibel genug aus, um sie fast zu glauben — aufgefallen ist es
      * daran, dass sie mit dem Spitzenwert uebereinstimmte, und bestaetigt im
      * php-fpm-Log ("Undefined variable").
+     *
+     * Gemessen mit memory_get_peak_usage(FALSE), nicht true. Der zweite
+     * Messlauf lieferte ueber acht Aufrufe stur "7,1 KB/edge" bei stur
+     * "10,0 MB" Spitze — zu glatt fuer eine Messung. true meldet, was der
+     * Allokator vom Betriebssystem geholt hat, und das waechst in Bloecken
+     * von zwei Megabyte; eine Differenz daraus ist auf 2 MB gerundet. Fuer
+     * den Vergleich GEGEN memory_limit bleibt true richtig, denn danach
+     * bemisst PHP die Grenze. Fuer eine Differenz taugt nur false.
      */
     private ?int $mem_vor_kanten = null;
 
@@ -551,7 +559,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // MAX_EDGES-Docblock steht (5,9 KB je Kante) — bisher einmal von Hand
         // gemessen und seitdem geglaubt. Zwei Aufrufe von memory_get_*, das
         // kostet nichts und ist ohne Messlauf ohnehin nur ein Diag-Eintrag.
-        $this->mem_vor_kanten = memory_get_peak_usage(true);
+        $this->mem_vor_kanten = memory_get_peak_usage(false);
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
                               $metrics['lldp_meta'] ?? [],
@@ -945,7 +953,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             // dann leer, statt eine Null zu zeigen, die nach Messung aussieht.
             'mem_edges_kb' => $this->mem_vor_kanten === null
                 ? null
-                : (int) round(max(0, $_mem_peak - $this->mem_vor_kanten) / 1024),
+                : (int) round(max(0, memory_get_peak_usage(false) - $this->mem_vor_kanten) / 1024),
         ]);
         $this->jsonResponseRaw($_payload);
     }
