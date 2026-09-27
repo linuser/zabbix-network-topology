@@ -1,0 +1,10 @@
+# Eigener Namensraum, weil dieser Cluster KEIN Wegwerfcluster ist: cert-manager,
+# ingress-nginx, longhorn, metallb und monitoring liegen darauf. Was der
+# Lasttest anlegt, soll sich mit einem einzigen "kubectl delete ns" wieder
+# entfernen lassen, ohne dass jemand ueberlegen muss, was dazugehoerte.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nt-last
+  labels:
+    zweck: lasttest-netzkarte

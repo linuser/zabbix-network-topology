@@ -1,0 +1,90 @@
+# snmpsim — EIN Pod fuer alle simulierten Geraete.
+#
+# Die Geraetedateien kommen NICHT als ConfigMap: zweihundert Stueck sind rund
+# 1,6 MB und eine ConfigMap darf 1 MiB. Stattdessen laeuft der Generator als
+# initContainer und schreibt sie in ein emptyDir. Das ist nicht nur ein
+# Ausweg um ein Limit herum — derselbe Seed liefert dieselben Dateien, der Pod
+# traegt also seine Geraete als REZEPT statt als Kopie, und die Zahl der
+# Geraete ist eine Zeile weiter unten statt ein neues Paket.
+# Die ConfigMap nt-generator steht NICHT hier, sondern entsteht aus den
+# echten Dateien:
+#
+#   kubectl -n nt-last create configmap nt-generator \
+#       --from-file=tools/devnet/erzeuge-geraete.mjs \
+#       --from-file=tools/check-snmprec.mjs
+#
+# Ein Abzug der Skripte in dieser Datei waere eine zweite Fassung, die beim
+# naechsten Fix am Generator still veraltet — und der Pod wuerde dann andere
+# Geraete erzeugen als der Rechner nebenan.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: snmpsim
+  namespace: nt-last
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: snmpsim } }
+  template:
+    metadata: { labels: { app: snmpsim } }
+    spec:
+      initContainers:
+        - name: erzeuge
+          image: docker.io/library/node:22-alpine
+          # Die Parameter stehen hier und sonst nirgends. Wer die Groesse des
+          # Lasttests aendert, aendert sie an dieser Stelle und legt den Pod
+          # neu an — die Soll-Datei entsteht dabei mit und passt dann auch.
+          args:
+            - /skripte/devnet/erzeuge-geraete.mjs
+            - --anzahl
+            - "200"
+            - --lag-anteil
+            - "0.15"
+            - --geister-anteil
+            - "0.08"
+            - --einseitig-anteil
+            - "0.03"
+            - --seed
+            - "1"
+            - --ziel
+            - /daten
+          volumeMounts:
+            - { name: skripte, mountPath: /skripte }
+            - { name: daten,   mountPath: /daten }
+      containers:
+        - name: snmpsim
+          image: docker.io/library/python:3.13-slim
+          command: ["/bin/sh", "-c"]
+          args:
+            # pip beim Start statt eines eigenen Images: fuer EIN Paket lohnt
+            # der Umweg ueber ein Image nicht. Version festgenagelt, damit ein
+            # Neustart in zwei Monaten dasselbe Programm startet.
+            #
+            # --process-user/--process-group sind PFLICHT, nicht Kosmetik:
+            # snmpsim verweigert den Start als root und beendet sich mit
+            # "Must drop privileges to a non-privileged user&group" — auf
+            # einem unprivilegierten Port und ohne eine Zeile im Log, weil der
+            # Container zu schnell stirbt, um eine zu hinterlassen.
+            - >-
+              pip install --no-cache-dir --quiet snmpsim-lextudio==1.1.1 &&
+              exec snmpsim-command-responder
+              --data-dir=/daten
+              --agent-udpv4-endpoint=0.0.0.0:1161
+              --process-user=nobody --process-group=nogroup
+          ports: [{ containerPort: 1161, protocol: UDP }]
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }
+            limits:   { memory: 1Gi }
+          volumeMounts:
+            - { name: daten, mountPath: /daten }
+      volumes:
+        - name: daten
+          emptyDir: {}
+        - name: skripte
+          configMap:
+            name: nt-generator
+            # Die Ablage muss die Lage im Repository nachbauen: der Generator
+            # sucht seinen Pruefer als ../check-snmprec.mjs, relativ zu sich
+            # selbst. Flach nebeneinander gelegt findet er ihn nicht.
+            items:
+              - { key: erzeuge-geraete.mjs, path: devnet/erzeuge-geraete.mjs }
+              - { key: check-snmprec.mjs,   path: check-snmprec.mjs }

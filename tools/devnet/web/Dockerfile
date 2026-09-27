@@ -18,7 +18,11 @@
 # Die PHP-Version haengt am Basis-Image (heute php85). Zieht Zabbix das
 # weiter, muss hier die Paketversion mit — das Image baut sonst nicht, und
 # das ist die richtige Fehlerrichtung: laut statt still.
-FROM zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
+# Registry ausgeschrieben, nicht "zabbix/...": docker ergaenzt docker.io von
+# selbst, buildah nicht — dort bricht der Bau mit "short-name did not resolve"
+# ab. Mit dem vollen Namen bauen beide, und das Kubernetes-Manifest des
+# Lasttests meint dasselbe Image.
+FROM docker.io/zabbix/zabbix-web-nginx-pgsql:alpine-7.0-latest
 
 USER root
 RUN apk add --no-cache php85-pecl-apcu \

@@ -30,7 +30,7 @@
 // Alle Werte sind ERFUNDEN. Kein Walk aus einem echten Netz, auch nicht
 // leicht veraendert — dieselbe Regel wie fuer die Belege.
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -332,8 +332,17 @@ function main() {
     const zufall = saatGenerator(w.seed);
     const netz = baueNetz(w, zufall);
 
-    rmSync(w.ziel, { recursive: true, force: true });
+    // Nur die EIGENEN Dateien wegraeumen, nicht das Verzeichnis. Zwei Gruende:
+    // im Lasttest ist das Ziel ein Mount, und ein rmSync darauf scheitert mit
+    // EBUSY — das war der erste Fehlschlag im Cluster. Der zweite Grund ist
+    // der wichtigere: ein Verzeichnis mit --ziel loeschen zu lassen ist eine
+    // Zeile, die bei einem Tippfehler das falsche Verzeichnis trifft.
     mkdirSync(w.ziel, { recursive: true });
+    for (const d of readdirSync(w.ziel)) {
+        if (d.endsWith('.snmprec') || d === 'soll.json') {
+            rmSync(join(w.ziel, d), { force: true });
+        }
+    }
 
     for (const g of netz.geraete) {
         writeFileSync(join(w.ziel, `${g.name}.snmprec`), snmprec(g, w.seed));

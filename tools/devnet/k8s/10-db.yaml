@@ -1,0 +1,58 @@
+# Postgres fuer den Lasttest.
+#
+# storageClassName steht ABSICHTLICH da, obwohl es eine Standardklasse gibt:
+# dieser Cluster hat ZWEI als default markiert (local-path und longhorn). Bei
+# mehreren Vorgaben ist die Auswahl nicht definiert, und eine PVC ohne Klasse
+# landet mal hier, mal dort. local-path, weil longhorn repliziert und bei
+# einem einzelnen laufenden Node nur Arbeit ohne Nutzen waere.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-daten
+  namespace: nt-last
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  namespace: nt-last
+spec:
+  replicas: 1
+  strategy: { type: Recreate }        # ein RWO-Volume vertraegt kein zweites Pod
+  selector: { matchLabels: { app: db } }
+  template:
+    metadata: { labels: { app: db } }
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:17-alpine
+          env:
+            - { name: POSTGRES_DB,   value: zabbix }
+            - { name: POSTGRES_USER, value: zabbix }
+            # Das Passwort kommt aus einem Secret, das von Hand angelegt wird —
+            # siehe README. In einer Datei im Repository hat es nichts zu suchen.
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: nt-last-db, key: passwort } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ containerPort: 5432 }]
+          resources:
+            requests: { cpu: 200m, memory: 512Mi }
+            limits:   { memory: 2Gi }
+          volumeMounts:
+            - { name: daten, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: daten
+          persistentVolumeClaim: { claimName: db-daten }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: db, namespace: nt-last }
+spec:
+  selector: { app: db }
+  ports: [{ port: 5432, targetPort: 5432 }]

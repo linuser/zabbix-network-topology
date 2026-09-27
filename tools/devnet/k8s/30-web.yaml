@@ -1,0 +1,58 @@
+# Zabbix-Frontend mit dem Modul.
+#
+# Das Image ist NICHT das offizielle: es bringt kein APCu mit, und ohne APCu
+# ist NtCache ein No-Op. Dann gibt es keine Topologie-Baseline, keine
+# Aenderungsmeldungen, keine alternden Kanten — und einen LEEREN Diag-Tab.
+# Genau dort landen die Speicherzahlen, um derentwillen dieser Lasttest
+# ueberhaupt stattfindet. Gebaut wird es auf dem Node aus
+# tools/devnet/web/Dockerfile, siehe README in diesem Verzeichnis.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: nt-last
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: web } }
+  template:
+    metadata: { labels: { app: web } }
+    spec:
+      containers:
+        - name: web
+          image: nt-web-apcu:7.0
+          # Das Image liegt nur lokal in containerd, es gibt keine Registry.
+          # Mit Always wuerde der Pod ewig in ImagePullBackOff haengen.
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: ZBX_SERVER_HOST, value: zabbix }
+            - { name: DB_SERVER_HOST,  value: db }
+            - { name: POSTGRES_DB,     value: zabbix }
+            - { name: POSTGRES_USER,   value: zabbix }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: nt-last-db, key: passwort } }
+            - { name: PHP_TZ, value: Europe/Berlin }
+            # Die Karte baut bei einigen hundert Geraeten einen grossen Graphen
+            # in EINER Anfrage. 128M ist Zabbix' Minimum und genau die Grenze,
+            # an der der erste Messlauf als weisse Seite endete.
+            - { name: ZBX_MEMORYLIMIT, value: "512M" }
+            - { name: ZBX_MAXEXECUTIONTIME, value: "300" }
+          ports: [{ containerPort: 8080 }]
+          resources:
+            requests: { cpu: 300m, memory: 512Mi }
+            limits:   { memory: 2Gi }
+          volumeMounts:
+            - { name: modul, mountPath: /usr/share/zabbix/modules/network_topology }
+      volumes:
+        # Der Arbeitsstand des Moduls, per rsync auf den Node gespielt.
+        - name: modul
+          hostPath: { path: /opt/nt-last/modul, type: DirectoryOrCreate }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: web, namespace: nt-last }
+spec:
+  # NodePort statt LoadBalancer: metallb liegt zwar auf dem Cluster, aber eine
+  # seiner Adressen fuer einen Lasttest zu verbrauchen waere unhoeflich.
+  type: NodePort
+  selector: { app: web }
+  ports: [{ port: 8080, targetPort: 8080, nodePort: 30081 }]

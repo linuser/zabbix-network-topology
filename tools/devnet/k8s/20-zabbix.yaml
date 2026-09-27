@@ -1,0 +1,47 @@
+# Zabbix-Server — MUSS im Cluster laufen.
+#
+# Die simulierten Geraete haengen an ClusterIPs (10.43.x.x), und die sind von
+# ausserhalb des Clusters nicht erreichbar. Ein Zabbix ausserhalb koennte kein
+# einziges Geraet abfragen. Das ist der Grund fuer diesen Deployment, nicht
+# Bequemlichkeit.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zabbix
+  namespace: nt-last
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: zabbix } }
+  template:
+    metadata: { labels: { app: zabbix } }
+    spec:
+      containers:
+        - name: server
+          image: docker.io/zabbix/zabbix-server-pgsql:alpine-7.0-latest
+          env:
+            - { name: DB_SERVER_HOST, value: db }
+            - { name: POSTGRES_DB,    value: zabbix }
+            - { name: POSTGRES_USER,  value: zabbix }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: nt-last-db, key: passwort } }
+            # Der Punkt des ganzen Aufbaus. Mit den vier Pollern des
+            # Compose-Stacks fuellen zweihundert Geraete die Warteschlange, und
+            # dann misst man Zabbix' Rueckstand statt der Karte. Vor jeder
+            # Messung trotzdem in Administration -> Queue sehen: die Zahl hier
+            # ist eine Annahme, die Queue ist die Antwort.
+            - { name: ZBX_STARTSNMPPOLLERS, value: "50" }
+            - { name: ZBX_STARTPOLLERS,     value: "10" }
+            - { name: ZBX_STARTDISCOVERERS, value: "5" }
+            - { name: ZBX_CACHESIZE,        value: "256M" }
+            - { name: ZBX_HISTORYCACHESIZE, value: "128M" }
+          ports: [{ containerPort: 10051 }]
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits:   { memory: 3Gi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: zabbix, namespace: nt-last }
+spec:
+  selector: { app: zabbix }
+  ports: [{ port: 10051, targetPort: 10051 }]
