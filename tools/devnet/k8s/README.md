@@ -107,11 +107,31 @@ python3 tools/devnet/setup.py --token-datei ~/.nt-last-token \
 
 ## Before believing any number
 
-**Look at the queue.** *Administration → Queue* must be empty. Two hundred
-devices with twenty-four ports each is a lot of SNMP for a host with four
-cores, and a backlog there turns every measurement into a measurement of
-Zabbix's backlog. `ZBX_STARTSNMPPOLLERS` is set to 50 in `20-zabbix.yaml`, but
-that is an assumption — the queue is the answer.
+**Look at the queue, and raise the intervals first.** Measured at 1000
+devices: `setup.py` leaves the LLDP interval at 1 minute, the standard
+interface template polls at 1 m and 3 m, and a few items at 30 s. Together
+that is around 300 polls per second, which four shared cores do not keep up
+with — roughly 16,000 of 57,000 items ran permanently late. The map then
+reads stale values and the measurement is of the backlog, not the module.
+
+At 5 minutes for both the LLDP items and the interface prototypes it settles.
+The map does not care: it reads last values, not intervals.
+
+```bash
+# the host macros win over the template, so remove them first — one call
+# instead of a thousand host.update
+kubectl ... # see the API snippet in the load-test notes
+```
+
+**And check lateness against each item's own interval, not against a fixed
+number.** A first attempt flagged 8,000 items as late by comparing everything
+to 15 minutes; 2,880 of them were `net.if.type` on an hourly interval and
+5,000 were `system.*` on a quarter-hourly one, all of them perfectly on time.
+The items that matter for the map — `lldpRem*` and `net.if.in/out` — were
+current throughout.
+
+`ZBX_STARTSNMPPOLLERS` is set to 50 in `20-zabbix.yaml`, but that is an
+assumption — the queue is the answer.
 
 **Then read the Diag tab.** The `data` rows carry `Memory` (peak against
 `memory_limit`) and `KB/edge`. Those two numbers are what this setup exists
