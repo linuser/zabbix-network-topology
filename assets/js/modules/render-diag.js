@@ -33,7 +33,10 @@ function _mem(e) {
 // im MAX_EDGES-Docblock und war bis zum ersten Lasttest von Hand gemessen.
 function _proKante(e) {
     const kanten = e.counts && e.counts.edges;
-    if (!kanten || !e.mem_edges_kb) return '';
+    // Auf null pruefen, nicht auf Falsy: eine gemessene 0 ist ein Ergebnis
+    // ("der Kantenbau haelt nichts fest") und soll dastehen. null heisst
+    // dagegen, dass gar nicht gebaut wurde — Cache-Treffer.
+    if (!kanten || e.mem_edges_kb == null) return '';
     return (e.mem_edges_kb / kanten).toFixed(1) + ' KB/edge';
 }
 

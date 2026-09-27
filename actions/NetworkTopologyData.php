@@ -181,13 +181,22 @@ class NetworkTopologyData extends NetworkTopologyController {
      * daran, dass sie mit dem Spitzenwert uebereinstimmte, und bestaetigt im
      * php-fpm-Log ("Undefined variable").
      *
-     * Gemessen mit memory_get_peak_usage(FALSE), nicht true. Der zweite
-     * Messlauf lieferte ueber acht Aufrufe stur "7,1 KB/edge" bei stur
-     * "10,0 MB" Spitze — zu glatt fuer eine Messung. true meldet, was der
-     * Allokator vom Betriebssystem geholt hat, und das waechst in Bloecken
-     * von zwei Megabyte; eine Differenz daraus ist auf 2 MB gerundet. Fuer
-     * den Vergleich GEGEN memory_limit bleibt true richtig, denn danach
-     * bemisst PHP die Grenze. Fuer eine Differenz taugt nur false.
+     * Gemessen mit memory_get_usage(), NICHT mit memory_get_peak_usage().
+     *
+     * Zwei Anlaeufe waren vorher falsch, jeder auf eigene Art. Der erste nahm
+     * peak(true): das waechst in Bloecken von zwei Megabyte, und eine
+     * Differenz daraus ist auf 2 MB gerundet — dabei kam stur "7,1 KB/edge"
+     * bei stur "10,0 MB" heraus, zu glatt fuer eine Messung. Der zweite nahm
+     * peak(false), fein genug, aber immer noch der HOECHSTSTAND: der entsteht
+     * beim Holen und Aufbereiten der Items, also BEVOR eine Kante existiert,
+     * und bewegt sich danach nicht mehr. Die Differenz war null, und die
+     * Spalte blieb leer.
+     *
+     * Was MAX_EDGES schuetzt, ist nicht die Spitze waehrend des Bauens,
+     * sondern was danach LIEGENBLEIBT — die Kantenliste selbst. Das misst der
+     * aktuelle Verbrauch vorher gegen nachher. Fuer den Vergleich gegen
+     * memory_limit bleibt peak(true) richtig, denn danach bemisst PHP die
+     * Grenze: zwei Fragen, zwei Instrumente.
      */
     private ?int $mem_vor_kanten = null;
 
@@ -590,7 +599,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // MAX_EDGES-Docblock steht (5,9 KB je Kante) — bisher einmal von Hand
         // gemessen und seitdem geglaubt. Zwei Aufrufe von memory_get_*, das
         // kostet nichts und ist ohne Messlauf ohnehin nur ein Diag-Eintrag.
-        $this->mem_vor_kanten = memory_get_peak_usage(false);
+        $this->mem_vor_kanten = memory_get_usage();
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
                               $metrics['lldp_meta'] ?? [],
@@ -984,7 +993,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             // dann leer, statt eine Null zu zeigen, die nach Messung aussieht.
             'mem_edges_kb' => $this->mem_vor_kanten === null
                 ? null
-                : (int) round(max(0, memory_get_peak_usage(false) - $this->mem_vor_kanten) / 1024),
+                : (int) round(max(0, memory_get_usage() - $this->mem_vor_kanten) / 1024),
         ]);
         $this->jsonResponseRaw($_payload);
     }
