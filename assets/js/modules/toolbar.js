@@ -30,6 +30,8 @@ import { refreshBottomLegend } from './legend.js';
 import { openColorScalesPanel } from './color-scales-ui.js';
 import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
 import { allLinksOn, setAllLinks, applyBundleView } from './parallel-links.js';
+import { collapseLeaves, expandLeaves, isCollapsed, collapseLabel,
+         setCollapsePref } from './collapse-leaves.js';
 import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
 import { t } from './i18n.js';
 import { toast } from './toast.js';
@@ -660,6 +662,30 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         setAllLinks(!allLinksOn());
         _setParLabel();
         if (applyBundleView(window._ntCy)) applyTrafficHeatmap(window._ntCy);
+    });
+
+    // Blaetter einklappen: Geraete mit genau einem Nachbarn verstecken und am
+    // Nachbarn zaehlen. Neben den parallelen Links, weil beides dasselbe tut —
+    // weniger zeichnen, ohne etwas zu verschweigen.
+    const bLeaf = mkbtn('nt-btn-collapse', '', null);
+    const _setLeafLabel = function() {
+        bLeaf.textContent = collapseLabel(window._ntCy);
+        bLeaf.style.opacity = isCollapsed() ? '1' : '0.5';
+        bLeaf.title = t('toolbar.collapse.tip');
+    };
+    _setLeafLabel();
+    bLeaf.addEventListener('click', function() {
+        const c = window._ntCy;
+        if (!c) return;
+        if (isCollapsed()) {
+            expandLeaves(c);
+            setCollapsePref(false);
+        } else {
+            collapseLeaves(c);
+            setCollapsePref(true);
+        }
+        c.fit(c.elements(':visible'), 40);
+        _setLeafLabel();
     });
 
     // Root-Cause-Analyse: Offline-Hosts in Ursache vs. Folge trennen

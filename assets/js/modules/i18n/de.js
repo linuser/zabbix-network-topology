@@ -104,6 +104,9 @@ export default {
     // Port-Labels + Root-Cause
     'toolbar.portlabels':     'Port-Labels: {state}',
     'toolbar.portlabels.tip': 'LLDP-Port des Reporters an den Edge-Enden anzeigen (Best-Effort aus dem Item-Key)',
+    'toolbar.collapse':       'Blätter einklappen: {state} ({n})',
+    'toolbar.collapse.tip':   'Geräte, die an genau einem anderen hängen und nichts hinter sich haben — meist Zugangs-Switches. In der Übersicht tragen sie keine Topologie, nur ihre Anzahl tut das, und sie alle zu zeichnen macht aus einer Campuskarte eine graue Wolke. Eingeklappt zeigt das Gerät, an dem sie hängen, ▸N, und ein Klick darauf öffnet genau diese. Entfernt wird nichts: die Host- und Kantenzahl in der Kopfzeile bleibt gleich.',
+    'collapse.auto':          'ℹ {n} Geräte hängen an genau einem Nachbarn — eingeklappt, damit die Form sichtbar bleibt. Ein Klick auf ein Gerät mit ▸N öffnet es, oder über Ansicht → Blätter einklappen wieder alle zeigen.',
     'toolbar.parlinks':       'Alle parallelen Links: {state}',
     'toolbar.parlinks.tip':   'Mehrere Verbindungen zwischen denselben zwei Ger\u00e4ten (LAG, Bonding, parallele Kabel). An: beim Hineinzoomen eine Linie pro Kabel, jede mit eigenen Ports, eigenem Traffic und Zustand; in der \u00dcbersicht geb\u00fcndelt zu einer Linie mit \u00d7N. Aus: immer eine Linie mit \u00d7N, Gesamttraffic gegen Gesamtkapazit\u00e4t, bernsteinfarben wenn ein Member ausgefallen ist \u2014 f\u00fcr Karten mit vielen Links zwischen denselben Ger\u00e4ten.',
     'parlinks.down':          '{n} ausgefallen',
@@ -507,6 +510,7 @@ export default {
     'layout.grid': 'Raster',
     'layout.tree': 'Baum',
     'layout.hierarchy': 'Hierarchie',
+    'layout.hops':            'Schichten nach Hops',
     'kpi.hosts': 'Hosts',
     'kpi.ok': 'OK',
     'kpi.warn': 'Warn',

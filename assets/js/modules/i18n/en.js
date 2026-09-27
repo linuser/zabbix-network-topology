@@ -99,6 +99,9 @@ export default {
     // Port labels + root cause
     'toolbar.portlabels':     'Port labels: {state}',
     'toolbar.portlabels.tip': "Show the reporter's LLDP port at the edge ends (best effort from the item key)",
+    'toolbar.collapse':       'Collapse leaves: {state} ({n})',
+    'toolbar.collapse.tip':   'Devices hanging off a single other device with nothing behind them \u2014 access switches, mostly. In an overview they carry no topology, only their number does, and drawing all of them is what turns a campus map into a grey cloud. Collapsed, the device they hang on shows \u25b8N and a click on it opens just those. Nothing is removed: the host and edge counts in the header stay the same.',
+    'collapse.auto':          '\u2139 {n} devices hang off a single neighbour \u2014 collapsed them so the shape stays visible. Click a device marked \u25b8N to open it, or use View \u2192 Collapse leaves to show all of them again.',
     'toolbar.parlinks':       'All parallel links: {state}',
     'toolbar.parlinks.tip':   'Several links between the same two devices (LAG, bonding, parallel cables). On: one line per cable when zoomed in, each with its own ports, traffic and state; bundled into one line marked \u00d7N when zoomed out. Off: always one line with \u00d7N, the total traffic against the total capacity, amber when a member is down \u2014 for maps with many links between the same devices.',
     'parlinks.down':          '{n} down',
@@ -502,6 +505,7 @@ export default {
     'layout.grid': 'Grid',
     'layout.tree': 'Tree',
     'layout.hierarchy': 'Hierarchy',
+    'layout.hops':            'Layers by hops',
     'kpi.hosts': 'Hosts',
     'kpi.ok': 'OK',
     'kpi.warn': 'Warn',

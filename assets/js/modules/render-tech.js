@@ -44,6 +44,8 @@ import { ensureBaseToolbar } from './tabs.js';
 import { updateKpi, refreshKpi } from './kpi.js';
 import { applyTrafficHeatmap, startEdgeAnimation } from './traffic.js';
 import { applyBundleView, bindBundleView, trunkData } from './parallel-links.js';
+import { collapseLeaves, bindCollapse, leafCandidates, collapsePref,
+         COLLAPSE_SCHWELLE } from './collapse-leaves.js';
 import { buildLayoutConfig, letzterLayoutGrund } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
 import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
@@ -361,7 +363,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     const cy = cytoscape({
         container: cyDiv,
         elements: elements,
-        style: buildCytoscapeStyle(dark),
+        style: buildCytoscapeStyle(dark, nodes.length),
         layout: _initialLayout,
         userZoomingEnabled: true, userPanningEnabled: true, boxSelectionEnabled: false,
         minZoom: 0.1, maxZoom: 4,
@@ -614,6 +616,29 @@ export function render(wrap, nodes, edges, dataUrl) {
     // Parallel links: fan or trunk, before the heatmap reads the trunk class.
     applyBundleView(cy);
     bindBundleView(cy, applyTrafficHeatmap);
+
+    // Blaetter einklappen. NACH applyBundleView, weil das Buendeln
+    // entscheidet, wie viele Kanten ein Knoten sichtbar hat — und damit, ob
+    // er als Blatt zaehlt.
+    bindCollapse(cy);
+    const _leafPref = collapsePref();
+    const _leafAuto = _leafPref === null && leafCandidates(cy).length >= COLLAPSE_SCHWELLE;
+    if (_leafPref === true || _leafAuto) {
+        const _eingeklappt = collapseLeaves(cy);
+        if (_eingeklappt) {
+            // Neu anordnen, sonst steht die geschrumpfte Karte in den Luecken
+            // der alten: das erste Layout lief ueber alle 200 Knoten. Der
+            // zweite Lauf geht nur ueber die sichtbaren, das sind hier
+            // achtzehn statt zweihundert und entsprechend schnell.
+            cy.elements(':visible').layout(_initialLayout).run();
+            cy.fit(cy.elements(':visible'), 40);
+        }
+        if (_leafAuto && _eingeklappt) {
+            // Einmal sagen, warum weniger zu sehen ist als die Kopfzeile
+            // meldet, und wie man da wieder herauskommt.
+            toastTruncatedOnce('autocollapse', t('collapse.auto', { n: _eingeklappt }));
+        }
+    }
     setTimeout(function() { applyTrafficHeatmap(cy); applyPortLabels(cy); }, 1800);
 
     setupMinimap(cy, wrap);

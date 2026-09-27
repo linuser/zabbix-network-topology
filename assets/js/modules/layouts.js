@@ -23,7 +23,8 @@ export const LAYOUT_OPTIONS = [
     { id: 'concentric',   label: t('layout.concentric') },
     { id: 'grid',         label: t('layout.grid')       },
     { id: 'breadthfirst', label: t('layout.tree')       },
-    { id: 'hierarchy',    label: t('layout.hierarchy')  }
+    { id: 'hierarchy',    label: t('layout.hierarchy')  },
+    { id: 'hops',         label: t('layout.hops')       }
 ];
 
 // Tier-Reihenfolge für das Hierarchie-Layout: niedrige Zahl = oben.
@@ -89,6 +90,157 @@ function buildHierarchyPositions(nodes) {
             };
         });
     });
+
+    return positions;
+}
+
+/**
+ * Schichten nach HOP-ABSTAND statt nach Geraetetyp.
+ *
+ * WARUM NEBEN buildHierarchyPositions
+ * -----------------------------------
+ * Das Hierarchie-Layout sortiert nach TIER_ORDER, also nach dem, WAS ein
+ * Geraet ist. In einem Rechenzentrum trennt das sauber: Firewall, Router,
+ * Switch, Server. In einem Campusnetz nicht — Kern, Verteilung und Zugang
+ * sind alle drei 'switch', und alles landet in EINER Zeile.
+ *
+ * Hier zaehlt stattdessen, WO ein Geraet steht: der Abstand in Hops zur
+ * Uplink-Referenz. Kern 0, Verteilung 1, Zugang 2 — das Bild, das Leute an
+ * Whiteboards malen. Aufgefallen am Lasttest mit 200 Geraeten, wo "auto"
+ * cose waehlte (Konnektivitaet 1,44) und aus einem Baum eine Wolke machte.
+ *
+ * Die Wurzel: Internet, sonst Firewall/Router — so weit wie findRoots() in
+ * whatif.js. Danach aber NICHT "der Knoten mit den meisten Nachbarn", wie es
+ * die Ursachenanalyse als Rueckfall nimmt. Fuer eine Karte ist das falsch:
+ * ein Verteiler mit einem Kern und vier Zugaengen hat fuenf Nachbarn, der
+ * Kern mit drei Verteilern nur drei — und die Karte haengt am Verteiler, der
+ * Kern rutscht eine Schicht nach unten. Genau so ist es beim ersten Lauf des
+ * Gates passiert.
+ *
+ * Stattdessen die MITTE des Graphen, ueber die uebliche Doppel-BFS: vom
+ * beliebigen Knoten zum entferntesten, von dort zum entferntesten, und die
+ * Mitte dieses laengsten Weges ist der Punkt, von dem aus alles am nächsten
+ * liegt. Bei Kern/Verteilung/Zugang ist das der Kern. Zwei BFS-Laeufe, also
+ * linear — bei 200 Knoten nicht messbar.
+ *
+ * findRoots() selbst ist hier ohnehin nicht verwendbar: es braucht eine
+ * fertige cy-Instanz, und das Layout wird gebraucht, bevor es die gibt.
+ */
+/** BFS von einem Knoten: liefert {tiefe, entferntester}. */
+function bfsVon(start, nachbarn) {
+    const tiefe = {};
+    tiefe[start] = 0;
+    let rand = [start], letzter = start;
+    while (rand.length) {
+        const naechste = [];
+        rand.forEach(function(id) {
+            Object.keys(nachbarn[id] || {}).forEach(function(o) {
+                if (tiefe[o] === undefined) { tiefe[o] = tiefe[id] + 1; naechste.push(o); letzter = o; }
+            });
+        });
+        rand = naechste;
+    }
+    return { tiefe: tiefe, entferntester: letzter };
+}
+
+/** Mitte des laengsten Weges — siehe buildHopTierPositions(). */
+function graphMitte(nodes, nachbarn) {
+    // Von einem Knoten der GROESSTEN Komponente starten, sonst landet die
+    // Mitte in einer Insel aus zwei Geraeten.
+    let start = null, bestGroesse = -1;
+    const besucht = {};
+    nodes.forEach(function(n) {
+        const id = String(n.id);
+        if (besucht[id]) return;
+        const r = bfsVon(id, nachbarn);
+        const ids = Object.keys(r.tiefe);
+        ids.forEach(function(k) { besucht[k] = 1; });
+        if (ids.length > bestGroesse) { bestGroesse = ids.length; start = id; }
+    });
+    if (start === null) return null;
+
+    const a = bfsVon(start, nachbarn).entferntester;
+    const vonA = bfsVon(a, nachbarn);
+    const b = vonA.entferntester;
+    const vonB = bfsVon(b, nachbarn);
+
+    // Der Knoten auf dem Weg a..b, dessen groesserer Abstand zu beiden Enden
+    // am kleinsten ist.
+    let mitte = a, bestMax = Infinity;
+    Object.keys(vonA.tiefe).forEach(function(id) {
+        if (vonB.tiefe[id] === undefined) return;
+        if (vonA.tiefe[id] + vonB.tiefe[id] !== vonA.tiefe[b]) return;   // nur auf dem Weg
+        const m = Math.max(vonA.tiefe[id], vonB.tiefe[id]);
+        if (m < bestMax) { bestMax = m; mitte = id; }
+    });
+    return mitte;
+}
+
+function buildHopTierPositions(nodes, edges) {
+    const tierGap = 190;
+    const nodeGap = 150;
+
+    const nachbarn = {};
+    const merke = function(a, b) {
+        a = String(a); b = String(b);
+        if (a === b) return;
+        (nachbarn[a] = nachbarn[a] || {})[b] = 1;
+        (nachbarn[b] = nachbarn[b] || {})[a] = 1;
+    };
+    (edges || []).forEach(function(e) {
+        merke(e.source !== undefined ? e.source : e.from,
+              e.target !== undefined ? e.target : e.to);
+    });
+
+    // Wurzel: Internet, sonst Firewall/Router, sonst meiste Nachbarn.
+    let wurzeln = nodes.filter(function(n) { return String(n.id).indexOf('internet_') === 0; });
+    if (!wurzeln.length) {
+        wurzeln = nodes.filter(function(n) { return n.type === 'firewall' || n.type === 'router'; });
+    }
+    if (!wurzeln.length && nodes.length) {
+        const mitte = graphMitte(nodes, nachbarn);
+        wurzeln = mitte ? [{ id: mitte }] : [];
+    }
+
+    const tiefe = {};
+    let rand = wurzeln.map(function(n) { return String(n.id); });
+    rand.forEach(function(id) { tiefe[id] = 0; });
+    for (let d = 1; rand.length; d++) {
+        const naechste = [];
+        rand.forEach(function(id) {
+            Object.keys(nachbarn[id] || {}).forEach(function(o) {
+                if (tiefe[o] === undefined) { tiefe[o] = d; naechste.push(o); }
+            });
+        });
+        rand = naechste;
+    }
+
+    // Was der BFS nicht erreicht hat — Inseln ohne Weg zur Wurzel — kommt
+    // GANZ nach unten statt auf (0,0). Cytoscape laesst Knoten ohne Position
+    // sonst uebereinander liegen, und ein Dutzend Geister im selben Punkt war
+    // schon einmal eine Meldung.
+    let maxTiefe = 0;
+    Object.keys(tiefe).forEach(function(k) { maxTiefe = Math.max(maxTiefe, tiefe[k]); });
+
+    const byTier = {};
+    nodes.forEach(function(n) {
+        const t2 = tiefe[String(n.id)] !== undefined ? tiefe[String(n.id)] : maxTiefe + 1;
+        (byTier[t2] = byTier[t2] || []).push(n);
+    });
+
+    const positions = {};
+    Object.keys(byTier).map(Number).sort(function(a, b) { return a - b; })
+        .forEach(function(tier, idx) {
+            const reihe = byTier[tier];
+            reihe.sort(function(a, b) {
+                return (b.severity || 0) - (a.severity || 0)
+                    || String(a.label || '').localeCompare(String(b.label || ''));
+            });
+            const breite = (reihe.length - 1) * nodeGap;
+            reihe.forEach(function(node, i) {
+                positions[String(node.id)] = { x: -breite / 2 + i * nodeGap, y: idx * tierGap };
+            });
+        });
 
     return positions;
 }
@@ -225,12 +377,24 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
             return a.indexOf('ghost_') !== 0 && b.indexOf('ghost_') !== 0;
         }).length;
         const connectivity = ids.length > 0 ? edgeCount / ids.length : 0;
-        if (connectivity < 0.3 && ids.length > 5) layoutId = 'concentric';
+        // Ab ein paar hundert Knoten ist cose ein Haarball, egal wie vermascht
+        // der Graph ist: die Konnektivitaet des Lasttests lag bei 1,44, also
+        // klar ueber jeder Schwelle fuer "dicht" — und 200 Knoten in 215
+        // Verbindungen sind trotzdem fast genau ein BAUM. Force-Directed
+        // verteilt einen Baum zu einer Wolke. Zwischen "lesbar" und perfMode
+        // (ab 1000 Knoten) klaffte hier eine Luecke.
+        if (ids.length > 150)                      layoutId = 'hops';
+        else if (connectivity < 0.3 && ids.length > 5) layoutId = 'concentric';
         else                                       layoutId = 'cose';
     } else if (layoutId === 'auto' && forceFresh) {
-        // Bei "Layout neu rechnen" mit auto: einfach cose (default für die
-        // meisten Topologien)
-        layoutId = 'cose';
+        // Bei "Layout neu rechnen" mit auto: cose — ausser die Karte ist zu
+        // gross dafuer. Diese Schwelle stand zuerst nur im anderen Zweig, und
+        // damit lieferte derselbe Knopf je nach gespeicherten Positionen ein
+        // anderes Ergebnis. Das Gate hat es gefunden.
+        const echte = (nodes || []).filter(function(n) {
+            return String(n.id).indexOf('ghost_') !== 0;
+        }).length;
+        layoutId = echte > 150 ? 'hops' : 'cose';
     }
 
     switch (layoutId) {
@@ -275,6 +439,20 @@ export function buildLayoutConfig(layoutId, nodes, edges, forceFresh) {
                 name: 'preset',
                 positions: (function() {
                     const pos = buildHierarchyPositions(nodes);
+                    return function(node) { return pos[node.id()] || undefined; };
+                })(),
+                padding: 50,
+                fit: true,
+                animate: true,
+                animationDuration: 500
+            };
+        case 'hops':
+            // Schichten nach Hop-Abstand zur Uplink-Referenz statt nach
+            // Geraetetyp — siehe buildHopTierPositions().
+            return {
+                name: 'preset',
+                positions: (function() {
+                    const pos = buildHopTierPositions(nodes, edges);
                     return function(node) { return pos[node.id()] || undefined; };
                 })(),
                 padding: 50,

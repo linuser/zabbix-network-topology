@@ -188,6 +188,52 @@ if (layout) {
     pruefe('Geister ueberwiegen: frisch, mit Grund', layout.viele, 'cose/geister');
 }
 
+// Schichten nach Hop-Abstand. Der Fall, wegen dem es das gibt: in einem
+// Campusnetz sind Kern, Verteilung und Zugang ALLE 'switch', das vorhandene
+// Hierarchie-Layout sortiert nach Geraetetyp und legt sie damit in eine Zeile.
+console.log('\n  Hop-Layout: Kern oben, Zugang unten\n');
+const hopLayout = szenario('hops', { lang: 'en_US' }, `
+    const L = await import(${JSON.stringify(MODULE('layouts.js'))});
+    const nodes = [{ id: 'core', type: 'switch' }];
+    const edges = [];
+    for (let d = 1; d <= 3; d++) {
+        nodes.push({ id: 'dist' + d, type: 'switch' });
+        edges.push({ source: 'core', target: 'dist' + d });
+        // Zwei Kabel zum Kern: ein Buendel darf den Abstand nicht veraendern.
+        edges.push({ source: 'core', target: 'dist' + d });
+        for (let a = 1; a <= 4; a++) {
+            nodes.push({ id: 'acc' + d + '_' + a, type: 'switch' });
+            edges.push({ source: 'dist' + d, target: 'acc' + d + '_' + a });
+        }
+    }
+    // Eine Insel ohne Weg zur Wurzel.
+    nodes.push({ id: 'insel', type: 'switch' });
+
+    const cfg = L.buildLayoutConfig('hops', nodes, edges, true);
+    const pos = (id) => cfg.positions({ id: () => id });
+    const gross = Array.from({ length: 160 }, (_, i) => ({ id: 'n' + i, type: 'switch' }));
+    const grossK = gross.slice(1).map((n) => ({ source: 'n0', target: n.id }));
+    console.log(JSON.stringify({
+        name: cfg.name,
+        core: pos('core').y,
+        dist: pos('dist1').y,
+        acc:  pos('acc1_1').y,
+        accGleich: pos('acc1_1').y === pos('acc3_4').y,
+        distGleich: pos('dist1').y === pos('dist3').y,
+        insel: pos('insel').y,
+        autoGross: L.buildLayoutConfig('auto', gross, grossK, true).name,
+    }));
+`);
+if (hopLayout) {
+    pruefe('Preset-Positionen',               hopLayout.name, 'preset');
+    pruefe('Kern ueber Verteilung',           hopLayout.core < hopLayout.dist, true);
+    pruefe('Verteilung ueber Zugang',         hopLayout.dist < hopLayout.acc,  true);
+    pruefe('eine Schicht, eine Hoehe',        [hopLayout.accGleich, hopLayout.distGleich], [true, true]);
+    pruefe('Buendel aendert den Abstand nicht', hopLayout.dist, 190);
+    pruefe('Insel ganz unten, nicht auf 0',   hopLayout.insel > hopLayout.acc, true);
+    pruefe('auto waehlt es bei 160 Knoten',   hopLayout.autoGross, 'preset');
+}
+
 // Ein LAG-Member kann auf zwei Arten tot sein: nicht mehr gemeldet (stale)
 // oder gemeldet, aber der Port ist unten. Das Buendel muss BEIDES zaehlen —
 // die zweite Art haelt die Gegenseite fuer die Dauer der Stale-TTL am Leben,

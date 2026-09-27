@@ -11,7 +11,20 @@
 //   - 'edge[?_isInternetEdge]'→ Internet-Wolken-Uplinks (blau-durchgezogen)
 //   - 'node[!isGroup]:selected'→ ausgewählter Host (lila underlay)
 
-export function buildCytoscapeStyle(dark) {
+/**
+ * @param dark        Dunkles Theme?
+ * @param knotenzahl  Wie viele Knoten gezeichnet werden. Entscheidet, ab
+ *                    welchem Zoom Beschriftungen erscheinen — siehe unten.
+ */
+export function buildCytoscapeStyle(dark, knotenzahl) {
+    // Ab wann eine Beschriftung ueberhaupt gezeichnet wird. Cytoscape
+    // vergleicht Schriftgroesse MAL Zoom mit diesem Wert; 8 heisst also, dass
+    // bei Zoom 0,73 noch jedes der 200 Labels steht. Genau das war der Grund,
+    // warum die Lasttest-Karte grau aussah: nicht die Knoten, der Text.
+    // Ueber 150 Knoten muss weiter hineingezoomt werden, bis Namen erscheinen
+    // — wer die Uebersicht ansieht, sucht die Form, nicht die Namen.
+    const labelSchwelle = (knotenzahl || 0) > 150 ? 15 : 8;
+
     return [
         { selector: 'node[!isGroup]', style: {
             'width': 96, 'height': 96, 'background-opacity': 0, 'border-width': 0,
@@ -23,7 +36,24 @@ export function buildCytoscapeStyle(dark) {
             'text-margin-y': 6, 'text-background-opacity': dark ? 0.75 : 0.85,
             'text-background-color': dark ? '#1e293b' : '#f8fafc',
             'text-background-padding': '2px', 'text-background-shape': 'roundrectangle',
-            'min-zoomed-font-size': 8,
+            'min-zoomed-font-size': labelSchwelle,
+        }},
+        // Eingeklappte Blaetter: display none, nicht visibility hidden. Der
+        // Unterschied ist das Layout — versteckte Knoten belegen weiter Platz,
+        // und eine Karte mit 182 unsichtbaren Luecken ist nicht aufgeraeumter
+        // als vorher. Im Graphen bleiben sie, nur gezeichnet werden sie nicht:
+        // cy.nodes() zaehlt sie weiter, also stimmt die Kopfzeile.
+        { selector: '.nt-leaf-hidden', style: { 'display': 'none' }},
+        // Der Elternknoten sagt, wie viele hinter ihm liegen.
+        { selector: 'node[_blaetter]', style: {
+            'border-width': 3,
+            'border-color': dark ? '#60a5fa' : '#2563eb',
+            'border-opacity': 0.9,
+            'font-weight': 'bold',
+            // Diese Beschriftung MUSS stehen bleiben, auch wenn die anderen
+            // wegen labelSchwelle verschwinden: sie ist der einzige Hinweis
+            // darauf, dass dort etwas eingeklappt ist.
+            'min-zoomed-font-size': 0,
         }},
         // Performance-Modus (render-tech: perfMode): einfacher Severity-Punkt
         // via background-color statt SVG-Pie-Image — spart die makeNodeImage-
@@ -173,6 +203,18 @@ export function buildCytoscapeStyle(dark) {
             'underlay-color': dark ? '#f59e0b' : '#d97706',
             'underlay-opacity': dark ? 0.55 : 0.4,
             'underlay-padding': 7,
+        }},
+        // Rollenakzent: was den Weg nach draussen haelt, soll man suchen
+        // koennen, ohne Namen zu lesen. Router und Firewalls tragen deshalb
+        // einen farbigen Ring — rot fuer die Firewall, violett fuer den
+        // Router. Das ist bewusst nur die INFRASTRUKTUR-Rolle und keine
+        // Dienstrolle: welcher Host DHCP macht, steht in keiner
+        // Nachbartabelle, das weiss nur Zabbix.
+        { selector: 'node[type = "firewall"]', style: {
+            'border-width': 4, 'border-color': '#dc2626', 'border-opacity': 0.85,
+        }},
+        { selector: 'node[type = "router"]', style: {
+            'border-width': 4, 'border-color': '#7c3aed', 'border-opacity': 0.85,
         }},
         { selector: 'node[!isGroup]:selected', style: {
             'underlay-color': '#6366f1', 'underlay-padding': 6,
