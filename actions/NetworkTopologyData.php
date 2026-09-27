@@ -138,6 +138,21 @@ class NetworkTopologyData extends NetworkTopologyController {
     private const MAX_HOP_HOSTS = 1000;
 
     /**
+     * Spitzenverbrauch VOR dem Kantenbau, oder null, wenn gar nicht gebaut
+     * wurde (Cache-Treffer).
+     *
+     * Eine Eigenschaft und keine lokale Variable, weil die Marke in
+     * doAction() gesetzt und in respondData() gelesen wird — zwei Methoden.
+     * Als lokale Variable war sie beim Lesen schlicht undefiniert, PHP machte
+     * daraus 0, und der Diag-Tab meldete den GESAMTEN Spitzenwert geteilt
+     * durch die Kantenzahl: 28 KB je Kante statt der gemessenen 5,9. Die Zahl
+     * sah plausibel genug aus, um sie fast zu glauben — aufgefallen ist es
+     * daran, dass sie mit dem Spitzenwert uebereinstimmte, und bestaetigt im
+     * php-fpm-Log ("Undefined variable").
+     */
+    private ?int $mem_vor_kanten = null;
+
+    /**
      * TTL of the discovered edge graph (host+hops mode). LLDP tables change
      * on the scale of minutes, and the graph is rebuilt per user anyway —
      * 60 s makes repeated hop queries (banner +/− clicks, 30 s refresh)
@@ -536,7 +551,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // MAX_EDGES-Docblock steht (5,9 KB je Kante) — bisher einmal von Hand
         // gemessen und seitdem geglaubt. Zwei Aufrufe von memory_get_*, das
         // kostet nichts und ist ohne Messlauf ohnehin nur ein Diag-Eintrag.
-        $_mem_vor_kanten = memory_get_peak_usage(true);
+        $this->mem_vor_kanten = memory_get_peak_usage(true);
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
                               $metrics['lldp_meta'] ?? [],
@@ -925,7 +940,12 @@ class NetworkTopologyData extends NetworkTopologyController {
             // Nur der Anteil, den der Kantenbau hinzugefuegt hat — geteilt
             // durch die Kantenzahl ist das die Groesse, an der MAX_EDGES
             // haengt.
-            'mem_edges_kb' => (int) round(max(0, $_mem_peak - $_mem_vor_kanten) / 1024),
+            // null bei Cache-Treffer: dann wurden keine Kanten gebaut, und eine
+            // Zahl je Kante waere erfunden. Der Diag-Tab laesst die Spalte
+            // dann leer, statt eine Null zu zeigen, die nach Messung aussieht.
+            'mem_edges_kb' => $this->mem_vor_kanten === null
+                ? null
+                : (int) round(max(0, $_mem_peak - $this->mem_vor_kanten) / 1024),
         ]);
         $this->jsonResponseRaw($_payload);
     }
