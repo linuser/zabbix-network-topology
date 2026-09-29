@@ -478,6 +478,160 @@ if (fehlerfall) {
     pruefe('X-Requested-With auch ohne Optionen', fehlerfall.kopf, 'XMLHttpRequest');
 }
 
+// Die Aufschrift des Einklapp-Knopfs ist das EINZIGE, woran sich der Zustand
+// ablesen laesst — die Karte selbst sieht eingeklappt genauso aus wie eine
+// kleine Karte. Bei tausend Geraeten stand dort "off (921)", waehrend genau
+// diese 921 versteckt waren: die Karte klappt ab COLLAPSE_SCHWELLE von allein
+// ein, und der Knopf wird VORHER gebaut. Der Klick tat das Richtige, die
+// Aufschrift log. Geprueft wird deshalb der Text nach jeder Bewegung, nicht
+// der interne Zustand.
+console.log('\n  Blaetter einklappen: die Aufschrift sagt, was gilt\n');
+const blaetter = szenario('collapse', { lang: 'en_US' }, `
+    const C = await import(${JSON.stringify(MODULE('collapse-leaves.js'))});
+
+    // Mini-Cytoscape. Nur was die drei Funktionen anfassen; ein echtes
+    // Cytoscape braucht einen Browser und traegt fuer diese Frage nichts bei.
+    const mkCy = (knoten, kanten) => {
+        const el = (d, istKnoten) => ({
+            _d: Object.assign({}, d), _c: {}, _n: istKnoten,
+            id() { return this._d.id; },
+            length: 1,
+            data(k, v) {
+                if (k === undefined) return this._d;
+                if (v === undefined) return this._d[k];
+                this._d[k] = v; return this;
+            },
+            removeData(k) { delete this._d[k]; return this; },
+            addClass(c) { this._c[c] = 1; return this; },
+            removeClass(c) { delete this._c[c]; return this; },
+            source() { return N[this._d.source]; },
+            target() { return N[this._d.target]; },
+            connectedEdges(sel) {
+                const mich = this.id();
+                const raus = E.filter((e) => e._d.source === mich || e._d.target === mich)
+                    .filter((e) => !sel || e._c[sel.replace('.', '')]);
+                return samm(raus);
+            },
+        });
+        const samm = (liste) => ({
+            length: liste.length,
+            forEach(f) { liste.forEach(f); return this; },
+            filter(f) { return samm(liste.filter(f)); },
+            addClass(c) { liste.forEach((x) => x.addClass(c)); return this; },
+            removeClass(c) { liste.forEach((x) => x.removeClass(c)); return this; },
+        });
+        const N = {};
+        knoten.forEach((d) => { N[d.id] = el(d, true); });
+        const E = kanten.map((d) => el(d, false));
+        const alle = () => Object.keys(N).map((k) => N[k]).concat(E);
+        return {
+            startBatch() {}, endBatch() {},
+            destroyed() { return false; },
+            getElementById(id) { return N[id] || { length: 0 }; },
+            nodes(sel) {
+                const liste = Object.keys(N).map((k) => N[k]);
+                if (sel === '[!isGroup]') return samm(liste.filter((n) => !n._d.isGroup));
+                if (sel === '[_blaetter]') return samm(liste.filter((n) => n._d._blaetter));
+                if (sel && sel[0] === '.') return samm(liste.filter((n) => n._c[sel.slice(1)]));
+                return samm(liste);
+            },
+            elements(sel) {
+                if (sel && sel[0] === '.') return samm(alle().filter((x) => x._c[sel.slice(1)]));
+                return samm(alle());
+            },
+        };
+    };
+
+    // Ein Verteiler mit vier Blaettern. Dazu drei Faelle, die KEINE sind:
+    // ein Geist, ein Blatt am Paar (Nachbar hat nur Grad 2) und ein
+    // Buendel-Blatt, dessen zwei Kabel zum selben Verteiler laufen — das
+    // letzte ist der Fall, an dem im Lasttest jeder dritte Zugangsswitch hing.
+    // Der Kern haengt an ZWEI Verteilern. Mit nur einem waere er selbst ein
+    // Blatt — nach der Regel voellig richtig, aber als Testaufbau irrefuehrend.
+    const knoten = [{ id: 'core' }, { id: 'dist' }, { id: 'dist2' }];
+    const kanten = [{ id: 'e0', source: 'core', target: 'dist' },
+                    { id: 'e0b', source: 'core', target: 'dist2' }];
+    for (let i = 1; i <= 4; i++) {
+        knoten.push({ id: 'acc' + i });
+        kanten.push({ id: 'ea' + i, source: 'dist', target: 'acc' + i });
+    }
+    knoten.push({ id: 'lag' });
+    kanten.push({ id: 'l1', source: 'dist', target: 'lag' });
+    kanten.push({ id: 'l2', source: 'dist', target: 'lag' });
+    knoten.push({ id: 'geist', _isGhost: true });
+    kanten.push({ id: 'eg', source: 'dist', target: 'geist' });
+    knoten.push({ id: 'paarA' }, { id: 'paarB' });
+    kanten.push({ id: 'ep', source: 'paarA', target: 'paarB' });
+
+    const cy = mkCy(knoten, kanten);
+    const gesehen = [];
+    C.onCollapseChanged(() => gesehen.push(C.collapseLabel(cy)));
+
+    const kandidaten = C.leafCandidates(cy).length;
+    const anfang = gesehen[gesehen.length - 1];
+    C.collapseLeaves(cy);
+    const nachEin = gesehen[gesehen.length - 1];
+    const versteckt = cy.nodes('.nt-leaf-hidden').length;
+    const badge = cy.getElementById('dist').data('label');
+    C.expandOne(cy, cy.getElementById('dist'));
+    const nachEins = gesehen[gesehen.length - 1];
+    C.expandLeaves(cy);
+    const nachAus = gesehen[gesehen.length - 1];
+
+    console.log(JSON.stringify({
+        kandidaten, anfang, nachEin, nachEins, nachAus, versteckt, badge,
+        rufe: gesehen.length,
+    }));
+`);
+if (blaetter) {
+    // Vier Zugaenge plus das Buendel-Blatt; Geist und Paar zaehlen nicht.
+    pruefe('Buendel-Blatt zaehlt, Geist und Paar nicht', blaetter.kandidaten, 5);
+    pruefe('vor dem Einklappen: off mit der Vorschau', blaetter.anfang, 'Collapse leaves: off (5)');
+    pruefe('nach dem Einklappen sagt sie on',          blaetter.nachEin, 'Collapse leaves: on (5)');
+    pruefe('und zaehlt die wirklich versteckten',      blaetter.versteckt, 5);
+    pruefe('der Elternknoten traegt die Zahl',         /▸5$/.test(blaetter.badge || ''), true);
+    pruefe('ein einzelnes Aufklappen aendert sie mit', blaetter.nachEins, 'Collapse leaves: on (0)');
+    pruefe('nach dem Ausklappen wieder off',           blaetter.nachAus, 'Collapse leaves: off (5)');
+    // Anmeldung + drei Bewegungen. Waere der Melder nicht da, bliebe es bei 1
+    // — und genau das war der Befund auf der Karte mit tausend Geraeten.
+    pruefe('jede Bewegung meldet sich',                blaetter.rufe, 4);
+}
+
+// Die Update-Pruefung sagt ihr Ergebnis in einem Satz, aber gelesen wird die
+// FARBE. Deshalb gehoert die Zuordnung geprueft und nicht nur angesehen: vier
+// Zustaende, und die beiden unsicheren duerfen weder gruen noch rot leuchten.
+// "GitHub nicht erreichbar" in Gruen hiesse "du bist aktuell" — eine Aussage
+// ueber die Version, die in diesem Fall niemand hat.
+console.log('\n  Update-Pruefung: die Farbe sagt dasselbe wie der Satz\n');
+const upd = szenario('update', { lang: 'en_US' }, `
+    const D = await import(${JSON.stringify(MODULE('render-diag.js'))});
+    const U = await import(${JSON.stringify(MODULE('utils.js'))});
+    const fall = (d) => {
+        const z = D.updateZustand(d);
+        return [z, D.updateFarbe(z, U.mkTabTheme(false)), D.updateFarbe(z, U.mkTabTheme(true))];
+    };
+    const hell = U.mkTabTheme(false), dunkel = U.mkTabTheme(true);
+    console.log(JSON.stringify({
+        aktuell:  fall({ current: '5.4.1', newer: false }),
+        veraltet: fall({ current: '5.4.1', latest: '5.5.0', newer: true }),
+        offline:  fall({ error: 'unreachable' }),
+        kaputt:   fall({ error: 'rate limited' }),
+        nichts:   fall(null),
+        // Beide Themen muessen eigene Werte haben, sonst ist einer unlesbar.
+        verschieden: [hell.ok !== dunkel.ok, hell.crit !== dunkel.crit],
+    }));
+`);
+if (upd) {
+    pruefe('aktuell ist gruen',            [upd.aktuell[0], upd.aktuell[1]],  ['current', '#166534']);
+    pruefe('neuere Fassung ist rot',       [upd.veraltet[0], upd.veraltet[1]], ['outdated', '#9c1a25']);
+    pruefe('nicht erreichbar ist neutral', upd.offline[0],  'unknown');
+    pruefe('und faerbt weder gruen noch rot',
+        [upd.offline[1] === upd.aktuell[1], upd.offline[1] === upd.veraltet[1]], [false, false]);
+    pruefe('ein anderer Fehler warnt',     [upd.kaputt[0], upd.kaputt[1]],    ['error', '#92400e']);
+    pruefe('gar keine Antwort ist auch unbekannt', upd.nichts[0], 'unknown');
+    pruefe('hell und dunkel sind nicht dieselbe Farbe', upd.verschieden, [true, true]);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

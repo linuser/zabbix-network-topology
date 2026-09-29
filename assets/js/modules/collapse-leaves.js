@@ -41,6 +41,36 @@ let _aktiv = false;
 
 export function isCollapsed() { return _aktiv; }
 
+// ── Wer die Beschriftung traegt, muss von JEDER Aenderung erfahren ─────────
+//
+// Auch von der, die niemand angeklickt hat: die Karte klappt beim ersten
+// Zeichnen von allein ein (COLLAPSE_SCHWELLE), und der Werkzeugknopf wird
+// VORHER gebaut. Bei tausend Geraeten stand er danach auf "off (921)",
+// waehrend genau diese 921 Blaetter versteckt waren — und ausgegraut, als
+// laufe die Funktion nicht. Der Klick tat trotzdem das Richtige, weil
+// isCollapsed() den echten Zustand kennt; falsch war nur die Aufschrift,
+// und die ist das Einzige, woran man den Zustand ablesen kann.
+//
+// Ein Melder statt eines Imports, weil toolbar.js und render-tech.js
+// einander nicht kennen und das auch so bleiben soll. Beide kennen dieses
+// Modul.
+
+let _melder = null;
+
+/** Beschriftung anmelden. Wird sofort einmal gerufen. */
+export function onCollapseChanged(fn) {
+    _melder = typeof fn === 'function' ? fn : null;
+    melde();
+}
+
+function melde() {
+    if (_melder) {
+        // Ein Fehler in der Beschriftung darf das Einklappen nicht abbrechen:
+        // sonst bliebe die Karte halb umgebaut stehen.
+        try { _melder(); } catch (e) {}
+    }
+}
+
 /**
  * Gespeicherte Wahl: true, false — oder null, wenn der Benutzer nie etwas
  * gesagt hat. Die drei Zustaende sind nicht dasselbe: nur bei null darf die
@@ -102,7 +132,10 @@ function nachbarZahl(n) {
 
 export function collapseLeaves(cy) {
     if (!cy || (cy.destroyed && cy.destroyed())) return 0;
-    expandLeaves(cy);
+    // Still, nicht ueber expandLeaves: sonst meldet ein Einklappen zuerst
+    // "aus" und gleich darauf "an". Zu sehen ist der Zwischenstand nie,
+    // aber jeder Melder muesste damit rechnen.
+    _ausklappen(cy);
 
     const kandidaten = leafCandidates(cy);
     if (!kandidaten.length) return 0;
@@ -131,10 +164,16 @@ export function collapseLeaves(cy) {
     cy.endBatch();
 
     _aktiv = true;
+    melde();
     return kandidaten.length;
 }
 
 export function expandLeaves(cy) {
+    _ausklappen(cy);
+    melde();
+}
+
+function _ausklappen(cy) {
     if (!cy || (cy.destroyed && cy.destroyed())) return;
     cy.startBatch();
     cy.elements('.' + KLASSE).removeClass(KLASSE);
@@ -168,6 +207,8 @@ export function expandOne(cy, eltern) {
     }
     eltern.removeData('_blaetter');
     cy.endBatch();
+    // Auch hier: die Zahl in der Aufschrift ist jetzt um zwoelf kleiner.
+    melde();
 }
 
 /**

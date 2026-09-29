@@ -74,7 +74,7 @@ function _buildSummary(byAction, theme) {
         const avg = s.count > 0 ? (s.totMs / s.count) : 0;
         const avgBytes = s.count > 0 ? (s.totBytes / s.count) : 0;
         const hitRate = s.count > 0 ? Math.round(100 * s.hits / s.count) : 0;
-        const slowCol = s.maxMs > 1000 ? '#dc2626' : (s.maxMs > 500 ? '#f59e0b' : theme.text);
+        const slowCol = s.maxMs > 1000 ? theme.crit : (s.maxMs > 500 ? theme.warn : theme.text);
         html += '<tr style="border-bottom:1px solid ' + theme.borderSoft + '">'
             + '<td style="padding:4px 14px;font-weight:600">' + esc(a) + '</td>'
             + '<td style="padding:4px 14px;text-align:right">' + s.count + '</td>'
@@ -93,14 +93,14 @@ function _buildLog(entries, theme) {
             + esc(t('diag.no_calls')) + '</div>';
     }
     const rows = entries.slice().reverse().map(function(e) {
-        const slowCol = (e.elapsed_ms || 0) > 1000 ? '#dc2626'
-                      : (e.elapsed_ms || 0) > 500 ? '#f59e0b' : theme.text;
+        const slowCol = (e.elapsed_ms || 0) > 1000 ? theme.crit
+                      : (e.elapsed_ms || 0) > 500 ? theme.warn : theme.text;
         const cacheLbl = e.cache_hit
-            ? '<span style="color:#16a34a">HIT</span>'
+            ? '<span style="color:' + theme.ok + '">HIT</span>'
             : '<span style="color:' + theme.subSoft + '">—</span>';
         // Ab drei Vierteln der Grenze wird es eng genug, um es zu faerben.
         const memAnteil = (e.mem_limit_kb && e.mem_peak_kb) ? e.mem_peak_kb / e.mem_limit_kb : 0;
-        const memCol = memAnteil > 0.9 ? '#dc2626' : memAnteil > 0.75 ? '#f59e0b' : theme.sub;
+        const memCol = memAnteil > 0.9 ? theme.crit : memAnteil > 0.75 ? theme.warn : theme.sub;
         const countsStr = e.counts
             ? Object.keys(e.counts).map(function(k) { return k + ':' + e.counts[k]; }).join(', ')
             : '';
@@ -129,6 +129,35 @@ function _buildLog(entries, theme) {
  * fremder Text — die Action laesst nur https://github.com/… durch, hier
  * landet sie ueber setAttribute statt in einer HTML-Zeichenkette.
  */
+/**
+ * Welchen Zustand die Update-Pruefung gemeldet hat.
+ *
+ * Als eigene Funktion, weil die Farbe die EINZIGE schnelle Auskunft ist: den
+ * Satz liest man, den Punkt sieht man. Vier Zustaende, nicht zwei — "GitHub
+ * nicht erreichbar" darf weder gruen noch rot leuchten, sonst behauptet die
+ * Anzeige etwas ueber die Version, das sie gar nicht weiss.
+ */
+export function updateZustand(d) {
+    if (!d || typeof d !== 'object') return 'unknown';
+    if (d.error === 'unreachable' || d.error === 'unreadable') return 'unknown';
+    if (d.error) return 'error';
+    return d.newer ? 'outdated' : 'current';
+}
+
+/** Farbe und Punkt zu einem Zustand. */
+export function updateFarbe(zustand, theme) {
+    if (zustand === 'current')  return theme.ok;
+    if (zustand === 'outdated') return theme.crit;
+    if (zustand === 'error')   return theme.warn;
+    return theme.sub;
+}
+
+/** Eine farbige Meldung in einen Kasten setzen — ohne innerHTML. */
+function zeigeMeldung(ziel, text, farbe) {
+    while (ziel.firstChild) ziel.removeChild(ziel.firstChild);
+    ziel.appendChild(el('div', 'color:' + farbe, text));
+}
+
 function releaseLink(url, theme) {
     const a = document.createElement('a');
     a.setAttribute('href', String(url || 'https://github.com/linuser/zabbix-network-topology/releases'));
@@ -198,6 +227,8 @@ export function renderDiag(wrap) {
 
     updBtn.addEventListener('click', function() {
         updBtn.disabled = true;
+        updOut.style.color = theme.sub;
+        updOut.style.fontWeight = 'normal';
         updOut.textContent = t('diag.update.checking');
         fetchJson(buildBaseUrl() + 'zabbix.php?action=network.topology.update_check')
             .then(function(d) {
@@ -206,15 +237,21 @@ export function renderDiag(wrap) {
                 // Fehler bei GitHub: fuer den Fragenden ist die Antwort
                 // dieselbe, und Innenleben hilft ihm nicht weiter.
                 while (updOut.firstChild) updOut.removeChild(updOut.firstChild);
+                const _zustand = updateZustand(d);
+                updOut.style.color = updateFarbe(_zustand, theme);
+                updOut.style.fontWeight = (_zustand === 'current' || _zustand === 'outdated')
+                    ? '600' : 'normal';
                 if (d.error === 'unreachable' || d.error === 'unreadable') {
-                    updOut.appendChild(document.createTextNode(t('diag.update.unreachable') + ' '));
+                    updOut.appendChild(document.createTextNode(
+                        '\u25cf ' + t('diag.update.unreachable') + ' '));
                     updOut.appendChild(releaseLink(d.url, theme));
                     return;
                 }
                 if (d.error) {
-                    updOut.textContent = String(d.error);
+                    updOut.textContent = '\u25cf ' + String(d.error);
                     return;
                 }
+                updOut.appendChild(document.createTextNode('\u25cf '));
                 if (d.newer) {
                     updOut.appendChild(el('b', '', t('diag.update.available', { v: d.latest || '?' })));
                     updOut.appendChild(document.createTextNode(
@@ -223,7 +260,7 @@ export function renderDiag(wrap) {
                     updOut.appendChild(releaseLink(d.url, theme));
                 }
                 else {
-                    updOut.textContent = t('diag.update.current', { v: d.current || '?' });
+                    updOut.appendChild(el('b', '', t('diag.update.current', { v: d.current || '?' })));
                 }
             })
             .catch(function(err) {
@@ -236,9 +273,10 @@ export function renderDiag(wrap) {
                 // Abfrage, waere "GitHub nicht erreichbar" schlicht falsch:
                 // dann hat das eigene Zabbix geantwortet, und fetchJson weiss
                 // womit.
-                updOut.textContent = (err && err.message)
+                updOut.style.color = theme.warn;
+                updOut.textContent = '\u25cf ' + ((err && err.message)
                     ? err.message
-                    : t('diag.update.unreachable');
+                    : t('diag.update.unreachable'));
             });
     });
 
@@ -270,12 +308,12 @@ export function renderDiag(wrap) {
     })
         .then(function(data) {
             if (data.error) {
-                summaryBody.innerHTML = '<div style="color:#dc2626">' + esc(data.error) + '</div>';
+                zeigeMeldung(summaryBody, data.error, theme.crit);
                 logBody.innerHTML = '';
                 return;
             }
             if (!data.apcu) {
-                summaryBody.innerHTML = '<div style="color:#f59e0b">' + esc(t('diag.no_apcu')) + '</div>';
+                zeigeMeldung(summaryBody, t('diag.no_apcu'), theme.warn);
                 logBody.innerHTML = '';
                 return;
             }
@@ -284,7 +322,7 @@ export function renderDiag(wrap) {
             logBody.innerHTML     = _buildLog(entries, theme);
         })
         .catch(function(e) {
-            summaryBody.innerHTML = '<div style="color:#dc2626">' + esc(t('diag.error', { msg: e.message })) + '</div>';
+            zeigeMeldung(summaryBody, t('diag.error', { msg: e.message }), theme.crit);
             logBody.innerHTML = '';
         });
 }

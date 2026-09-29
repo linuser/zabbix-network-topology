@@ -31,7 +31,7 @@ import { openColorScalesPanel } from './color-scales-ui.js';
 import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
 import { allLinksOn, setAllLinks, applyBundleView } from './parallel-links.js';
 import { collapseLeaves, expandLeaves, isCollapsed, collapseLabel,
-         setCollapsePref } from './collapse-leaves.js';
+         setCollapsePref, onCollapseChanged } from './collapse-leaves.js';
 import { isRootCauseActive, clearRootCause, toggleRootCause } from './root-cause.js';
 import { t } from './i18n.js';
 import { toast } from './toast.js';
@@ -673,7 +673,9 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         bLeaf.style.opacity = isCollapsed() ? '1' : '0.5';
         bLeaf.title = t('toolbar.collapse.tip');
     };
-    _setLeafLabel();
+    // Angemeldet statt einmal gesetzt: die Karte klappt beim ersten Zeichnen
+    // von allein ein, und das geschieht NACH dieser Zeile.
+    onCollapseChanged(_setLeafLabel);
     bLeaf.addEventListener('click', function() {
         const c = window._ntCy;
         if (!c) return;
@@ -685,7 +687,6 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             setCollapsePref(true);
         }
         c.fit(c.elements(':visible'), 40);
-        _setLeafLabel();
     });
 
     // Root-Cause-Analyse: Offline-Hosts in Ursache vs. Folge trennen

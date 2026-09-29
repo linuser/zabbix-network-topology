@@ -47,13 +47,21 @@ export function buildBaseUrl() {
 // Die Tabelle (render-table.js) hat bewusst ihr eigenes, umfangreicheres
 // Zabbix-Native-Theme — das bleibt getrennt.
 export function mkTabTheme(dark) {
+    // ok/warn/crit gehoeren dazu, weil die Tabs sie ohnehin brauchen und sie
+    // sich sonst als rohe Hex-Werte in die Module schleichen — in render-diag
+    // standen sie schon, und das Rot #dc2626 ist auf dunklem Zabbix kaum zu
+    // lesen. Die Werte sind dieselben wie --nt-ok-text/--nt-crit-text in
+    // network-topology.css; eine CSS-Variable hilft hier nicht, weil diese
+    // Tabs ihre Farben als JS-Zeichenketten in style-Attribute schreiben.
     return dark
         ? { bg:'#0d1117', surface:'#161b22', head:'#1c2128', hover:'#21262d',
             text:'#e6edf3', sub:'#8b949e', subSoft:'#6e7681',
-            border:'#30363d', borderSoft:'#21262d', accent:'#0275b8' }
+            border:'#30363d', borderSoft:'#21262d', accent:'#0275b8',
+            ok:'#4ade80', warn:'#fbbf24', crit:'#fca5a5' }
         : { bg:'#ffffff', surface:'#f8fafc', head:'#f1f5f9', hover:'#f1f5f9',
             text:'#1f2c33', sub:'#64748b', subSoft:'#94a3b8',
-            border:'#dfe4e7', borderSoft:'#eef2f5', accent:'#0275b8' };
+            border:'#dfe4e7', borderSoft:'#eef2f5', accent:'#0275b8',
+            ok:'#166534', warn:'#92400e', crit:'#9c1a25' };
 }
 
 // aggregateValues — Sum/Avg/Min/Max/P50/P95/P99 ueber non-null numerische
