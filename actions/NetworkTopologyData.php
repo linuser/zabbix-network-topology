@@ -571,7 +571,9 @@ class NetworkTopologyData extends NetworkTopologyController {
             // Die Itemids stammen aus einer rechtegefilterten
             // API::Item()-Abfrage und werden vor der Interpolation nach int
             // gecastet; sie kommen nie ungeprueft aus einer Benutzereingabe.
+            $this->markiere('items:get');
             $lv = $this->fetchLastValues($chunk);
+            $this->markiere('items:last');
 
             // Stale-Detection: pro Host das max(lastclock) seiner Items. Wenn
             // alle Items eines Hosts mehrere Minuten alt sind, kommen keine
@@ -596,6 +598,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             // Ende doch wieder alle Stuecke gleichzeitig im Speicher.
             $metrics = MetricExtractor::merge($metrics, MetricExtractor::extract($chunk));
             unset($chunk, $lv);
+            $this->markiere('items:extract');
         }
 
         // Die "show"-Items sind eine eigene, kleine Menge (nur was per
@@ -629,7 +632,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // MAX_EDGES-Docblock steht (5,9 KB je Kante) — bisher einmal von Hand
         // gemessen und seitdem geglaubt. Zwei Aufrufe von memory_get_*, das
         // kostet nichts und ist ohne Messlauf ohnehin nur ein Diag-Eintrag.
-        $this->markiere('items');
+        $this->markiere('items:show');
         $this->mem_vor_kanten = memory_get_usage();
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],

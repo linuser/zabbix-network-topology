@@ -151,15 +151,17 @@ export function collapseLeaves(cy) {
     Object.keys(proEltern).forEach(function(id) {
         const eltern = cy.getElementById(id);
         if (!eltern || !eltern.length) return;
-        // Das Originallabel merken statt es neu zu bauen: es entsteht in
-        // build-elements aus label/host/IP mit einer eigenen Regel, und die
-        // hier zu wiederholen hiesse, sie zweimal zu pflegen.
-        if (eltern.data('_labelVorEinklappen') === undefined) {
-            eltern.data('_labelVorEinklappen', eltern.data('label') || '');
-        }
+        // NUR die Zahl. Das Abzeichen daraus baut der Stil
+        // (render-tech-style.js, Selektor node[_blaetter]).
+        //
+        // Bis dahin stand hier ein Anhaengen an data('label') — mit dem
+        // Originallabel in einem zweiten Feld, damit man es zuruecklegen
+        // konnte. Das war zweimal falsch: einmal, weil jeder Leser von
+        // 'label' das Abzeichen mitbekam (Tooltip, Detail-Panel, CSV, HTML,
+        // GraphML), und einmal, weil zwei Felder ueber denselben Namen
+        // auseinanderlaufen koennen. Jetzt gibt es nur noch eine Wahrheit,
+        // und das Aufraeumen besteht darin, '_blaetter' zu entfernen.
         eltern.data('_blaetter', proEltern[id].length);
-        eltern.data('label', (eltern.data('_labelVorEinklappen') || '')
-            + '  ▸' + proEltern[id].length);
     });
     cy.endBatch();
 
@@ -178,12 +180,7 @@ function _ausklappen(cy) {
     cy.startBatch();
     cy.elements('.' + KLASSE).removeClass(KLASSE);
     cy.elements('.' + AUSGEKLAPPT).removeClass(AUSGEKLAPPT);
-    cy.nodes('[_blaetter]').forEach(function(n) {
-        if (n.data('_labelVorEinklappen') !== undefined) {
-            n.data('label', n.data('_labelVorEinklappen'));
-        }
-        n.removeData('_blaetter');
-    });
+    cy.nodes('[_blaetter]').forEach(function(n) { n.removeData('_blaetter'); });
     cy.endBatch();
     _aktiv = false;
 }
@@ -202,9 +199,6 @@ export function expandOne(cy, eltern) {
         blatt.removeClass(KLASSE).addClass(AUSGEKLAPPT);
         e.removeClass(KLASSE).addClass(AUSGEKLAPPT);
     });
-    if (eltern.data('_labelVorEinklappen') !== undefined) {
-        eltern.data('label', eltern.data('_labelVorEinklappen'));
-    }
     eltern.removeData('_blaetter');
     cy.endBatch();
     // Auch hier: die Zahl in der Aufschrift ist jetzt um zwoelf kleiner.

@@ -548,7 +548,7 @@ const blaetter = szenario('collapse', { lang: 'en_US' }, `
     // letzte ist der Fall, an dem im Lasttest jeder dritte Zugangsswitch hing.
     // Der Kern haengt an ZWEI Verteilern. Mit nur einem waere er selbst ein
     // Blatt — nach der Regel voellig richtig, aber als Testaufbau irrefuehrend.
-    const knoten = [{ id: 'core' }, { id: 'dist' }, { id: 'dist2' }];
+    const knoten = [{ id: 'core' }, { id: 'dist', label: 'sw-dist-01' }, { id: 'dist2' }];
     const kanten = [{ id: 'e0', source: 'core', target: 'dist' },
                     { id: 'e0b', source: 'core', target: 'dist2' }];
     for (let i = 1; i <= 4; i++) {
@@ -572,14 +572,20 @@ const blaetter = szenario('collapse', { lang: 'en_US' }, `
     C.collapseLeaves(cy);
     const nachEin = gesehen[gesehen.length - 1];
     const versteckt = cy.nodes('.nt-leaf-hidden').length;
-    const badge = cy.getElementById('dist').data('label');
+    // Die Zahl gehoert in ein eigenes Feld, das Label bleibt, wie es war:
+    // das Abzeichen setzt der Stil zusammen. Angehaengt truege es jeder
+    // Leser von 'label' mit — Tooltip, Detail-Panel, CSV, HTML, GraphML.
+    const badge = cy.getElementById('dist').data('_blaetter');
+    const label = cy.getElementById('dist').data('label');
     C.expandOne(cy, cy.getElementById('dist'));
     const nachEins = gesehen[gesehen.length - 1];
     C.expandLeaves(cy);
     const nachAus = gesehen[gesehen.length - 1];
 
     console.log(JSON.stringify({
-        kandidaten, anfang, nachEin, nachEins, nachAus, versteckt, badge,
+        kandidaten, anfang, nachEin, nachEins, nachAus, versteckt, badge, label,
+        labelDanach: cy.getElementById('dist').data('label'),
+        blaetterDanach: cy.getElementById('dist').data('_blaetter'),
         rufe: gesehen.length,
     }));
 `);
@@ -589,7 +595,11 @@ if (blaetter) {
     pruefe('vor dem Einklappen: off mit der Vorschau', blaetter.anfang, 'Collapse leaves: off (5)');
     pruefe('nach dem Einklappen sagt sie on',          blaetter.nachEin, 'Collapse leaves: on (5)');
     pruefe('und zaehlt die wirklich versteckten',      blaetter.versteckt, 5);
-    pruefe('der Elternknoten traegt die Zahl',         /▸5$/.test(blaetter.badge || ''), true);
+    pruefe('der Elternknoten traegt die Zahl',         blaetter.badge, 5);
+    pruefe('das Label bleibt unberuehrt',             blaetter.label, 'sw-dist-01');
+    // Ohne das Aufraeumen faerbte der Stil den Knoten weiter als eingeklappt.
+    pruefe('nach dem Ausklappen ist die Zahl weg',
+        [blaetter.labelDanach, blaetter.blaetterDanach], ['sw-dist-01', null]);
     pruefe('ein einzelnes Aufklappen aendert sie mit', blaetter.nachEins, 'Collapse leaves: on (0)');
     pruefe('nach dem Ausklappen wieder off',           blaetter.nachAus, 'Collapse leaves: off (5)');
     // Anmeldung + drei Bewegungen. Waere der Melder nicht da, bliebe es bei 1

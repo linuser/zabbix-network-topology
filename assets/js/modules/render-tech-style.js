@@ -46,6 +46,17 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
         { selector: '.nt-leaf-hidden', style: { 'display': 'none' }},
         // Der Elternknoten sagt, wie viele hinter ihm liegen.
         { selector: 'node[_blaetter]', style: {
+            // Das Abzeichen wird HIER zusammengesetzt und nicht in die Daten
+            // geschrieben. Vorher haengte collapseLeaves() das "  \u25b8N" an
+            // data('label') — und damit an alles, was Labels liest: der
+            // Tooltip zeigte "lab-gen-dist-0015 \u25b812", die Nachbarliste im
+            // Detail-Panel haette es mitgefuehrt, und CSV, HTML und GraphML
+            // haetten ein Darstellungsmerkmal als Geraetenamen exportiert.
+            // Derselbe Fehler wie bei einer synthetischen Kante: was fuers
+            // Auge gedacht ist, darf nicht in den Bestand.
+            'label': function(ele) {
+                return (ele.data('label') || '') + '  \u25b8' + ele.data('_blaetter');
+            },
             'border-width': 3,
             'border-color': dark ? '#60a5fa' : '#2563eb',
             'border-opacity': 0.9,
