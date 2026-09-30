@@ -673,6 +673,36 @@ if (phasen) {
     pruefe('lauter Nullen ergeben keinen NaN', /NaN/.test(phasen.nullen), false);
 }
 
+// Der Diag-Ring fasst 50 Eintraege, und 'spark' faellt bei jedem Ueberfahren
+// eines Knotens an. Auf der Lasttest-Karte standen 35 davon gegen 6 teure
+// data-Aufrufe — die Zeilen, fuer die man den Tab oeffnet, waren unter dem
+// Rauschen begraben und waeren als naechstes ganz verdraengt worden.
+// Zurueckgehalten heisst aber nicht verschwiegen: die Zahl muss darunter
+// stehen, und die Zusammenfassung zaehlt weiter alles.
+console.log('\n  Diag: haeufige Aufrufe verdecken die teuren nicht\n');
+const leise = szenario('leise', { lang: 'en_US' }, `
+    const D = await import(${JSON.stringify(MODULE('render-diag.js'))});
+    const mk = (a, n) => Array.from({ length: n }, function() { return { action: a }; });
+    const gemischt = mk('spark', 35).concat(mk('data', 6)).concat(mk('compliance', 1));
+    const g = D.sichtbareAufrufe(gemischt);
+    console.log(JSON.stringify({
+        gezeigt:  g.zeilen.length,
+        aktionen: Array.from(new Set(g.zeilen.map(function(e) { return e.action; }))).sort(),
+        text:     D.verdecktText(g.verdeckt),
+        nurTeure: D.verdecktText(D.sichtbareAufrufe(mk('data', 3)).verdeckt),
+        leerText: D.verdecktText(D.sichtbareAufrufe([]).verdeckt),
+        ohneName: D.sichtbareAufrufe([{}, null]).zeilen.length,
+    }));
+`);
+if (leise) {
+    pruefe('die teuren Aufrufe bleiben stehen',  leise.gezeigt, 7);
+    pruefe('und nur die haeufigen gehen weg',    leise.aktionen, ['compliance', 'data']);
+    pruefe('die Zahl steht darunter',            leise.text, '35 spark');
+    pruefe('ohne Rauschen kein Hinweis',         [leise.nurTeure, leise.leerText], ['', '']);
+    // Ein Eintrag ohne action darf nicht stillschweigend verschwinden.
+    pruefe('namenlose Eintraege bleiben sichtbar', leise.ohneName, 2);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

@@ -624,6 +624,7 @@ export default {
     'compliance.unavailable': 'Compliance data unavailable (permissions or backend error).',
     'compliance.error': 'Error: {msg}',
     'diag.no_entries': 'No entries.',
+    'diag.noisy_hidden': '{list} hidden \u2014 high-frequency calls from hovering the map. They are still counted in Summary above.',
     'diag.no_calls': 'No calls recorded yet. Switch to another tab and back \u2014 then entries show up.',
     'diag.no_apcu': 'APCu is not enabled on the server \u2014 diagnostic data cannot be stored.',
     'diag.error': 'Error: {msg}',

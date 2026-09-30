@@ -629,6 +629,7 @@ export default {
     'compliance.unavailable': 'Compliance-Daten nicht verf\u00fcgbar (Berechtigung oder Backend-Fehler).',
     'compliance.error': 'Fehler: {msg}',
     'diag.no_entries': 'Keine Eintr\u00e4ge.',
+    'diag.noisy_hidden': '{list} ausgeblendet \u2014 h\u00e4ufige Aufrufe vom \u00dcberfahren der Karte. In der Zusammenfassung oben z\u00e4hlen sie weiter mit.',
     'diag.no_calls': 'Noch keine Aufrufe protokolliert. Wechsle auf einen anderen Tab und zur\u00fcck \u2014 dann tauchen Eintr\u00e4ge auf.',
     'diag.no_apcu': 'APCu ist auf dem Server nicht aktiv \u2014 Diagnose-Daten k\u00f6nnen nicht gespeichert werden.',
     'diag.error': 'Fehler: {msg}',

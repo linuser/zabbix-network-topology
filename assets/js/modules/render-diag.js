@@ -115,10 +115,56 @@ function _buildSummary(byAction, theme) {
     return html + '</tbody></table>';
 }
 
-function _buildLog(entries, theme) {
+/**
+ * Aktionen, die beim blossen Ansehen der Karte entstehen.
+ *
+ * 'spark' faellt bei jedem Ueberfahren eines Knotens an. Auf der Lasttest-
+ * Karte standen nach ein paar Sekunden Mausbewegung 35 davon gegen 6
+ * data-Aufrufe im Ring — und der fasst 50. Noch etwas laenger, und genau
+ * die teuren Aufrufe sind verdraengt, fuer die man diesen Tab oeffnet.
+ */
+const LEISE = { spark: true };
+
+/**
+ * Die Liste trennen: was gezeigt wird, und was zurueckgehalten wurde.
+ *
+ * Zurueckgehalten, nicht verschwiegen — die Zahl steht unter der Tabelle,
+ * und in der Zusammenfassung zaehlen die Aufrufe unveraendert mit. Still
+ * abzuschneiden ist in diesem Projekt nirgends der Weg.
+ */
+export function sichtbareAufrufe(entries) {
+    const zeilen = [], verdeckt = {};
+    (entries || []).forEach(function(e) {
+        const a = (e && e.action) || '?';
+        if (LEISE[a]) {
+            verdeckt[a] = (verdeckt[a] || 0) + 1;
+        } else {
+            zeilen.push(e);
+        }
+    });
+    return { zeilen: zeilen, verdeckt: verdeckt };
+}
+
+/** "35 spark" — oder leer, wenn nichts zurueckgehalten wurde. */
+export function verdecktText(verdeckt) {
+    const namen = Object.keys(verdeckt || {}).sort();
+    if (!namen.length) return '';
+    return namen.map(function(a) { return verdeckt[a] + ' ' + a; }).join(', ');
+}
+
+function _buildLog(alleEintraege, theme) {
+    const geteilt  = sichtbareAufrufe(alleEintraege);
+    const entries  = geteilt.zeilen;
+    const verdeckt = verdecktText(geteilt.verdeckt);
+    // Der Hinweis gehoert auch unter eine LEERE Tabelle: "noch keine
+    // Aufrufe" waere dann schlicht falsch, es waren welche da.
+    const fussnote = verdeckt
+        ? '<div style="color:' + theme.subSoft + ';font-size:11px;padding:8px 0">'
+            + esc(t('diag.noisy_hidden', { list: verdeckt })) + '</div>'
+        : '';
     if (!entries.length) {
         return '<div style="color:' + theme.subSoft + ';padding:20px 0">'
-            + esc(t('diag.no_calls')) + '</div>';
+            + esc(t('diag.no_calls')) + '</div>' + fussnote;
     }
     const rows = entries.slice().reverse().map(function(e) {
         const slowCol = (e.elapsed_ms || 0) > 1000 ? theme.crit
@@ -154,7 +200,7 @@ function _buildLog(entries, theme) {
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
         + [t('diag.col.ago'), 'Action', t('diag.col.latency'), 'Size', 'Cache', 'Memory', 'Counts'].map(function(h) {
             return '<th style="padding:6px 12px;text-align:left;color:' + theme.sub + ';font-weight:600">' + h + '</th>';
-        }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>';
+        }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table>' + fussnote;
 }
 
 /**
