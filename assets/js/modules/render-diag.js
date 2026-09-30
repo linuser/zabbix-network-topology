@@ -158,8 +158,11 @@ function _buildLog(alleEintraege, theme) {
     const verdeckt = verdecktText(geteilt.verdeckt);
     // Der Hinweis gehoert auch unter eine LEERE Tabelle: "noch keine
     // Aufrufe" waere dann schlicht falsch, es waren welche da.
+    // theme.sub, nicht subSoft: 11px in der blasseren Farbe kommen auf
+    // dunklem Grund kaum ueber 4:1 Kontrast, und ein Hinweis, den man
+    // uebersieht, haette man auch weglassen koennen.
     const fussnote = verdeckt
-        ? '<div style="color:' + theme.subSoft + ';font-size:11px;padding:8px 0">'
+        ? '<div style="color:' + theme.sub + ';font-size:11px;padding:10px 0 2px">'
             + esc(t('diag.noisy_hidden', { list: verdeckt })) + '</div>'
         : '';
     if (!entries.length) {

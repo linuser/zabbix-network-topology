@@ -931,7 +931,7 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
         + '<th data-sort="__host__" style="padding:6px 8px;text-align:left;font-size:11px;'
         + 'font-weight:700;color:' + (sortCol === '__host__' || !sortCol ? t.textStrong : t.sub)
         + ';text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;user-select:none;'
-        + 'position:sticky;left:0;background:' + t.head + ';z-index:1">Host'
+        + 'position:sticky;left:0;background:' + t.head + ';z-index:1;white-space:nowrap">Host'
         + arrow('__host__') + (!sortCol ? ' \u25B2' : '') + '</th>';
     // Spalten-Label aufraeumen: Zabbix-Discovery-Keys stehen oft in Quotes
     // (z.B. net.if.in["BR-MAILCOW"]) — die fuehrenden/abschliessenden " sind
@@ -988,8 +988,15 @@ export function renderPivotTable(container, data, hostsLookup, sortHostIds, sort
 
         let html = '<tr style="border-bottom:1px solid ' + t.borderSoft
             + ';transition:background 0.12s">'
-            + '<td style="padding:5px 8px;font-weight:600;font-size:13px;'
+            // nowrap + Ellipse: ohne das drueckt der Browser die erste Spalte
+            // zusammen, sobald viele Item-Spalten um den Platz konkurrieren —
+            // bei 111 Spalten stand "lab-gen-dist-0077" ueber vier Zeilen, und
+            // ausgerechnet der Name ist die Spalte, an der man sich orientiert.
+            // Der volle Name bleibt im title erreichbar, damit die Ellipse
+            // nichts verschluckt, was man nicht wiederbekommt.
+            + '<td title="' + esc(hostname) + '" style="padding:5px 8px;font-weight:600;font-size:13px;'
             + 'position:sticky;left:0;background:' + t.surface + ';z-index:1;'
+            + 'white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;'
             + 'border-right:1px solid ' + t.borderSoft + '">'
             + '<a href="' + esc(latestHostUrl) + '" target="_blank" rel="noopener noreferrer" '
             + 'style="color:' + t.link + ';text-decoration:none">' + esc(hostname) + '</a></td>';
