@@ -27,6 +27,7 @@ import { isSimActive, clearSimulation } from './whatif.js';
 import { isFocusActive, clearFocus } from './focus-mode.js';
 import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
 import { refreshBottomLegend } from './legend.js';
+import { refreshLabel } from './utils.js';
 import { openColorScalesPanel } from './color-scales-ui.js';
 import { portLabelsOn, setPortLabels, applyPortLabels } from './port-labels.js';
 import { allLinksOn, setAllLinks, applyBundleView } from './parallel-links.js';
@@ -568,10 +569,13 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         bar.appendChild(clusterWrap);
     }
 
-    // Auto-Refresh-Toggle
-    mkbtn('nt-btn-auto', t('toolbar.auto.on'), function() {
+    // Auto-Refresh-Toggle. Die Zahl kommt aus derselben Funktion, die den
+    // Timer stellt — eine Aufschrift, die einen anderen Takt behauptet als
+    // den laufenden, waere schlimmer als gar keine.
+    const _autoAn = function() { return t('toolbar.auto.on', { int: refreshLabel(nodes.length) }); };
+    mkbtn('nt-btn-auto', _autoAn(), function() {
         window._ntRefreshOn = !window._ntRefreshOn;
-        this.textContent = window._ntRefreshOn ? t('toolbar.auto.on') : t('toolbar.auto.off');
+        this.textContent = window._ntRefreshOn ? _autoAn() : t('toolbar.auto.off');
         this.style.opacity = window._ntRefreshOn ? '1' : '0.5';
     });
 

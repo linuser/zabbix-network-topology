@@ -14,7 +14,7 @@
 // State (Modul-privat):
 //   _posSaveTimer — debounce-Timer für drag-save
 
-import { esc, isDark, clearWrap } from './utils.js';
+import { esc, isDark, clearWrap, refreshIntervallMs, refreshLabel } from './utils.js';
 import { t } from './i18n.js';
 import { primaryGroup, SEV_COL } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
@@ -709,7 +709,13 @@ export function render(wrap, nodes, edges, dataUrl) {
         }, 800);
     });
 
-    // ── Auto-Refresh (alle 30s) ────────────────────────────────────────────
+    // ── Auto-Refresh ──────────────────────────────────────────────────────
+    // Der Takt haengt an der Groesse, siehe refreshIntervallMs in utils.js.
+    const _refreshMs = refreshIntervallMs(nodes.length);
+    if (_refreshMs > 30000) {
+        toastTruncatedOnce('refreshslow',
+            t('refresh.slowed', { int: refreshLabel(nodes.length), n: nodes.length }));
+    }
     if (window._ntRefreshTimer) clearInterval(window._ntRefreshTimer);
     _clearRefreshWarn();   // frischer Render → Refresh-Fehler-Status zuruecksetzen
     window._ntRefreshTimer = setInterval(function() {
@@ -809,5 +815,5 @@ export function render(wrap, nodes, edges, dataUrl) {
                 if (isRootCauseActive()) runRootCause(window._ntCy, false);
             })
             .catch(function(err) { _markRefresh(false, err); });   // Netz-/HTTP-/Parse-Fehler → Badge
-    }, 30000);
+    }, _refreshMs);
 }

@@ -21,6 +21,22 @@ namespace Modules\NetworkTopology\Actions;
 class NetworkTopologyDiag extends NetworkTopologyController {
 
     private const MAX_ENTRIES = 50;
+
+    /**
+     * Aktionen, die beim blossen ANSEHEN der Karte anfallen.
+     *
+     * 'spark' faellt bei jedem Ueberfahren eines Knotens an. Auf der
+     * Lasttest-Karte reichten ein paar Sekunden Mausbewegung fuer 35 Stueck,
+     * und der Ring fasst 50: die teuren data-Aufrufe fielen von vier auf
+     * zwei, waehrend man auf den Tab sah. Die Anzeige zu filtern reichte
+     * nicht — da waren sie schon aus dem Puffer.
+     *
+     * Eigener Slot-Raum, gemeinsamer Zaehler. Der Zaehler MUSS gemeinsam
+     * bleiben, sonst sind die laufenden Nummern der beiden Raeume nicht mehr
+     * vergleichbar und die zeitliche Reihenfolge in der Liste waere geraten.
+     */
+    private const LAUT     = ['spark' => true];
+    private const MAX_LAUT = 10;
     private const KEY_PREFIX  = 'nt_diag_';
     private const TTL         = 3600;   // 1h Buffer-Lebensdauer
 
@@ -56,6 +72,9 @@ class NetworkTopologyDiag extends NetworkTopologyController {
             for ($i = 0; $i < self::MAX_ENTRIES; $i++) {
                 $keys[] = self::KEY_PREFIX . $uid . '_' . $i;
             }
+            for ($i = 0; $i < self::MAX_LAUT; $i++) {
+                $keys[] = self::KEY_PREFIX . $uid . '_l' . $i;
+            }
             $found = apcu_fetch($keys);
             if (is_array($found)) {
                 foreach ($found as $e) {
@@ -73,7 +92,7 @@ class NetworkTopologyDiag extends NetworkTopologyController {
         }
 
         $this->jsonResponse([
-            'entries' => array_values(array_slice($entries, -self::MAX_ENTRIES)),
+            'entries' => array_values(array_slice($entries, -(self::MAX_ENTRIES + self::MAX_LAUT))),
             'apcu'    => $apcu,
             'uid'     => $uid,
         ]);
@@ -111,8 +130,12 @@ class NetworkTopologyDiag extends NetworkTopologyController {
         $entry['ts']  = time();
         $entry['seq'] = $seq;
 
+        // Lauteste Aktionen in ihren eigenen Ring. Sie zaehlen in der
+        // Zusammenfassung weiter mit, verdraengen aber nichts mehr.
+        $laut = isset(self::LAUT[(string) ($entry['action'] ?? '')]);
         apcu_store(
-            self::KEY_PREFIX . $uid . '_' . ($seq % self::MAX_ENTRIES),
+            self::KEY_PREFIX . $uid . ($laut ? '_l' : '_')
+                . ($seq % ($laut ? self::MAX_LAUT : self::MAX_ENTRIES)),
             $entry,
             self::TTL
         );

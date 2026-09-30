@@ -46,6 +46,32 @@ export function buildBaseUrl() {
 // (hover vs. accent je nach Modul). Superset beider Varianten.
 // Die Tabelle (render-table.js) hat bewusst ihr eigenes, umfangreicheres
 // Zabbix-Native-Theme — das bleibt getrennt.
+// ── Auto-Refresh: der Takt richtet sich nach der Kartengroesse ────────────
+//
+// Dieselbe Schwelle wie der Perf-Modus, und aus demselben Grund. Nur war der
+// Perf-Modus bisher allein damit: er macht das ZEICHNEN billiger, waehrend der
+// Refresh stur alle 30 Sekunden weiterlief. Auf dem Lasttest heisst das, dass
+// ein Abruf 4,4 Sekunden Serverzeit kostet und 1,2 MB bewegt — alle 30
+// Sekunden, fuer EINEN Betrachter. Der Browser kommt dazwischen nicht zur
+// Ruhe, und genau so fuehlt es sich an.
+//
+// Hier und nicht in render-tech, weil auch die Werkzeugleiste die Zahl
+// nennen muss. Zwei Stellen, die dieselbe Schwelle getrennt fuehren, laufen
+// auseinander — und dann behauptet die Aufschrift etwas anderes, als der
+// Takt tut. Genau diesen Fehler hatte der Einklapp-Knopf.
+
+export const REFRESH_GROSS_AB = 400;
+
+export function refreshIntervallMs(knotenzahl) {
+    return (knotenzahl || 0) >= REFRESH_GROSS_AB ? 120000 : 30000;
+}
+
+/** "30s" oder "2m" — was in der Aufschrift steht. */
+export function refreshLabel(knotenzahl) {
+    const ms = refreshIntervallMs(knotenzahl);
+    return ms >= 60000 ? (ms / 60000) + 'm' : (ms / 1000) + 's';
+}
+
 export function mkTabTheme(dark) {
     // ok/warn/crit gehoeren dazu, weil die Tabs sie ohnehin brauchen und sie
     // sich sonst als rohe Hex-Werte in die Module schleichen — in render-diag

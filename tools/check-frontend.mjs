@@ -703,6 +703,31 @@ if (leise) {
     pruefe('namenlose Eintraege bleiben sichtbar', leise.ohneName, 2);
 }
 
+// Takt und Aufschrift muessen aus derselben Rechnung kommen. Der
+// Einklapp-Knopf hat vorgefuehrt, was sonst passiert: er stand auf "off",
+// waehrend 921 Knoten eingeklappt waren, weil zwei Stellen denselben Zustand
+// getrennt fuehrten. Hier waere es eine Leiste, die "Auto: 30s" behauptet,
+// waehrend der Timer auf zwei Minuten laeuft.
+console.log('\n  Auto-Refresh: der Takt richtet sich nach der Groesse\n');
+const takt = szenario('refresh', { lang: 'en_US' }, `
+    const U = await import(${JSON.stringify(MODULE('utils.js'))});
+    console.log(JSON.stringify({
+        klein:    [U.refreshIntervallMs(150),  U.refreshLabel(150)],
+        knapp:    [U.refreshIntervallMs(399),  U.refreshLabel(399)],
+        schwelle: [U.refreshIntervallMs(400),  U.refreshLabel(400)],
+        gross:    [U.refreshIntervallMs(1000), U.refreshLabel(1000)],
+        nichts:   [U.refreshIntervallMs(0),    U.refreshLabel(undefined)],
+    }));
+`);
+if (takt) {
+    pruefe('kleine Karte bleibt bei 30s',      takt.klein,    [30000, '30s']);
+    pruefe('knapp darunter auch',              takt.knapp,    [30000, '30s']);
+    // Die Schwelle ist dieselbe, ab der der Perf-Modus greift (400).
+    pruefe('ab der Schwelle zwei Minuten',     takt.schwelle, [120000, '2m']);
+    pruefe('und darueber ebenso',              takt.gross,    [120000, '2m']);
+    pruefe('ohne Knotenzahl der kleine Takt',  takt.nichts,   [30000, '30s']);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);
