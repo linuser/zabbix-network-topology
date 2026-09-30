@@ -201,6 +201,33 @@ class NetworkTopologyData extends NetworkTopologyController {
     private ?int $mem_vor_kanten = null;
 
     /**
+     * Zeit je Abschnitt in Millisekunden, in der Reihenfolge des Durchlaufs.
+     *
+     * Der Anlass: bei 1000 Geraeten brauchte diese Action 4,4 Sekunden, und
+     * der Diag-Tab konnte nur sagen DASS, nicht WO. Ohne diese Aufteilung
+     * optimiert man die Stelle, die man sich vorstellt, statt der, die
+     * kostet — beim Hop-Limit war die Vermutung "Hosts" schon einmal falsch
+     * und die Antwort "Items".
+     *
+     * Wiederholte Marken addieren sich. Das ist fuer 'items' noetig, die je
+     * Stueck einmal anfaellt; eine Zuweisung wuerde nur das letzte Stueck
+     * zeigen.
+     */
+    private array $phasen = [];
+
+    /** Zeitpunkt der letzten Marke. */
+    private float $phase_t = 0.0;
+
+    private function markiere(string $name): void {
+        $jetzt = microtime(true);
+        if ($this->phase_t > 0.0) {
+            $this->phasen[$name] = round(($this->phasen[$name] ?? 0)
+                + ($jetzt - $this->phase_t) * 1000, 1);
+        }
+        $this->phase_t = $jetzt;
+    }
+
+    /**
      * TTL of the discovered edge graph (host+hops mode). LLDP tables change
      * on the scale of minutes, and the graph is rebuilt per user anyway —
      * 60 s makes repeated hop queries (banner +/− clicks, 30 s refresh)
@@ -239,6 +266,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // legitime Nutzung nie, kappt aber ein Runaway-Skript / viele Tabs.
         if (!$this->throttle('data', 30, 10)) return;
         $_t0 = microtime(true);
+        $this->phase_t = $_t0;
         $groupids = $this->getInput('groupids', []);
 
         // Host+hops mode: the map is scoped to ONE host and its N-hop
@@ -441,6 +469,8 @@ class NetworkTopologyData extends NetworkTopologyController {
             }
         }
 
+        $this->markiere('hosts');
+
         // ── 3. ITEMS — STUECKWEISE, nicht alle auf einmal ─────────────────
         //
         // Alle relevanten Keys in EINEM Aufruf je Stueck: frueher waren es zwei
@@ -599,6 +629,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // MAX_EDGES-Docblock steht (5,9 KB je Kante) — bisher einmal von Hand
         // gemessen und seitdem geglaubt. Zwei Aufrufe von memory_get_*, das
         // kostet nichts und ist ohne Messlauf ohnehin nur ein Diag-Eintrag.
+        $this->markiere('items');
         $this->mem_vor_kanten = memory_get_usage();
         $lldp           = LldpEdgeBuilder::build($hosts, $lldp_raw,
                               $metrics['lldp_ports'], $metrics['port_traffic'], $metrics['port_speed'],
@@ -695,6 +726,8 @@ class NetworkTopologyData extends NetworkTopologyController {
             }
         }
 
+        $this->markiere('edges');
+
         // ── 6. BUILD NODES ────────────────────────────────────────────────
         // Knoten-Zusammenbau ausgelagert nach topology/NodeBuilder.php (§6).
         // Die Buendel von MetricExtractor und HostTagParser gehen UNENTPACKT
@@ -770,6 +803,8 @@ class NetworkTopologyData extends NetworkTopologyController {
             $health['avg'] = (int) round($sum / count($g_stats));
             $health['min'] = $min;
         }
+
+        $this->markiere('nodes');
 
         // ── Topology-Change-Detection ─────────────────────────────────────
         // Aktuellen Edge-Stand gegen die APCu-Baseline diffen und die
@@ -973,9 +1008,28 @@ class NetworkTopologyData extends NetworkTopologyController {
              'capabilities'    => $this->capabilities()]
         );
         $_mem_peak = memory_get_peak_usage(true);
+        $_elapsed  = round((microtime(true) - $t0) * 1000, 1);
+
+        // Der Rest ist alles, was NACH der letzten Marke liegt: das Diffen
+        // gegen die Baseline, json_encode und das Zusammensetzen hier. Er wird
+        // ausgerechnet und nicht gemessen, damit die Summe der Abschnitte
+        // immer die Gesamtzeit ergibt — sonst sucht man den Unterschied.
+        $_phasen = $this->phasen;
+        if ($_phasen) {
+            $_rest = $_elapsed - array_sum($_phasen);
+            // Nur wenn es der Rede wert ist. Eine Zeile "rest: 0.4 ms" sagt
+            // nichts und verdeckt die drei, die etwas sagen.
+            if ($_rest >= 1.0) {
+                $_phasen['rest'] = round($_rest, 1);
+            }
+        }
+
         NetworkTopologyDiag::record([
             'action'     => 'data',
-            'elapsed_ms' => round((microtime(true) - $t0) * 1000, 1),
+            'elapsed_ms' => $_elapsed,
+            // Leer bei Cache-Treffer: dann lief die Pipeline nicht, und eine
+            // Aufteilung waere die des vorigen Aufrufs.
+            'phases'     => $_phasen ?: null,
             'bytes'      => strlen($_payload),
             'cache_hit'  => $cache_hit,
             'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],

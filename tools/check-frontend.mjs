@@ -632,6 +632,37 @@ if (upd) {
     pruefe('hell und dunkel sind nicht dieselbe Farbe', upd.verschieden, [true, true]);
 }
 
+// Die Phasenzeile beantwortet genau eine Frage: wo fangen wir an. Sie muss
+// deshalb nach Groesse sortieren und Anteile rechnen, und beides ist Rechnen
+// — das gehoert geprueft. Der Anlass: 4,4 s bei 1000 Geraeten, und der
+// Diag-Tab konnte nur sagen DASS, nicht WO.
+console.log('\n  Diag: die Phasenzeile zeigt den teuersten Abschnitt zuerst\n');
+const phasen = szenario('phasen', { lang: 'en_US' }, `
+    const D = await import(${JSON.stringify(MODULE('render-diag.js'))});
+    console.log(JSON.stringify({
+        normal:  D.phasenZeile({ phases: { hosts: 120, items: 3100, edges: 900, nodes: 280 } }),
+        leer:    D.phasenZeile({ phases: null }),
+        fehlt:   D.phasenZeile({}),
+        kaputt:  D.phasenZeile({ phases: { a: 'viel', b: NaN } }),
+        nullen:  D.phasenZeile({ phases: { a: 0, b: 0 } }),
+    }));
+`);
+if (phasen) {
+    pruefe('teuerster Abschnitt zuerst',
+        phasen.normal.split(' · ')[0], 'items 3100ms (70%)');
+    pruefe('alle Abschnitte stehen da',  phasen.normal.split(' · ').length, 4);
+    // Vier gerundete Anteile ergeben nicht zwingend genau 100 — hier 99.
+    // Geprueft wird deshalb, dass sie zusammen ein Ganzes beschreiben, nicht
+    // dass die Rundung sich aufhebt.
+    pruefe('die Anteile beschreiben das Ganze',
+        Math.abs(100 - phasen.normal.match(/\d+(?=%)/g)
+            .reduce(function(a, x) { return a + Number(x); }, 0)) <= 2, true);
+    pruefe('Cache-Treffer zeigt nichts', [phasen.leer, phasen.fehlt], ['', '']);
+    pruefe('unbrauchbare Werte fallen raus', phasen.kaputt, '');
+    // Sonst waere der Anteil eine Division durch null.
+    pruefe('lauter Nullen ergeben keinen NaN', /NaN/.test(phasen.nullen), false);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

@@ -40,6 +40,34 @@ function _proKante(e) {
     return (e.mem_edges_kb / kanten).toFixed(1) + ' KB/edge';
 }
 
+/**
+ * Die Abschnitte eines data-Aufrufs als eine Zeile, der teuerste zuerst.
+ *
+ * Nach Groesse sortiert und nicht in der Reihenfolge des Durchlaufs: gesucht
+ * wird der Abschnitt, an dem sich Arbeit lohnt, und der soll vorne stehen. Die
+ * Reihenfolge der Pipeline kennt man ohnehin, die Verteilung nicht.
+ *
+ * Exportiert, weil der Anteil gerechnet wird und Rechnen eine Gegenprobe
+ * verdient.
+ */
+export function phasenZeile(e) {
+    const p = e && e.phases;
+    if (!p || typeof p !== 'object') return '';
+    const namen = Object.keys(p).filter(function(k) {
+        return typeof p[k] === 'number' && isFinite(p[k]);
+    });
+    if (!namen.length) return '';
+    const summe = namen.reduce(function(a, k) { return a + p[k]; }, 0);
+    namen.sort(function(a, b) { return p[b] - p[a]; });
+    return namen.map(function(k) {
+        // Der Anteil ist die eigentliche Auskunft: "3100 ms" sagt wenig,
+        // "items 70%" sagt, wo man anfaengt. Bei einer Summe von 0 gaebe es
+        // keinen Anteil, nur eine Division durch null.
+        const anteil = summe > 0 ? Math.round(100 * p[k] / summe) : 0;
+        return k + ' ' + Math.round(p[k]) + 'ms (' + anteil + '%)';
+    }).join(' · ');
+}
+
 function _ago(ts) {
     const sec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
     if (sec < 60)    return sec + 's';
@@ -104,6 +132,7 @@ function _buildLog(entries, theme) {
         const countsStr = e.counts
             ? Object.keys(e.counts).map(function(k) { return k + ':' + e.counts[k]; }).join(', ')
             : '';
+        const phasen = phasenZeile(e);
         return '<tr style="border-bottom:1px solid ' + theme.borderSoft + '">'
             + '<td style="padding:4px 12px;color:' + theme.sub + ';font-family:monospace">' + _ago(e.ts) + '</td>'
             + '<td style="padding:4px 12px;font-weight:600">' + esc(e.action || '?') + '</td>'
@@ -114,7 +143,11 @@ function _buildLog(entries, theme) {
             + '<td style="padding:4px 12px;text-align:right;font-family:monospace;color:' + memCol + '">'
                 + esc(_mem(e)) + '</td>'
             + '<td style="padding:4px 12px;color:' + theme.sub + ';font-family:monospace;font-size:11px">'
-                + esc([countsStr, _proKante(e)].filter(Boolean).join(' · ')) + '</td>'
+                + esc([countsStr, _proKante(e)].filter(Boolean).join(' · '))
+                + (phasen
+                    ? '<div style="color:' + theme.subSoft + ';margin-top:2px">' + esc(phasen) + '</div>'
+                    : '')
+                + '</td>'
             + '</tr>';
     }).join('');
     return '<table style="border-collapse:collapse;font-size:12px;width:100%">'
