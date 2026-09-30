@@ -218,6 +218,21 @@ class NetworkTopologyData extends NetworkTopologyController {
     /** Zeitpunkt der letzten Marke. */
     private float $phase_t = 0.0;
 
+    /**
+     * Wie viele Items in DIESEM Aufruf geholt wurden — und damit, wie viele
+     * letzte Werte einzeln nachgeschlagen werden mussten.
+     *
+     * Die Zahl ist der Kostentreiber. items:last traegt 85 % der Laufzeit,
+     * und diese Phase besteht aus genau einem Nachschlag je Item. Bisher war
+     * sie hochgerechnet: 3900 ms gemessen, 490 ms fuer 6000 Items im
+     * Vergleichslauf, macht "ungefaehr 47.000". Eine Hochrechnung ist keine
+     * Messung, und auf ihr sollte kein Umbau stehen.
+     *
+     * null bei Cache-Treffer: dann wurde nichts geholt, und eine 0 saehe aus
+     * wie ein Ergebnis.
+     */
+    private ?int $item_zahl = null;
+
     private function markiere(string $name): void {
         $jetzt = microtime(true);
         if ($this->phase_t > 0.0) {
@@ -492,6 +507,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // Zusicherung fest.
         $metrics         = [];
         $host_last_seen  = [];
+        $this->item_zahl = 0;
 
         foreach (array_chunk($hostids, self::HOSTS_PER_ITEM_CHUNK) as $chunk_hostids) {
             $chunk = API::Item()->get([
@@ -571,6 +587,7 @@ class NetworkTopologyData extends NetworkTopologyController {
             // Die Itemids stammen aus einer rechtegefilterten
             // API::Item()-Abfrage und werden vor der Interpolation nach int
             // gecastet; sie kommen nie ungeprueft aus einer Benutzereingabe.
+            $this->item_zahl += count($chunk);
             $this->markiere('items:get');
             $lv = $this->fetchLastValues($chunk);
             $this->markiere('items:last');
@@ -606,6 +623,7 @@ class NetworkTopologyData extends NetworkTopologyController {
         // Stueckelung. Ihre Lastvalues brauchen einen eigenen Durchgang, seit
         // sie nicht mehr mit den Metrik-Items zusammen geholt werden.
         if ($items_show) {
+            $this->item_zahl += count($items_show);
             $lv_show = $this->fetchLastValues($items_show);
             foreach ($items_show as $iid => &$item) {
                 $item['lastvalue'] = $lv_show['values'][$iid] ?? null;
@@ -1035,7 +1053,10 @@ class NetworkTopologyData extends NetworkTopologyController {
             'phases'     => $_phasen ?: null,
             'bytes'      => strlen($_payload),
             'cache_hit'  => $cache_hit,
-            'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)],
+            // items nur, wenn wirklich geholt wurde — bei einem Cache-Treffer
+            // stuende sonst eine 0 da, die nach Messung aussieht.
+            'counts'     => ['hosts' => count($nodes), 'edges' => count($edges)]
+                + ($this->item_zahl === null ? [] : ['items' => $this->item_zahl]),
             // Der Spitzenwert und wie nah er an der Grenze lag. Ein Absturz
             // wegen "Allowed memory size exhausted" ist eine WEISSE SEITE
             // ohne Meldung; wer vorher sehen will, dass es eng wird, braucht
