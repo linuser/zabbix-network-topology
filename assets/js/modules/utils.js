@@ -72,6 +72,43 @@ export function refreshLabel(knotenzahl) {
     return ms >= 60000 ? (ms / 60000) + 'm' : (ms / 1000) + 's';
 }
 
+// ── Host-Formular: zwei Zabbix-Versionen, zwei verschiedene URLs ─────────
+//
+// Es gibt KEINE Adresse, die auf beiden funktioniert. Nachgemessen an einer
+// 7.0.31 und einer 7.4.12:
+//
+//                          action=host.edit        action=popup&popup=host.edit
+//   Zabbix 7.0             vollstaendige Seite     Fatal error
+//   Zabbix 7.4             JSON-Fragment           funktioniert
+//
+// Auf 7.0 kennt CControllerPopup ueberhaupt nur 'acknowledge.edit', und sein
+// Pflichtfeld heisst 'popup_action' — ein Aufruf mit 'popup' endet dort auf
+// der roten Seite "Fatal error, please report to the Zabbix team". Auf 7.4
+// existiert host.edit zwar, antwortet aber als JSON: in einem neuen Tab
+// stuende roher Text.
+//
+// Gemeldet beim Anlegen eines Hosts aus einem Geisterknoten. Das Modul sagt
+// 7.0 LTS und 7.4 zu, und dieser Weg war auf 7.0 nie begehbar.
+//
+// Die Entscheidung faellt im Backend, wo die Version bekannt ist
+// (NT_CONFIG.host_edit_popup); hier steht nur noch, was daraus folgt.
+
+export function hostEditUrl(basis, params) {
+    const cfg = (typeof window !== 'undefined' && window.NT_CONFIG) || {};
+    // Ohne Angabe die Popup-Form: das ist der Stand, der auf den aktuellen
+    // Versionen laeuft, und ein fehlendes Feld soll die neueren nicht
+    // schlechter stellen.
+    const alsPopup = cfg.host_edit_popup !== false;
+    let url = basis + 'zabbix.php?action='
+        + (alsPopup ? 'popup&popup=host.edit' : 'host.edit');
+    Object.keys(params || {}).forEach(function(k) {
+        const v = params[k];
+        if (v === undefined || v === null || v === '') return;
+        url += '&' + k + '=' + encodeURIComponent(v);
+    });
+    return url;
+}
+
 export function mkTabTheme(dark) {
     // ok/warn/crit gehoeren dazu, weil die Tabs sie ohnehin brauchen und sie
     // sich sonst als rohe Hex-Werte in die Module schleichen — in render-diag

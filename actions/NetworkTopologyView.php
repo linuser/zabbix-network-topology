@@ -161,6 +161,14 @@ class NetworkTopologyView extends CController {
             'user'              => [
                 'type'           => $this->getUserType(),
                 'can_edit'       => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN,
+                // Welche Form das Host-Formular hat. Siehe hostEditUrl() in
+                // utils.js: auf 7.0 ist action=host.edit eine Seite und der
+                // Popup-Weg ein Fatal, ab 7.2 ist es umgekehrt. Die Version
+                // kennt nur der Server, also entscheidet er.
+                //
+                // 7.1 und 7.3 gibt es als Zabbix-Release nicht, die Grenze
+                // ist damit genau "7.0 oder 7.2 aufwaerts" und keine Schaetzung.
+                'host_edit_popup' => version_compare(ZABBIX_VERSION, '7.2', '>='),
                 'is_super_admin' => $this->getUserType() === USER_TYPE_SUPER_ADMIN
             ],
             // Manuelle Kanten direkt mitliefern statt per zweitem Request: sie

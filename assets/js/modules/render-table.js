@@ -14,7 +14,7 @@
 //
 // Sortierung: Klick auf Spalten-Header. Default: Status-DESC (kritischste oben).
 
-import { esc, fmt, aggregateValues, isDark } from './utils.js';
+import { esc, fmt, aggregateValues, isDark, hostEditUrl } from './utils.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { t } from './i18n.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
@@ -964,8 +964,7 @@ function rowHtml(n, baseUrl, theme) {
         + 'zabbix.php?action=problem.view&filter_set=1&hostids%5B%5D=' + hostId;
     const chartsUrl = window.location.origin + baseUrl
         + 'zabbix.php?action=charts.view&filter_set=1&filter_hostids%5B%5D=' + hostId;
-    const editUrl   = window.location.origin + baseUrl
-        + 'zabbix.php?action=popup&popup=host.edit&hostid=' + hostId;
+    const editUrl   = hostEditUrl(window.location.origin + baseUrl, { hostid: n.id });
 
     // Traffic: aus net.if-Items vom Backend, sind in n.traffic.{in,out} (bits/s).
     // fmtBps formatiert kompakt (Kbps/Mbps/Gbps).

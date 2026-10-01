@@ -29,7 +29,7 @@
 // querySelectorAll('button[data-act]') wieder eingesammelt — ein Umweg, den
 // es nur gab, weil die Knöpfe zwischendurch Text waren.
 
-import { el, fmt, fmtItemValue } from './utils.js';
+import { el, fmt, fmtItemValue, hostEditUrl } from './utils.js';
 import { SEV_COL, SEV_LBL } from './severity.js';
 import { t } from './i18n.js';
 
@@ -444,7 +444,7 @@ export function showDetail(panel, d, cy) {
     ];
     if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
         actions.push({ lbl: '⚙️', title: t('detail.act.edit'),
-          url: zbxOrigin + 'zabbix.php?action=popup&popup=host.edit&hostid=' + hostId });
+          url: hostEditUrl(zbxOrigin, { hostid: d.id }) });
     }
     const actionBar = el('div', 'display:flex;gap:4px;margin-bottom:4px');
     actions.forEach(function(a) {

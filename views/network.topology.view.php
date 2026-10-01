@@ -278,6 +278,7 @@ window.NT_CONFIG = <?= json_encode([
     'hops'               => (int) ($data['hops'] ?? 1),
     'data_url'   => $data_url,
     'can_edit'       => (bool) $data['user']['can_edit'],
+    'host_edit_popup' => (bool) ($data['user']['host_edit_popup'] ?? true),
     'is_super_admin' => (bool) ($data['user']['is_super_admin'] ?? false),
     // CSRF-Token fuer die schreibende Maintenance-Action (action- + session-
     // gebunden). Das JS sendet es mit; NetworkTopologyMaintenance prueft es via

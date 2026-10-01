@@ -23,7 +23,7 @@ import { isSimulated, isSimActive, simulatedCount,
 import { isFocusActive, getFocusId, getFocusHops,
          setFocus, clearFocus } from './focus-mode.js';
 import { t } from './i18n.js';
-import { isDark } from './utils.js';
+import { isDark, hostEditUrl } from './utils.js';
 import { fetchJson } from './http.js';
 
 // Attached to <body> like the tooltip → color tokens via .nt-float; the dark
@@ -225,11 +225,11 @@ export function showCtx(cx, cy2, d) {
                 const note = seenBy
                     ? 'Discovered via ' + via + ' by ' + seenBy + ' (Network Topology)'
                     : 'Discovered via ' + via + ' (Network Topology)';
-                let url = window.location.origin + base
-                    + 'zabbix.php?action=popup&popup=host.edit'
-                    + '&host=' + encodeURIComponent(d.label || d.host || '')
-                    + '&description=' + encodeURIComponent(note.slice(0, 250));
-                if (grp) url += '&groupids[]=' + encodeURIComponent(grp);
+                const url = hostEditUrl(window.location.origin + base, {
+                    host: d.label || d.host || '',
+                    description: note.slice(0, 250),
+                    'groupids[]': grp || '',
+                });
                 window.open(url, '_blank', 'noopener,noreferrer');
             }));
         }
@@ -334,8 +334,8 @@ export function showCtx(cx, cy2, d) {
         [' Graphs',               zbxUrl('charts.view',  hostId)],
     ];
     if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
-        items.push([t('ctx.edit'), window.location.origin + base
-            + 'zabbix.php?action=popup&popup=host.edit&hostid=' + encodeURIComponent(hostId)]);
+        items.push([t('ctx.edit'),
+            hostEditUrl(window.location.origin + base, { hostid: hostId })]);
         items.push([t('ctx.hosts_list'), window.location.origin + base
             + 'zabbix.php?action=host.list'
             + '&filter_name=' + encodeURIComponent(d.host || d.label)

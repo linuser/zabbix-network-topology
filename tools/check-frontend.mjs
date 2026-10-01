@@ -915,6 +915,50 @@ if (ebenen) {
     pruefe('ebenenLabel nimmt den letzten Abschnitt', ebenen.label, 'Access');
 }
 
+// Das Host-Formular hat je nach Zabbix-Version eine andere Adresse, und es
+// gibt keine, die auf beiden traegt. Gemeldet beim Anlegen eines Hosts aus
+// einem Geisterknoten: auf 7.0 kam die rote Seite "Fatal error, please report
+// to the Zabbix team", weil CControllerPopup dort nur acknowledge.edit kennt
+// und sein Pflichtfeld popup_action heisst.
+console.log('\n  Host-Formular: zwei Versionen, zwei Adressen\n');
+const hostform = szenario('hostedit', { lang: 'en_US' }, `
+    const U = await import(${JSON.stringify(MODULE('utils.js'))});
+    const mit = (flag) => {
+        window.NT_CONFIG = { host_edit_popup: flag };
+        return {
+            leer:  U.hostEditUrl('/', {}),
+            id:    U.hostEditUrl('/', { hostid: '10084' }),
+            geist: U.hostEditUrl('/', { host: 'ap 1', description: 'via LLDP', 'groupids[]': '7' }),
+        };
+    };
+    const neu = mit(true), alt = mit(false);
+    window.NT_CONFIG = {};
+    const ohne = U.hostEditUrl('/', { hostid: '1' });
+    // Leere Werte duerfen nicht als "&groupids[]=" im Ergebnis landen.
+    window.NT_CONFIG = { host_edit_popup: true };
+    const luecken = U.hostEditUrl('/', { hostid: '1', 'groupids[]': '', weg: null, auch: undefined });
+    console.log(JSON.stringify({ neu, alt, ohne, luecken }));
+`);
+if (hostform) {
+    pruefe('7.2 aufwaerts: der Popup-Weg',
+        hostform.neu.id, '/zabbix.php?action=popup&popup=host.edit&hostid=10084');
+    // Auf 7.0 ist genau das ein Fatal, dort ist host.edit eine ganze Seite.
+    pruefe('7.0: die Aktion direkt',
+        hostform.alt.id, '/zabbix.php?action=host.edit&hostid=10084');
+    pruefe('ohne Angabe der Popup-Weg (neuere Versionen nicht bestrafen)',
+        hostform.ohne, '/zabbix.php?action=popup&popup=host.edit&hostid=1');
+    // Der Fall aus der Meldung: Host aus einem Geist anlegen.
+    pruefe('Geist-Anlage traegt Name, Notiz und Gruppe',
+        hostform.alt.geist,
+        // Der Schluesselname bleibt unkodiert, so wie der Code es vorher
+        // auch schrieb — Zabbix liest 'groupids[]' und Browser schicken es so.
+        '/zabbix.php?action=host.edit&host=ap%201&description=via%20LLDP&groupids[]=7');
+    pruefe('ohne Parameter nur die Aktion',
+        hostform.neu.leer, '/zabbix.php?action=popup&popup=host.edit');
+    pruefe('leere und fehlende Werte fallen weg',
+        hostform.luecken, '/zabbix.php?action=popup&popup=host.edit&hostid=1');
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);
