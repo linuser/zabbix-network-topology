@@ -86,11 +86,11 @@ Drei Schichten, und die Trennung ist der Punkt:
   Konfiguration als `NT_CONFIG` ins DOM — unter anderem die manuellen
   Verbindungen. Widgets haben keinen solchen View-Controller; was nur dort
   liegt, sehen sie nie.
-- **`topology/` (14 Klassen)** — reine Logik ohne Zabbix-Abhängigkeiten,
+- **`topology/` (15 Klassen)** — reine Logik ohne Zabbix-Abhängigkeiten,
   deshalb testbar. Hier lebt alles Interessante: `LldpEdgeBuilder` (Kanten aus
   SNMP-Nachbartabellen), `NodeBuilder`, `ManualLinks`, `SharedLayerFilter`.
 - **`assets/js/` → ein Bundle.** `network-topology.js` ist nur Orchestrator;
-  der Renderer liegt in `modules/render-*.js` (10 davon, 54 Module insgesamt). Cytoscape.js für den
+  der Renderer liegt in `modules/render-*.js` (10 davon, 55 Module insgesamt). Cytoscape.js für den
   Graphen, Leaflet für Geo.
 
 ### Zwei-Ebenen-Speicherung

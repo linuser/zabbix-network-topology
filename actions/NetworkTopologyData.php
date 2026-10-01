@@ -1358,6 +1358,11 @@ class NetworkTopologyData extends NetworkTopologyController {
             foreach (array_chunk($offen, self::LASTVALUE_RUECKFALL_CHUNK) as $chunk) {
                 $parts = [];
                 foreach ($chunk as $iid) {
+                    // Der Cast steht hier, obwohl $offen schon nur Ganzzahlen
+                    // traegt. An einer Interpolationsstelle soll die Zusicherung
+                    // LOKAL gelten und nicht davon abhaengen, was zwanzig Zeilen
+                    // weiter oben passiert — das ueberlebt den naechsten Umbau.
+                    $iid = (int) $iid;
                     $parts[] = '(SELECT ' . $iid . ' AS itemid, value, clock FROM ' . $table
                              . ' WHERE itemid=' . $iid
                              . ' ORDER BY clock DESC LIMIT 1)';
