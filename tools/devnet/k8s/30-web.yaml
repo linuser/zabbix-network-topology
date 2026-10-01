@@ -17,6 +17,22 @@ spec:
   template:
     metadata: { labels: { app: web } }
     spec:
+      # AUF DEN CONTROL-KNOTEN FESTNAGELN.
+      #
+      # Zwei Dinge gibt es nur dort: das selbstgebaute Image (es liegt in
+      # containerd, eine Registry gibt es nicht) und /opt/nt-last/modul, wo
+      # das Modul per hostPath eingebunden wird.
+      #
+      # Das fiel erst auf, als die Worker nach einer Pause wieder hochkamen:
+      # der Pod wurde dorthin eingeplant und blieb in ImagePullBackOff
+      # haengen. Das war noch der freundliche Ausgang — mit dem Image auf dem
+      # Worker haette hostPath wegen DirectoryOrCreate ein LEERES Verzeichnis
+      # angelegt, und das Modul waere kommentarlos verschwunden.
+      #
+      # Nach der Rolle ausgewaehlt, nicht nach dem Knotennamen: ein
+      # Infrastrukturname gehoert nicht in eine Datei, die auf GitHub liegt.
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
       containers:
         - name: web
           image: nt-web-apcu:7.0

@@ -14,6 +14,7 @@
 //     Zirkulardependenz (render-tech.js → toolbar.js → render-tech.js).
 //     Lösung: setRenderCallback() injiziert die render-Funktion vom Hauptmodul.
 
+import { loadGroupOpen, saveGroupOpen } from './storage.js';
 import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
     isGroupViewEffective,
          loadGhostMode, saveGhostMode,
@@ -428,6 +429,31 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');
         }
     };
+
+    // ── Zurueck nach oben ────────────────────────────────────────────────
+    //
+    // Ohne diesen Knopf gaebe es keinen Weg aus der Tiefe. Ein Klick auf eine
+    // Gruppe klappt sie EINE Ebene auf — und danach ist der Knoten, dessen
+    // Pfad offen ist, gar nicht mehr gezeichnet. Wer "Berlin" geoeffnet hat,
+    // sieht "Berlin/Campus" und klappt damit Campus auf, nicht Berlin zu.
+    // Der Zuklapp-Zweig in toggleGroupOpen war von der Karte aus schlicht
+    // unerreichbar.
+    //
+    // Er erscheint nur, wenn wirklich etwas offen ist: ein Knopf, der nie
+    // etwas tut, ist Rauschen.
+    const _offeneEbenen = Object.keys(loadGroupOpen());
+    if (_groupViewOn && _offeneEbenen.length) {
+        const bZu = mkbtn('nt-btn-groupfold',
+            t('toolbar.group.fold', { n: _offeneEbenen.length }), null);
+        bZu.title = t('toolbar.group.fold.tip');
+        bZu.onclick = function() {
+            saveGroupOpen({});
+            const d = window._ntLastData || {};
+            if (d.nodes && d.nodes.length) {
+                _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');
+            }
+        };
+    }
 
     // §9 Ghost-Knoten: LLDP/CDP-Nachbarn ohne eigenen Zabbix-Host einblenden.
     // Braucht einen Re-Render (es kommen Knoten + Kanten dazu bzw. fallen weg) —
