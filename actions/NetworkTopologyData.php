@@ -109,11 +109,26 @@ class NetworkTopologyData extends NetworkTopologyController {
      * nicht ueber Tabs, Nutzer und die Kartenansicht hinweg — genau die Faelle
      * deckt dieser Cache ab.
      *
-     * 15 s liegen deutlich unter jedem Refresh-Intervall (Dashboard-Default
-     * 1 min, Karte 30 s). Die Antwort enthaelt Live-Werte wie CPU und Traffic;
-     * laenger zu cachen wuerde bemerkbar veralten, ohne viel mehr zu sparen.
+     * Hier standen 15 s, begruendet damit, dass sie "deutlich unter jedem
+     * Refresh-Intervall" liegen — Dashboard 1 min, Karte 30 s. Genau diese
+     * Praemisse gilt nicht mehr: oberhalb von 400 Knoten laeuft der
+     * Karten-Refresh seit 5.4.2 auf zwei Minuten (refreshIntervallMs in
+     * utils.js). Ein Fenster von 15 Sekunden kann dort NIE greifen, und auf
+     * dem Lasttest ist es auch nie: 0 % Trefferquote bei einem Aufruf, der
+     * 4,7 Sekunden kostet.
+     *
+     * 60 s liegen auf dem Dashboard-Default und darunter bei der kleinen
+     * Karte. Was der Cache ausliefert, sind letzte Werte, die selbst im
+     * Poll-Intervall entstehen — meist eine Minute oder mehr. Eine Minute
+     * Alter heisst also hoechstens "ein Durchgang hinterher", nicht
+     * "veraltet".
+     *
+     * Dem einzelnen Betrachter bringt das nichts, der liegt mit zwei Minuten
+     * ohnehin ausserhalb. Es greift bei MEHREREN: zweiter Tab, zweiter
+     * Nutzer, Widgets neben der Karte. Die teure Arbeit faellt dann einmal
+     * an statt dreimal.
      */
-    private const CACHE_TTL = 15;
+    private const CACHE_TTL = 60;
 
     /**
      * Host+hops mode: upper bound for the hop distance. Mirrors MAX_HOPS in
