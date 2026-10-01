@@ -20,6 +20,7 @@ import { primaryGroup, SEV_COL } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import {
     NT_GROUP_VIEW_KEY, NT_LLDP_KEY, NT_PERF_KEY, setGroupViewEffective,
+    loadGroupOpen, toggleGroupOpen,
     loadPositions, savePositions, loadPinned, loadNotes, loadLinks, addLink,
     loadLayout, loadTapholdMs
 } from './storage.js';
@@ -206,7 +207,7 @@ export function render(wrap, nodes, edges, dataUrl) {
     }
 
     if (_groupViewActive && groupNames.length > 0) {
-        const agg = aggregateByGroup(nodes, edges);
+        const agg = aggregateByGroup(nodes, edges, loadGroupOpen());
         nodes = agg.nodes;
         edges = agg.edges;
     }
@@ -620,6 +621,26 @@ export function render(wrap, nodes, edges, dataUrl) {
     // Blaetter einklappen. NACH applyBundleView, weil das Buendeln
     // entscheidet, wie viele Kanten ein Knoten sichtbar hat — und damit, ob
     // er als Blatt zaehlt.
+    // Klick auf eine zusammengefasste Gruppe loest sie eine Ebene weiter auf
+    // — und auf der untersten Ebene stehen die Hosts selbst da. Dieselbe
+    // Bewegung wie beim Einklappen der Blaetter, nur eine Schicht hoeher.
+    //
+    // Nicht an bindCollapse angehaengt: dort geht es um Knoten, die im Graphen
+    // BLEIBEN und nur versteckt sind. Hier wird neu gezeichnet, weil die
+    // Knoten selbst andere werden.
+    if (!cy.scratch('_ntGruppeGebunden')) {
+        cy.scratch('_ntGruppeGebunden', true);
+        cy.on('tap', 'node[_isAggregate]', function(ev) {
+            const pfad = ev.target.data('_gruppenPfad');
+            if (!pfad) return;
+            toggleGroupOpen(pfad);
+            const _d = window._ntLastData || {};
+            if (_d.nodes && _d.nodes.length) {
+                render(wrap, _d.nodes.slice(), (_d.edges || []).slice(), _d.url || '');
+            }
+        });
+    }
+
     bindCollapse(cy);
     const _leafPref = collapsePref();
     const _leafAuto = _leafPref === null && leafCandidates(cy).length >= COLLAPSE_SCHWELLE;

@@ -334,7 +334,7 @@ export default {
     'stats.agg_summary': '{events} Events &middot; {hosts} Hosts &middot; {triggers} Trigger &middot; {from} – {to}',
     'stats.truncated': 'Achtung: Backend-Limit erreicht',
     'warn.truncated': '⚠ Nur die ersten {processed} von {requested} Hostgruppen ausgewertet — Auswahl eingrenzen für ein vollständiges Bild.',
-    'group.auto': 'ℹ {n} Hosts — automatisch zur Gruppenansicht gewechselt, weil die Einzelkarte hier unlesbar wäre. Rechtsklick → Gruppenansicht verlassen zeigt wieder alle Hosts.',
+    'group.auto': 'ℹ {n} Hosts — automatisch zur Gruppenansicht gewechselt, weil die Einzelkarte hier unlesbar wäre. Ein Klick auf eine Gruppe öffnet sie eine Ebene, ein weiterer klappt sie zu. Rechtsklick → Gruppenansicht verlassen zeigt wieder alle Hosts.',
     'warn.edges_truncated': '⚠ {n} Verbindungen nicht gezeichnet — die Karte hat die Obergrenze erreicht und ist unvollständig. Auswahl eingrenzen.',
     'warn.hop_truncated': '⚠ {hops} Hops erreichen {total} Hosts — gezeigt werden nur die nächsten {shown}. Vollständig ist die Karte bis {complete} Hops; für ein vollständiges Bild weniger Hops wählen.',
     'warn.hop_truncated_ring': '⚠ {hops} Hops erreichen {total} Hosts — gezeigt werden nur die nächsten {shown}, und schon der erste Hop ist unvollständig.',

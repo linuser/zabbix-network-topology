@@ -57,6 +57,45 @@ export const NT_LEGEND_COLLAPSED_KEY = 'nt_' + PFX + 'legend_collapsed';
 export const NT_PERF_KEY = 'nt_' + PFX + 'perf';
 export const NT_TAB_KEY        = 'nt_' + PFX + 'active_tab';
 export const NT_GROUP_VIEW_KEY = 'nt_' + PFX + 'group_view';
+export const NT_GROUP_OPEN_KEY = 'nt_' + PFX + 'group_open';
+
+// ── Welche Gruppenebenen aufgeklappt sind ─────────────────────────────────
+//
+// Pro Browser, nicht pro Server: wie tief jemand gerade hineingesehen hat,
+// ist eine Blickrichtung und keine Eigenschaft der Karte. Zwei Leute duerfen
+// gleichzeitig verschiedene Standorte offen haben.
+//
+// Als Objekt { "Berlin": true, "Berlin/Campus": true } und nicht als Liste,
+// weil die Abfrage in der heissen Schleife steckt (einmal je Host) und ein
+// indexOf dort unnoetig waere.
+
+export function loadGroupOpen() {
+    try {
+        const roh = JSON.parse(localStorage.getItem(NT_GROUP_OPEN_KEY) || '{}');
+        return (roh && typeof roh === 'object' && !Array.isArray(roh)) ? roh : {};
+    } catch (e) { return {}; }
+}
+
+export function saveGroupOpen(offen) {
+    try { localStorage.setItem(NT_GROUP_OPEN_KEY, JSON.stringify(offen || {})); } catch (e) {}
+}
+
+/** Eine Ebene auf- oder zuklappen. Liefert den neuen Stand. */
+export function toggleGroupOpen(pfad) {
+    const offen = loadGroupOpen();
+    if (offen[pfad]) {
+        // Zuklappen heisst AUCH: alles darunter zuklappen. Sonst bleibt eine
+        // Ebene offen, die niemand mehr sieht, und beim naechsten Oeffnen
+        // springt die Karte zwei Stufen weit auf.
+        Object.keys(offen).forEach(function(k) {
+            if (k === pfad || k.indexOf(pfad + '/') === 0) delete offen[k];
+        });
+    } else {
+        offen[pfad] = true;
+    }
+    saveGroupOpen(offen);
+    return offen;
+}
 
 // Der TATSAECHLICHE Zustand der Gruppenansicht, nicht die gespeicherte Wahl.
 //

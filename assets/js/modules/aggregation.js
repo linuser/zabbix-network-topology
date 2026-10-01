@@ -6,20 +6,81 @@
 //
 // Eingabe-Nodes brauchen das _primaryGroup-Feld (wird in render() via
 // primaryGroup() aus severity.js gesetzt).
+//
+// VERSCHACHTELTE GRUPPEN
+// ----------------------
+// Zabbix' Gruppenhierarchie ist eine Namenskonvention: "Berlin/Campus/Access"
+// ist eine Gruppe, deren Name drei Ebenen beschreibt. Bis 5.4.2 wurde dieser
+// Name als Ganzes genommen, und die Karte zeigte je einen Knoten pro
+// BLATTGRUPPE — bei einem Netz ueber mehrere Standorte also fast so viele
+// Knoten wie vorher, nur anders beschriftet.
+//
+// Jetzt entscheidet `ausgeklappt`, wie tief aufgeloest wird. Wer nichts
+// aufgeklappt hat, sieht die oberste Ebene; ein Klick auf einen Standort
+// loest ihn eine Ebene weiter auf, und ganz unten stehen wieder die Hosts
+// selbst. Das ist die Bewegung, die man von einem Ordnerbaum kennt.
+//
+// Angestossen hat es eine Rueckmeldung zur Lasttest-Karte: tausend Hosts
+// anzuzeigen sei sinnlos, sinnvoller waere eine Gruppenebene mit Aufklappen
+// auf Zuruf. Das Zusammenfassen gab es da schon, die Ebenen nicht.
 
 import { t } from './i18n.js';
 
-export function aggregateByGroup(nodes, edges) {
-    // Hosts nach Gruppe bündeln
+/**
+ * Auf welchem Namen wird dieser Host zusammengefasst — oder gar nicht?
+ *
+ * Genommen wird die oberste Ebene, und je Ebene, die aufgeklappt ist, eine
+ * mehr. Ist auch die letzte aufgeklappt, bleibt nichts zu buendeln: dann
+ * liefert die Funktion null, und der Host erscheint als er selbst.
+ *
+ * Das gilt auch fuer flache Namen ohne '/'. Eine Gruppe "DMZ" aufzuklappen
+ * heisst dann schlicht: zeig ihre Hosts. Verschachtelung und Aufklappen sind
+ * damit derselbe Mechanismus und nicht zwei.
+ *
+ * @param {string} name        voller Gruppenname, z.B. "Berlin/Campus/Access"
+ * @param {Object} ausgeklappt Praefixe, die offen sind: { "Berlin": true }
+ * @return {?string} Name der Ebene, auf der gebuendelt wird, oder null
+ */
+export function gruppenEbene(name, ausgeklappt) {
+    const offen = ausgeklappt || {};
+    const teile = String(name || '').split('/');
+    let tiefe = 1;
+    while (tiefe < teile.length && offen[teile.slice(0, tiefe).join('/')]) {
+        tiefe++;
+    }
+    const schluessel = teile.slice(0, tiefe).join('/');
+    if (tiefe === teile.length && offen[schluessel]) {
+        return null;
+    }
+    return schluessel;
+}
+
+/** Nur der letzte Abschnitt — "Berlin/Campus/Access" wird zu "Access". */
+export function ebenenLabel(schluessel) {
+    const teile = String(schluessel || '').split('/');
+    return teile[teile.length - 1] || schluessel;
+}
+
+export function aggregateByGroup(nodes, edges, ausgeklappt) {
+    const offen = ausgeklappt || {};
+    // Hosts nach Ebene bündeln. Wer auf keiner Ebene mehr gebuendelt wird,
+    // geht unveraendert durch — so stehen aufgeklappte Gruppen neben
+    // zusammengefassten, und man sieht, wo man gerade hineingesehen hat.
     const groups = {};
+    const einzeln = [];
     nodes.forEach(function(n) {
         const g = n._primaryGroup || t('agg.no_group');
-        if (!groups[g]) groups[g] = [];
-        groups[g].push(n);
+        const schluessel = gruppenEbene(g, offen);
+        if (schluessel === null) {
+            einzeln.push(n);
+            return;
+        }
+        if (!groups[schluessel]) groups[schluessel] = [];
+        groups[schluessel].push(n);
     });
 
-    const aggNodes = [];
-    const nodeToGroup = {};   // hostId -> groupName (für Edge-Aggregation)
+    const aggNodes = einzeln.slice();
+    const nodeToGroup = {};   // hostId -> Ebenenname (für Edge-Aggregation)
 
     Object.keys(groups).forEach(function(gname) {
         const children = groups[gname];
@@ -59,7 +120,10 @@ export function aggregateByGroup(nodes, edges) {
 
         aggNodes.push({
             id:      'grp_' + gname,
-            label:   gname + ' (' + children.length + ')',
+            // Nur der letzte Abschnitt, sonst steht bei tiefen Hierarchien
+            // dreimal derselbe Standort an jedem Knoten. Der volle Pfad
+            // bleibt in host und wird im Detail-Panel und Tooltip gezeigt.
+            label:   ebenenLabel(gname) + ' (' + children.length + ')',
             host:    gname,
             ip:      null,
             type:    'group',
@@ -75,6 +139,8 @@ export function aggregateByGroup(nodes, edges) {
             groups: [gname],
             _primaryGroup: gname,
             _isAggregate: true,
+            // Woran die Oberflaeche erkennt, dass hier noch etwas drin ist.
+            _gruppenPfad: gname,
             _childCount: children.length,
             _topProblems: topProblems.slice(0, 3)
         });
@@ -82,21 +148,24 @@ export function aggregateByGroup(nodes, edges) {
 
     // Edges aggregieren: Edges innerhalb derselben Gruppe entfallen,
     // Cross-Group-Edges werden zu einer einzelnen Edge mit Summen-Counter.
+    // Wer vertritt einen Knoten: sein Aggregat — oder er selbst, wenn seine
+    // Gruppe aufgeklappt ist. Ohne diese Unterscheidung verloeren aufgeklappte
+    // Hosts jede Kante zur restlichen Karte und haengen im Nichts.
+    const vertreter = {};
+    nodes.forEach(function(n) {
+        const id = String(n.id);
+        vertreter[id] = nodeToGroup[id] ? 'grp_' + nodeToGroup[id] : id;
+    });
+
     const aggEdgeMap = {};
     edges.forEach(function(e) {
-        const src = String(e.source || e.from || '');
-        const tgt = String(e.target || e.to || '');
-        const srcGroup = nodeToGroup[src];
-        const tgtGroup = nodeToGroup[tgt];
-        if (!srcGroup || !tgtGroup || srcGroup === tgtGroup) return;
+        const src = vertreter[String(e.source || e.from || '')];
+        const tgt = vertreter[String(e.target || e.to || '')];
+        if (!src || !tgt || src === tgt) return;
 
-        const key = [srcGroup, tgtGroup].sort().join('|');
+        const key = [src, tgt].sort().join('|');
         if (!aggEdgeMap[key]) {
-            aggEdgeMap[key] = {
-                source: 'grp_' + srcGroup,
-                target: 'grp_' + tgtGroup,
-                count: 0
-            };
+            aggEdgeMap[key] = { source: src, target: tgt, count: 0 };
         }
         aggEdgeMap[key].count++;
     });

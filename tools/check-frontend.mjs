@@ -838,6 +838,83 @@ if (takt) {
     pruefe('ohne Knotenzahl der kleine Takt',  takt.nichts,   [30000, '30s']);
 }
 
+// Verschachtelte Gruppen: Zabbix' Hierarchie ist eine Namenskonvention
+// ("Berlin/Campus/Access"), und bis 5.4.2 nahm die Gruppenansicht den Namen
+// als Ganzes — bei einem Netz ueber mehrere Standorte also fast so viele
+// Knoten wie ohne Zusammenfassen. Geprueft wird hier die BEWEGUNG: oberste
+// Ebene, eine Ebene tiefer, ganz unten die Hosts selbst.
+console.log('\n  Gruppenebenen: aufklappen wie ein Ordnerbaum\n');
+const ebenen = szenario('gruppen', { lang: 'en_US' }, `
+    const A = await import(${JSON.stringify(MODULE('aggregation.js'))});
+
+    const mk = (id, gruppe) => ({ id, label: id, _primaryGroup: gruppe,
+        severity: 0, problems: 0, traffic: { in: 0, out: 0 } });
+    const nodes = [
+        mk('a1', 'Berlin/Campus/Access'), mk('a2', 'Berlin/Campus/Access'),
+        mk('d1', 'Berlin/Campus/Dist'),
+        mk('r1', 'Berlin/RZ'),
+        mk('m1', 'Muenchen/Campus/Access'),
+    ];
+    // Ein Kabel innerhalb einer Blattgruppe, eines zwischen Standorten.
+    const edges = [
+        { source: 'a1', target: 'a2' },
+        { source: 'd1', target: 'm1' },
+    ];
+    const lauf = (offen) => {
+        const r = A.aggregateByGroup(nodes, edges, offen);
+        return {
+            ids:    r.nodes.map((n) => n.id).sort(),
+            labels: r.nodes.map((n) => n.label).sort(),
+            kanten: r.edges.map((e) => [e.source, e.target].sort().join('|')).sort(),
+        };
+    };
+    console.log(JSON.stringify({
+        zu:     lauf({}),
+        eins:   lauf({ 'Berlin': true }),
+        zwei:   lauf({ 'Berlin': true, 'Berlin/Campus': true }),
+        hosts:  lauf({ 'Berlin': true, 'Berlin/Campus': true, 'Berlin/Campus/Access': true }),
+        ebene:  [A.gruppenEbene('A/B/C', {}), A.gruppenEbene('A/B/C', { A: true }),
+                 A.gruppenEbene('A/B/C', { A: true, 'A/B': true }),
+                 A.gruppenEbene('A/B/C', { A: true, 'A/B': true, 'A/B/C': true })],
+        flach:  [A.gruppenEbene('DMZ', {}), A.gruppenEbene('DMZ', { DMZ: true })],
+        label:  A.ebenenLabel('Berlin/Campus/Access'),
+    }));
+`);
+if (ebenen) {
+    // Nichts offen: ein Knoten je Standort.
+    pruefe('zu: nur die oberste Ebene',
+        ebenen.zu.ids, ['grp_Berlin', 'grp_Muenchen']);
+    pruefe('zu: das Label nennt die Anzahl',
+        ebenen.zu.labels, ['Berlin (4)', 'Muenchen (1)']);
+    // Berlin offen: Berlin zerfaellt, Muenchen bleibt zusammen.
+    pruefe('eine Ebene: Berlin zerfaellt, Muenchen nicht',
+        ebenen.eins.ids, ['grp_Berlin/Campus', 'grp_Berlin/RZ', 'grp_Muenchen']);
+    pruefe('das Label zeigt nur den letzten Abschnitt',
+        ebenen.eins.labels, ['Campus (3)', 'Muenchen (1)', 'RZ (1)']);
+    pruefe('zwei Ebenen: bis zur Blattgruppe',
+        ebenen.zwei.ids,
+        ['grp_Berlin/Campus/Access', 'grp_Berlin/Campus/Dist', 'grp_Berlin/RZ', 'grp_Muenchen']);
+    // Auch die Blattgruppe laesst sich oeffnen — dann stehen die Hosts da,
+    // und zwar NEBEN den weiterhin zusammengefassten. Genau das ist
+    // "aufklappen auf Zuruf".
+    pruefe('Blattgruppe offen: die Hosts selbst, neben den Aggregaten',
+        ebenen.hosts.ids,
+        ['a1', 'a2', 'grp_Berlin/Campus/Dist', 'grp_Berlin/RZ', 'grp_Muenchen']);
+    // Die Kante a1-a2 lag INNERHALB der Blattgruppe und war zusammengefasst
+    // unsichtbar. Aufgeklappt muss sie wieder da sein.
+    pruefe('aufgeklappt kommt das interne Kabel zurueck',
+        ebenen.hosts.kanten.indexOf('a1|a2') >= 0, true);
+    // Und ein aufgeklappter Host haengt weiter am Rest der Karte.
+    pruefe('zu: nur die Kante zwischen den Standorten',
+        ebenen.zu.kanten, ['grp_Berlin|grp_Muenchen']);
+    pruefe('gruppenEbene geht Stufe fuer Stufe',
+        ebenen.ebene, ['A', 'A/B', 'A/B/C', null]);
+    // Eine flache Gruppe aufzuklappen ist derselbe Mechanismus, keine
+    // Sonderbehandlung.
+    pruefe('flache Gruppe: zu, dann offen',  ebenen.flach, ['DMZ', null]);
+    pruefe('ebenenLabel nimmt den letzten Abschnitt', ebenen.label, 'Access');
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

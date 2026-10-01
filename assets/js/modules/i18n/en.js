@@ -329,7 +329,7 @@ export default {
     'stats.agg_summary': '{events} events &middot; {hosts} hosts &middot; {triggers} triggers &middot; {from} – {to}',
     'stats.truncated': 'Note: backend limit reached',
     'warn.truncated': '⚠ Only the first {processed} of {requested} host groups were evaluated — narrow the selection for a complete picture.',
-    'group.auto': 'ℹ {n} hosts — switched to the group view automatically, because the per-host map would be unreadable here. Right-click → leave group view to show every host again.',
+    'group.auto': 'ℹ {n} hosts — switched to the group view automatically, because the per-host map would be unreadable here. Click a group to open it one level, click again to fold it back. Right-click → leave group view to show every host again.',
     'warn.edges_truncated': '⚠ {n} links not drawn — the map hit its upper limit and is incomplete. Narrow the selection.',
     'warn.hop_truncated': '⚠ {hops} hops reach {total} hosts — only the nearest {shown} are shown. The map is complete up to {complete} hops; choose fewer hops for a complete picture.',
     'warn.hop_truncated_ring': '⚠ {hops} hops reach {total} hosts — only the nearest {shown} are shown, and even the first hop is incomplete.',

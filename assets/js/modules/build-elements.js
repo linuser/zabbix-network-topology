@@ -261,6 +261,10 @@ export function buildNodeElements(nodes, perfMode) {
             nodeData._isAggregate = true;
             nodeData._childCount  = n._childCount;
             nodeData._topProblems = n._topProblems;
+            // Der volle Gruppenpfad. Ohne ihn weiss der Klick-Handler in
+            // render-tech nicht, WELCHE Ebene er aufklappen soll — und das
+            // faellt nicht auf, es passiert dann einfach nichts.
+            nodeData._gruppenPfad = n._gruppenPfad;
         }
         // Im Performance-Modus kein SVG bauen — der nt-perf-Style nutzt sevColor.
         // WICHTIG: 'none', NICHT '' — der Basis-Node-Style bildet
