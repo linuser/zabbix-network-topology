@@ -128,7 +128,10 @@ if (cols.join(',') !== '5,7,8,9,10,12') {
 // von Issue #15, lief nie.
 function discover(walk) {
     try {
-        // eslint-disable-next-line no-new-func -- genau das ist der Zweck: den Code aus dem Template ausfuehren
+        // new Function ist hier genau der Zweck: den Discovery-Code aus dem
+        // Template ausfuehren. (Die eslint-Ausnahme dafuer stand hier, ohne
+        // dass no-new-func in dieser Konfiguration ueberhaupt greift — eine
+        // Ausnahme, die nichts unterdrueckt, verschleiert nur die Absicht.)
         return JSON.parse(new Function('value', js)(walkToJson(walk)));
     } catch (e) {
         check(`Discovery-Skript laeuft ohne Fehler: ${e.message}`, false, true);

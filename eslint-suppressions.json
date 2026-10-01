@@ -12,11 +12,6 @@
       "count": 2
     }
   },
-  "assets/js/modules/history-mode.js": {
-    "no-unsanitized/property": {
-      "count": 1
-    }
-  },
   "assets/js/modules/items-pivot.js": {
     "no-unsanitized/method": {
       "count": 3
@@ -28,11 +23,6 @@
   "assets/js/modules/legend.js": {
     "no-unsanitized/property": {
       "count": 3
-    }
-  },
-  "assets/js/modules/minimap.js": {
-    "no-unsanitized/property": {
-      "count": 1
     }
   },
   "assets/js/modules/render-compliance.js": {
@@ -71,11 +61,6 @@
     },
     "no-unsanitized/property": {
       "count": 5
-    }
-  },
-  "assets/js/modules/sev-filter.js": {
-    "no-unsanitized/property": {
-      "count": 1
     }
   },
   "assets/js/modules/tooltip.js": {

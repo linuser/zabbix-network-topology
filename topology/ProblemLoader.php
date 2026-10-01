@@ -160,9 +160,18 @@ final class ProblemLoader {
         // und ERST DANACH auf MAX_PER_HOST kappen, damit die Kappung die
         // unwichtigsten trifft und nicht die aeltesten.
         foreach ($host_problem_list as $hid => &$list) {
+            // Gecastet vergleichen, nicht strikt: severity kommt als
+            // Zeichenkette aus der API, und sobald irgendwo ein Wert als int
+            // hereinkommt, meldet ein strikter Vergleich "ungleich", waehrend
+            // die Differenz null ist — der Sortierer haelt die beiden dann
+            // fuer gleichrangig. Hier entscheidet das, welches Problem als
+            // das schwerste eines Hosts angezeigt und welches weggekappt
+            // wird. Derselbe Fehler steckte in HostMetadata::primaryIp.
             usort($list, function($a, $b) {
-                if ($a['severity'] !== $b['severity']) return $b['severity'] - $a['severity'];
-                return $b['clock'] - $a['clock'];
+                $sa = (int) ($a['severity'] ?? 0);
+                $sb = (int) ($b['severity'] ?? 0);
+                if ($sa !== $sb) return $sb - $sa;
+                return (int) ($b['clock'] ?? 0) - (int) ($a['clock'] ?? 0);
             });
             if (count($list) > self::MAX_PER_HOST) {
                 $list = array_slice($list, 0, self::MAX_PER_HOST);

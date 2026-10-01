@@ -64,8 +64,14 @@ export function buildSevFilter(bar, cy) {
             + 'border-radius:12px;border:1.5px solid ' + sd.col
             + ';background:transparent;cursor:pointer;font-size:11px;color:' + sd.col
             + ';font-weight:600';
-        pill.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;background:'
-            + sd.col + ';display:inline-block"></span>' + esc(sd.lbl);
+        // Punkt als Element, Text als textContent. Mit esc() in einen
+        // HTML-String war es richtig, aber nur solange jemand daran denkt;
+        // so kann die Beschriftung gar kein Markup mehr sein.
+        const punkt = document.createElement('span');
+        punkt.style.cssText = 'width:7px;height:7px;border-radius:50%;'
+            + 'display:inline-block;background:' + sd.col;
+        pill.appendChild(punkt);
+        pill.appendChild(document.createTextNode(sd.lbl));
 
         // Wenn aus localStorage geladen schon aktiv → optisch markieren
         if (_sevFilter.has(sd.sev)) {

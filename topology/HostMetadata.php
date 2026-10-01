@@ -89,11 +89,26 @@ final class HostMetadata {
      */
     public static function primaryIp(array $ifaces): string {
         if (!$ifaces) return '';
-        usort($ifaces, static fn($a, $b) =>
-            $b['main'] !== $a['main']
-                ? (int) $b['main'] - (int) $a['main']
-                : (int) $a['type'] - (int) $b['type']
-        );
+        // Verglichen werden die GECASTETEN Werte, nicht die rohen.
+        //
+        // Vorher stand hier $b['main'] !== $a['main'] — strikt, und damit
+        // eine Falle: int 1 und string '1' sind ungleich, ihre Differenz ist
+        // aber null. Der Sortierer meldete dann "gleich", der Typ-Stichent-
+        // scheid lief nie, und es gewann, was zufaellig vorne stand. Mit
+        // einem IPMI- und einem Agent-Interface stand so die IPMI-Adresse
+        // auf der Karte.
+        //
+        // Die Zabbix-API liefert heute durchgehend Zeichenketten, also hat
+        // es nie zugeschlagen. Das macht es nicht richtig: ein einziger Cast
+        // irgendwo weiter oben verschiebt die angezeigte IP, ohne dass etwas
+        // rot wird — und dieselbe IP geht in die Nachbar-Zuordnung ein.
+        usort($ifaces, static function (array $a, array $b): int {
+            $ma = (int) ($a['main'] ?? 0);
+            $mb = (int) ($b['main'] ?? 0);
+            return $ma !== $mb
+                ? $mb - $ma
+                : (int) ($a['type'] ?? 0) - (int) ($b['type'] ?? 0);
+        });
 
         return $ifaces[0]['ip'] ?? '';
     }

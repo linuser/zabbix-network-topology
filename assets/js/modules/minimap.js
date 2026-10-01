@@ -85,21 +85,44 @@ export function setupMinimap(cy, wrap) {
         vpX2 = Math.max(vpX1 + 4, Math.min(MM_W, vpX2));
         vpY2 = Math.max(vpY1 + 4, Math.min(MM_H, vpY2));
 
-        const dots = visNodes.map(function(n) {
-            const col = SEV_COLORS[Math.min(n.sev, SEV_COLORS.length - 1)];
-            return '<circle cx="' + tx(n.x).toFixed(1) + '" cy="' + ty(n.y).toFixed(1)
-                 + '" r="3" fill="' + col + '" opacity="0.85"/>';
-        }).join('');
+        // SVG aus Elementen statt aus einer Zeichenkette.
+        //
+        // Hier standen nur Zahlen im Markup, die Zuweisung an innerHTML war
+        // also harmlos — nur konnte das kein Werkzeug sehen, und sie stand
+        // deshalb in eslint-suppressions.json. Ein Eintrag dort ist eine
+        // Ausnahme, die jemand beim naechsten Mal als Vorbild nimmt; eine
+        // Datei weniger auf der Liste ist eine Ausnahme weniger.
+        const SVGNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(SVGNS, 'svg');
+        svg.setAttribute('width', String(MM_W));
+        svg.setAttribute('height', String(MM_H));
 
-        const vpRect = '<rect x="' + vpX1.toFixed(1) + '" y="' + vpY1.toFixed(1)
-            + '" width="' + (vpX2 - vpX1).toFixed(1) + '" height="' + (vpY2 - vpY1).toFixed(1)
-            + '" fill="rgba(59,130,246,0.08)" stroke="#3b82f6" stroke-width="1.5" rx="2"/>';
+        visNodes.forEach(function(n) {
+            const c = document.createElementNS(SVGNS, 'circle');
+            c.setAttribute('cx', tx(n.x).toFixed(1));
+            c.setAttribute('cy', ty(n.y).toFixed(1));
+            c.setAttribute('r', '3');
+            c.setAttribute('fill', SEV_COLORS[Math.min(n.sev, SEV_COLORS.length - 1)]);
+            c.setAttribute('opacity', '0.85');
+            svg.appendChild(c);
+        });
+
+        const vp = document.createElementNS(SVGNS, 'rect');
+        vp.setAttribute('x', vpX1.toFixed(1));
+        vp.setAttribute('y', vpY1.toFixed(1));
+        vp.setAttribute('width',  (vpX2 - vpX1).toFixed(1));
+        vp.setAttribute('height', (vpY2 - vpY1).toFixed(1));
+        vp.setAttribute('fill', 'rgba(59,130,246,0.08)');
+        vp.setAttribute('stroke', '#3b82f6');
+        vp.setAttribute('stroke-width', '1.5');
+        vp.setAttribute('rx', '2');
+        svg.appendChild(vp);
 
         const dark = document.getElementById('nt-root')
                   && document.getElementById('nt-root').classList.contains('nt-dark');
         _el.style.background = dark ? 'rgba(22,27,34,0.95)' : 'rgba(255,255,255,0.95)';
-        _el.innerHTML = '<svg width="' + MM_W + '" height="' + MM_H + '" xmlns="http://www.w3.org/2000/svg">'
-            + dots + vpRect + '</svg>';
+        while (_el.firstChild) _el.removeChild(_el.firstChild);
+        _el.appendChild(svg);
     }
 
     // Klick → Pan zu dieser Position. Handler nur beim ersten Init anlegen,

@@ -167,9 +167,14 @@ class NetworkTopologyDiscoverPatterns extends NetworkTopologyController {
             ];
         }
         // Sort: hosts desc, dann items desc, dann alphabetisch fuer Determinismus
+        // Gecastet vergleichen — siehe HostMetadata::primaryIp. Hier sind
+        // es selbst gezaehlte Zahlen und damit heute durchgehend int; der
+        // Cast kostet nichts und macht die Zusicherung lokal.
         usort($patterns, function($a, $b) {
-            if ($a['hosts'] !== $b['hosts']) return $b['hosts'] - $a['hosts'];
-            if ($a['items'] !== $b['items']) return $b['items'] - $a['items'];
+            $ha = (int) $a['hosts']; $hb = (int) $b['hosts'];
+            if ($ha !== $hb) return $hb - $ha;
+            $ia = (int) $a['items']; $ib = (int) $b['items'];
+            if ($ia !== $ib) return $ib - $ia;
             return strcmp($a['stem'], $b['stem']);
         });
         $stemsTruncated = false;

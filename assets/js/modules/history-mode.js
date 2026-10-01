@@ -188,7 +188,12 @@ function buildBar() {
 
     // Icon + Label
     const lbl = document.createElement('span');
-    lbl.innerHTML = '\u{1F551} <strong>' + t('hist.title') + '</strong>';
+    // Uhr-Zeichen und fetter Titel als zwei Knoten statt als Markup —
+    // t() liefert uebersetzten Text, und der gehoert in textContent.
+    lbl.appendChild(document.createTextNode('\u{1F551} '));
+    const lblStark = document.createElement('strong');
+    lblStark.textContent = t('hist.title');
+    lbl.appendChild(lblStark);
     lbl.style.cssText = 'font-size:13px;color:#78350f';
     bar.appendChild(lbl);
 
