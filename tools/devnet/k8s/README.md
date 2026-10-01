@@ -133,10 +133,27 @@ current throughout.
 `ZBX_STARTSNMPPOLLERS` is set to 50 in `20-zabbix.yaml`, but that is an
 assumption — the queue is the answer.
 
-**Then read the Diag tab.** The `data` rows carry `Memory` (peak against
-`memory_limit`) and `KB/edge`. Those two numbers are what this setup exists
-for: `MAX_EDGES` is 6000 on the strength of a hand-measured 5.9 KB per edge,
-and `MAX_HOP_HOSTS` is 1000 on no measurement at all.
+**Then read the Diag tab.** The `data` rows carry `Memory`, `KB/edge`,
+`items:` and a per-stage breakdown of the request. This setup was built to put
+numbers under `MAX_EDGES` (6000, resting on a hand-measured 5.9 KB per edge)
+and `MAX_HOP_HOSTS` (1000, resting on nothing). It did, and the answer was not
+the one either constant assumes:
+
+| | |
+|---|---|
+| 1000 devices, 1425 edges | 43200 items — thirty per edge drawn |
+| edge building | 33 ms of 1581 ms, 2% |
+| fetching the values | ~950 ms, 58% |
+| retained memory | 7.3 KB per edge, 34 MB of 512 |
+
+**Neither host count nor edge count is the cost driver — the item count is,**
+and nothing guards it. The same finding came out of the hop-limit run before
+it. Expect to be wrong here: over one session the edge builder, the SQL chunk
+size and the idea of fetching fewer values were each the obvious culprit, and
+each was measured out of the running.
+
+Correctness is a separate question and this setup answers it too: the map drew
+1425 edges against 1425 cables in `soll.json`, and 79 ghosts against 79.
 
 **And compare against `soll.json`.** It says which device hangs on which port
 of which other one, written before the module worked it out. A map that draws

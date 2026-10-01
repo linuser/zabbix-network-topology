@@ -72,6 +72,34 @@ final class LldpEdgeBuilder {
      * greifen — eine lesbare Karte liegt weit darunter, die Obergrenze fuer
      * manuelle Verbindungen bei 2.000 —, und wenn sie doch greift, sagt die
      * Karte es an (`edges_truncated`, Toast) statt abzustuerzen.
+     *
+     * ── NACHTRAG AUS DEM LASTTEST (1000 Geraete, 1425 Kanten) ────────────
+     *
+     * Die Zahlen oben stammen aus einem synthetischen Messaufbau. Am echten
+     * Aufbau kam heraus:
+     *
+     *   7,3 KB je Kante statt 5,9      |      33 ms fuer 1425 Kanten
+     *
+     * Die 5,9 sind damit NICHT widerlegt: sie messen mit
+     * memory_get_peak_usage(true) die Spitze um build() herum, die 7,3
+     * messen mit memory_get_usage(), was nach dem Bauen LIEGENBLEIBT —
+     * zwei Instrumente, zwei Fragen. Fuer die Frage "wie nah ist die Grenze
+     * am memory_limit" ist die Spitze richtig, fuer "was kostet eine Kante
+     * dauerhaft" der Verbrauch. Hochgerechnet auf 6.000 Kanten sind das 44
+     * MB statt 38 — in derselben Groessenordnung, die Zahl 6.000 bleibt
+     * also begruendet.
+     *
+     * WOGEGEN DIESE GRENZE NICHT SCHUETZT, und das ist der eigentliche
+     * Nachtrag: gegen die Laufzeit. Der Kantenbau kostet 33 ms von 1581 ms
+     * — zwei Prozent. Teuer ist das Beschaffen der Werte, und das haengt
+     * an der ITEMZAHL: 43.200 Items fuer diese 1425 Kanten, dreissig je
+     * gezeichneter Kante. Dafuer gibt es keine Obergrenze.
+     *
+     * Dasselbe Muster wie bei MAX_HOP_HOSTS, wo die Hostzahl als Waechter
+     * gewaehlt war und sich die Itemzahl als Kostentreiber herausstellte.
+     * Wer hier eine Grenze SUCHT, findet sie nicht in dieser Konstante —
+     * die Diag-Zeile nennt `items:` neben `edges:`, und das Verhaeltnis
+     * der beiden ist die Zahl, auf die es ankommt.
      */
     private const MAX_EDGES = 6000;
 
