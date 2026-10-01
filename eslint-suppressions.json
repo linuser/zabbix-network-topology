@@ -1,9 +1,4 @@
 {
-  "assets/js/modules/detail-panel.js": {
-    "no-unsanitized/property": {
-      "count": 1
-    }
-  },
   "assets/js/modules/export.js": {
     "no-unsanitized/method": {
       "count": 3

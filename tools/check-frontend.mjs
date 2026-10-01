@@ -48,6 +48,87 @@ const KOPF = `
     try { Object.defineProperty(globalThis, 'navigator', { value: { language: 'en' }, configurable: true }); } catch (e) {}
     globalThis.fetchAufrufe = 0;
     globalThis.fetch = () => { globalThis.fetchAufrufe++; return new Promise(() => {}); };
+
+    // ── Ein DOM, das sich merkt, was gebaut wurde ─────────────────────────
+    //
+    // Die Attrappe oben verschluckt appendChild und liefert leeren Text — gut
+    // genug, damit ein Modul nicht abstuerzt, unbrauchbar, um zu pruefen, WAS
+    // es erzeugt hat. Module, die ihre Ausgabe als Zeichenkette bauen, kann
+    // man ueber innerHTML pruefen; wer auf Elemente umstellt, verliert genau
+    // dieses Pruefmittel.
+    //
+    // Deshalb hier ein kleines DOM, das Kinder und Text behaelt. Zusammen mit
+    // sicht() unten traegt dieselbe Behauptung BEIDE Bauweisen — und damit
+    // laesst sich ein Umbau von Zeichenketten auf Elemente ueberhaupt erst
+    // absichern, statt ihn auf gut Glueck zu machen.
+    globalThis.miniDom = function() {
+        const txt = (v) => ({ nodeType: 3, _t: String(v), get textContent() { return this._t; } });
+        const el = (tag) => {
+            const n = {
+                nodeType: 1, tagName: String(tag).toUpperCase(),
+                childNodes: [], style: { cssText: '' }, attrs: {}, dataset: {},
+                _t: '', innerHTML: '',
+                classList: { _s: {}, add(c) { this._s[c] = 1; }, remove(c) { delete this._s[c]; },
+                    toggle(c, an) { if (an) this._s[c] = 1; else delete this._s[c]; },
+                    contains(c) { return !!this._s[c]; } },
+                appendChild(c) { this.childNodes.push(c); this._t = ''; return c; },
+                removeChild(c) { const i = this.childNodes.indexOf(c); if (i >= 0) this.childNodes.splice(i, 1); return c; },
+                get firstChild() { return this.childNodes[0] || null; },
+                setAttribute(k, v) {
+                    this.attrs[k] = String(v);
+                    if (k.indexOf('data-') === 0) this.dataset[k.slice(5)] = String(v);
+                },
+                getAttribute(k) { return this.attrs[k] === undefined ? null : this.attrs[k]; },
+                addEventListener() {}, removeEventListener() {}, remove() {},
+                get textContent() {
+                    if (this.childNodes.length) {
+                        return this.childNodes.map((c) => c.textContent).join('');
+                    }
+                    return this._t;
+                },
+                set textContent(v) { this.childNodes = []; this._t = String(v); },
+                // Reicht fuer 'tag[attr]' und 'tag' — mehr braucht hier niemand.
+                // Von Hand zerlegt statt per Regex: der Ausdruck muesste durch
+                // zwei Ebenen Maskierung (Template-Literal, erzeugte Datei),
+                // und dabei verliert er zuverlaessig seine Backslashes.
+                querySelectorAll(sel) {
+                    let t = String(sel).trim(), a = '';
+                    const auf = t.indexOf('[');
+                    if (auf >= 0) {
+                        a = t.slice(auf + 1, t.indexOf(']') >= 0 ? t.indexOf(']') : t.length);
+                        t = t.slice(0, auf);
+                    }
+                    const raus = [];
+                    const lauf = (k) => k.childNodes.forEach((c) => {
+                        if (c.nodeType !== 1) return;
+                        const tagOk  = !t || c.tagName === t.toUpperCase();
+                        const attrOk = !a || c.attrs[a] !== undefined;
+                        if (tagOk && attrOk) raus.push(c);
+                        lauf(c);
+                    });
+                    lauf(this);
+                    return raus;
+                },
+                querySelector(sel) { return this.querySelectorAll(sel)[0] || null; },
+            };
+            return n;
+        };
+        return {
+            el, txt,
+            document: {
+                createElement: el,
+                createElementNS: (ns, tag) => el(tag),
+                createTextNode: txt,
+                getElementById: () => null,
+                querySelector: () => null, querySelectorAll: () => [],
+                body: el('body'), documentElement: el('html'),
+                addEventListener() {}, removeEventListener() {},
+            },
+        };
+    };
+
+    // Was ein Modul ausgegeben hat — egal ob als Zeichenkette oder als Knoten.
+    globalThis.sicht = (n) => (n && n.innerHTML) ? n.innerHTML : (n ? n.textContent : '');
 `;
 
 let fehler = 0;
@@ -90,29 +171,52 @@ const nurText = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').tri
 console.log('\n  Detail-Panel: ein Geist ist kein Host\n');
 const panel = szenario('panel', { lang: 'en_US' }, `
     const { showDetail } = await import(${JSON.stringify(MODULE('detail-panel.js'))});
-    const p1 = { style: {}, innerHTML: '', querySelectorAll: () => [], addEventListener(){} };
+    // Echtes Mini-DOM statt einer Attrappe: so traegt dieselbe Behauptung
+    // den Zeichenketten-Bau wie den Element-Bau, und der Umbau des Panels
+    // hat ein Netz, statt eines zu brauchen.
+    const dom = miniDom();
+    globalThis.document = dom.document;
+    const p1 = dom.el('div');
     showDetail(p1, { id: 'ghost_02_5e_10_00_00_01', label: '02:5E:10:00:00:01',
         host: '02:5E:10:00:00:01', type: 'ghost', severity: 0, _isGhost: true,
         _ghostSrc: ['cdp'], _ghostSeenBy: ['lab-sw-01'], _ghostChassis: '02:5E:10:00:00:01',
         _ghostCaps: ['Bridge'], _ghostDesc: 'Example vendor' }, null);
-    const p2 = { style: {}, innerHTML: '', querySelectorAll: () => [], addEventListener(){} };
+    const p2 = dom.el('div');
     showDetail(p2, { id: '10084', label: 'lab-sw-01', host: 'lab-sw-01', type: 'switch',
         severity: 0, ip: '10.99.0.5', iftype: 'SNMP', cpu: 12, memory: 40, ping: 0.4 }, null);
     const kante = { data: (k) => ({ source: 'ap1', target: 'sw1', portSrc: 'eth0', portTgt: 'Gi1/0/8' })[k],
         source: () => ({ id: () => 'ap1', data: () => 'ap-1' }),
         target: () => ({ id: () => 'sw1', data: (k) => k === 'label' ? 'lab-sw-01' : false }) };
-    const p3 = { style: {}, innerHTML: '', querySelectorAll: () => [], addEventListener(){} };
+    const p3 = dom.el('div');
     showDetail(p3, { id: 'ap1', label: 'ap-1', host: 'ap-1', type: 'wireless', severity: 0 },
         { getElementById: () => ({ connectedEdges: () => [kante] }) });
+    // Der Punkt der ganzen Umstellung: ein Geraetename, der wie Markup
+    // aussieht, darf keines werden. LLDP-Namen kommen von fremden Geraeten,
+    // die niemand hier kontrolliert — das ist der Fall, vor dem die
+    // Projektregel warnt.
+    const boese = '<img src=x onerror=alert(1)>';
+    const p4 = dom.el('div');
+    showDetail(p4, { id: 'g1', label: boese, host: boese, type: 'ghost',
+        severity: 0, _isGhost: true, _ghostSrc: ['lldp'], _ghostSeenBy: ['sw-1'],
+        _ghostDesc: '<script>x</script>' }, null);
+
+    const s1 = sicht(p1), s2 = sicht(p2), s3 = sicht(p3), s4 = sicht(p4);
     console.log(JSON.stringify({
-        geistStatus:  /NOT MONITORED/.test(p1.innerHTML),
-        geistNormal:  /Normal/.test(p1.innerHTML),
-        geistRinge:   /CPU/.test(p1.innerHTML),
-        geistQuelle:  /CDP/.test(p1.innerHTML) && /lab-sw-01/.test(p1.innerHTML),
-        geistMac:     /02:5E:10:00:00:01/.test(p1.innerHTML),
-        hostRinge:    /CPU/.test(p2.innerHTML),
-        hostStatus:   /Normal/.test(p2.innerHTML),
-        portPaar:     /eth0/.test(p3.innerHTML) && /Gi1\\/0\\/8/.test(p3.innerHTML),
+        geistStatus:  /NOT MONITORED/.test(s1),
+        geistNormal:  /Normal/.test(s1),
+        geistRinge:   /CPU/.test(s1),
+        geistQuelle:  /CDP/.test(s1) && /lab-sw-01/.test(s1),
+        geistMac:     /02:5E:10:00:00:01/.test(s1),
+        hostRinge:    /CPU/.test(s2),
+        hostStatus:   /Normal/.test(s2),
+        hostName:     /lab-sw-01/.test(s2),
+        hostIp:       /10[.]99[.]0[.]5/.test(s2),
+        // Der Name steht als TEXT da — und es ist kein einziges Element
+        // daraus entstanden.
+        boeseText:    s4.indexOf(boese) >= 0,
+        boeseBilder:  p4.querySelectorAll('img').length,
+        boeseSkripte: p4.querySelectorAll('script').length,
+        portPaar:     /eth0/.test(s3) && /Gi1\\/0\\/8/.test(s3),
     }));
 `);
 if (panel) {
@@ -123,6 +227,12 @@ if (panel) {
     pruefe('Geist: MAC steht da',                   panel.geistMac,    true);
     pruefe('Host: Ringe bleiben',                   panel.hostRinge,   true);
     pruefe('Host: Status bleibt',                   panel.hostStatus,  true);
+    pruefe('Host: Name und IP stehen da',           [panel.hostName, panel.hostIp], [true, true]);
+    pruefe('Name mit Markup bleibt lesbarer Text',  panel.boeseText,   true);
+    // Das ist die Zusicherung, die vor dem Umbau an esc() hing und seitdem
+    // an der Bauweise haengt: aus Text entsteht kein Element.
+    pruefe('und erzeugt kein einziges Element',
+        [panel.boeseBilder, panel.boeseSkripte], [0, 0]);
     pruefe('Verbindungsliste nennt beide Ports',    panel.portPaar,    true);
 }
 
