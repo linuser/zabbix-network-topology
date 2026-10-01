@@ -5,6 +5,8 @@ declare(strict_types = 1);
 
 namespace Modules\NetworkTopology\Actions;
 
+use Modules\NetworkTopology\Topology\DiagLog;
+
 /**
  * NetworkTopologyDiag
  *
@@ -23,19 +25,9 @@ class NetworkTopologyDiag extends NetworkTopologyController {
     private const MAX_ENTRIES = 50;
 
     /**
-     * Aktionen, die beim blossen ANSEHEN der Karte anfallen.
-     *
-     * 'spark' faellt bei jedem Ueberfahren eines Knotens an. Auf der
-     * Lasttest-Karte reichten ein paar Sekunden Mausbewegung fuer 35 Stueck,
-     * und der Ring fasst 50: die teuren data-Aufrufe fielen von vier auf
-     * zwei, waehrend man auf den Tab sah. Die Anzeige zu filtern reichte
-     * nicht — da waren sie schon aus dem Puffer.
-     *
-     * Eigener Slot-Raum, gemeinsamer Zaehler. Der Zaehler MUSS gemeinsam
-     * bleiben, sonst sind die laufenden Nummern der beiden Raeume nicht mehr
-     * vergleichbar und die zeitliche Reihenfolge in der Liste waere geraten.
+     * Wie viele Slots die lauten Aktionen bekommen. Der Rest — welche das
+     * sind und warum — steht in Topology\DiagLog, wo es pruefbar ist.
      */
-    private const LAUT     = ['spark' => true];
     private const MAX_LAUT = 10;
     private const KEY_PREFIX  = 'nt_diag_';
     private const TTL         = 3600;   // 1h Buffer-Lebensdauer
@@ -83,12 +75,7 @@ class NetworkTopologyDiag extends NetworkTopologyController {
                     }
                 }
             }
-            // Nach der laufenden Nummer sortieren: die Slot-Reihenfolge ist
-            // seq modulo MAX_ENTRIES und damit gegenueber der Zeit gedreht,
-            // sobald der Ring einmal herum ist.
-            usort($entries, static function (array $a, array $b): int {
-                return ($a['seq'] ?? 0) <=> ($b['seq'] ?? 0);
-            });
+            $entries = DiagLog::nachZeitSortiert($entries);
         }
 
         $this->jsonResponse([
@@ -123,8 +110,10 @@ class NetworkTopologyDiag extends NetworkTopologyController {
         // denselben Schluessel, es gibt nichts zu ueberschreiben.
         // Signatur: apcu_inc(key, step, &$success, ttl). Ein fehlender
         // Schluessel wird dabei angelegt und auf $step gesetzt.
+        $laut    = DiagLog::istLaut((string) ($entry['action'] ?? ''));
         $success = false;
-        $seq = apcu_inc(self::KEY_PREFIX . 'seq_' . $uid, 1, $success, self::TTL);
+        $seq = apcu_inc(self::KEY_PREFIX . ($laut ? 'lseq_' : 'seq_') . $uid,
+                        1, $success, self::TTL);
         if ($seq === false || !$success) return;
 
         $entry['ts']  = time();
@@ -132,7 +121,6 @@ class NetworkTopologyDiag extends NetworkTopologyController {
 
         // Lauteste Aktionen in ihren eigenen Ring. Sie zaehlen in der
         // Zusammenfassung weiter mit, verdraengen aber nichts mehr.
-        $laut = isset(self::LAUT[(string) ($entry['action'] ?? '')]);
         apcu_store(
             self::KEY_PREFIX . $uid . ($laut ? '_l' : '_')
                 . ($seq % ($laut ? self::MAX_LAUT : self::MAX_ENTRIES)),
