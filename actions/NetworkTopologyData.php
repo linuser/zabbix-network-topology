@@ -131,6 +131,31 @@ class NetworkTopologyData extends NetworkTopologyController {
     private const CACHE_TTL = 60;
 
     /**
+     * Zeitfenster fuer den schnellen Weg in fetchLastValues(), in Sekunden.
+     *
+     * Eine Stunde, und die Zahl ist gemessen, nicht gewaehlt: 15 Minuten
+     * waren gleich schnell, 2 Stunden schon langsamer, 24 Stunden
+     * langsamer als gar kein Fenster. Eine Stunde liegt am flachen Ende
+     * der Kurve und faengt zugleich Items mit stuendlichem Intervall ein,
+     * die sonst alle in den Rueckfall liefen.
+     *
+     * Wer sie vergroessert, macht den schnellen Weg langsamer UND spart
+     * nur Nachzuegler, die ohnehin billig sind. Wer sie verkleinert, spart
+     * fast nichts und schiebt mehr in den Rueckfall.
+     */
+    private const LASTVALUE_FENSTER = 3600;
+
+    /** Wie viele Itemids in ein IN(...) des Fenster-Scans gehen. */
+    private const LASTVALUE_FENSTER_CHUNK = 1000;
+
+    /**
+     * Stueckgroesse des Rueckfalls. Gemessen fast wirkungslos (13 % zwischen
+     * 20 und 300), deshalb ein Wert, der die SQL-Zeichenkette handlich
+     * haelt, statt einer, der etwas verspricht.
+     */
+    private const LASTVALUE_RUECKFALL_CHUNK = 200;
+
+    /**
      * Host+hops mode: upper bound for the hop distance. Mirrors MAX_HOPS in
      * the client-side focus mode (focus-mode.js) — one shared mental model.
      */
@@ -1215,12 +1240,66 @@ class NetworkTopologyData extends NetworkTopologyController {
     }
 
     /**
-     * Letzte Werte fuer eine Item-Menge via batched UNION-ALL Queries.
+     * Letzte Werte fuer eine Item-Menge — Fenster-Scan mit Rueckfall.
      *
-     * Statt N separaten DB-Roundtrips machen wir eine Query pro 20 Items
-     * mit UNION ALL von Subqueries. Jedes Subquery nutzt den Index (itemid, clock)
-     * über ORDER BY clock DESC LIMIT 1 effizient.
-     * Für 482 Items reduziert das 482 Queries auf ~25.
+     * DIESE METHODE IST DER TEUERSTE TEIL DER KARTE. Auf dem Lasttest mit
+     * 1000 Geraeten traegt sie 86 % der Antwortzeit: 4017 von 4681 ms, bei
+     * 43.200 Items. Jedes Item ist genau ein Nachschlag, also entscheidet
+     * nicht die Hostzahl, sondern die Itemzahl.
+     *
+     * Vorher stand hier UNION ALL aus Unterabfragen mit je
+     * "ORDER BY clock DESC LIMIT 1". Gemessen an 6000 echten Items aus dem
+     * Lasttest, jeweils zwei Laeufe:
+     *
+     *   UNION ALL, 20 je Anweisung       456 / 499 ms
+     *   UNION ALL, 300 je Anweisung      426 / 444 ms
+     *   Fensterfunktion, 15 min            68 /  45 ms
+     *   Fensterfunktion,  1 h              64 /  61 ms
+     *   Fensterfunktion,  2 h              96 / 150 ms
+     *   Fensterfunktion, 24 h             922 / 690 ms
+     *
+     * Zwei Dinge stehen darin, und beide waren gegen die Erwartung:
+     *
+     * Die STUECKGROESSE ist fast egal — 13 % zwischen 20 und 300, im
+     * DB-Pod wie ueber das Pod-Netz gemessen. Der Rundlauf kostet hier
+     * nichts, die Indexzugriffe kosten alles. Wer hier optimieren will,
+     * muss die Zahl der Zugriffe senken, nicht die der Anweisungen.
+     *
+     * Das ZEITFENSTER ist alles. Ohne Fenster muss die Datenbank je Item
+     * den ganzen Indexbereich ansehen; mit Fenster nur den jungen Teil.
+     * Deshalb ist ein zu GROSSES Fenster schlechter als gar keins: bei 24
+     * Stunden war die Variante langsamer als der alte Weg.
+     *
+     * Ein Fenster allein waere aber falsch. Von denselben 6000 Items hatten
+     * nur 3786 ueberhaupt einen Wert darin — der Rest meldet selten, ist
+     * abgeschaltet oder hat nie geliefert. Stumm wegzulassen hiesse, dass
+     * ein stillgelegter Port aus der Karte verschwindet, statt als alt
+     * erkannt zu werden. Deshalb DANACH der alte Weg fuer genau die, die
+     * das Fenster nicht gefunden hat: 2214 Nachzuegler in 143 ms.
+     *
+     * Zusammen ~200 ms statt 435 ms fuer dieselben 6000 Items, bei
+     * unveraenderter Semantik — jedes Item bekommt denselben Wert wie
+     * vorher, nur auf einem billigeren Weg.
+     *
+     * AN DER ECHTEN KARTE nachgemessen, 1000 Geraete, 43.200 Items:
+     *
+     *            vorher                     nachher
+     *   items:last  4017 ms (86 %)   →    ~ 950 ms (58 %)
+     *   Gesamtaufruf 4681 ms         →     1581 ms
+     *
+     * Also 4,3-fach auf diesem Abschnitt und 2,9-fach auf dem ganzen
+     * Aufruf. Die Hochrechnung aus den 6000 Items hatte 1850 ms erwartet
+     * und war damit zu pessimistisch: im Grossen faellt ein groesserer
+     * Anteil ins Fenster, und der Rueckfall waechst langsamer als linear.
+     *
+     * Der teuerste Abschnitt ist seitdem nicht mehr dieser, sondern
+     * items:get mit 450 ms (26 %) — die Item-Abfrage ueber die Zabbix-API.
+     * Wer als Naechstes etwas holen will, faengt dort an.
+     *
+     * ROW_NUMBER() OVER laeuft auf allen von Zabbix 7.0 unterstuetzten
+     * Datenbanken (PostgreSQL 13+, MySQL 8.0+, MariaDB 10.5+).
+     * PostgreSQLs eigenes DISTINCT ON waere knapp schneller gewesen und
+     * steht deshalb NICHT hier.
      *
      * @param array $items itemid => Item (braucht 'value_type')
      * @return array{values: array<int, mixed>, clocks: array<int, int>}
@@ -1228,7 +1307,7 @@ class NetworkTopologyData extends NetworkTopologyController {
     private function fetchLastValues(array $items): array {
         $last_values = [];
         $last_clocks = [];
-        $CHUNK = 20;
+        $grenze      = time() - self::LASTVALUE_FENSTER;
 
         foreach ([
             ITEM_VALUE_TYPE_FLOAT  => 'history',
@@ -1241,18 +1320,49 @@ class NetworkTopologyData extends NetworkTopologyController {
             }));
             if (empty($type_itemids)) continue;
 
-            foreach (array_chunk($type_itemids, $CHUNK) as $chunk) {
+            // ── Stufe 1: ein Scan ueber das Zeitfenster ───────────────────
+            $offen = [];
+            foreach (array_chunk($type_itemids, self::LASTVALUE_FENSTER_CHUNK) as $chunk) {
+                $ids = [];
+                foreach ($chunk as $iid) {
+                    $ids[] = (int) $iid;
+                }
+                // value + clock beide aus demselben SELECT — die
+                // Stale-Erkennung braucht die Uhrzeit, und ein zweiter
+                // Durchgang dafuer waere die Haelfte der Ersparnis.
+                $sql = 'SELECT itemid, value, clock FROM ('
+                     . 'SELECT itemid, value, clock, ROW_NUMBER() OVER '
+                     . '(PARTITION BY itemid ORDER BY clock DESC) AS rn FROM ' . $table
+                     . ' WHERE itemid IN (' . implode(',', $ids) . ')'
+                     . ' AND clock > ' . $grenze
+                     . ') t WHERE rn = 1';
+                $res = DBselect($sql);
+                $gefunden = [];
+                while ($row = DBfetch($res)) {
+                    $iid = (int) $row['itemid'];
+                    $last_values[$iid] = $row['value'];
+                    $last_clocks[$iid] = (int) $row['clock'];
+                    $gefunden[$iid] = true;
+                }
+                foreach ($ids as $iid) {
+                    if (!isset($gefunden[$iid])) {
+                        $offen[] = $iid;
+                    }
+                }
+            }
+
+            // ── Stufe 2: der alte Weg, nur fuer die Nachzuegler ───────────
+            // Wer im Fenster nichts hatte, bekommt trotzdem seinen letzten
+            // Wert — egal wie alt. Ein Port, der seit Tagen schweigt, soll
+            // als ALT erkennbar sein und nicht verschwinden.
+            foreach (array_chunk($offen, self::LASTVALUE_RUECKFALL_CHUNK) as $chunk) {
                 $parts = [];
                 foreach ($chunk as $iid) {
-                    $iid = (int) $iid;
-                    // value + clock fuer Stale-Detection beide aus dem
-                    // selben SELECT — kein zusaetzlicher Roundtrip.
                     $parts[] = '(SELECT ' . $iid . ' AS itemid, value, clock FROM ' . $table
                              . ' WHERE itemid=' . $iid
                              . ' ORDER BY clock DESC LIMIT 1)';
                 }
-                $sql = implode(' UNION ALL ', $parts);
-                $res = DBselect($sql);
+                $res = DBselect(implode(' UNION ALL ', $parts));
                 while ($row = DBfetch($res)) {
                     $iid = (int) $row['itemid'];
                     $last_values[$iid] = $row['value'];
