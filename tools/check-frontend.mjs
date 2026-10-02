@@ -886,6 +886,18 @@ const ebenen = szenario('gruppen', { lang: 'en_US' }, `
         label:  A.ebenenLabel('Berlin/Campus/Access'),
         labelFlach: A.ebenenLabel('DMZ'),
         labelLeer:  A.ebenenLabel(''),
+        kurzGleich: (function() {
+            const k = A.kurzeLabels(['Lasttest/Berlin/Core', 'Lasttest/Muenchen/Core']);
+            return [k['Lasttest/Berlin/Core'], k['Lasttest/Muenchen/Core']];
+        })(),
+        kurzVerschieden: (function() {
+            const k = A.kurzeLabels(['Lasttest/Berlin/Core', 'Lasttest/Berlin/Dist']);
+            return [k['Lasttest/Berlin/Core'], k['Lasttest/Berlin/Dist']];
+        })(),
+        kurzEiner: (function() {
+            const k = A.kurzeLabels(['Lasttest/Berlin/Core']);
+            return [k['Lasttest/Berlin/Core']];
+        })(),
     }));
 `);
 if (ebenen) {
@@ -931,6 +943,15 @@ if (ebenen) {
     // durch die Aggregation liefen.
     pruefe('flacher Name bleibt er selbst',  ebenen.labelFlach, 'DMZ');
     pruefe('leerer Name wirft nicht',        ebenen.labelLeer,  '');
+    // Der letzte Abschnitt allein genuegt nicht: zwei Kerne an verschiedenen
+    // Standorten standen beide als "Core" an ihrer Huelle. Gezeigt wird
+    // deshalb das kuerzeste Ende, das diesen Pfad von den anderen trennt.
+    pruefe('gleicher Blattname: Standort kommt dazu',
+        ebenen.kurzGleich, ['Berlin/Core', 'Muenchen/Core']);
+    pruefe('verschiedene Blattnamen bleiben kurz',
+        ebenen.kurzVerschieden, ['Core', 'Dist']);
+    pruefe('ein einzelner Pfad braucht nichts davor',
+        ebenen.kurzEiner, ['Core']);
 }
 
 // Das Host-Formular hat je nach Zabbix-Version eine andere Adresse, und es

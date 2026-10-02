@@ -16,7 +16,7 @@
 //   - Aufruf-Logik (≥2 Gruppen) liegt im render-tech-Modul
 
 import { grpColor } from './severity.js';
-import { ebenenLabel } from './aggregation.js';
+import { kurzeLabels } from './aggregation.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 // Pixel-Abstand zwischen aeusserstem Knoten und Huelle. War 60, aber das hat
@@ -119,6 +119,11 @@ function redraw(cy) {
     if (_added === 0) return;
 
     // Pro Gruppe: aufpumpen → Convex Hull → SVG-Polygon
+    // Beschriftungen ueber die ganze Menge der gezeichneten Huellen: je das
+    // kuerzeste Ende, das diese Gruppe von den anderen unterscheidet. Nur den
+    // letzten Abschnitt zu nehmen war zu wenig — zwei Kerne an verschiedenen
+    // Standorten standen beide als "Core" nebeneinander.
+    const kurz = kurzeLabels(Object.keys(byGroup));
     Object.keys(byGroup).forEach(function(g) {
         const pts = byGroup[g];
         if (pts.length === 0) return;
@@ -174,7 +179,7 @@ function redraw(cy) {
         // Der volle Pfad bleibt als <title> erreichbar: ueberfahren genuegt,
         // und bei zwei gleichnamigen Blattgruppen an verschiedenen
         // Standorten ist das der Unterschied.
-        text.textContent = ebenenLabel(g);
+        text.textContent = kurz[g] || g;
         const titel = document.createElementNS(NS, 'title');
         titel.textContent = g;
         text.appendChild(titel);

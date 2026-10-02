@@ -61,6 +61,45 @@ export function ebenenLabel(schluessel) {
     return teile[teile.length - 1] || schluessel;
 }
 
+/**
+ * Beschriftungen fuer eine ganze MENGE von Pfaden: je das kuerzeste Ende,
+ * das diesen Pfad von allen anderen unterscheidet.
+ *
+ *   Lasttest/Berlin/Core  +  Lasttest/Muenchen/Core
+ *     -> "Berlin/Core"    und  "Muenchen/Core"
+ *   Lasttest/Berlin/Core  +  Lasttest/Berlin/Dist
+ *     -> "Core"           und  "Dist"
+ *
+ * Der letzte Abschnitt allein genuegt naemlich nicht. Genau das war an den
+ * Gruppen-Huellen zu sehen: zwei Kerne an verschiedenen Standorten standen
+ * beide als "Core" nebeneinander und waren nicht mehr zu unterscheiden. Der
+ * volle Pfad im Tooltip hilft beim Nachsehen, nicht beim Hinsehen.
+ *
+ * Quadratisch in der Zahl der Pfade. Das ist hier richtig so: es geht um
+ * die Gruppen EINER Karte, und davon gibt es Dutzende, keine Tausende.
+ */
+export function kurzeLabels(namen) {
+    const liste = (namen || []).map(String);
+    const raus = {};
+    const ende = function(pfad, tiefe) {
+        const t = pfad.split('/');
+        return t.slice(Math.max(0, t.length - tiefe)).join('/');
+    };
+    liste.forEach(function(n) {
+        const teile = n.split('/');
+        let tiefe = 1;
+        while (tiefe < teile.length) {
+            const suffix = ende(n, tiefe);
+            let gleich = 0;
+            liste.forEach(function(m) { if (ende(m, tiefe) === suffix) gleich++; });
+            if (gleich === 1) break;
+            tiefe++;
+        }
+        raus[n] = ende(n, tiefe) || n;
+    });
+    return raus;
+}
+
 export function aggregateByGroup(nodes, edges, ausgeklappt) {
     const offen = ausgeklappt || {};
     // Hosts nach Ebene bündeln. Wer auf keiner Ebene mehr gebuendelt wird,
@@ -81,6 +120,10 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
 
     const aggNodes = einzeln.slice();
     const nodeToGroup = {};   // hostId -> Ebenenname (für Edge-Aggregation)
+    // Beschriftungen ueber die ganze Menge, nicht je Gruppe einzeln: zwei
+    // Ebenen gleichen Namens an verschiedenen Stellen muessen unterscheidbar
+    // bleiben.
+    const kurz = kurzeLabels(Object.keys(groups));
 
     Object.keys(groups).forEach(function(gname) {
         const children = groups[gname];
@@ -123,7 +166,7 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
             // Nur der letzte Abschnitt, sonst steht bei tiefen Hierarchien
             // dreimal derselbe Standort an jedem Knoten. Der volle Pfad
             // bleibt in host und wird im Detail-Panel und Tooltip gezeigt.
-            label:   ebenenLabel(gname) + ' (' + children.length + ')',
+            label:   kurz[gname] + ' (' + children.length + ')',
             host:    gname,
             ip:      null,
             type:    'group',
