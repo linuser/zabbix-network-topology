@@ -291,6 +291,63 @@ check('Port 1 ist oben',                  $mSt['port_status']['s1']['1'] ?? null
 check('Port 2 ist unten',                 $mSt['port_status']['s1']['2'] ?? null, true);
 check('admin-down taucht nicht auf',      isset($mSt['port_status']['s1']['3']), false);
 
+// ── Host-Traffic: die Richtung steht im Key, nicht im Namen ───────────────
+//
+// Bis 5.5.0 suchte dieser Zweig nach "received" / "bits in" / "sent" /
+// "bits out" im ANZEIGENAMEN. Das traf die mitgelieferten Vorlagen und sonst
+// nichts: ein umbenanntes oder uebersetztes Item fiel still aus der
+// Host-Summe — kein Fehler, keine Meldung, nur eine zu kleine Zahl.
+echo "\nHost-Traffic: Richtung aus dem Key\n";
+
+// Der Fall, der den Fehler ausloeste: Namen, die auf KEIN Muster passen.
+$mR = MetricExtractor::extract([
+    ['hostid' => 'r', 'key_' => 'net.if.in[eth0]',  'name' => 'Eingehender Verkehr', 'lastvalue' => '100'],
+    ['hostid' => 'r', 'key_' => 'net.if.out[eth0]', 'name' => 'Trafic sortant',      'lastvalue' => '200'],
+]);
+check('umbenanntes Item zaehlt trotzdem (in)',   $mR['traffic']['r']['in']  ?? null, 100.0);
+check('umbenanntes Item zaehlt trotzdem (out)',  $mR['traffic']['r']['out'] ?? null, 200.0);
+
+// GANZ OHNE name-Feld. Das ist die Zusicherung, auf der das Weglassen von
+// 'name' in der Item-Abfrage von NetworkTopologyData steht: wird hier je
+// wieder ein Name gebraucht, faellt dieser Test und nicht die Karte.
+$mO = MetricExtractor::extract([
+    ['hostid' => 'o', 'key_' => 'net.if.in[eth0]',  'lastvalue' => '7'],
+    ['hostid' => 'o', 'key_' => 'net.if.out[eth0]', 'lastvalue' => '9'],
+]);
+check('ohne name-Feld: in',                      $mO['traffic']['o']['in']  ?? null, 7.0);
+check('ohne name-Feld: out',                     $mO['traffic']['o']['out'] ?? null, 9.0);
+
+// Der Key gewinnt gegen einen widersprechenden Namen: er ist die Zusicherung
+// des Agenten, der Name ist frei editierbar.
+$mW = MetricExtractor::extract([
+    ['hostid' => 'w', 'key_' => 'net.if.in[eth0]', 'name' => 'Bits sent', 'lastvalue' => '5'],
+]);
+check('Key schlaegt widersprechenden Namen',     $mW['traffic']['w']['in']  ?? null, 5.0);
+check('... und landet nicht bei out',            $mW['traffic']['w']['out'] ?? null, 0.0);
+
+// net.if.total ist KEINE Richtung. Es mitzuzaehlen wuerde den Verkehr
+// doppeln, denn es ist die Summe der beiden anderen.
+$mT = MetricExtractor::extract([
+    ['hostid' => 't', 'key_' => 'net.if.in[eth0]',    'lastvalue' => '3'],
+    ['hostid' => 't', 'key_' => 'net.if.total[eth0]', 'name' => 'Bits received', 'lastvalue' => '999'],
+]);
+check('net.if.total zaehlt nirgends',            $mT['traffic']['t']['in']  ?? null, 3.0);
+check('... auch nicht als Ausgang',              $mT['traffic']['t']['out'] ?? null, 0.0);
+
+// Praefix-Falle: ein Key, der nur mit 'net.if.in' ANFAENGT, ist kein Eingang.
+$mP = MetricExtractor::extract([
+    ['hostid' => 'p', 'key_' => 'net.if.info[eth0]', 'name' => 'Bits received', 'lastvalue' => '42'],
+]);
+check('net.if.info ist kein Eingang',            $mP['traffic']['p']['in']  ?? null, null);
+
+// Die mitgelieferten Vorlagen muessen weiter genau so zaehlen wie bisher.
+$mV = MetricExtractor::extract([
+    ['hostid' => 'v', 'key_' => 'net.if.in[ifHCInOctets.8]',   'name' => 'Interface 8: Bits received', 'lastvalue' => '10'],
+    ['hostid' => 'v', 'key_' => 'net.if.out[ifHCOutOctets.8]', 'name' => 'Interface 8: Bits sent',     'lastvalue' => '20'],
+]);
+check('Vorlagenform unveraendert (in)',          $mV['traffic']['v']['in']  ?? null, 10.0);
+check('Vorlagenform unveraendert (out)',         $mV['traffic']['v']['out'] ?? null, 20.0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

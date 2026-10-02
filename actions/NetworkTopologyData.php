@@ -551,7 +551,23 @@ class NetworkTopologyData extends NetworkTopologyController {
 
         foreach (array_chunk($hostids, self::HOSTS_PER_ITEM_CHUNK) as $chunk_hostids) {
             $chunk = API::Item()->get([
-                'output'       => ['itemid', 'hostid', 'key_', 'name', 'value_type'],
+                // OHNE 'name'. Es war die groessere Haelfte der Nutzlast —
+                // am Lastfeld gemessen 4844 kB gegen 2359 kB fuer dieselben
+                // 43 200 Items — und wurde an genau EINER Stelle gebraucht:
+                // MetricExtractor las die Verkehrsrichtung aus dem
+                // Anzeigenamen ("bits received"). Seit 5.5.0 kommt sie aus
+                // dem Key, wo sie ohnehin steht.
+                //
+                // Die Zeit spart das kaum (in der Datenbank gemessen 104 ms
+                // gegen 106 ms, der Array-Aufbau 4,0 ms gegen 2,6 ms) — es
+                // halbiert aber, was ueber den Socket geht und im Speicher
+                // liegt. Die Zusicherung dafuer steht in
+                // MetricExtractorTest: ein Lauf GANZ OHNE name-Feld muss
+                // dieselben Summen liefern.
+                //
+                // $items_show weiter unten holt 'name' weiter selbst — das
+                // ist eine andere, kleine Abfrage fuer die Tooltip-Items.
+                'output'       => ['itemid', 'hostid', 'key_', 'value_type'],
                 'hostids'      => $chunk_hostids,
                     'search'       => ['key_' => [
                     // Traffic — Agent + SNMP

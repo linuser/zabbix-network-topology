@@ -278,15 +278,31 @@ final class MetricExtractor {
                     $host_speed[$hid] = $sp;
                 }
             } elseif ($agent_if) {
-                // Zabbix agent traffic (bits/s)
-                $name = strtolower($item['name']);
-                if (!isset($host_traffic[$hid])) {
-                    $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
-                }
-                if (strpos($name, 'received') !== false || strpos($name, 'bits in') !== false) {
-                    $host_traffic[$hid]['in'] += (float) $val;
-                } elseif (strpos($name, 'sent') !== false || strpos($name, 'bits out') !== false) {
-                    $host_traffic[$hid]['out'] += (float) $val;
+                // RICHTUNG AUS DEM KEY, NICHT AUS DEM ANZEIGENAMEN.
+                //
+                // Hier stand eine Suche nach "received" / "bits in" / "sent" /
+                // "bits out" im Itemnamen. Das traf die mitgelieferten
+                // Vorlagen und sonst nichts: ein Item, das jemand in
+                // "Eingehender Verkehr" umbenannt hat — oder das aus einer
+                // uebersetzten Vorlage kommt —, passte auf kein Muster, und
+                // sein Verkehr fiel STILL aus der Host-Summe. Kein Fehler,
+                // keine Meldung, nur eine zu kleine Zahl.
+                //
+                // Die Richtung steht laengst im Key: net.if.in[...] gegen
+                // net.if.out[...]. snmpIfKey() holt sie zwei Zweige weiter
+                // oben selbst heraus und scheitert hier nur daran, dass in
+                // der Klammer kein reiner Index steht (net.if.in[eth0],
+                // net.if.in[ifHCInOctets.3]).
+                //
+                // Ein Key gewinnt dabei absichtlich gegen einen
+                // widersprechenden Namen: er ist die Zusicherung des Agenten,
+                // der Name ist frei editierbar.
+                $richtung = self::ifRichtung($key);
+                if ($richtung !== null) {
+                    if (!isset($host_traffic[$hid])) {
+                        $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
+                    }
+                    $host_traffic[$hid][$richtung] += (float) $val;
                 }
             } elseif (strpos($key, 'ifHCInOctets') !== false || strpos($key, 'ifInOctets') !== false) {
                 // SNMP traffic in — octets/s → bits/s × 8
@@ -721,6 +737,21 @@ final class MetricExtractor {
             return ($m[1] === 'in' || $m[1] === 'out') ? [$m[2], $m[3]] : null;
         }
         return [$m[1], $m[3]];
+    }
+
+    /**
+     * Richtung eines Agent-/Vorlagen-Interface-Keys: 'in', 'out' oder nichts.
+     *
+     * Das Zeichen NACH der Richtung muss '[' oder '.' sein. Ein blosses
+     * Praefix-strncmp auf 'net.if.in' wuerde sonst auch einen Key wie
+     * net.if.info[...] als Eingang zaehlen — den gibt es heute nicht, aber
+     * die Pruefung kostet nichts und die Annahme waere unausgesprochen.
+     *
+     * net.if.total[...] liefert bewusst null: es ist keine Richtung, und es
+     * zu einer zu machen wuerde den Verkehr doppelt zaehlen.
+     */
+    private static function ifRichtung(string $key): ?string {
+        return preg_match('/^net\.if\.(in|out)[\[.]/', $key, $m) === 1 ? $m[1] : null;
     }
 
     private static function ifIndexOf(string $key): string {
