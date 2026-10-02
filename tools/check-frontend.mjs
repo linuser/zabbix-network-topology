@@ -74,6 +74,11 @@ const KOPF = `
                 appendChild(c) { this.childNodes.push(c); this._t = ''; return c; },
                 removeChild(c) { const i = this.childNodes.indexOf(c); if (i >= 0) this.childNodes.splice(i, 1); return c; },
                 get firstChild() { return this.childNodes[0] || null; },
+                // children: nur die ELEMENT-Kinder, wie im echten DOM.
+                // clearWrap() in utils.js laeuft darueber, und ohne das Feld
+                // bricht jedes Szenario ab, das eine ganze Ansicht rendert
+                // statt nur ein Fragment.
+                get children() { return this.childNodes.filter((c) => c.nodeType === 1); },
                 setAttribute(k, v) {
                     this.attrs[k] = String(v);
                     if (k.indexOf('data-') === 0) this.dataset[k.slice(5)] = String(v);
@@ -428,6 +433,161 @@ if (uplink) {
     pruefe('Switch: Infrastruktur zuerst',       uplink.swErst, 'lab-sw-02 | Te1/1/1');
     pruefe('ohne Nachbarn: leer',                uplink.ohne, '');
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
+}
+
+// Der Management-Tab sortiert Hosts in Ebenen (Firewall, Router, Switch,
+// Wireless, Server, Storage, Hausautomation, Geraete). Welche Ebene ein Host
+// bekommt, entscheidet sein Typ — und ein UNBEKANNTER Typ landet absichtlich
+// bei "Server", nicht in einer eigenen Resteklasse.
+console.log('\n  Management-Tab: welche Ebene ein Host bekommt\n');
+const mgmt = szenario('mgmt', { lang: 'en_US' }, `
+    const dom = miniDom();
+    globalThis.document = dom.document;
+    globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+    const M = await import(${JSON.stringify(MODULE('render-mgmt.js'))});
+    const wrap = dom.el('div');
+    M.renderManagement(wrap, [
+        { id: '1', label: 'fw-01',   type: 'firewall',  severity: 0 },
+        { id: '2', label: 'rt-01',   type: 'router',    severity: 2 },
+        { id: '3', label: 'sw-01',   type: 'switch',    severity: 5 },
+        { id: '4', label: 'srv-01',  type: 'linux',     severity: 0 },
+        { id: '5', label: 'ding-01', type: 'nichtsdergleichen', severity: 0 },
+        { id: '6', label: 'ups-01',  type: 'ups',       severity: 0 },
+    ], []);
+    const txt = sicht(wrap);
+    console.log(JSON.stringify({
+        laenge:    txt.length > 50,
+        firewall:  txt.indexOf('Firewall / Gateway') >= 0,
+        router:    txt.indexOf('Router') >= 0,
+        switchE:   txt.indexOf('Switch') >= 0,
+        geraete:   txt.indexOf('ups-01') >= 0,
+        // Unbekannter Typ: KEINE eigene Ebene, sondern zu den Servern.
+        unbekannt: txt.indexOf('ding-01') >= 0,
+        keineRestklasse: txt.indexOf('nichtsdergleichen') < 0,
+        alleHosts: ['fw-01','rt-01','sw-01','srv-01','ding-01','ups-01']
+                     .every((h) => txt.indexOf(h) >= 0),
+    }));
+`);
+if (mgmt) {
+    pruefe('der Tab gibt ueberhaupt etwas aus',   mgmt.laenge,    true);
+    pruefe('Firewall bekommt ihre Ebene',         mgmt.firewall,  true);
+    pruefe('Router auch',                         mgmt.router,    true);
+    pruefe('Switch auch',                         mgmt.switchE,   true);
+    pruefe('UPS landet bei den Geraeten',         mgmt.geraete,   true);
+    pruefe('unbekannter Typ faellt nicht weg',    mgmt.unbekannt, true);
+    pruefe('... und erzeugt keine Resteklasse',   mgmt.keineRestklasse, true);
+    pruefe('kein Host geht unterwegs verloren',   mgmt.alleHosts, true);
+}
+
+// Die KARTENFORMATIERUNG als Datenstruktur — Cytoscape braucht man dafuer
+// nicht, buildCytoscapeStyle() gibt ein Array zurueck. Zwei Zusicherungen
+// darin haben echte Folgen anderswo:
+//
+// 1. node[?_isGhost] setzt background-image:none. Darauf stuetzt sich die
+//    Aussage, dass die Severity-Farbe eines Geistes auf der Karte nicht zu
+//    sehen ist — ohne diese Regel waere ein unueberwachtes Geraet gruen
+//    umrandet. Bis hierher bewachte das nichts.
+// 2. Das Blatt-Abzeichen wird in der FORMATIERUNG zusammengesetzt. Vorher
+//    stand es in data('label') und wanderte damit in Tooltip, Nachbarliste
+//    und GraphML — ein Darstellungsmerkmal im Bestand.
+console.log('\n  Kartenformatierung: Geist grau, Abzeichen nur fuers Auge\n');
+const stil = szenario('style', { lang: 'en_US' }, `
+    const S = await import(${JSON.stringify(MODULE('render-tech-style.js'))});
+    const regeln = S.buildCytoscapeStyle(false, 50);
+    const dunkel = S.buildCytoscapeStyle(true, 50);
+    const finde = (liste, sel) => (liste.find((r) => r.selector === sel) || {}).style || {};
+    const geist = finde(regeln, 'node[?_isGhost]');
+    const blatt = finde(regeln, 'node[_blaetter]');
+    // Das Label ist eine Funktion: so sieht man, was sie aus den Daten macht.
+    const ele = { data: (k) => ({ label: 'lab-sw-01', _blaetter: 12 })[k] };
+    const ohne = { data: (k) => ({ label: 'lab-sw-01' })[k] };
+    console.log(JSON.stringify({
+        geistOhneBild:   geist['background-image'],
+        geistGestrichelt: geist['border-style'],
+        geistFarbe:      String(geist['background-color'] || '').toLowerCase(),
+        blattIstFunktion: typeof blatt.label,
+        blattLabel:      typeof blatt.label === 'function' ? blatt.label(ele) : null,
+        // Die Daten selbst bleiben unberuehrt — das ist der Punkt.
+        datenLabel:      ele.data('label'),
+        ohneBadge:       typeof blatt.label === 'function' ? blatt.label(ohne) : null,
+        hellDunkelUnterschiedlich:
+            JSON.stringify(finde(regeln, 'node[?_isGhost]'))
+            !== JSON.stringify(finde(dunkel, 'node[?_isGhost]')),
+        anzahlRegeln:    regeln.length > 10,
+    }));
+`);
+if (stil) {
+    pruefe('Geist bekommt kein Knotenbild',     stil.geistOhneBild, 'none');
+    pruefe('... und einen gestrichelten Rand',  stil.geistGestrichelt, 'dashed');
+    pruefe('... in Grau, nicht in Severity-Gruen',
+        ['#64748b', '#94a3b8'].indexOf(stil.geistFarbe) >= 0, true);
+    pruefe('Abzeichen ist eine Stil-Funktion',  stil.blattIstFunktion, 'function');
+    pruefe('... und haengt N an die Beschriftung', stil.blattLabel, 'lab-sw-01  \u25b812');
+    pruefe('die DATEN bleiben ohne Abzeichen',  stil.datenLabel, 'lab-sw-01');
+    pruefe('hell und dunkel sind verschieden',  stil.hellDunkelUnterschiedlich, true);
+    pruefe('die Formatierung ist vollstaendig', stil.anzahlRegeln, true);
+}
+
+// Die Health-Formel ist ein ABSICHTLICHES Duplikat (render-health.js gegen
+// widget_health/), das ci:parity bewacht — aber Parity prueft nur, dass beide
+// Seiten gleich sind, nicht dass die Zahl stimmt. Zwei identisch falsche
+// Kopien gingen damit durch. Hier steht, WAS herauskommen soll.
+console.log('\n  Health-Score: die Zahl, nicht nur die Gleichheit\n');
+const health = szenario('health', { lang: 'en_US' }, `
+    const H = await import(${JSON.stringify(MODULE('render-health.js'))});
+    const jetzt = Math.floor(Date.now() / 1000);
+    const g = (nodes) => H.statsByGroup(nodes)[0] || {};
+    // Vier Hosts, je ein Mangel: offline 40%, stale 15%, kritisch 25%,
+    // unbestaetigt 20% — anteilig an der Gruppengroesse.
+    const vier = g([
+        { groups: ['A'], unavailable: true },
+        { groups: ['A'], severity: 4 },
+        { groups: ['A'], problems: 1, acknowledged: false },
+        { groups: ['A'] },
+    ]);
+    console.log(JSON.stringify({
+        // 100 - 40/4 - 25/4 - 20/4 = 78.75 -> 79
+        score:    vier.score,
+        offline:  vier.offline,
+        kritisch: vier.critical,
+        unacked:  vier.unacked,
+        worst:    vier.worstSev,
+        total:    vier.total,
+        sauber:   g([{ groups: ['A'] }, { groups: ['A'] }]).score,
+        // Offline und stale schliessen sich aus: ein offline-Host wird nicht
+        // zusaetzlich als veraltet gezaehlt. Der schlechteste erreichbare
+        // Wert ist deshalb 100-40-25-20 = 15, nicht 0.
+        schlimmst: g([{ groups: ['A'], unavailable: true, severity: 5,
+                        problems: 2, acknowledged: false, last_seen: jetzt - 99999 }]).score,
+        // Ein Geist traegt keine Gruppen und darf keine Statistik faelschen.
+        mitGeist: H.statsByGroup([
+            { groups: ['A'] },
+            { groups: [], _isGhost: true, severity: 0 },
+        ])[0].total,
+        gruppen:  H.statsByGroup([{ groups: ['A', 'B'] }]).length,
+        farben:   [H.scoreColor(85), H.scoreColor(84), H.scoreColor(65),
+                   H.scoreColor(64), H.scoreColor(40), H.scoreColor(39)]
+                  .map((c) => String(c).toLowerCase()),
+        marken:   [H.scoreLabel(100), H.scoreLabel(70), H.scoreLabel(50), H.scoreLabel(10)],
+    }));
+`);
+if (health) {
+    pruefe('vier Hosts, drei Maengel -> 79',     health.score,    79);
+    pruefe('offline gezaehlt',                   health.offline,  1);
+    pruefe('kritisch ab Severity 4',             health.kritisch, 1);
+    pruefe('unbestaetigtes Problem gezaehlt',    health.unacked,  1);
+    pruefe('schlechteste Severity gemerkt',      health.worst,    4);
+    pruefe('alle vier in der Gruppe',            health.total,    4);
+    pruefe('ohne Mangel volle 100',              health.sauber,   100);
+    pruefe('offline schliesst stale aus -> 15',  health.schlimmst, 15);
+    pruefe('ein Geist faelscht keine Gruppe',    health.mitGeist, 1);
+    pruefe('ein Host zaehlt in jede seiner Gruppen', health.gruppen, 2);
+    pruefe('Farbschwellen 85/65/40 halten',
+        health.farben.length === 6 && health.farben[0] !== health.farben[1]
+            && health.farben[2] !== health.farben[3]
+            && health.farben[4] !== health.farben[5], true);
+    pruefe('vier verschiedene Marken',
+        new Set(health.marken).size, 4);
 }
 
 // Der gemeinsame Ort fuer "was steht als Status da". Geprueft wird nicht nur
