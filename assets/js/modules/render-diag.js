@@ -37,6 +37,12 @@ function _proKante(e) {
     // ("der Kantenbau haelt nichts fest") und soll dastehen. null heisst
     // dagegen, dass gar nicht gebaut wurde — Cache-Treffer.
     if (!kanten || e.mem_edges_kb == null) return '';
+    // Unter einer Handvoll Kanten sagt der Quotient nichts: der Zaehler ist
+    // der Speicher, den der Kantenbau hinterlaesst, und darin steckt ein
+    // Sockel, der nicht mit der Kantenzahl waechst. Bei zwei Kanten kamen so
+    // "1163.0 KB/edge" heraus — das sieht aus wie eine Messung und ist
+    // keine. Lieber nichts anzeigen als eine Zahl, der jemand glaubt.
+    if (kanten < 50) return '';
     return (e.mem_edges_kb / kanten).toFixed(1) + ' KB/edge';
 }
 
