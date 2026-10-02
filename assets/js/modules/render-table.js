@@ -407,7 +407,7 @@ _urlRestore();
 // vorerst eigenstaendig (Zabbix Dark hat nicht komplett standardisierte Tokens
 // fuer Module). border-radius wird im Code generell auf 2-3px reduziert
 // damit es flach/Zabbix-konform wirkt — siehe RADIUS-Konstante unten.
-function mkTheme(dark) {
+export function mkTheme(dark) {
     if (dark) {
         return {
             bg:           '#0d1117',
@@ -973,7 +973,10 @@ function uplinkCell(n, theme) {
     return html;
 }
 
-function rowHtml(n, baseUrl, theme) {
+// Exportiert, damit ci:frontend die AUSGABE lesen kann statt eines
+// Hilfsbegriffs darueber: ob eine Zeile Links nach Zabbix traegt, steht
+// nur im erzeugten HTML, und genau dort sass der Fehler.
+export function rowHtml(n, baseUrl, theme) {
     // Ein Geist ist kein Host: keine Severity, keine Metriken, keine Links
     // nach Zabbix. Dieselbe Behandlung wie im Detail-Panel (istGeist dort) —
     // wer eines von beiden aendert, soll das andere mitbedenken.
@@ -1065,13 +1068,28 @@ function rowHtml(n, baseUrl, theme) {
         + ';transition:background 0.12s;' + rowOpacity + '">'
         // Status (Pille mit Punkt + Label oder Offline-Anzeige) + Diff-Badge
         + '<td style="' + cellPad + '">' + _diffBadgeHtml(n.id) + sevCellHtml + '</td>'
-        // Host (Link zu Latest-Data)
-        + '<td style="' + cellPad + '"><a href="' + esc(latestUrl) + '" '
-            + 'target="_blank" rel="noopener noreferrer" '
-            + 'data-no-detail="1" '
-            + 'style="color:' + theme.link + ';text-decoration:none;font-weight:600;'
-            + 'font-size:12px">'
-            + esc(n.label || n.host || '') + '</a></td>'
+        // Host (Link zu Latest-Data) — fuer einen Geist KEIN Link.
+        //
+        // Dieselbe Falle wie bei den Aktionsknoepfen, und hier beim ersten
+        // Durchgang uebersehen: latestUrl wird aus n.id gebaut, und die ist
+        // 'ghost_<name>' statt einer hostid. Der Name fuehrte damit auf eine
+        // nach einem nicht existierenden Host gefilterte Seite — ein Link,
+        // der aussieht wie einer und keiner ist.
+        //
+        // Als Span OHNE data-no-detail: der Klick auf die Zeile oeffnet dann
+        // das Detail-Panel, und das kann einen Geist (Melder, Faehigkeiten,
+        // Hersteller). Das ist die Antwort, die hier zu holen ist.
+        + '<td style="' + cellPad + '">'
+            + (istGeist
+                ? '<span style="color:' + theme.text + ';font-weight:600;'
+                    + 'font-size:12px">' + esc(n.label || n.host || '') + '</span>'
+                : '<a href="' + esc(latestUrl) + '" '
+                    + 'target="_blank" rel="noopener noreferrer" '
+                    + 'data-no-detail="1" '
+                    + 'style="color:' + theme.link + ';text-decoration:none;font-weight:600;'
+                    + 'font-size:12px">'
+                    + esc(n.label || n.host || '') + '</a>')
+            + '</td>'
         // Type (Icon + Label)
         + '<td style="' + cellPad + ';font-size:12px;color:' + metricColor + '">'
             + '<span style="margin-right:5px">' + ti + '</span>' + esc(tl) + '</td>'

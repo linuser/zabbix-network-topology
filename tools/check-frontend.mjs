@@ -430,6 +430,40 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// Eine Geisterzeile darf KEINEN Link nach Zabbix tragen: ihre id ist
+// 'ghost_<name>' und keine hostid, jeder solche Link fuehrt auf eine nach
+// einem nicht existierenden Host gefilterte Seite. Geprueft wird das erzeugte
+// HTML, denn genau dort sass der Fehler — die Aktionsknoepfe waren beim ersten
+// Durchgang entfernt, der Link am Hostnamen nicht.
+console.log('\n  Tabellenzeile: ein Geist verlinkt nirgendwohin\n');
+const zeile = szenario('row-ghost', { lang: 'en_US', can_edit: true }, `
+    const T = await import(${JSON.stringify(MODULE('render-table.js'))});
+    const theme = T.mkTheme(false);
+    const geist = { id: 'ghost_sw-edge-03', label: 'sw-edge-03', type: 'ghost',
+                    severity: 0, _isGhost: true };
+    const host  = { id: '10839', label: 'lab-sw-01', type: 'switch', severity: 0 };
+    const hG = T.rowHtml(geist, '/', theme);
+    const hH = T.rowHtml(host,  '/', theme);
+    console.log(JSON.stringify({
+        geistLinks:   (hG.match(/<a /g) || []).length,
+        hostLinks:    (hH.match(/<a /g) || []).length > 0,
+        geistHostid:  /hostids(%5B%5D|\\[\\])=ghost_/.test(hG),
+        geistName:    /sw-edge-03/.test(hG),
+        geistPille:   /NOT MONITORED/.test(hG),
+        geistNormal:  />Normal</.test(hG),
+        hostNormal:   />Normal</.test(hH),
+    }));
+`);
+if (zeile) {
+    pruefe('Geisterzeile traegt keinen einzigen Link', zeile.geistLinks, 0);
+    pruefe('... und keine hostid aus einer Geist-id',  zeile.geistHostid, false);
+    pruefe('der Name steht trotzdem da',               zeile.geistName, true);
+    pruefe('Status ist NOT MONITORED',                 zeile.geistPille, true);
+    pruefe('... und ausdruecklich nicht "Normal"',     zeile.geistNormal, false);
+    pruefe('ein Host behaelt seine Links',             zeile.hostLinks, true);
+    pruefe('... und sein "Normal"',                    zeile.hostNormal, true);
+}
+
 // Der Filter muss "nichts bekannt" von "keine Probleme" trennen. Ein Geist
 // traegt severity 0 und hing deshalb an der OK-Pille: wer auf Probleme
 // filterte, verlor ihn, und wer ihn SUCHTE, hatte keinen Schalter.
