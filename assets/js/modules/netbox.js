@@ -51,6 +51,31 @@ const SPALTEN = [
     'status', 'type', 'label', 'description',
 ];
 
+/**
+ * Faengt dieser Wert eine Tabellenkalkulation als FORMEL an?
+ *
+ * Eine CSV landet selten nur im Zielsystem — jemand oeffnet sie vorher in
+ * Excel oder LibreOffice, um nachzusehen. Beginnt ein Feld mit =, +, - oder
+ * @, wird es dort als Formel ausgewertet, und "=cmd|..." ist die bekannte
+ * DDE-Nutzlast.
+ *
+ * Der Weg dorthin ist hier kein Gedankenspiel: Das Kontextmenue legt einen
+ * Zabbix-Host aus einem Geisterknoten an und fuellt den Namen mit dem
+ * LLDP-Namen des NACHBARN vor — also mit einer Zeichenkette von einem
+ * fremden Geraet, das niemand hier kontrolliert. Von dort fuehrt ein
+ * gerader Weg in dieses Feld.
+ *
+ * Die uebliche Gegenmassnahme ist ein vorangestelltes Apostroph. Das faellt
+ * hier aus: es wuerde den Geraetenamen VERAENDERN, und die Datei ist fuer
+ * NetBox gedacht, nicht fuer die Tabellenkalkulation. Also dieselbe
+ * Entscheidung wie bei den anderen drei Regeln — die Zeile faellt weg und
+ * wird gezaehlt. Ein Geraet, dessen Name mit = beginnt, ist ohnehin
+ * entweder ein Angriff oder ein Tippfehler.
+ */
+function formelAnfang(wert) {
+    return /^[=+\-@\t\r]/.test(String(wert === undefined || wert === null ? '' : wert));
+}
+
 /** Ein CSV-Feld nach RFC 4180: nur quoten, wenn noetig. */
 function feld(wert) {
     const s = String(wert === undefined || wert === null ? '' : wert);
@@ -72,7 +97,9 @@ function feld(wert) {
  *           ohnePorts: number, unsicher: number, ohneHost: number}}
  */
 export function buildNetboxCsv(nodes, edges) {
-    const hostVon = {};
+    // Ohne Prototyp: eine Hostgruppe oder ein Host namens "constructor" oder
+    // "toString" wuerde sonst einen geerbten Wert treffen statt nichts.
+    const hostVon = Object.create(null);
     (nodes || []).forEach(function(n) {
         if (!n || n._isGhost || n._isInternet || n.isGroup) return;
         const name = n.host || '';
@@ -80,7 +107,7 @@ export function buildNetboxCsv(nodes, edges) {
     });
 
     const zeilen = [];
-    let ohnePorts = 0, unsicher = 0, ohneHost = 0;
+    let ohnePorts = 0, unsicher = 0, ohneHost = 0, gefaehrlich = 0;
     const alle = edges || [];
 
     alle.forEach(function(e) {
@@ -109,6 +136,15 @@ export function buildNetboxCsv(nodes, edges) {
             || (konf !== null && konf >= NETBOX_MIN_KONFIDENZ);
         if (!sicher) { unsicher++; return; }
 
+        // Regel 4: kein Feld darf eine Tabellenkalkulation als Formel
+        // ansprechen. Betrifft die Geraetenamen und die Portnamen — beide
+        // koennen ueber LLDP von einem fremden Geraet stammen.
+        if (formelAnfang(aHost) || formelAnfang(bHost)
+            || formelAnfang(aPort) || formelAnfang(bPort)) {
+            gefaehrlich++;
+            return;
+        }
+
         const quellen = (e.src || []).join('+').toUpperCase() || 'LLDP';
         const herkunft = quellen
             + (e.confirmed === true ? ', both ends' : ', one end')
@@ -134,6 +170,7 @@ export function buildNetboxCsv(nodes, edges) {
         ohnePorts: ohnePorts,
         unsicher: unsicher,
         ohneHost: ohneHost,
+        gefaehrlich: gefaehrlich,
     };
 }
 
@@ -141,9 +178,10 @@ export function buildNetboxCsv(nodes, edges) {
 export function netboxBericht(r) {
     return t('export.netbox.done', {
         n: r.geschrieben,
-        skipped: r.ohnePorts + r.unsicher + r.ohneHost,
+        skipped: r.ohnePorts + r.unsicher + r.ohneHost + r.gefaehrlich,
         ports: r.ohnePorts,
         unsure: r.unsicher,
         ghost: r.ohneHost,
+        risky: r.gefaehrlich,
     });
 }

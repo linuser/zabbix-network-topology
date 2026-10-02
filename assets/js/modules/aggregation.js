@@ -42,14 +42,17 @@ import { t } from './i18n.js';
  * @return {?string} Name der Ebene, auf der gebuendelt wird, oder null
  */
 export function gruppenEbene(name, ausgeklappt) {
-    const offen = ausgeklappt || {};
+    // hasOwnProperty statt offen[x]: ein Gruppenname wie "toString" waere
+    // sonst IMMER aufgeklappt, weil er den geerbten Wert trifft.
+    const roh = ausgeklappt || {};
+    const offen = { has: function(k) { return Object.prototype.hasOwnProperty.call(roh, k) && !!roh[k]; } };
     const teile = String(name || '').split('/');
     let tiefe = 1;
-    while (tiefe < teile.length && offen[teile.slice(0, tiefe).join('/')]) {
+    while (tiefe < teile.length && offen.has(teile.slice(0, tiefe).join('/'))) {
         tiefe++;
     }
     const schluessel = teile.slice(0, tiefe).join('/');
-    if (tiefe === teile.length && offen[schluessel]) {
+    if (tiefe === teile.length && offen.has(schluessel)) {
         return null;
     }
     return schluessel;
@@ -80,7 +83,7 @@ export function ebenenLabel(schluessel) {
  */
 export function kurzeLabels(namen) {
     const liste = (namen || []).map(String);
-    const raus = {};
+    const raus = Object.create(null);
     const ende = function(pfad, tiefe) {
         const t = pfad.split('/');
         return t.slice(Math.max(0, t.length - tiefe)).join('/');
@@ -105,7 +108,12 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
     // Hosts nach Ebene bündeln. Wer auf keiner Ebene mehr gebuendelt wird,
     // geht unveraendert durch — so stehen aufgeklappte Gruppen neben
     // zusammengefassten, und man sieht, wo man gerade hineingesehen hat.
-    const groups = {};
+    // Ohne Prototyp. Eine Hostgruppe heisst, wie der Betreiber sie nennt, und
+    // bei "constructor" oder "toString" trifft groups[name] sonst eine
+    // geerbte Funktion: die Pruefung !groups[name] ist dann falsch, es wird
+    // nie initialisiert, und .push() auf eine Funktion wirft. Die Karte
+    // bliebe weiss. Nachgestellt, nicht vermutet.
+    const groups = Object.create(null);
     const einzeln = [];
     nodes.forEach(function(n) {
         const g = n._primaryGroup || t('agg.no_group');
@@ -119,7 +127,7 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
     });
 
     const aggNodes = einzeln.slice();
-    const nodeToGroup = {};   // hostId -> Ebenenname (für Edge-Aggregation)
+    const nodeToGroup = Object.create(null);   // hostId -> Ebenenname (für Edge-Aggregation)
     // Beschriftungen ueber die ganze Menge, nicht je Gruppe einzeln: zwei
     // Ebenen gleichen Namens an verschiedenen Stellen muessen unterscheidbar
     // bleiben.
@@ -194,7 +202,7 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
     // Wer vertritt einen Knoten: sein Aggregat — oder er selbst, wenn seine
     // Gruppe aufgeklappt ist. Ohne diese Unterscheidung verloeren aufgeklappte
     // Hosts jede Kante zur restlichen Karte und haengen im Nichts.
-    const vertreter = {};
+    const vertreter = Object.create(null);
     nodes.forEach(function(n) {
         const id = String(n.id);
         vertreter[id] = nodeToGroup[id] ? 'grp_' + nodeToGroup[id] : id;

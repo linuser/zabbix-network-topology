@@ -884,6 +884,13 @@ const ebenen = szenario('gruppen', { lang: 'en_US' }, `
                  A.gruppenEbene('A/B/C', { A: true, 'A/B': true, 'A/B/C': true })],
         flach:  [A.gruppenEbene('DMZ', {}), A.gruppenEbene('DMZ', { DMZ: true })],
         label:  A.ebenenLabel('Berlin/Campus/Access'),
+        proto: (function() {
+            const r = A.aggregateByGroup(
+                [{ id: 'x', _primaryGroup: 'constructor', severity: 0, traffic: { in: 0, out: 0 } }],
+                [], {});
+            return r.nodes[0] && r.nodes[0].label;
+        })(),
+        protoOffen: A.gruppenEbene('toString', {}),
         labelFlach: A.ebenenLabel('DMZ'),
         labelLeer:  A.ebenenLabel(''),
         kurzGleich: (function() {
@@ -938,6 +945,11 @@ if (ebenen) {
     // Sonderbehandlung.
     pruefe('flache Gruppe: zu, dann offen',  ebenen.flach, ['DMZ', null]);
     pruefe('ebenenLabel nimmt den letzten Abschnitt', ebenen.label, 'Access');
+    // Eine Hostgruppe heisst, wie der Betreiber sie nennt. Bei "constructor"
+    // traf groups[name] eine geerbte Funktion, .push() warf, und die Karte
+    // blieb weiss.
+    pruefe('Gruppe namens constructor stuerzt nicht ab', ebenen.proto, 'constructor (1)');
+    pruefe('und toString gilt nicht als aufgeklappt',    ebenen.protoOffen, 'toString');
     // Flache Namen und Leerwerte muessen durchgehen: ebenenLabel beschriftet
     // seit 5.4.2 auch die Gruppen-Huellen, und dort kommen Namen an, die nie
     // durch die Aggregation liefen.
@@ -1040,6 +1052,24 @@ const netbox = szenario('netbox', { lang: 'en_US' }, `
         zweite:  zeilen[2],
         leer:    N.buildNetboxCsv(nodes, []).csv,
         quoting: q.csv ? q.csv.trim().split('\\n')[1] : null,
+        formelAnzahl: (function() {
+            const f = N.buildNetboxCsv(
+                [{ id: '1', host: '=cmd|X!A0' }, { id: '2', host: 'sw-02' }],
+                [{ from: '1', to: '2', ports: { 1: 'a', 2: 'b' }, confirmed: true }]);
+            return f.geschrieben;
+        })(),
+        formelGezaehlt: (function() {
+            const f = N.buildNetboxCsv(
+                [{ id: '1', host: '@SUM(1)' }, { id: '2', host: 'sw-02' }],
+                [{ from: '1', to: '2', ports: { 1: 'a', 2: 'b' }, confirmed: true }]);
+            return f.gefaehrlich;
+        })(),
+        formelPort: (function() {
+            const f = N.buildNetboxCsv(
+                [{ id: '1', host: 'sw-01' }, { id: '2', host: 'sw-02' }],
+                [{ from: '1', to: '2', ports: { 1: '+Gi1', 2: 'b' }, confirmed: true }]);
+            return f.geschrieben;
+        })(),
     }));
 `);
 if (netbox) {
@@ -1061,6 +1091,13 @@ if (netbox) {
     pruefe('der Kabeltyp wird nicht erfunden',
         netbox.erste.indexOf('connected,,,') > 0, true);
     pruefe('ohne Kabel keine Datei',               netbox.leer, null);
+    // Eine CSV landet selten nur im Zielsystem — jemand sieht vorher in Excel
+    // hinein. Ein Feld, das mit = beginnt, wird dort ausgewertet, und der
+    // Name kann ueber "Host aus Geist anlegen" von einem fremden Geraet
+    // stammen.
+    pruefe('Formelzeichen am Namensanfang: Zeile faellt weg',
+        [netbox.formelAnzahl, netbox.formelGezaehlt], [0, 1]);
+    pruefe('auch am Portnamen',  netbox.formelPort, 0);
     pruefe('Komma und Anfuehrungszeichen im Namen ueberleben',
         netbox.quoting.indexOf('"sw,01",dcim.interface,a,"sw""02"') === 0, true);
 }

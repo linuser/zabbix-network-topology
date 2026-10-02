@@ -451,7 +451,7 @@ export default {
     'edge.threshold': '(warnt ab {n})',
     'export.menu.netbox': 'NetBox-Kabelliste (CSV)',
     'export.netbox.none': 'Keine Kante hat die Regeln \u00fcberstanden: ein Kabel braucht an beiden Enden einen Port und muss beidseitig best\u00e4tigt oder sicher genug sein.',
-    'export.netbox.done': '{n} Kabel geschrieben, {skipped} ausgelassen \u2014 {ports} ohne Port an beiden Enden, {unsure} nicht sicher genug, {ghost} ohne Zabbix-Host. NetBox pr\u00fcft beim Import jede Zeile; was es ablehnt, ist die Abweichung gegen eure Dokumentation.',
+    'export.netbox.done': '{n} Kabel geschrieben, {skipped} ausgelassen \u2014 {ports} ohne Port an beiden Enden, {unsure} nicht sicher genug, {ghost} ohne Zabbix-Host, {risky} deren Name eine Tabellenformel ausl\u00f6sen w\u00fcrde. NetBox pr\u00fcft beim Import jede Zeile; was es ablehnt, ist die Abweichung gegen eure Dokumentation.',
     'export.menu.graphml': 'GraphML (draw.io, yEd)',
     // Geraetebericht (device-report.js)
     'devreport.button': 'Ger\u00e4tebericht',

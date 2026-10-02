@@ -446,7 +446,7 @@ export default {
     'edge.threshold': '(warns above {n})',
     'export.menu.netbox': 'NetBox cable list (CSV)',
     'export.netbox.none': 'No cable survived the rules: a cable needs a port at both ends and must be confirmed from both sides or above the confidence threshold.',
-    'export.netbox.done': '{n} cables written, {skipped} left out \u2014 {ports} without a port on both ends, {unsure} not certain enough, {ghost} without a Zabbix host. NetBox checks every row on import; what it rejects is the drift against your documentation.',
+    'export.netbox.done': '{n} cables written, {skipped} left out \u2014 {ports} without a port on both ends, {unsure} not certain enough, {ghost} without a Zabbix host, {risky} whose name would start a spreadsheet formula. NetBox checks every row on import; what it rejects is the drift against your documentation.',
     'export.menu.graphml': 'GraphML (draw.io, yEd)',
     // Geraetebericht (device-report.js)
     'devreport.button': 'Device report',
