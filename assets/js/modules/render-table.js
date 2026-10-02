@@ -1182,11 +1182,17 @@ function buildTable(nodes, baseUrl, theme) {
 
     let tbody = '<tbody>';
     const sorted = nodes.slice().sort(compare);
-    let visible = 0;
+    // Hosts und Geister werden GETRENNT gezaehlt, sichtbar wie gesamt. Sonst
+    // zaehlen Zaehler und Nenner verschiedene Mengen: eine Suche, die genau
+    // einen Geist trifft, meldete sonst "1 / 1000 hosts" — der Treffer ist
+    // keiner der tausend.
+    let visible = 0, visibleGhosts = 0, totalGhosts = 0;
     sorted.forEach(function(n) {
+        if (n._isGhost) totalGhosts++;
         if (passesFilter(n)) {
             tbody += rowHtml(n, baseUrl, theme);
             visible++;
+            if (n._isGhost) visibleGhosts++;
         }
     });
     tbody += '</tbody>';
@@ -1204,6 +1210,8 @@ function buildTable(nodes, baseUrl, theme) {
             + thead + tbody + '</table>',
         visible: visible,
         total: nodes.length,
+        visibleGhosts: visibleGhosts,
+        totalGhosts: totalGhosts,
     };
 }
 
@@ -1350,12 +1358,20 @@ export function renderTable(wrap, nodes, edges) {
             // Geister sind KEINE Hosts und duerfen den Zaehler nicht
             // auffuellen: "1042 hosts" bei 1000 ueberwachten waere eine
             // falsche Zahl an der Stelle, an der man die richtige nachliest.
-            // Sie bekommen ihren eigenen Vermerk, wenn welche dabei sind.
-            const _gz = realNodes.reduce(function(a, n) { return a + (n._isGhost ? 1 : 0); }, 0);
-            let txt = r.visible === r.total
-                ? t('table.count.all', { n: r.total - _gz })
-                : t('table.count.filtered', { shown: r.visible, total: r.total - _gz });
-            if (_gz > 0) txt += ' \u00b7 ' + esc(t('table.count.ghosts', { n: _gz }));
+            // Sie bekommen ihren eigenen Vermerk, und zwar in derselben Form
+            // wie die Hosts — gefiltert also auch dort "sichtbar / gesamt".
+            const _hSicht = r.visible - r.visibleGhosts;
+            const _hGes   = r.total   - r.totalGhosts;
+            const _alle   = r.visible === r.total;
+            let txt = _alle
+                ? t('table.count.all', { n: _hGes })
+                : t('table.count.filtered', { shown: _hSicht, total: _hGes });
+            if (r.totalGhosts > 0) {
+                txt += ' \u00b7 ' + esc(_alle
+                    ? t('table.count.ghosts', { n: r.totalGhosts })
+                    : t('table.count.ghosts.filtered',
+                        { shown: r.visibleGhosts, total: r.totalGhosts }));
+            }
             if (_diff) {
                 const parts = [];
                 if (_diff.new.size)  parts.push('<span style="color:#06b6d4;font-weight:700">+' + _diff.new.size + '</span>');

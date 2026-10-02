@@ -100,6 +100,12 @@ it.
   Whether they show follows the same **👻 Ghost nodes** setting as the map, so
   there is only one switch to reason about. It is off by default, which means
   nothing changes until you ask for it.
+- **A "Not monitored" filter pill**, next to the severity pills, appearing
+  only when the map actually holds such neighbours. Until now they were
+  governed by the **OK** pill, because severity 0 is what they carry — so
+  filtering for problems dropped them, and there was no way to filter *to*
+  them at all. Severity 0 on a ghost means nothing is known, not that all is
+  well, and the filter now says so too.
 - **Four ways to make a crowded map readable again** — leaf collapsing,
   group aggregation, hulls and label shortening, each usable on its own.
 - **The auto-refresh interval follows the size of the map:** two minutes from

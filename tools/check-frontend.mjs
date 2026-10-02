@@ -430,6 +430,34 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// Der Filter muss "nichts bekannt" von "keine Probleme" trennen. Ein Geist
+// traegt severity 0 und hing deshalb an der OK-Pille: wer auf Probleme
+// filterte, verlor ihn, und wer ihn SUCHTE, hatte keinen Schalter.
+console.log('\n  Filter: nicht ueberwacht ist keine Severity\n');
+const sevg = szenario('sev-ghost', { lang: 'en_US' }, `
+    const S = await import(${JSON.stringify(MODULE('sev-filter.js'))});
+    const kn = (d) => ({ data: (k) => d[k] });
+    console.log(JSON.stringify({
+        geist:    S.filterSchluessel(kn({ _isGhost: true, severity: 0 })),
+        ok:       S.filterSchluessel(kn({ severity: 0 })),
+        warn:     S.filterSchluessel(kn({ severity: 3 })),
+        ohneSev:  S.filterSchluessel(kn({})),
+        // Ein Geist, dem jemand eine Severity anhaengt, bleibt ein Geist.
+        geistSev: S.filterSchluessel(kn({ _isGhost: true, severity: 4 })),
+        konst:    S.SEV_GHOST,
+        // Der Schluessel darf mit keiner echten Severity kollidieren.
+        kollision: [0,1,2,3,4,5].indexOf(S.SEV_GHOST),
+    }));
+`);
+if (sevg) {
+    pruefe('Geist hat einen eigenen Schluessel', sevg.geist, sevg.konst);
+    pruefe('... der keine Severity ist',         sevg.kollision, -1);
+    pruefe('Host mit severity 0 bleibt 0',       sevg.ok, 0);
+    pruefe('Host mit severity 3 bleibt 3',       sevg.warn, 3);
+    pruefe('fehlende Severity zaehlt als 0',     sevg.ohneSev, 0);
+    pruefe('Geist schlaegt eine gesetzte Severity', sevg.geistSev, sevg.konst);
+}
+
 // GEISTER IN DER TABELLE. Der eigentliche Fall hinter "an welchem Port haengt
 // das Ding": gerade die interessanten Geraete sind keine Zabbix-Hosts. Geprueft
 // wird die ganze Kette — injectGhostNodes baut Knoten und Kante aus den
