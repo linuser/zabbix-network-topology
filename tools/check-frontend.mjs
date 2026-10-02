@@ -884,6 +884,8 @@ const ebenen = szenario('gruppen', { lang: 'en_US' }, `
                  A.gruppenEbene('A/B/C', { A: true, 'A/B': true, 'A/B/C': true })],
         flach:  [A.gruppenEbene('DMZ', {}), A.gruppenEbene('DMZ', { DMZ: true })],
         label:  A.ebenenLabel('Berlin/Campus/Access'),
+        labelFlach: A.ebenenLabel('DMZ'),
+        labelLeer:  A.ebenenLabel(''),
     }));
 `);
 if (ebenen) {
@@ -924,6 +926,11 @@ if (ebenen) {
     // Sonderbehandlung.
     pruefe('flache Gruppe: zu, dann offen',  ebenen.flach, ['DMZ', null]);
     pruefe('ebenenLabel nimmt den letzten Abschnitt', ebenen.label, 'Access');
+    // Flache Namen und Leerwerte muessen durchgehen: ebenenLabel beschriftet
+    // seit 5.4.2 auch die Gruppen-Huellen, und dort kommen Namen an, die nie
+    // durch die Aggregation liefen.
+    pruefe('flacher Name bleibt er selbst',  ebenen.labelFlach, 'DMZ');
+    pruefe('leerer Name wirft nicht',        ebenen.labelLeer,  '');
 }
 
 // Das Host-Formular hat je nach Zabbix-Version eine andere Adresse, und es

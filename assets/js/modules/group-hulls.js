@@ -16,6 +16,7 @@
 //   - Aufruf-Logik (≥2 Gruppen) liegt im render-tech-Modul
 
 import { grpColor } from './severity.js';
+import { ebenenLabel } from './aggregation.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 // Pixel-Abstand zwischen aeusserstem Knoten und Huelle. War 60, aber das hat
@@ -160,7 +161,23 @@ function redraw(cy) {
         text.setAttribute('font-weight', '700');
         text.setAttribute('font-family', 'sans-serif');
         text.setAttribute('opacity', '0.7');
-        text.textContent = g;
+        // Nur der letzte Abschnitt — dieselbe Entscheidung wie bei den
+        // Aggregat-Knoten (ebenenLabel in aggregation.js).
+        //
+        // Vorher stand hier der volle Pfad. Mit einer flachen Gruppe war das
+        // richtig und kurz; seit verschachtelte Gruppen moeglich sind, stehen
+        // sechs Huellen nebeneinander, ihre Schwerpunkte liegen dicht
+        // beieinander, und die Beschriftungen ueberdrucken sich zu
+        // "Lasttest/MueLasttest/Berlin/Dist". Dreimal derselbe Standort an
+        // jeder Huelle ist ohnehin keine Information.
+        //
+        // Der volle Pfad bleibt als <title> erreichbar: ueberfahren genuegt,
+        // und bei zwei gleichnamigen Blattgruppen an verschiedenen
+        // Standorten ist das der Unterschied.
+        text.textContent = ebenenLabel(g);
+        const titel = document.createElementNS(NS, 'title');
+        titel.textContent = g;
+        text.appendChild(titel);
         _svg.appendChild(text);
     });
 }
