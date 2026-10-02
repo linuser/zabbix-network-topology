@@ -115,6 +115,25 @@ function istDeutsch(text) {
  * Blockkommentar, String. Nur im Zustand "String" wird gesammelt. Damit sind
  * '//' in URLs und Deutsch in Zeilenend-Kommentaren beide korrekt behandelt.
  */
+/**
+ * Woerter, nach denen ein '/' eine Regex beginnt und keine Division ist.
+ * Nach einem Bezeichner oder einer Zahl waere es eine Division — nach
+ * `return`, `typeof` und Geschwistern kann dort nichts geteilt werden.
+ */
+const SCHLUESSELWORT = new Set([
+    'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void',
+    'throw', 'case', 'do', 'else', 'yield', 'await',
+]);
+
+/** Das Wort unmittelbar vor Position i, ueber Leerraum hinweg. */
+function wortVor(src, i) {
+    let j = i - 1;
+    while (j >= 0 && /\s/.test(src[j])) j--;
+    let ende = j + 1;
+    while (j >= 0 && /[A-Za-z_$]/.test(src[j])) j--;
+    return src.slice(j + 1, ende);
+}
+
 function stringLiterale(src, php) {
     const out = [];
     let i = 0, zeile = 1;
@@ -154,7 +173,17 @@ function stringLiterale(src, php) {
         // Regex-Literal (nur JS). Ein '/' beginnt eine Regex, wenn davor ein
         // Operator, eine oeffnende Klammer o.ae. stand — nach einem Bezeichner
         // oder einer schliessenden Klammer waere es eine Division.
-        if (!php && c === '/' && (vorher === '' || '(,=:[!&|?{};+-*%~^<>'.includes(vorher))) {
+        //
+        // ODER wenn davor ein SCHLUESSELWORT stand. Das fehlte, und es fehlte
+        // nicht theoretisch: `return /[",\n\r]/.test(s)` in netbox.js wurde
+        // als Division gelesen, das Anfuehrungszeichen IN der Regex galt als
+        // String-Beginn, und der verschluckte den halben Rest der Datei —
+        // elf gemeldete "deutsche Strings", die alle Kommentare waren.
+        // Genau derselbe Riss, vor dem der Kommentar oben bei replace(/'/g)
+        // warnt, nur eine Zeile frueher im Satz.
+        if (!php && c === '/' && (vorher === ''
+                || '(,=:[!&|?{};+-*%~^<>'.includes(vorher)
+                || (/[A-Za-z_$]/.test(vorher) && SCHLUESSELWORT.has(wortVor(src, i))))) {
             i++;
             let klasse = false;
             while (i < n) {

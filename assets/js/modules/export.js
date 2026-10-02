@@ -15,6 +15,7 @@
 
 import { esc, fmt } from './utils.js';
 import { buildGraphml } from './graphml.js';
+import { buildNetboxCsv, netboxBericht } from './netbox.js';
 
 // Ein einziger Document-Close-Handler (schliesst das Dropdown bei Aussenklick).
 // Modul-Level, damit setupExportMenu ihn vor dem Neu-Anlegen entfernen kann —
@@ -621,6 +622,24 @@ export function setupExportMenu(bar, isFirstRun) {
         downloadBlob(xml,
             'network-topology-' + new Date().toISOString().slice(0, 10) + '.graphml',
             'application/xml');
+    });
+
+    // NetBox — Kabelliste zum Einspielen. Neben GraphML, weil beide
+    // dieselbe Kantenliste in ein fremdes Werkzeug tragen; der Unterschied
+    // ist, dass NetBox jede Zeile beim Import PRUEFT und damit nebenbei die
+    // Dokumentation abgleicht.
+    mItem('&#128230;', t('export.menu.netbox'), function() {
+        // Rohdaten, nicht die gezeichnete Karte: in der Gruppenansicht
+        // stuenden sonst Gruppennamen in der Datei.
+        const d = window._ntLastData || {};
+        const roh = window._ntRawNodes || d.nodes;
+        if (!roh || !roh.length) { toast(t('export.no_map'), 'warn', 6000); return; }
+        const r = buildNetboxCsv(roh, d.edges || []);
+        if (!r.csv) { toast(t('export.netbox.none'), 'warn', 8000); return; }
+        downloadBlob(r.csv,
+            'netbox-cables-' + new Date().toISOString().slice(0, 10) + '.csv',
+            'text/csv');
+        toast(netboxBericht(r), 'info', 10000);
     });
 
     expBtn.addEventListener('click', function(e) {

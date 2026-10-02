@@ -998,6 +998,73 @@ if (hostform) {
         hostform.luecken, '/zabbix.php?action=popup&popup=host.edit&hostid=1');
 }
 
+// NetBox-Kabelliste. Die Spalten sind aus CableImportForm abgeschrieben, nicht
+// erinnert — aber dass sie stimmen, prueft erst NetBox beim Import. Was dieser
+// Gate prueft, sind die vier Regeln, ohne die der Export mehr schadet als
+// nuetzt: ein Kabel in einer Dokumentation ist eine Tatsachenbehauptung.
+console.log('\n  NetBox-Export: lieber eine Zeile weniger als eine falsche\n');
+const netbox = szenario('netbox', { lang: 'en_US' }, `
+    const N = await import(${JSON.stringify(MODULE('netbox.js'))});
+    const nodes = [
+        { id: '1', host: 'sw-core-01' },
+        { id: '2', host: 'sw-acc-01' },
+        { id: '3', host: 'sw-acc-02' },
+        { id: '9', host: 'ap-unknown', _isGhost: true },
+    ];
+    const edges = [
+        // Beidseitig bestaetigt, Ports an beiden Enden — das Kabel.
+        { from: '1', to: '2', ports: { 1: 'Gi1/0/1', 2: 'Gi0/1' },
+          src: ['lldp'], confirmed: true, confidence: 100 },
+        // Nur eine Seite meldet, aber sicher genug.
+        { from: '1', to: '3', ports: { 1: 'Gi1/0/2', 3: 'Gi0/1' },
+          src: ['cdp'], confirmed: false, confidence: 90 },
+        // Zu unsicher.
+        { from: '2', to: '3', ports: { 2: 'Gi0/2', 3: 'Gi0/2' },
+          src: ['lldp'], confirmed: false, confidence: 40 },
+        // Kein Port auf der Gegenseite (UniFi-Uplink, nt:parent, manuell).
+        { from: '1', to: '2', ports: { 1: 'Gi1/0/9' }, confirmed: true },
+        // Gegenstelle ist ein Geist — kein Geraet in NetBox.
+        { from: '1', to: '9', ports: { 1: 'Gi1/0/5', 9: 'eth0' }, confirmed: true },
+    ];
+    const r = N.buildNetboxCsv(nodes, edges);
+    const zeilen = r.csv ? r.csv.trim().split('\\n') : [];
+    // Und einmal mit einem Komma im Namen — CSV muss es ueberleben.
+    const q = N.buildNetboxCsv(
+        [{ id: '1', host: 'sw,01' }, { id: '2', host: 'sw"02' }],
+        [{ from: '1', to: '2', ports: { 1: 'a', 2: 'b' }, confirmed: true }]);
+    console.log(JSON.stringify({
+        kopf:    zeilen[0],
+        anzahl:  r.geschrieben,
+        ohnePorts: r.ohnePorts, unsicher: r.unsicher, ohneHost: r.ohneHost,
+        erste:   zeilen[1],
+        zweite:  zeilen[2],
+        leer:    N.buildNetboxCsv(nodes, []).csv,
+        quoting: q.csv ? q.csv.trim().split('\\n')[1] : null,
+    }));
+`);
+if (netbox) {
+    pruefe('die Spalten stehen in der Reihenfolge des Importformulars',
+        netbox.kopf,
+        'side_a_device,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name,status,type,label,description');
+    pruefe('zwei Kabel von fuenf Kanten',          netbox.anzahl, 2);
+    // Jede Auslassung wird GEZAEHLT. Still weglassen hiesse, dass jemand die
+    // Datei fuer vollstaendig haelt.
+    pruefe('und jede Auslassung ist gezaehlt',
+        [netbox.ohnePorts, netbox.unsicher, netbox.ohneHost], [1, 1, 1]);
+    pruefe('beidseitig bestaetigt, mit Herkunft',
+        netbox.erste,
+        'sw-core-01,dcim.interface,Gi1/0/1,sw-acc-01,dcim.interface,Gi0/1,connected,,,"LLDP, both ends, confidence 100 (Network Topology)"');
+    pruefe('einseitig, aber sicher genug — und als solches benannt',
+        netbox.zweite.indexOf('one end, confidence 90') > 0, true);
+    // 'type' bleibt leer: welches Kabel physisch steckt, steht in keiner
+    // SNMP-Tabelle, und Raten gehoert nicht in eine Dokumentation.
+    pruefe('der Kabeltyp wird nicht erfunden',
+        netbox.erste.indexOf('connected,,,') > 0, true);
+    pruefe('ohne Kabel keine Datei',               netbox.leer, null);
+    pruefe('Komma und Anfuehrungszeichen im Namen ueberleben',
+        netbox.quoting.indexOf('"sw,01",dcim.interface,a,"sw""02"') === 0, true);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);
