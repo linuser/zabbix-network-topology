@@ -205,6 +205,14 @@ Replace the `network_topology` directory with the new version, `chown`, reload p
 
 **"Scan directory" is for new module *directories*, not for new actions.** This page said the opposite for a long time, and it is wrong: `CModuleManager::loadManifest()` reads `manifest.json` from disk on every request, and the `module` table stores only the path, the status and the config. So a version that adds actions to a module Zabbix already knows works the moment the files are in place — measured on 7.4 on 2026-09-02 and read in the 7.0.30 source on 2026-09-25. What *does* need "Scan directory" is a module Zabbix has never seen: the five widgets are separate modules, so installing one for the first time needs it. When in doubt, run it — one click, and it breaks nothing.
 
+> **From 5.4.1 to 5.5.0:** **no new actions, no template change, and the
+> widget scripts are byte-identical** — so dashboards need nothing at all,
+> not even a cache bypass, and "Scan directory" is not required. Replace the
+> directory, `chown`, reload php-fpm. Reload the topology page once with a
+> cache bypass, because the bundle changed. Layouts, manual links, pins,
+> notes and presets stay where they are; the group view adds one browser key
+> for which levels you have open, and an old browser simply starts folded.
+
 > **From 5.4.0 to 5.4.1:** one new action (`network.topology.update_check`),
 > and **no "Scan directory" needed** — see the note above on why a new action
 > inside an existing module does not require one. Replace the directory,
@@ -549,6 +557,16 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`.
 
 **„Scan directory" ist für neue Modul-*Verzeichnisse* da, nicht für neue Actions.** Hier stand lange das Gegenteil, und das ist falsch: `CModuleManager::loadManifest()` liest `manifest.json` bei jeder Anfrage von der Platte, und in der Tabelle `module` stehen nur Pfad, Status und Konfiguration. Eine Version, die einem bereits registrierten Modul Actions hinzufügt, funktioniert also, sobald die Dateien liegen — am 2026-09-02 auf 7.4 gemessen und am 2026-09-25 im Quelltext von 7.0.30 nachgelesen. **Nötig** ist „Scan directory" für ein Modul, das Zabbix noch nie gesehen hat: die fünf Widgets sind eigene Module, ihre Erstinstallation braucht es. Im Zweifel einfach ausführen — ein Klick, und es macht nichts kaputt.
+
+> **Von 5.4.1 auf 5.5.0:** **Keine neuen Actions, kein Template geaendert,
+> und die Widget-Skripte sind byteweise identisch** — Dashboards brauchen
+> also gar nichts, nicht einmal eine Cache-Umgehung, und „Scan directory"
+> ist nicht noetig. Verzeichnis ersetzen, `chown`, php-fpm neu laden. Die
+> Topologie-Seite einmal mit Cache-Umgehung laden, denn das Bundle hat sich
+> geaendert. Anordnungen, manuelle Links, Pins, Notizen und Presets bleiben
+> liegen; die Gruppenansicht legt einen zusaetzlichen Browser-Schluessel
+> dafuer an, welche Ebenen offen sind — ein alter Browser startet einfach
+> zugeklappt.
 
 > **Von 5.4.0 auf 5.4.1:** eine neue Action (`network.topology.update_check`),
 > und **kein „Scan directory" nötig** — eine neue Action in einem Modul, das

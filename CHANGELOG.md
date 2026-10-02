@@ -2,6 +2,185 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.5.0 — 2026-10-02
+
+### Updating from 5.4.1 — replace the directory, and that is all
+
+**No new action, no new template, no widget change.** "Scan directory" is not
+needed: the only new PHP file is an internal class, and `loadManifest()` reads
+`manifest.json` from disk on every request anyway. The five widget scripts are
+byte-identical to 5.4.1, so dashboards need nothing — not even a cache bypass.
+
+Replace the module directory, `chown`, reload php-fpm, then reload the
+topology page once with a cache bypass, because the bundle changed.
+
+Layouts, manual links, pins, notes and presets stay where they are. The group
+view stores one additional key in your browser (which group levels you have
+open); nothing existing was touched, and an old browser simply starts with
+everything folded.
+
+### The map got about three times faster, and not one displayed number changed
+
+This is the headline, and it was measured rather than felt. On the load-test
+rig — 1000 hosts, 1425 edges, 43 200 items behind them — a full map load went
+from **4681 ms to 1581 ms**.
+
+Worth writing down is how it went, because three plausible explanations were
+wrong and each cost a measurement:
+
+- **Edge building** was the first suspect, because that is where the clever
+  code lives. It was **2 %** of the time.
+- **The SQL chunk size** was the second. Raising it bought **13 %**, not the
+  order of magnitude the hypothesis predicted.
+- **Fetching fewer values** was the third, and this one was worse than wrong:
+  reading `MetricExtractor` first showed that the per-port items feed the host
+  aggregates. "Ports down 17 (55 %)" would have quietly become "2 (100 %)".
+  A faster map that lies is not a faster map.
+
+What actually paid was fetching the same values **differently**. The last
+value per item now comes from a single window scan bounded to the last hour,
+with the old per-item query kept as a fallback for exactly the items the
+window missed. That phase went from 4017 ms (86 % of the load) to about
+950 ms. The cache window also moved from 15 to 60 seconds — a 15-second cache
+cannot help a map whose auto-refresh is two minutes apart.
+
+The new bottleneck is the item lookup itself at roughly 450 ms, now a quarter
+of the total. It is named here so the next person does not have to rediscover
+it.
+
+### Added
+
+- **Nested host groups, opened one level at a time.** Zabbix' group hierarchy
+  is a naming convention: `Berlin/Campus/Access` is one group whose name
+  describes three levels. The map now resolves along those levels — a site
+  collapses to a single node, and a click opens exactly that one level while
+  its siblings stay folded. The point is **readability, not speed**: a
+  thousand hosts drawn at once is a correct picture that nobody can read.
+  Which levels you have open is kept per browser, because how deep someone
+  has looked is a direction of view, not a property of the map.
+- **A NetBox cable list.** *Export → NetBox cable list (CSV)* writes a file
+  NetBox accepts under *Import*. No token, no connection, no new action — it
+  is built in the browser like the GraphML file.
+
+  **The side effect is worth more than the file.** NetBox validates every row
+  itself: unknown device, unknown interface, interface already occupied. The
+  first import is therefore a reconciliation against your documentation
+  without this module comparing anything — and it answers, with real data,
+  the most expensive question of the reverse direction before anyone builds
+  it: do device and port names line up between the two worlds at all?
+
+  Four rules decide what goes in, and every omission is counted in the
+  message afterwards rather than swallowed: a cable needs a port at **both**
+  ends, it must be confirmed from both sides or above the confidence
+  threshold, both endpoints must be real Zabbix hosts, and no field may start
+  a spreadsheet formula. The `type` column stays **empty** — which cable is
+  physically plugged in appears in no SNMP table, and guessing does not
+  belong in a document that is treated as truth afterwards.
+- **Four ways to make a crowded map readable again** — leaf collapsing,
+  group aggregation, hulls and label shortening, each usable on its own.
+- **The auto-refresh interval follows the size of the map:** two minutes from
+  400 nodes upward, 30 seconds below that. A map that takes seconds to build
+  should not start rebuilding while you are still reading it.
+
+### Changed
+
+- The Diag tab now reports **where** a load spent its time, phase by phase,
+  including the number of item lookups behind it. The previous version
+  reported that time had passed.
+
+### Fixed
+
+- **A cable between two hosts you had just expanded was redrawn as a group
+  link.** With two expanded hosts in a collapsed site, the edge was rebuilt
+  as a bare aggregate and the map hung on "Loading topology…" while the
+  server had already delivered 1.3 MB. Edges between two un-aggregated nodes
+  now pass through untouched.
+- **The collapse button said "off" while 921 nodes were hidden.** The label
+  was written once, and the renderer auto-collapsed afterwards. It is now
+  notified, so the toolbar cannot contradict the canvas.
+- **The `▸N` badge leaked out of the canvas.** It lived inside the node's
+  label data, so it also appeared in the tooltip, in the detail panel's peer
+  list and in the GraphML export. It is now composed in the style, where it
+  belongs. (CSV and HTML exports were never affected — they read the raw
+  nodes.)
+- **The host form opened as a bare page on 7.0.** Before 7.2 it is
+  `action=host.edit`; from 7.2 it is `action=popup&popup=host.edit`. The
+  address is now chosen by the detected version, so "create host from ghost"
+  works on both.
+- **Two sites both had a group called "Core".** Shortened labels are now the
+  shortest *unique* suffix, so two distinct groups can no longer share one
+  name on the map.
+- **A group hull showed the full path while its node showed the last
+  segment.** Both now show the same thing.
+- **The displayed IP could belong to the wrong interface.** The comparator
+  that picks a host's primary interface compared `main` strictly, so an int
+  `1` from our own code and a `'1'` from the API counted as different while
+  their difference was zero — the sorter reported "equal" and the interface
+  type never decided. An IPMI address won against an Agent address purely by
+  input order. `tests/HostInterfaceTest.php` now pins this, including the
+  mixed-type case that triggered it.
+- **The Diag log looked frozen.** `apcu_inc` applies its TTL only when the
+  counter is created, so after an hour it expired and restarted at 1 — new
+  entries sorted to the bottom. The log is ordered by timestamp now.
+- **Hovering the map pushed the Diag tab's own entries out.** Noisy actions
+  have their own ring buffer, so they can no longer evict what the tab is for.
+- **The memory figure measured the high-water mark, not what the map
+  retains** — two different questions, two different instruments. And the
+  KB-per-edge figure is suppressed below fifty edges, where it was noise that
+  looked measured.
+
+### Security
+
+Both of these were found while reviewing code written in this release, and
+both were reproduced before they were fixed.
+
+- **A device name can no longer start a spreadsheet formula.** A CSV rarely
+  stops at its target system — someone opens it in Excel or LibreOffice to
+  look. A field beginning with `=`, `+`, `-` or `@` is evaluated there, and
+  `=cmd|…` is the known DDE payload. The path is not hypothetical: the
+  context menu pre-fills a new host's name with the **neighbour's** LLDP
+  name, a string from a foreign device nobody here controls. The usual
+  apostrophe guard was rejected because it would alter the device name, and
+  the file is meant for NetBox. Such rows are dropped and counted instead.
+- **The detail panel is built as elements, not assembled as markup.** It
+  composed HTML strings from host names, item names, notes and LLDP
+  neighbour names. Every value went through `esc()`, so no injection was
+  found — but a single forgotten call would have been one, and string
+  assembly makes that failure invisible. DOM construction makes it
+  impossible. Behaviour is unchanged, byte for byte in the styles.
+
+### For contributors
+
+- **`ci:i18n` was reporting false positives and could have hidden a real
+  one.** Its scanner read `return /[",\n\r]/` as a division, after which the
+  `"` opened a string and swallowed the following comments. It now tracks
+  whether a `/` can start a regex, and the fix was counter-checked with a
+  planted German string.
+- **`ci:frontend` grew a recording DOM stub**, which is what made the detail
+  panel refactor safe: the test was written first, run green against the old
+  string-building build, and only then was the module rewritten. New
+  scenarios cover collapsing, the group view, the refresh interval, the host
+  form address and the NetBox export.
+- **The load-test rig is in the repository**, not in someone's notes:
+  `tools/devnet/` now generates devices in bulk, gives each simulated device
+  its own address, answers interface counters, and runs on k3s. 1000 hosts
+  with 1425 cables, and a `soll.json` to check the drawn map against.
+  `tools/devnet/erzeuge-gruppenbaum.py` builds the group tree the nested view
+  needs — additively, because replacing a host's groups would drop it out of
+  the load-test group and turn every neighbour outside the selection into a
+  ghost. That mistake once produced 812 ghosts instead of 24.
+- Three lint suppressions are gone rather than added to.
+
+### Thanks
+
+**[@christos-diamantis](https://github.com/christos-diamantis)** for the
+observation that pushed the group view from an idea to a priority: showing a
+very large number of hosts is not obviously worth doing, and tiering nested
+groups to a single element that expands on demand is the more useful answer.
+Two thirds of the machinery was already there — his framing is what made
+clear the missing third was the nesting itself, and that the goal was
+readability rather than throughput.
+
 ## v5.4.1 — 2026-09-25
 
 ### Updating from 5.4.0 — replace the directory, and that is all
