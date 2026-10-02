@@ -153,7 +153,22 @@ export function injectGhostNodes(nodes, edges, lldpQuality, modus) {
             const eid = 'eghost_' + reporter + '_' + gid;
             if (edgeSeen[eid]) return;
             edgeSeen[eid] = true;
-            ghostEdges.push({ id: eid, source: reporter, target: gid, _isGhostEdge: true });
+            // Ports in DERSELBEN Form wie bei echten Kanten ({ id: port }),
+            // damit nichts, was Kanten liest, einen Sonderfall lernen muss —
+            // die Tabellenspalte "Connected to", das Kanten-Panel und der
+            // Tooltip greifen alle auf e.ports zu.
+            //
+            // u.port ist der Port am MELDER: "wo muss ich hin, um das Kabel zu
+            // ziehen". u.remote_port ist der, den der Geist selbst nennt; er
+            // fehlt oft, weil ein Geraet ohne Monitoring auch nicht
+            // zwangslaeufig seinen Portnamen meldet.
+            const gports = {};
+            if (u && u.port) gports[reporter] = String(u.port);
+            if (u && u.remote_port) gports[gid] = String(u.remote_port);
+            ghostEdges.push({
+                id: eid, source: reporter, target: gid, _isGhostEdge: true,
+                ports: gports
+            });
         });
     });
 

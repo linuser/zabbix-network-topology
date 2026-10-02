@@ -454,6 +454,25 @@ final class LldpEdgeBuilder {
                     // liefert. Ueber denselben SNMPINDEX wie der SysName —
                     // dieselbe Nachbar-Zeile in der lldpRemTable.
                     $entry = ['raw' => $neighbor_raw, 'src' => $src];
+                    // DER PORT, AN DEM DER GEIST HAENGT.
+                    //
+                    // Das ist die Frage, wegen der ein Nutzer dieses Modul
+                    // ueberhaupt gesucht hat: ein Access Point ist tot und
+                    // soll per PoE neu gestartet werden — an welchem Port?
+                    // Gerade die interessanten Geraete sind oft keine
+                    // Zabbix-Hosts.
+                    //
+                    // $port (Port am MELDER — dort muss man hin) und
+                    // $remote_port (der Port, den der Nachbar selbst nennt)
+                    // stehen hier schon im Geltungsbereich, aus $row['ctx'].
+                    // Sie wurden nur nie weitergegeben: ohne aufgeloesten Host
+                    // entsteht keine Kante, auf der sie sonst landen koennten.
+                    if ($port !== '') {
+                        $entry['port'] = $port;
+                    }
+                    if ($remote_port !== '') {
+                        $entry['remote_port'] = $remote_port;
+                    }
                     $midx  = HostMetadata::ifaceParam($item['key_']);
                     if ($midx !== '' && isset($lldp_meta[$rid][$midx])) {
                         $m = $lldp_meta[$rid][$midx];

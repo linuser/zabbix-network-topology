@@ -1022,6 +1022,57 @@ check('Member-Label: fremder Port stempelt nicht um', $mixPorts, ['Gi1/0/1', 'Gi
 check('Member-Label: eigener ifIndex bleibt stehen',
     $rMix['edges'][0]['port_idx']['core'] ?? null, '1');
 
+// ── Der Port, an dem ein GEIST haengt ─────────────────────────────────────
+//
+// "An welchem Port haengt das Ding?" ist die Frage, mit der Leute dieses
+// Modul suchen — und sie stellt sich am haeufigsten fuer Geraete, die KEIN
+// Zabbix-Host sind. Fuer die gab es den Port bisher nirgends: ohne
+// aufgeloesten Host entsteht keine Kante, auf der er landen koennte.
+//
+// Beide Werte stehen im unmatched-Eintrag:
+//   port        — Port am MELDER ("dort muss man hin, um das Kabel zu ziehen")
+//   remote_port — der Port, den der Nachbar selbst nennt; fehlt oft, weil ein
+//                 unueberwachtes Geraet seinen Portnamen nicht melden muss.
+echo "\n  Geist: an welchem Port er haengt\n\n";
+
+$hGeist = [
+    ['hostid' => 'sw1', 'host' => 'lab-sw-01', 'name' => 'lab-sw-01', 'interfaces' => []],
+];
+$rGeist = LldpEdgeBuilder::build(
+    $hGeist,
+    [
+        // Nachbar an Port 8, den Zabbix nicht kennt -> Geist
+        ['hostid' => 'sw1', 'key_' => 'lldpRemSysName[0.8.1]',
+         'lastvalue' => 'sw-edge-03', 'src' => 'lldp'],
+        // Nachbar ohne Portbezug -> Geist ohne Port
+        ['hostid' => 'sw1', 'key_' => 'lldpRemSysName',
+         'lastvalue' => 'drucker-og', 'src' => 'lldp'],
+    ],
+    ['sw1' => ['0.8.1' => ['desc' => 'uplink1']]],     // lldp_ports -> remote_port
+    [], [], [], [], [],
+    ['sw1' => ['8' => 'Gi1/0/8']]                      // port_names -> port
+);
+
+$uGeist = $rGeist['quality']['sw1']['unmatched'] ?? [];
+$nachRaw = [];
+foreach ($uGeist as $e) {
+    $nachRaw[$e['raw']] = $e;
+}
+
+check('beide Nachbarn bleiben unmatched',    count($uGeist), 2);
+check('Port am Melder steht im Eintrag',
+    $nachRaw['sw-edge-03']['port'] ?? null, 'Gi1/0/8');
+check('Port des Nachbarn steht daneben',
+    $nachRaw['sw-edge-03']['remote_port'] ?? null, 'uplink1');
+// Kein Portbezug heisst KEIN Schluessel — nicht ein leerer. Ein leerer Wert
+// wuerde im Frontend als "Port bekannt, Name leer" gelesen, und daraus wird
+// in der Spalte ein Melder mit haengendem Trennzeichen.
+check('ohne Portbezug: kein port-Schluessel',
+    array_key_exists('port', $nachRaw['drucker-og'] ?? []), false);
+check('ohne Portbezug: kein remote_port',
+    array_key_exists('remote_port', $nachRaw['drucker-og'] ?? []), false);
+check('und keine Kante aus beiden',          count($rGeist['edges']), 0);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

@@ -20,7 +20,8 @@ import { t } from './i18n.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
 import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
 import { loadSnapshot, computeDiff, formatSnapshotAge } from './diff-mode.js';
-import { loadFilterPresets, saveFilterPresets } from './storage.js';
+import { loadFilterPresets, saveFilterPresets, loadGhostMode } from './storage.js';
+import { injectGhostNodes } from './build-elements.js';
 import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY, NT_ITEMS_HIDE_EMPTY_KEY,
          NT_ITEMS_HEATMAP_KEY } from './storage.js';
 import { showDetail } from './detail-panel.js';
@@ -35,6 +36,8 @@ const TYPE_ICON = {
     webserver: '\u{1F310}', container: '\u{1F4E6}', monitoring: '\u{1F4CA}',
     linux: '\u{1F427}', windows: '\u{1FA9F}', macos: '\u{1F34F}',
     internet: '\u{1F30D}',
+    // Dasselbe Symbol wie der Umschalter in der Werkzeugleiste.
+    ghost: '\u{1F47B}',
 };
 const TYPE_LBL = {
     firewall: 'Firewall', router: 'Router', switch: 'Switch',
@@ -43,6 +46,7 @@ const TYPE_LBL = {
     ups: t('table.type.ups'), homeauto: 'Smart Home', mailserver: 'Mail',
     webserver: 'Web', container: 'Container', monitoring: 'Monitoring',
     linux: 'Linux', windows: 'Windows', macos: 'macOS', internet: 'Internet',
+    ghost: t('table.type.ghost'),
 };
 
 // "Haengt an": an welchem Geraet und an welchem Port steckt diese Zeile.
@@ -75,14 +79,35 @@ export function buildUplinks(nodes, edges) {
     const out = {};
     (edges || []).forEach(function(e) {
         if (e._type === 'hosts' || e.kind === 'hosts' || e._isInternetEdge
-                || e._isGhostEdge || e._type === 'manual') {
+                || e._type === 'manual') {
             return;
         }
         const a = String(e.source || e.from || '');
         const b = String(e.target || e.to || '');
         if (!byId[a] || !byId[b] || a === b) return;
         const ports = e.ports || {};
-        [[a, b], [b, a]].forEach(function(paar) {
+        // NUR EINE RICHTUNG BEI GEISTERN.
+        //
+        // Ein Geist haengt am Melder, nicht umgekehrt: er ist ein Blatt, das
+        // sich selbst nicht meldet. Stuende er im Uplink des Switches, waere
+        // die Antwort fuer den Switch "haengt an <unbekanntes Geraet>" —
+        // richtig verkabelt und falsch herum gelesen. Dieselbe Begruendung
+        // wie bei den Access Points in UPLINK_INFRA oben.
+        //
+        // Die Richtung wird am KNOTEN entschieden, nicht an source/target:
+        // welches Ende die Kante vorne traegt, ist eine Eigenschaft des
+        // Kantenbauers und keine Zusicherung an diese Stelle.
+        let paare = [[a, b], [b, a]];
+        if (e._isGhostEdge) {
+            const aGeist = !!(byId[a] && byId[a]._isGhost);
+            const bGeist = !!(byId[b] && byId[b]._isGhost);
+            // Zwei Geister aneinander gibt es nicht (ein Geist meldet nichts,
+            // es braucht immer einen ueberwachten Melder) — und falls doch,
+            // ist "haengt an" fuer beide ohne Aussage.
+            if (aGeist === bGeist) return;
+            paare = aGeist ? [[a, b]] : [[b, a]];
+        }
+        paare.forEach(function(paar) {
             const ich = paar[0], nb = paar[1];
             (out[ich] = out[ich] || []).push({
                 nb: nb,
@@ -651,7 +676,12 @@ export function hostsCsv(nodes, uplinks) {
         const up = (ups[String(n.id)] || [])[0] || {};
         const tr = n.traffic || {};
         zeilen.push([
-            SEV_LBL[n.severity || 0] || '',
+            // DIESELBE FALLE WIE AUF DEM SCHIRM: ein Geist traegt severity 0,
+            // weil ueber ihn nichts BEKANNT ist — nicht, weil alles in Ordnung
+            // waere. "Normal" in dieser Spalte war als Fehler gemeldet, und
+            // eine CSV wird weitergegeben und gegen die Dokumentation
+            // gehalten; dort wirkt die Zeile noch mehr wie eine Messung.
+            n._isGhost ? t('detail.ghost.status') : (SEV_LBL[n.severity || 0] || ''),
             n.label || n.host || '',
             TYPE_LBL[n.type] || n.type || '',
             n._primaryGroup || '',
@@ -944,6 +974,10 @@ function uplinkCell(n, theme) {
 }
 
 function rowHtml(n, baseUrl, theme) {
+    // Ein Geist ist kein Host: keine Severity, keine Metriken, keine Links
+    // nach Zabbix. Dieselbe Behandlung wie im Detail-Panel (istGeist dort) —
+    // wer eines von beiden aendert, soll das andere mitbedenken.
+    const istGeist = !!n._isGhost;
     const sev = n.severity || 0;
     const sevCol = SEV_COL[sev];
     const sevLbl = SEV_LBL[sev];
@@ -995,7 +1029,17 @@ function rowHtml(n, baseUrl, theme) {
     const isStale = !isOff && n.last_seen > 0 && _ageSec > STALE_S;
     const offColor = '#9ca3af';
     const rowOpacity = (isOff || isStale) ? 'opacity:0.55;' : '';
-    const sevCellHtml = isOff
+    // GEIST ZUERST, vor Offline und Stale. Eine gruene Pille "Normal" an
+    // einem unueberwachten Geraet war eine gemeldete Stoerung: der Knoten
+    // hatte severity 0, weil ueber ihn nichts BEKANNT ist, und das sah aus
+    // wie "alles in Ordnung". Gestrichelt und gedaempft wie im Detail-Panel,
+    // damit die Aussage dieselbe bleibt, wo immer sie auftaucht.
+    const sevCellHtml = istGeist
+        ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
+            + 'border-radius:' + NT_R.pill + ';border:1px dashed currentColor;'
+            + 'color:' + theme.subSoft + ';font-size:11px;font-weight:700">'
+            + esc(t('detail.ghost.status')) + '</span>'
+        : isOff
         ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;'
             + 'border-radius:' + NT_R.pill + ';background:rgba(229,55,66,0.13);'
             + 'color:#e53742;font-size:11px;font-weight:700">'
@@ -1085,12 +1129,19 @@ function rowHtml(n, baseUrl, theme) {
         // prueft serverseitig nochmal, aber die UI soll keinen Button
         // anzeigen der auf "Forbidden" landet.
         + '<td style="padding:5px;text-align:right;white-space:nowrap">'
-            + actBtn(latestUrl, '\u{1F4CA}', 'Latest Data')
-            + actBtn(probUrl,   '\u26A0',    t('table.problems'))
-            + actBtn(chartsUrl, '\u{1F4C8}', 'Graphs')
-            + (window.NT_CONFIG && window.NT_CONFIG.can_edit
-                ? actBtn(editUrl, '\u2699\uFE0F', t('table.act.edit'))
-                : '')
+            // Fuer einen Geist FUEHRT KEINER DIESER LINKS IRGENDWOHIN: seine id
+            // ist 'ghost_<name>' und keine hostid, also waeren Latest Data,
+            // Problems, Graphs und Edit vier Knoepfe auf eine leere Seite.
+            // Den Host anlegen kann man weiter ueber das Kontextmenue der
+            // Karte ("create host from ghost") — dort steht der Melder daneben,
+            // den das Anlegen braucht.
+            + (istGeist ? ''
+                : actBtn(latestUrl, '\u{1F4CA}', 'Latest Data')
+                + actBtn(probUrl,   '\u26A0',    t('table.problems'))
+                + actBtn(chartsUrl, '\u{1F4C8}', 'Graphs')
+                + (window.NT_CONFIG && window.NT_CONFIG.can_edit
+                    ? actBtn(editUrl, '\u2699\uFE0F', t('table.act.edit'))
+                    : ''))
             + '</td>'
         + '</tr>';
 }
@@ -1162,6 +1213,33 @@ export function renderTable(wrap, nodes, edges) {
     // Refs fuer _applyFilterPreset() merken — der ruft renderTable() neu mit
     // gleichen Args nach Preset-Anwendung.
     _renderWrap = wrap; _renderNodes = nodes; _renderEdges = edges;
+
+    // ── GEISTER MITNEHMEN ──────────────────────────────────────────────────
+    //
+    // switchTab() uebergibt hier die ROHDATEN vom Backend. Geister entstehen
+    // erst beim Zeichnen (injectGhostNodes aus build-elements.js), und die
+    // Tabelle hatte sie deshalb nie — obwohl gerade die unueberwachten Geraete
+    // die interessanten sind: "an welchem Port haengt das Ding?" ist fuer
+    // einen Zabbix-Host leicht zu beantworten und fuer alles andere gar nicht.
+    //
+    // Der Modus kommt aus DERSELBEN Einstellung wie auf der Karte
+    // (off / infra / all). Zwei Schalter mit derselben Bedeutung waeren eine
+    // Einladung, sie auseinanderlaufen zu lassen. Voreingestellt ist 'off',
+    // hier aendert sich also zunaechst nichts.
+    //
+    // Die ROHEN Referenzen bleiben oben gemerkt: _applyFilterPreset() ruft
+    // renderTable() mit ihnen erneut, und dieser Block laeuft dann wieder.
+    // injectGhostNodes ist dabei unschaedlich, weil es vorhandene Geister an
+    // ihrer id erkennt und auslaesst — aber Rohdaten zu merken ist die
+    // Zusicherung, auf die man sich dabei nicht verlassen muss.
+    const _ghostMode = loadGhostMode();
+    if (_ghostMode !== 'off') {
+        const _lq = (window._ntLastData && window._ntLastData.lldp_quality) || [];
+        const _mitGeistern = injectGhostNodes(nodes, edges, _lq, _ghostMode);
+        nodes = _mitGeistern.nodes;
+        edges = _mitGeistern.edges;
+    }
+
     // Uplinks EINMAL je Render, nicht je Zeile: buildUplinks laeuft ueber alle
     // Kanten, und rowHtml wird pro Host gerufen. Der Text haengt zusaetzlich am
     // Knoten, damit Sortierung und Suche ihn ohne Neuberechnung sehen.
@@ -1269,9 +1347,15 @@ export function renderTable(wrap, nodes, edges) {
         tableArea.innerHTML = r.html;
         const counter = document.getElementById('nt-table-count');
         if (counter) {
+            // Geister sind KEINE Hosts und duerfen den Zaehler nicht
+            // auffuellen: "1042 hosts" bei 1000 ueberwachten waere eine
+            // falsche Zahl an der Stelle, an der man die richtige nachliest.
+            // Sie bekommen ihren eigenen Vermerk, wenn welche dabei sind.
+            const _gz = realNodes.reduce(function(a, n) { return a + (n._isGhost ? 1 : 0); }, 0);
             let txt = r.visible === r.total
-                ? t('table.count.all', { n: r.total })
-                : t('table.count.filtered', { shown: r.visible, total: r.total });
+                ? t('table.count.all', { n: r.total - _gz })
+                : t('table.count.filtered', { shown: r.visible, total: r.total - _gz });
+            if (_gz > 0) txt += ' \u00b7 ' + esc(t('table.count.ghosts', { n: _gz }));
             if (_diff) {
                 const parts = [];
                 if (_diff.new.size)  parts.push('<span style="color:#06b6d4;font-weight:700">+' + _diff.new.size + '</span>');

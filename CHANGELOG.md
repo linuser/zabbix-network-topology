@@ -76,6 +76,30 @@ it.
   a spreadsheet formula. The `type` column stays **empty** — which cable is
   physically plugged in appears in no SNMP table, and guessing does not
   belong in a document that is treated as truth afterwards.
+- **"Which port is that thing on?" now answers for devices Zabbix does not
+  monitor.** The table's *Connected to* column has named the switch and port
+  for a while, and the search understands `port:lab-sw-01`. Both only ever
+  worked for hosts — and the device you are looking for is often precisely the
+  one without a host: an access point that needs a PoE restart, something
+  unknown on a wall port.
+
+  Such neighbours now appear as rows of their own, with the reporting switch
+  and the port they hang on, and they are included in the CSV, so the result
+  is a patch list you can print and hold against your documentation. They are
+  marked **NOT MONITORED** rather than carrying a status, on screen and in the
+  file: a ghost has severity 0 because nothing is *known* about it, not
+  because everything is fine — and a green "Normal" there was a reported bug
+  once already. They are counted separately from the hosts for the same
+  reason, and they carry no links into Zabbix, because there is no host
+  behind them to open.
+
+  The switch does **not** gain its ghosts as uplinks. A ghost hangs on the
+  switch, not the other way round; the reverse reads as "lab-sw-01 is
+  connected to <unknown device>", which is correctly wired and wrongly read.
+
+  Whether they show follows the same **👻 Ghost nodes** setting as the map, so
+  there is only one switch to reason about. It is off by default, which means
+  nothing changes until you ask for it.
 - **Four ways to make a crowded map readable again** — leaf collapsing,
   group aggregation, hulls and label shortening, each usable on its own.
 - **The auto-refresh interval follows the size of the map:** two minutes from

@@ -234,23 +234,31 @@ Verbindungsliste den Port an beiden Enden. Und weil Kanten altern statt zu
 verschwinden, steht dort auch bei einem toten Gerät noch der Port, an dem es
 zuletzt hing — genau der Fall aus der Mail.
 
-**Was fehlt, damit daraus eine Antwort auf die Frage wird:**
+**Stand nach 5.5.0 — erledigt, bis auf die MAC:**
 
-1. **Suche nach Gerät, Antwort Port.** Ein Feld, in das man einen Namen, eine
-   IP oder eine MAC wirft, und heraus kommt „hängt an sw-og-2, Gi1/0/8, zuletzt
-   gesehen vor 4 Minuten". Ohne vorher die richtige Kante auf der Karte treffen
-   zu müssen.
-2. **Eine Liste statt einer Karte.** Der Tabellen-Tab kennt Hosts, aber keine
-   Ports. Eine Spalte „hängt an" mit Switch und Port macht daraus eine
-   Patchliste, die sich ausdrucken und gegen die Dokumentation halten lässt —
-   und über den vorhandenen CSV-Export auch exportieren.
-3. **Geister mitnehmen.** Gerade die interessanten Geräte sind oft keine
-   Zabbix-Hosts. Der Port, an dem ein unbekanntes Gerät hängt, ist die Frage
-   hinter „was steckt da eigentlich".
-
-**Aufwand:** Die Daten liegen vollständig vor, `edge.ports` trägt beide Enden.
-Es ist Anzeige, keine neue Erhebung. Suche und Tabellenspalte je ein halber Tag,
-die Geister-Zeilen kommen fast geschenkt dazu.
+1. ~~**Suche nach Gerät, Antwort Port.**~~ **Fertig.** Das Suchfeld steht auf
+   Karte und Tabelle und versteht eine Abfragesprache (`host:`, `ip:`,
+   `type:`, `port:`, Negation, ODER). `port:lab-sw-01` beantwortet dabei die
+   Umkehrung: welche Geräte hängen an diesem Switch.
+   **Offen bleibt die MAC** — die beantwortet nicht LLDP, sondern die
+   Forwarding-Tabelle, und das ist der eigene Posten
+   [MAC/FDB-Suche](#macfdb-suche--hängt-an-switch-x-port-y) weiter unten. Eine
+   neue Erhebung, kein Anzeigeproblem.
+2. ~~**Eine Liste statt einer Karte.**~~ **Fertig.** Spalte „Connected to" mit
+   Gerät und Port der Gegenseite, Infrastruktur zuerst sortiert, alternde
+   Einträge als „last seen here" gekennzeichnet, im CSV-Export enthalten.
+3. ~~**Geister mitnehmen.**~~ **Fertig in 5.5.0.** Teurer als hier geschätzt,
+   und zwar aus einem Grund, der vorher nicht dastand: `switchTab()` übergibt
+   der Tabelle die **Rohdaten** vom Backend, Geister entstehen aber erst beim
+   Zeichnen. Der `_isGhostEdge`-Filter in `buildUplinks()` war deshalb toter
+   Code. Nötig waren fünf Teile statt „fast geschenkt":
+   der Port im `unmatched`-Eintrag des Backends (er lag in `$row['ctx']`
+   bereit und wurde nie weitergegeben), `ports` auf der Geisterkante,
+   `injectGhostNodes` in `renderTable`, die Richtungsregel (ein Geist hängt am
+   Switch, nicht umgekehrt) und die Geisterbehandlung in Zeile, Zähler **und**
+   CSV. Letzteres hätte sonst „Normal" für ein unüberwachtes Gerät
+   geschrieben — dieselbe Störung, die auf dem Schirm schon einmal gemeldet
+   wurde, nur in einer Datei, die weitergegeben wird.
 
 **Der Nachbar dieser Idee** ist die MAC/FDB-Suche weiter unten: dieselbe Frage,
 aber für Geräte, die gar nichts melden — dort beantwortet sie die

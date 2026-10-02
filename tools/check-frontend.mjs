@@ -430,6 +430,68 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// GEISTER IN DER TABELLE. Der eigentliche Fall hinter "an welchem Port haengt
+// das Ding": gerade die interessanten Geraete sind keine Zabbix-Hosts. Geprueft
+// wird die ganze Kette — injectGhostNodes baut Knoten und Kante aus den
+// unmatched-Eintraegen des Backends, buildUplinks macht daraus die Antwort.
+console.log('\n  Tabelle: der Geist und sein Port\n');
+const geist = szenario('ghost-uplink', { lang: 'en_US' }, `
+    const B = await import(${JSON.stringify(MODULE('build-elements.js'))});
+    const T = await import(${JSON.stringify(MODULE('render-table.js'))});
+    const nodes = [
+        { id: '10', label: 'lab-sw-01', type: 'switch' },
+        { id: '11', label: 'lab-sw-02', type: 'switch' },
+    ];
+    const edges = [
+        { id: 'e1', from: '10', to: '11', ports: { 10: 'Gi1/0/1', 11: 'Te1/1/1' } },
+    ];
+    // So liefert das Backend es: lldp_quality[].unmatched mit port (am Melder)
+    // und remote_port (vom Nachbarn selbst gemeldet, oft leer).
+    const lq = [{
+        id: '10', label: 'lab-sw-01', matched: 1, unmatched: [
+            { raw: 'sw-edge-03', src: 'lldp', port: 'Gi1/0/8', remote_port: 'uplink1',
+              caps: ['Bridge'] },
+            { raw: 'drucker-og', src: 'lldp', port: 'Gi1/0/22' },
+            { raw: 'ohne-port',  src: 'cdp' },
+        ],
+    }];
+    const mit = B.injectGhostNodes(nodes, edges, lq, 'all');
+    const map = T.buildUplinks(mit.nodes, mit.edges);
+    const txt = (id) => {
+        const l = map[id] || [];
+        return l.length ? (l[0].port ? l[0].name + ' | ' + l[0].port : l[0].name) : '';
+    };
+    const gid = (raw) => 'ghost_' + raw;
+    const gk = mit.edges.filter((e) => e._isGhostEdge);
+    console.log(JSON.stringify({
+        // Die Antwort, um die es geht
+        edge:     txt(gid('sw-edge-03')),
+        drucker:  txt(gid('drucker-og')),
+        // Ohne Port bleibt der Melder uebrig — besser als nichts
+        ohnePort: txt(gid('ohne-port')),
+        // Der Switch darf NICHT an seinen Geistern haengen
+        swGeist:  (map['10'] || []).some((u) => String(u.nb).indexOf('ghost_') === 0),
+        swEcht:   txt('10'),
+        // Die Kante traegt beide Ports in der ueblichen Form
+        portMelder:  (gk.find((e) => e.target === gid('sw-edge-03')) || {}).ports?.['10'],
+        portGeist:   (gk.find((e) => e.target === gid('sw-edge-03')) || {}).ports?.[gid('sw-edge-03')],
+        // Severity: ueber einen Geist ist nichts bekannt, das ist nicht "normal"
+        sev:      (mit.nodes.find((n) => n.id === gid('sw-edge-03')) || {}).severity,
+        istGeist: (mit.nodes.find((n) => n.id === gid('sw-edge-03')) || {})._isGhost,
+    }));
+`);
+if (geist) {
+    pruefe('Geist: Melder und Port am Melder',    geist.edge,     'lab-sw-01 | Gi1/0/8');
+    pruefe('zweiter Geist am eigenen Port',       geist.drucker,  'lab-sw-01 | Gi1/0/22');
+    pruefe('ohne Port: nur der Melder',           geist.ohnePort, 'lab-sw-01');
+    pruefe('Switch haengt NICHT an seinem Geist', geist.swGeist,  false);
+    pruefe('Switch behaelt seinen echten Uplink', geist.swEcht,   'lab-sw-02 | Te1/1/1');
+    pruefe('Kante traegt den Port am Melder',     geist.portMelder, 'Gi1/0/8');
+    pruefe('Kante traegt den Port des Geistes',   geist.portGeist,  'uplink1');
+    pruefe('Geist traegt severity 0 ...',         geist.sev,      0);
+    pruefe('... ist aber als Geist erkennbar',    geist.istGeist, true);
+}
+
 // Die Aenderungsmeldung ist der eigentliche Zweck der parallelen Links: ein
 // ausgefallenes Buendelmitglied soll eine gemeldete Aenderung sein. Dann muss
 // der Satz aber auch stimmen — "link A <-> B disappeared" ist falsch, solange
@@ -509,16 +571,23 @@ const csv = szenario('csv', { lang: 'en_US' }, `
         // Ein Hostname, der in Excel eine Formel waere. Zabbix laesst so etwas
         // als sichtbaren Namen zu, und LLDP-Nachbarn erst recht.
         { id: 'boe', label: '=cmd|\\'/C calc\\'!A0', type: 'server', severity: 2 },
+        // Ein Geist traegt severity 0, weil ueber ihn nichts BEKANNT ist.
+        // In dieser Spalte darf daraus nicht "Normal" werden.
+        { id: 'ghost_sw-edge-03', label: 'sw-edge-03', type: 'ghost', severity: 0,
+          _isGhost: true },
     ];
     const edges = [
         { id: 'e1', from: 'ap1', to: 'sw1', ports: { ap1: 'eth0', sw1: 'Gi1/0/8' } },
         { id: 'e2', from: 'boe', to: 'sw1', ports: { sw1: 'Gi1/0/9' }, stale: true },
+        { id: 'e3', from: 'sw1', to: 'ghost_sw-edge-03', _isGhostEdge: true,
+          ports: { sw1: 'Gi1/0/22' } },
     ];
     const text = T.hostsCsv(nodes, T.buildUplinks(nodes, edges));
     console.log(JSON.stringify({
         kopf:    text.split('\\n')[0],
         ap:      text.split('\\n').find((z) => z.indexOf('lab-ap-01') === 0 || z.indexOf(',lab-ap-01,') > -1) || '',
         boese:   (text.match(/^[^\\n]*calc[^\\n]*$/m) || [''])[0],
+        geist:   text.split('\\n').find((z) => z.indexOf('sw-edge-03') > -1) || '',
     }));
 `);
 if (csv) {
@@ -526,6 +595,12 @@ if (csv) {
         /Connected to,Port,Last seen here/.test(csv.kopf), true);
     pruefe('AP-Zeile nennt Switch und Port',
         /lab-sw-01,Gi1\/0\/8/.test(csv.ap), true);
+    pruefe('Geist: Melder und Port stehen drin',
+        /lab-sw-01,Gi1\/0\/22/.test(csv.geist), true);
+    pruefe('Geist: NICHT als "Normal" ausgewiesen',
+        /^Normal,/.test(csv.geist), false);
+    pruefe('Geist: als unueberwacht ausgewiesen',
+        /NOT MONITORED/.test(csv.geist), true);
     pruefe('alternder Eintrag ist filterbar',
         /Gi1\/0\/9,yes/.test(csv.boese), true);
     pruefe('Formel wird entschaerft',
