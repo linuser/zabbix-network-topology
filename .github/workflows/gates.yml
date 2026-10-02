@@ -65,7 +65,7 @@ jobs:
         run: for t in tests/*Test.php; do echo "--- $t"; php "$t" || exit 1; done
 
   node:
-    name: eslint + parity + templates + package + layers + i18n + pipeline + bundle-drift
+    name: eslint + parity + templates + package + layers + i18n + ghost + pipeline + bundle-drift
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +90,8 @@ jobs:
         run: node tools/check-layers.mjs
       - name: i18n
         run: node tools/check-i18n.mjs
+      - name: ghost
+        run: node tools/check-ghost.mjs
       - name: pipeline
         run: npm run ci:pipeline
       - name: npm-audit

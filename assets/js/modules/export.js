@@ -27,7 +27,11 @@ import { COMPLIANCE_CHECKS, fetchComplianceData } from './render-compliance.js';
 import { t } from './i18n.js';
 import { toast } from './toast.js';
 
-const SEV_LBL = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
+// SEV_LBL kam hier als eigene Kopie vor. Kein Grund stand dabei, und es
+// gibt auch keinen: dies ist ein ES-Modul im selben Bundle wie
+// severity.js (anders als die Widgets, deren Duplikate dokumentiert und
+// von ci:parity bewacht sind).
+import { SEV_LBL, statusLabel, istGeist } from './severity.js';
 const SEV_COLORS = {
     Normal: '#22c55e', Info: '#06b6d4', Warning: '#f59e0b',
     Average: '#f97316', High: '#ef4444', Disaster: '#991b1b'
@@ -65,8 +69,11 @@ function buildReportHtml(opts) {
                 || (a.label || '').localeCompare(b.label || '');
         })
         .map(function(n) {
-            const sev = SEV_LBL[n.severity || 0] || 'Normal';
-            const col = SEV_COLORS[sev] || '#22c55e';
+            // Ueber statusLabel, nicht ueber SEV_LBL: window._ntNodes (der
+            // Rueckfall oben) kann Geister enthalten, und "Normal" an einem
+            // unueberwachten Geraet ist genau die gemeldete Stoerung.
+            const sev = statusLabel(n);
+            const col = istGeist(n) ? '#94a3b8' : (SEV_COLORS[sev] || '#22c55e');
             const tr  = n.traffic || { in: 0, out: 0 };
             return '<tr>'
                 + '<td>' + esc(n.label || n.host) + '</td>'

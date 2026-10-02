@@ -157,6 +157,17 @@ i18n:
   script:
     - node tools/check-i18n.mjs
 
+# Ein Geist ist kein Host. Ein Nachbar ohne Zabbix-Host traegt severity 0,
+# weil ueber ihn nichts BEKANNT ist — nicht weil alles in Ordnung waere.
+# Einmal aus dem Feld gemeldet (gruene Pille "Normal"), danach in 5.5.0 beim
+# Bau der Tabellenansicht an fuenf weiteren Stellen neu entstanden. Seither
+# steht die Aussage einmal in severity.js, und dieses Gate haelt sie dort.
+ghost:
+  stage: test
+  image: node:22-alpine
+  script:
+    - node tools/check-ghost.mjs
+
 # Prueft, was im Modul-ZIP landen wuerde. Liest die Ausschlussmuster aus
 # deploy.sh, statt sie zu wiederholen — eine zweite Liste waere eine zweite
 # Stelle, die auseinanderlaeuft. Anlass: nt-uninstall.sh rutschte ins Paket,

@@ -28,15 +28,15 @@ npm run build        # esbuild -> assets/js/dist/nt-bundle.js (eingecheckt!)
 ./deploy.sh <server> all     # Hauptmodul + Widgets per SSH ausrollen
 ```
 
-**Die vollständige Gate-Kette — alle sechzehn, nicht nur die Node-Gates:**
+**Die vollständige Gate-Kette — alle siebzehn, nicht nur die Node-Gates:**
 
 ```bash
 npm run build && npm run ci:lint-php && npm run ci:test && npm run ci:eslint \
   && npm run ci:xss && npm run ci:parity && npm run ci:templates \
   && npm run ci:snmprec && npm run ci:frontend && npm run ci:package \
   && npm run ci:layers \
-  && npm run ci:i18n && npm run ci:pipeline && npm run ci:shellcheck \
-  && npm run ci:audit && npm run ci:php-use
+  && npm run ci:i18n && npm run ci:ghost && npm run ci:pipeline \
+  && npm run ci:shellcheck && npm run ci:audit && npm run ci:php-use
 ```
 
 `ci:audit` kam zuletzt dazu und ist der einzige Gate, der von etwas **außerhalb
@@ -52,10 +52,20 @@ Syntax, und die war einwandfrei — erst die Auflösung zur Laufzeit scheitert.
 ein `CWebUser::$data` ohne `use` hat damit eine Produktionsseite weiß gemacht,
 bei vollständig grünen Gates.
 
+`ci:ghost` ist das jüngste und das einzige, das einen **Begriff** prüft statt
+Syntax, Duplikate oder Ausgabe: ein Geisterknoten trägt `severity 0`, weil über
+ihn nichts *bekannt* ist — nicht, weil alles in Ordnung wäre. `SEV_LBL[0]`
+darauf angewendet schreibt „Normal" an ein Gerät, über das niemand etwas weiß.
+Einmal aus dem Feld gemeldet, und beim Bau der Tabellenansicht in 5.5.0 an
+**fünf weiteren Stellen** neu entstanden — drei fielen erst in der Durchsicht
+auf. Fünf Fundstellen für einen Begriff an einem Tag sind ein Messwert, kein
+Pech. Seither steht die Aussage einmal in `severity.js` (`istGeist`,
+`statusLabel`, `statusColor`), und das Gate hält sie dort.
+
 `ci:lint-php` und `ci:test` brauchen `php` — **das ist installiert**
 (`/opt/homebrew/bin/php`). Sie zu überspringen hat schon einmal einen
 PHP-Fatal durchrutschen lassen (ein doppeltes `use` nach einem Merge, den git
-konfliktfrei zusammenführte). „Alle Gates grün" heißt sechzehn, nicht neun.
+konfliktfrei zusammenführte). „Alle Gates grün" heißt siebzehn, nicht neun.
 
 Einzelnen Test fahren — kein PHPUnit, kein DB-Zugriff, reines PHP:
 

@@ -30,7 +30,7 @@
 // es nur gab, weil die Knöpfe zwischendurch Text waren.
 
 import { el, fmt, fmtItemValue, hostEditUrl } from './utils.js';
-import { SEV_COL, SEV_LBL } from './severity.js';
+import { SEV_COL, SEV_LBL, statusLabel, statusColor } from './severity.js';
 import { t } from './i18n.js';
 
 // Mapping von Backend-Type-String zu deutschem Label + Emoji-Icon.
@@ -86,7 +86,7 @@ export function hideDetail(panel) {
 }
 
 export function showDetail(panel, d, cy) {
-    const sc = SEV_COL[d.severity || 0] || SEV_COL[0];
+    const sc = statusColor(d);
     // GEISTER SIND KEINE HOSTS. Bis hierher wurden sie wie welche behandelt:
     // eine gruene Pille "Normal" fuer ein Geraet, das gar nicht ueberwacht
     // wird, daneben leere Felder fuer CPU, Speicher und Ping. Beides ist eine
@@ -185,7 +185,7 @@ export function showDetail(panel, d, cy) {
         ? pille('background:rgba(245,158,11,0.13);color:var(--nt-warn-text);',
                 'background:#f59e0b;', 'STALE')
         : pille('background:' + sc + '22;color:' + sc + ';',
-                'background:' + sc + ';', SEV_LBL[d.severity || 0] || 'Normal');
+                'background:' + sc + ';', statusLabel(d));
 
     // Status-Badges (Pinned, Wartung, Acked, Note) als kleine Chips daneben
     const chip = function(stil, text, titel) {

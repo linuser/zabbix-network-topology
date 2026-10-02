@@ -15,7 +15,7 @@
 // Sortierung: Klick auf Spalten-Header. Default: Status-DESC (kritischste oben).
 
 import { esc, fmt, aggregateValues, isDark, hostEditUrl } from './utils.js';
-import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
+import { SEV_COL, SEV_LBL, grpColor, statusLabel, statusColor } from './severity.js';
 import { t } from './i18n.js';
 import { fetchItemsPivot, buildPivotToolbar, renderPivotTable } from './items-pivot.js';
 import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
@@ -676,12 +676,11 @@ export function hostsCsv(nodes, uplinks) {
         const up = (ups[String(n.id)] || [])[0] || {};
         const tr = n.traffic || {};
         zeilen.push([
-            // DIESELBE FALLE WIE AUF DEM SCHIRM: ein Geist traegt severity 0,
-            // weil ueber ihn nichts BEKANNT ist — nicht, weil alles in Ordnung
-            // waere. "Normal" in dieser Spalte war als Fehler gemeldet, und
-            // eine CSV wird weitergegeben und gegen die Dokumentation
-            // gehalten; dort wirkt die Zeile noch mehr wie eine Messung.
-            n._isGhost ? t('detail.ghost.status') : (SEV_LBL[n.severity || 0] || ''),
+            // Ueber statusLabel: ein Geist traegt severity 0, weil ueber ihn
+            // nichts BEKANNT ist — nicht, weil alles in Ordnung waere. Eine
+            // CSV wird weitergegeben und gegen die Dokumentation gehalten,
+            // dort wirkt "Normal" noch mehr wie eine Messung.
+            statusLabel(n, t('detail.ghost.status')),
             n.label || n.host || '',
             TYPE_LBL[n.type] || n.type || '',
             n._primaryGroup || '',
@@ -982,8 +981,11 @@ export function rowHtml(n, baseUrl, theme) {
     // wer eines von beiden aendert, soll das andere mitbedenken.
     const istGeist = !!n._isGhost;
     const sev = n.severity || 0;
-    const sevCol = SEV_COL[sev];
-    const sevLbl = SEV_LBL[sev];
+    // Farbe und Text ueber den gemeinsamen Ort — siehe severity.js. Der
+    // Geisterzweig unten ersetzt die Pille zwar ohnehin, aber die Entscheidung
+    // soll hier gar nicht erst zweimal getroffen werden koennen.
+    const sevCol = statusColor(n);
+    const sevLbl = statusLabel(n, t('detail.ghost.status'));
     const ti = TYPE_ICON[n.type] || '\u2753';
     const tl = TYPE_LBL[n.type] || (n.type || t('table.type.unknown'));
     const grp = n._primaryGroup || '';

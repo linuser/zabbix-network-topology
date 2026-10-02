@@ -22,7 +22,7 @@
 
 import { fmt, linkCapacity } from './utils.js';
 import { makeNodeImage } from './icons.js';
-import { SEV_COL } from './severity.js';
+import { SEV_COL, statusColor } from './severity.js';
 import { annotateBundles } from './parallel-links.js';
 
 // Synthetische Internet-Wolke + Edges injizieren, falls nötig.
@@ -218,8 +218,9 @@ export function buildNodeElements(nodes, perfMode) {
             severity: n.severity || 0,
             // Severity-Farbe fuer den Performance-Modus (background-color statt
             // SVG-Image). Offline (unavailable) sticht als grau heraus.
-            sevColor: n.unavailable ? '#9ca3af'
-                : SEV_COL[Math.min(n.severity || 0, SEV_COL.length - 1)],
+            // Offline sticht als grau heraus; sonst ueber statusColor, das
+            // auch das Klemmen uebernimmt und einen Geist nicht gruen faerbt.
+            sevColor: n.unavailable ? '#9ca3af' : statusColor(n),
             cpu: n.cpu, memory: n.memory, ping: n.ping, traffic: n.traffic,
             iface_health: n.iface_health || null,
             link_speed: n.link_speed || 0,

@@ -430,6 +430,40 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// Der gemeinsame Ort fuer "was steht als Status da". Geprueft wird nicht nur
+// der Geist, sondern auch das Klemmen: das Math.min stand vorher an drei
+// Stellen einzeln und fehlte an zweien — ein Wert ueber 5 waere ins Leere
+// getroffen und ueber `|| SEV_COL[0]` ausgerechnet als GRUEN gelandet.
+console.log('\n  severity.js: ein Ort fuer den Status\n');
+const stat = szenario('status', { lang: 'en_US' }, `
+    const S = await import(${JSON.stringify(MODULE('severity.js'))});
+    const paar = (d) => [S.statusLabel(d), S.statusColor(d)];
+    console.log(JSON.stringify({
+        normal:   paar({ severity: 0 }),
+        disaster: paar({ severity: 5 }),
+        drueber:  paar({ severity: 9 }),
+        negativ:  paar({ severity: -1 }),
+        text:     paar({ severity: '3' }),
+        leer:     paar({}),
+        geist:    paar({ _isGhost: true, severity: 0 }),
+        geistSev: paar({ _isGhost: true, severity: 4 }),
+        geistTxt: S.statusLabel({ _isGhost: true }, 'NICHT UEBERWACHT'),
+        istGeist: [S.istGeist({ _isGhost: true }), S.istGeist({}), S.istGeist(null)],
+    }));
+`);
+if (stat) {
+    pruefe('severity 0 -> Normal',            stat.normal,   ['Normal', '#22c55e']);
+    pruefe('severity 5 -> Disaster',          stat.disaster, ['Disaster', '#991b1b']);
+    pruefe('ueber 5 bleibt Disaster',         stat.drueber,  ['Disaster', '#991b1b']);
+    pruefe('negativ wird nicht gruen geraten', stat.negativ, ['Normal', '#22c55e']);
+    pruefe('Zeichenkette zaehlt als Zahl',    stat.text,     ['Average', '#f97316']);
+    pruefe('ohne Severity: Normal',           stat.leer,     ['Normal', '#22c55e']);
+    pruefe('Geist ist nicht Normal',          stat.geist,    ['NOT MONITORED', '#94a3b8']);
+    pruefe('Geist schlaegt eine Severity',    stat.geistSev, ['NOT MONITORED', '#94a3b8']);
+    pruefe('Text ist uebersetzbar',           stat.geistTxt, 'NICHT UEBERWACHT');
+    pruefe('istGeist trennt sauber',          stat.istGeist, [true, false, false]);
+}
+
 // Eine Geisterzeile darf KEINEN Link nach Zabbix tragen: ihre id ist
 // 'ghost_<name>' und keine hostid, jeder solche Link fuehrt auf eine nach
 // einem nicht existierenden Host gefilterte Seite. Geprueft wird das erzeugte

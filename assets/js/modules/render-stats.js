@@ -12,6 +12,7 @@
 // werden ausgeklammert — sie zaehlen nicht als neue Events.
 
 import { esc, mkTabTheme, buildBaseUrl, fmt, linkCapacity, isDark, clearWrap } from './utils.js';
+import { SEV_LBL } from './severity.js';
 import { t } from './i18n.js';
 import { fetchJson } from './http.js';
 
@@ -23,7 +24,7 @@ const RANGES = [
 const DEFAULT_DAYS = 7;
 
 const SEV_COLORS = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
-const SEV_LBL    = ['Normal', 'Info', 'Warning', 'Average', 'High', 'Disaster'];
+// Aus severity.js statt als eigene Kopie — siehe dort, warum es einen Ort gibt.
 
 // Aggregation: nimm das Backend-Format { events: {hostid: [{ts,sev,name,val,pre?}]}, from, to }
 // und baue daraus die drei Statistiken (perDay, perHost, perTrigger).

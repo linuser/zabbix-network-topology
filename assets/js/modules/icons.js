@@ -8,7 +8,7 @@
 // nötig nach Zustandswechseln (Dark-Mode, Pin-Toggle, Note-Edit), damit das
 // nächste makeNodeImage() den Cache nicht aus Versehen wiederverwendet.
 
-import { SEV_COL, grpColor } from './severity.js';
+import { SEV_COL, grpColor, statusColor } from './severity.js';
 import { isDark } from './utils.js';
 
 export const TYPE_ICON = {
@@ -97,8 +97,7 @@ export function makeNodeImage(d) {
     // Skull-Server damit man "tot" von "Disaster-Trigger" unterscheiden kann).
     const offline = !!d.unavailable;
     const dead = !offline && (d.severity || 0) >= 5;
-    const sevCol = offline ? '#9ca3af'
-        : SEV_COL[Math.min(d.severity || 0, SEV_COL.length - 1)];
+    const sevCol = offline ? '#9ca3af' : statusColor(d);
     const gc = grpColor(d._primaryGroup);
     const segs = [
         { col: '#3b82f6', val: Math.min(d.cpu    || 0, 100) },

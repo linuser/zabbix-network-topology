@@ -16,7 +16,7 @@
 
 import { esc, isDark, clearWrap, refreshIntervallMs, refreshLabel } from './utils.js';
 import { t } from './i18n.js';
-import { primaryGroup, SEV_COL } from './severity.js';
+import { primaryGroup, SEV_COL, statusColor } from './severity.js';
 import { makeNodeImage, clearImgCache } from './icons.js';
 import {
     NT_GROUP_VIEW_KEY, NT_LLDP_KEY, NT_PERF_KEY, setGroupViewEffective,
@@ -809,7 +809,7 @@ export function render(wrap, nodes, edges, dataUrl) {
                     // neu bauen); sonst das volle Node-Image.
                     if (perfMode) {
                         node.data('sevColor', node.data('unavailable') ? '#9ca3af'
-                            : SEV_COL[Math.min(node.data('severity') || 0, SEV_COL.length - 1)]);
+                            : statusColor(node.data()));
                     } else {
                         node.data('bgImage', makeNodeImage(node.data()));
                     }
