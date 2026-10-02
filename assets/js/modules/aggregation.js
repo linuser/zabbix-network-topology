@@ -158,10 +158,28 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
     });
 
     const aggEdgeMap = {};
+    const echte = [];
     edges.forEach(function(e) {
-        const src = vertreter[String(e.source || e.from || '')];
-        const tgt = vertreter[String(e.target || e.to || '')];
+        const sId = String(e.source || e.from || '');
+        const tId = String(e.target || e.to || '');
+        const src = vertreter[sId];
+        const tgt = vertreter[tId];
         if (!src || !tgt || src === tgt) return;
+
+        // Haengt das Kabel an ZWEI aufgeklappten Hosts, bleibt es, wie es ist.
+        //
+        // Das ist kein Feinschliff, daran ist die Karte gestorben. Eine
+        // Aggregat-Kante ist {source, target, count} — ohne id, Ports,
+        // Verkehr, LLDP-Kennzeichen. Solange ALLES zusammengefasst war, gab
+        // es nie eine andere Art Kante und die magere Form war richtig. Seit
+        // eine Gruppe ganz geoeffnet werden kann, treffen echte Hosts
+        // aufeinander, und ihre Kabel als Aggregate nachzubauen heisst, sie
+        // zu zerstoeren: "Loading topology…" blieb stehen, der Server hatte
+        // laengst 1,3 MB geliefert.
+        if (!nodeToGroup[sId] && !nodeToGroup[tId]) {
+            echte.push(e);
+            return;
+        }
 
         const key = [src, tgt].sort().join('|');
         if (!aggEdgeMap[key]) {
@@ -169,7 +187,8 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
         }
         aggEdgeMap[key].count++;
     });
-    const aggEdges = Object.keys(aggEdgeMap).map(function(k) { return aggEdgeMap[k]; });
+    const aggEdges = echte.concat(
+        Object.keys(aggEdgeMap).map(function(k) { return aggEdgeMap[k]; }));
 
     return { nodes: aggNodes, edges: aggEdges };
 }

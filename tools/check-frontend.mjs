@@ -856,9 +856,11 @@ const ebenen = szenario('gruppen', { lang: 'en_US' }, `
         mk('m1', 'Muenchen/Campus/Access'),
     ];
     // Ein Kabel innerhalb einer Blattgruppe, eines zwischen Standorten.
+    // Die Kanten tragen Nutzlast — genau die muss ueberleben, wenn beide
+    // Enden aufgeklappt sind.
     const edges = [
-        { source: 'a1', target: 'a2' },
-        { source: 'd1', target: 'm1' },
+        { id: 'e1', source: 'a1', target: 'a2', isLLDP: true, ports: { a1: 'Gi1/0/1' } },
+        { id: 'e2', source: 'd1', target: 'm1', isLLDP: true },
     ];
     const lauf = (offen) => {
         const r = A.aggregateByGroup(nodes, edges, offen);
@@ -866,6 +868,10 @@ const ebenen = szenario('gruppen', { lang: 'en_US' }, `
             ids:    r.nodes.map((n) => n.id).sort(),
             labels: r.nodes.map((n) => n.label).sort(),
             kanten: r.edges.map((e) => [e.source, e.target].sort().join('|')).sort(),
+            echt: (function() {
+                const k = r.edges.filter((e) => e.source === 'a1' || e.target === 'a1')[0];
+                return k ? { id: k.id, isLLDP: k.isLLDP, port: k.ports && k.ports.a1 } : null;
+            })(),
         };
     };
     console.log(JSON.stringify({
@@ -904,6 +910,11 @@ if (ebenen) {
     // unsichtbar. Aufgeklappt muss sie wieder da sein.
     pruefe('aufgeklappt kommt das interne Kabel zurueck',
         ebenen.hosts.kanten.indexOf('a1|a2') >= 0, true);
+    // Und zwar UNVERSEHRT. Als Aggregat nachgebaut verliert es id, Ports und
+    // LLDP-Kennzeichen — daran ist die Karte haengengeblieben, bevor der
+    // Durchlass fuer Kabel zwischen zwei aufgeklappten Hosts da war.
+    pruefe('und zwar mit id, Ports und LLDP-Kennzeichen',
+        ebenen.hosts.echt, { id: 'e1', isLLDP: true, port: 'Gi1/0/1' });
     // Und ein aufgeklappter Host haengt weiter am Rest der Karte.
     pruefe('zu: nur die Kante zwischen den Standorten',
         ebenen.zu.kanten, ['grp_Berlin|grp_Muenchen']);
