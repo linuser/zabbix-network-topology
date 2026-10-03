@@ -682,7 +682,7 @@ export default {
     'diag.gzip.measuring': 'Messe, was gzip daraus machen w\u00fcrde\u2026',
     'diag.gzip.measured':  'gzip w\u00fcrde aus {raw} genau {gz} machen \u2014 Faktor {ratio}. Hier gemessen, in diesem Browser, an der Karte, die du ansiehst.',
     'diag.gzip.unknown':   'Wie viel gzip sparen w\u00fcrde, lie\u00df sich in diesem Browser nicht messen.',
-    'diag.gzip.how':       'Komprimieren ist Aufgabe des Webservers, nicht des Moduls: gzip f\u00fcr application/json und application/javascript in nginx oder Apache einschalten. Im lokalen Netz merkt man den Unterschied nicht \u2014 \u00fcber VPN, aus dem Homeoffice oder vom Mobilger\u00e4t ist es die gr\u00f6\u00dfte Einzelersparnis \u00fcberhaupt, und eine gro\u00dfe Karte l\u00e4dt alle zwei Minuten je Betrachter neu.',
+    'diag.gzip.how':       'Ein Vorschlag, keine Vorgabe \u2014 und nichts, was das Modul f\u00fcr dich tun kann: Komprimieren geh\u00f6rt in den Webserver. gzip ist meist schon an; was \u00fcblicherweise fehlt, sind die Typen, denn application/json steht nicht in der Standardliste und application/x-javascript trifft die .js-Dateien nicht mehr, die Browser ausgeliefert bekommen. Im lokalen Netz merkt man den Unterschied nicht. \u00dcber VPN, aus dem Homeoffice oder vom Mobilger\u00e4t ist es die gr\u00f6\u00dfte Einzelersparnis \u00fcberhaupt, und eine gro\u00dfe Karte l\u00e4dt alle zwei Minuten je Betrachter neu. In INSTALL.md stehen die Zeilen f\u00fcr nginx und Apache.',
     'diag.summary': 'Zusammenfassung',
     'diag.recent': 'Letzte Aufrufe',
     'diag.col.ago': 'vor',

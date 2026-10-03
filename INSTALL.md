@@ -325,42 +325,56 @@ Two things need a manual follow-up:
 
 Everything user-side is preserved. The map layout and manual links live server-side — in `module.config` and the user profile, not tied to the module name. Pins, notes, filter presets and toolbar settings live in `localStorage`, whose keys were never tied to the module name either. Host tags (`nt:parent`) are unaffected anyway.
 
-### Compression — the largest single saving, and it is not in the module
+### Compression — a recommendation, not a requirement
 
-A map of 1000 hosts is about **1.2 MB of JSON**, and it reloads every two
-minutes per viewer. Measured on the load-test rig: **gzip turns those 1.2 MB
-into 73 KB, a factor of 17**. Uncompressed it is not only the module —
-Zabbix' own `jsLoader.php` is another 1 MB on every page load, and
-`cytoscape.min.js` 357 KB. The official Zabbix container images compress
-`text/css` but leave `application/javascript` and PHP responses alone.
+**This is not something the module changes, and it is not something you have
+to do.** It is written down because it is measurable and because the numbers
+surprised us; what you do with your web server is your decision.
 
-**On a local network you will not notice this.** 1.2 MB at gigabit is about
-10 ms. It matters where monitoring is actually looked at: over VPN, from
-home, on a phone. At 10 Mbit/s those 1.2 MB are a second, at 2 Mbit/s five —
-more than anything that could be gained inside the module.
+A map of 1000 hosts is about **1.2 MB of JSON**, reloaded every two minutes
+per viewer. Measured on the load-test rig: **gzip turns it into 73 KB, a
+factor of 17**. The Diag tab measures the same thing for your installation, on
+your own map, so none of this has to be taken on trust.
 
-The Diag tab measures this for your installation and says what gzip would
-make of your own map, so you do not have to take the numbers above on trust.
+**What we found is not a missing setting but an incomplete list.** The
+official Zabbix container images already enable gzip — for `text/plain`,
+`text/css` and `application/x-javascript`. Two things fall through:
 
-nginx:
+- **`application/json` is not in the list at all**, so the map response is
+  never compressed.
+- **`application/x-javascript` is the legacy MIME type.** Modern nginx serves
+  `.js` as `application/javascript`, so script files are not matched either —
+  which affects Zabbix' own `jsLoader.php` (about 1 MB per page load) and
+  `cytoscape.min.js` (357 KB) just as much as this module's bundle.
+
+Adding the two types is the whole change:
 
 ```nginx
-gzip on;
-gzip_types application/json application/javascript text/css text/plain;
-gzip_min_length 1024;
+gzip_types application/json application/javascript text/javascript;
 ```
-
-Apache:
 
 ```apache
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE application/json application/javascript text/css text/plain
-</IfModule>
+AddOutputFilterByType DEFLATE application/json application/javascript text/javascript
 ```
 
-Compression belongs in the web server, not in the module: a module that
-compresses its own responses breaks `Content-Length` and caching in places
-nobody would look for it.
+**Where to put it is the part worth thinking about.** On a package
+installation it belongs in your own nginx or Apache configuration. **In a
+container, do not edit the files inside it** — they are gone with the next
+image. The image's own `includes/user.conf` hook does not help here either:
+it is included in the *main* context, and `gzip_types` is only valid inside
+`http`, `server` or `location`. That leaves a file mounted into
+`/etc/nginx/http.d/`, or — usually simpler, and already present wherever TLS
+terminates somewhere else — the reverse proxy in front.
+
+**On a local network you will not notice any of this.** 1.2 MB at gigabit is
+about 10 ms. It matters where monitoring is actually looked at: over VPN, from
+home, on a phone. At 10 Mbit/s those 1.2 MB are a second, at 2 Mbit/s five —
+more than could be gained anywhere inside the module.
+
+The module deliberately does **not** compress its own responses.
+`ob_gzhandler` or `gzencode()` would work and would break `Content-Length` and
+caching in places where nobody would look for the cause. Compression belongs
+to the web server.
 
 ### Uninstall
 
@@ -719,42 +733,58 @@ Zwei Dinge musst du danach von Hand nachziehen:
 
 Alles Nutzerseitige bleibt erhalten. Kartenanordnung und manuelle Links liegen serverseitig — an `module.config` und am Benutzerprofil, nicht am Modulnamen. Pins, Notizen, Filter-Presets und Toolbar-Einstellungen liegen im `localStorage`, dessen Schlüssel nie an den Modulnamen gebunden waren. Host-Tags (`nt:parent`) sind ohnehin unberührt.
 
-### Kompression — die größte Einzelersparnis, und sie liegt nicht im Modul
+### Kompression — eine Empfehlung, keine Vorgabe
+
+**Das Modul ändert daran nichts, und niemand muss es tun.** Es steht hier,
+weil es messbar ist und weil die Zahlen uns überrascht haben; was mit deinem
+Webserver geschieht, ist deine Entscheidung.
 
 Eine Karte mit 1000 Hosts ist rund **1,2 MB JSON** und lädt alle zwei Minuten
-je Betrachter neu. Am Lasttestfeld gemessen: **gzip macht aus diesen 1,2 MB
-genau 73 KB, Faktor 17**. Unkomprimiert ist dabei nicht nur das Modul —
-Zabbix' eigener `jsLoader.php` ist bei jedem Seitenaufruf ein weiteres MB,
-`cytoscape.min.js` 357 KB. Die offiziellen Zabbix-Container komprimieren
-`text/css`, lassen `application/javascript` und PHP-Antworten aber aus.
+je Betrachter neu. Am Lasttestfeld gemessen: **gzip macht daraus 73 KB, Faktor
+17**. Der Diag-Tab misst dasselbe für deine Installation an deiner eigenen
+Karte — glauben muss man das hier also nicht.
 
-**Im lokalen Netz merkt man davon nichts.** 1,2 MB bei Gigabit sind rund
-10 ms. Es zählt dort, wo Monitoring tatsächlich angesehen wird: über VPN, aus
-dem Homeoffice, vom Mobilgerät. Bei 10 Mbit/s wird aus 1,2 MB eine Sekunde,
-bei 2 Mbit/s fünf — mehr, als im Modul selbst überhaupt zu holen wäre.
+**Gefunden haben wir keine fehlende Einstellung, sondern eine unvollständige
+Liste.** Die offiziellen Zabbix-Container haben gzip bereits an — für
+`text/plain`, `text/css` und `application/x-javascript`. Zwei Dinge fallen
+durch:
 
-Der Diag-Tab misst das für deine Installation und sagt, was gzip aus deiner
-eigenen Karte machen würde; die Zahlen oben muss man also nicht glauben.
+- **`application/json` steht gar nicht in der Liste**, die Kartenantwort wird
+  also nie komprimiert.
+- **`application/x-javascript` ist der veraltete MIME-Typ.** Moderne nginx
+  liefern `.js` als `application/javascript` aus, Skriptdateien werden also
+  ebenfalls nicht erfasst — das betrifft Zabbix' eigenen `jsLoader.php` (rund
+  1 MB je Seitenaufruf) und `cytoscape.min.js` (357 KB) genauso wie das Bundle
+  dieses Moduls.
 
-nginx:
+Die beiden Typen zu ergänzen ist die ganze Änderung:
 
 ```nginx
-gzip on;
-gzip_types application/json application/javascript text/css text/plain;
-gzip_min_length 1024;
+gzip_types application/json application/javascript text/javascript;
 ```
-
-Apache:
 
 ```apache
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE application/json application/javascript text/css text/plain
-</IfModule>
+AddOutputFilterByType DEFLATE application/json application/javascript text/javascript
 ```
 
-Komprimieren gehört in den Webserver, nicht ins Modul: eines, das seine
-Antworten selbst komprimiert, bricht `Content-Length` und Caching an Stellen,
-an denen niemand bei ihm sucht.
+**Worüber nachzudenken lohnt, ist der Ort.** Bei einer Paketinstallation
+gehört es in die eigene nginx- oder Apache-Konfiguration. **Im Container nicht
+die Dateien darin ändern** — die sind mit dem nächsten Image weg. Der
+vorgesehene Haken `includes/user.conf` des Images hilft hier auch nicht: er
+wird im *main*-Kontext eingebunden, und `gzip_types` ist nur in `http`,
+`server` oder `location` gültig. Bleiben eine Datei, die nach
+`/etc/nginx/http.d/` gemountet wird, oder — meist einfacher und ohnehin
+vorhanden, wo TLS woanders endet — der vorgelagerte Reverse Proxy.
+
+**Im lokalen Netz merkt man von all dem nichts.** 1,2 MB bei Gigabit sind rund
+10 ms. Es zählt dort, wo Monitoring tatsächlich angesehen wird: über VPN, aus
+dem Homeoffice, vom Mobilgerät. Bei 10 Mbit/s wird aus 1,2 MB eine Sekunde,
+bei 2 Mbit/s fünf — mehr, als im Modul selbst irgendwo zu holen wäre.
+
+Das Modul komprimiert seine Antworten bewusst **nicht** selbst.
+`ob_gzhandler` oder `gzencode()` gingen und würden `Content-Length` und
+Caching an Stellen brechen, an denen niemand die Ursache sucht. Komprimieren
+gehört in den Webserver.
 
 ### Deinstallation
 

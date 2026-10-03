@@ -677,7 +677,7 @@ export default {
     'diag.gzip.measuring': 'Measuring what gzip would make of it\u2026',
     'diag.gzip.measured':  'gzip would turn {raw} into {gz} \u2014 a factor of {ratio}. Measured here, in this browser, on the map you are looking at.',
     'diag.gzip.unknown':   'How much gzip would save could not be measured in this browser.',
-    'diag.gzip.how':       'Compression is the web server\u2019s job, not the module\u2019s: switch on gzip for application/json and application/javascript in nginx or Apache. On a local network you will not notice the difference \u2014 over VPN, from home or on a phone, this is the largest single saving there is, and a large map reloads every two minutes per viewer.',
+    'diag.gzip.how':       'A suggestion, not a requirement \u2014 and nothing the module can do for you: compression belongs to the web server. gzip is usually already on; what is normally missing is the types, because application/json is absent from the default list and application/x-javascript no longer matches the .js files browsers are served. On a local network you will not notice the difference. Over VPN, from home or on a phone it is the largest single saving there is, and a large map reloads every two minutes per viewer. INSTALL.md has the nginx and Apache lines.',
     'diag.summary': 'Summary',
     'diag.recent': 'Recent calls',
     'diag.col.ago': 'Ago',
