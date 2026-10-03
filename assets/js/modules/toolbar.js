@@ -18,6 +18,7 @@ import { loadGroupOpen, saveGroupOpen } from './storage.js';
 import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
     isGroupViewEffective,
          loadGhostMode, saveGhostMode,
+         loadBundleMode, saveBundleMode,
          clearPositions, savePositions, savePinned, clearLinks, defaultLinkScope,
          loadLayout, saveLayout,
          loadTapholdMs, saveTapholdMs } from './storage.js';
@@ -495,6 +496,27 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         const jetzt = loadGhostMode();
         saveGhostMode(_GHOST_RING[(_GHOST_RING.indexOf(jetzt) + 1) % _GHOST_RING.length]);
         _setGhostLabel();
+        const d = window._ntLastData || {};
+        if (d.nodes && d.nodes.length) {
+            _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');
+        }
+    };
+
+    // Endgeraete buendeln: an/aus. Die Umkehrung des 'infra'-Filters — nicht
+    // wegwerfen, sondern zusammenfassen. Nur sinnvoll, wenn Geister ueberhaupt
+    // gezeigt werden; der Schalter steht trotzdem immer da, weil er sonst
+    // genau dann fehlte, wenn man ihn sucht (viele Geister auf einmal).
+    const bBundle = mkbtn('nt-btn-bundle', '', null);
+    const _setBundleLabel = function() {
+        const an = loadBundleMode();
+        bBundle.textContent = t('toolbar.bundle', { state: t(an ? 'toolbar.on' : 'toolbar.off') });
+        bBundle.style.opacity = an ? '1' : '0.5';
+        bBundle.title = t('toolbar.bundle.tip');
+    };
+    _setBundleLabel();
+    bBundle.onclick = function() {
+        saveBundleMode(!loadBundleMode());
+        _setBundleLabel();
         const d = window._ntLastData || {};
         if (d.nodes && d.nodes.length) {
             _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');

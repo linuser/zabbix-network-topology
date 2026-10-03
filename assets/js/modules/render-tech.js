@@ -21,10 +21,11 @@ import { makeNodeImage, clearImgCache } from './icons.js';
 import {
     NT_GROUP_VIEW_KEY, NT_LLDP_KEY, NT_PERF_KEY, setGroupViewEffective,
     loadGroupOpen, toggleGroupOpen,
+    loadBundleMode, loadBundleOpen, toggleBundleOpen,
     loadPositions, savePositions, loadPinned, loadNotes, loadLinks, addLink,
     loadLayout, loadTapholdMs
 } from './storage.js';
-import { aggregateByGroup } from './aggregation.js';
+import { aggregateByGroup, aggregateEndpoints } from './aggregation.js';
 import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
 import { isPathActive, clearPathState } from './path-highlight.js';
 import { clearSimulation, isSimActive, recomputeSimulation } from './whatif.js';
@@ -241,6 +242,18 @@ export function render(wrap, nodes, edges, dataUrl) {
         // Einmal pro Sitzung sagen, woran es liegt.
         if (_ghostMode === 'infra' && !withGhosts.gefiltert && nodes.length > _vorher) {
             toastTruncatedOnce('ghostfilter', t('warn.ghost_filter_idle'));
+        }
+
+        // ── Endgeraete buendeln ───────────────────────────────────────────
+        // Erst JETZT, nach der Geister-Injektion: gebuendelt werden nur
+        // Geister, und die entstehen hier. An einem Access-Switch mit 48 Ports
+        // fasst das die namenlosen Blatt-Endgeraete zu einem Knoten zusammen,
+        // der sich per Klick aufklappt — die Umkehrung des 'infra'-Filters,
+        // der sie wegwirft. Voreingestellt an, abschaltbar in der Toolbar.
+        if (loadBundleMode()) {
+            const geb = aggregateEndpoints(nodes, edges, loadBundleOpen());
+            nodes = geb.nodes;
+            edges = geb.edges;
         }
     }
 
@@ -640,6 +653,18 @@ export function render(wrap, nodes, edges, dataUrl) {
             }
         });
     }
+
+    // Klick auf ein Endgeraete-Buendel klappt genau diesen Switch auf (oder
+    // wieder zu). Eigener Handler, weil ein Buendel kein Gruppen-Aggregat ist.
+    cy.on('tap', 'node[?_isEndpointBundle]', function(ev) {
+        const sw = ev.target.data('_bundleSwitch');
+        if (!sw) return;
+        toggleBundleOpen(sw);
+        const _d = window._ntLastData || {};
+        if (_d.nodes && _d.nodes.length) {
+            render(wrap, _d.nodes.slice(), (_d.edges || []).slice(), _d.url || '');
+        }
+    });
 
     bindCollapse(cy);
     const _leafPref = collapsePref();

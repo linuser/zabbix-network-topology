@@ -564,6 +564,12 @@ export default {
     'http.denied': 'Keine Berechtigung mehr für diese Abfrage (HTTP {status}). Meist ist die Sitzung abgelaufen — Seite neu laden und erneut anmelden.',
     'http.body_start': 'Die Antwort begann mit: {start}',
     'agg.no_group': '— Ohne Gruppe —',
+    'bundle.label': '{n} Endger\u00e4te',
+    'toolbar.bundle': '\u{1F4E6} Endger\u00e4te b\u00fcndeln: {state}',
+    'toolbar.bundle.tip': 'Die un\u00fcberwachten Endger\u00e4te je Switch zu einem Knoten zusammenfassen \u2014 Arbeitsplatzrechner, Drucker, Telefone. Klick auf ein B\u00fcndel klappt es auf. Das Gegenteil des \u201enur Netzger\u00e4te\u201c-Filters: nichts wird weggeworfen, nur eingeklappt.',
+    'toolbar.on': 'an',
+    'toolbar.off': 'aus',
+    'bundle.tip': 'Un\u00fcberwachte Endger\u00e4te an diesem Switch, zu einem Knoten geb\u00fcndelt \u2014 Klick klappt auf. Arbeitsplatzrechner, Drucker, Telefone: was an einem Port h\u00e4ngt und keine Infrastruktur-Rolle meldet.',
     'minimap.tip': 'Minimap — klicken zum Navigieren',
 
     // Wartung aus der Map (context-menu.js)

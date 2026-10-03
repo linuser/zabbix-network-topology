@@ -559,6 +559,12 @@ export default {
     'http.denied': 'No permission for this request any more (HTTP {status}). Usually the session has expired — reload the page and sign in again.',
     'http.body_start': 'The answer began with: {start}',
     'agg.no_group': '— No group —',
+    'bundle.label': '{n} endpoints',
+    'toolbar.bundle': '\u{1F4E6} Bundle endpoints: {state}',
+    'toolbar.bundle.tip': 'Collapse the unmonitored end devices on each switch into one node \u2014 workstations, printers, phones. Click a bundle to expand it. The opposite of the \u201cnetwork gear only\u201d ghost filter: nothing is thrown away, only folded.',
+    'toolbar.on': 'on',
+    'toolbar.off': 'off',
+    'bundle.tip': 'Unmonitored end devices on this switch, bundled into one node \u2014 click to expand. Workstations, printers, phones: things that hang on a single port and advertise no infrastructure role.',
     'minimap.tip': 'Minimap — click to navigate',
 
     // Maintenance from the map (context-menu.js)

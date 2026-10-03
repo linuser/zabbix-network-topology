@@ -133,6 +133,24 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
             'font-style': 'italic',
             'min-zoomed-font-size': 9,
         }},
+        // Endgeraete-Buendel: ein abgerundetes Rechteck statt eines Icons —
+        // es ist kein Geraet, sondern eine Schachtel voller Geraete. Die
+        // doppelte Kontur deutet den Stapel an; die Beschriftung ("34
+        // Endgeraete") kommt aus den Daten. Klickbar, deshalb kein gedaempftes
+        // opacity wie beim Geist — ein Buendel ist eine Handlungsaufforderung.
+        { selector: 'node[?_isEndpointBundle]', style: {
+            'background-image': 'none',
+            'shape': 'round-rectangle',
+            'background-color': dark ? '#475569' : '#cbd5e1',
+            'background-opacity': 0.9,
+            'width': 58, 'height': 36,
+            'border-width': 2, 'border-style': 'solid',
+            'border-color': dark ? '#94a3b8' : '#64748b',
+            'color': dark ? '#e2e8f0' : '#334155',
+            'font-size': 10, 'font-weight': 600,
+            'text-valign': 'center', 'text-halign': 'center',
+            'min-zoomed-font-size': 7,
+        }},
         // Neu aufgetauchte Kante. Bewusst nur eine Glorie (underlay) statt
         // einer eigenen Linienfarbe: die Kante soll weiter zeigen, was sie
         // zeigt — Traffic, Auslastung, Zustand —, und zusaetzlich auffallen.

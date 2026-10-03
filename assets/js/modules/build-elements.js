@@ -24,6 +24,7 @@ import { fmt, linkCapacity } from './utils.js';
 import { makeNodeImage } from './icons.js';
 import { SEV_COL, statusColor } from './severity.js';
 import { annotateBundles } from './parallel-links.js';
+import { INFRA_CAPS } from './device-caps.js';
 
 // Synthetische Internet-Wolke + Edges injizieren, falls nötig.
 // Mutiert NICHT die Eingabe-Arrays — gibt neue Arrays zurück.
@@ -73,11 +74,6 @@ export function injectInternetCloud(nodes, edges, layoutId) {
 // denselben Unbekannten melden → EIN Ghost-Knoten, mehrere Kanten.
 //
 // Mutiert die Eingabe-Arrays NICHT — gibt neue zurueck (wie injectInternetCloud).
-// Welche Faehigkeiten machen ein Geraet zu INFRASTRUKTUR? Genau die drei, die
-// ein Netz aufspannen. Telefone und Arbeitsplatzrechner melden 'Station' oder
-// 'Telephone' und gehoeren nicht dazu.
-const INFRA_CAPS = ['Bridge', 'Router', 'WLAN AP'];
-
 // Traegt dieser Geist etwas, das nach Infrastruktur aussieht?
 //
 // KEINE FAEHIGKEITEN HEISST BEHALTEN. Ein Geraet, das nichts meldet — oder
@@ -281,6 +277,13 @@ export function buildNodeElements(nodes, perfMode) {
             // render-tech nicht, WELCHE Ebene er aufklappen soll — und das
             // faellt nicht auf, es passiert dann einfach nichts.
             nodeData._gruppenPfad = n._gruppenPfad;
+        }
+        // Endgeraete-Buendel durchreichen. Der Tap-Handler in render-tech
+        // liest _bundleSwitch, um genau diesen Switch aufzuklappen.
+        if (n._isEndpointBundle) {
+            nodeData._isEndpointBundle = true;
+            nodeData._bundleSwitch     = n._bundleSwitch;
+            nodeData._childCount       = n._childCount;
         }
         // Im Performance-Modus kein SVG bauen — der nt-perf-Style nutzt sevColor.
         // WICHTIG: 'none', NICHT '' — der Basis-Node-Style bildet

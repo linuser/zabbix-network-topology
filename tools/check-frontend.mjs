@@ -435,6 +435,62 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+console.log('\n  Endgeraete buendeln\n');
+const epb = szenario('endpoints', { lang: 'en_US' }, `
+    const A = await import(${JSON.stringify(MODULE('aggregation.js'))});
+    const geist = (id, caps) => ({ id, _isGhost: true, _ghostCaps: caps || [] });
+    const sw = (id) => ({ id, type: 'switch' });
+    const nodes = [
+        sw('s1'), sw('s2'),
+        geist('e1'), geist('e2'), geist('e3'), geist('e4'),
+        geist('ap', ['WLAN AP']),
+        { id: 'h1', type: 'server' },
+    ];
+    const edges = [
+        { source: 's1', target: 'e1', _isGhostEdge: true },
+        { source: 's1', target: 'e2', _isGhostEdge: true },
+        { source: 's1', target: 'e3', _isGhostEdge: true },
+        { source: 's1', target: 'e4', _isGhostEdge: true },
+        { source: 's1', target: 'ap', _isGhostEdge: true },
+        { source: 's1', target: 's2' },
+        { source: 's2', target: 'h1' },
+    ];
+    const zu = A.aggregateEndpoints(nodes, edges, {});
+    const ids = zu.nodes.map((n) => n.id).sort();
+    const b = zu.nodes.find((n) => n._isEndpointBundle);
+    const auf = A.aggregateEndpoints(nodes, edges, { s1: true });
+    const duenn = A.aggregateEndpoints(
+        [sw('s2'), geist('x1'), geist('x2')],
+        [{ source: 's2', target: 'x1', _isGhostEdge: true },
+         { source: 's2', target: 'x2', _isGhostEdge: true }], {});
+    console.log(JSON.stringify({
+        schwelle:   A.BUENDEL_AB,
+        hatBuendel: !!b,
+        kinder:     b ? b._childCount : 0,
+        buendelAnS1: b ? b._bundleSwitch : null,
+        bleibt:     ['ap', 'h1', 's1', 's2'].every((x) => ids.indexOf(x) >= 0),
+        endpointsWeg: ['e1','e2','e3','e4'].every((x) => ids.indexOf(x) < 0),
+        buendelKante: zu.edges.filter((e) => e._isBundleEdge).length,
+        echteKanteBleibt: zu.edges.some((e) => (e.source === 's1' && e.target === 's2')),
+        aufKeinBuendel: auf.nodes.some((n) => n._isEndpointBundle) === false,
+        aufEinzeln: ['e1','e2','e3','e4'].every((x) => auf.nodes.map((n)=>n.id).indexOf(x) >= 0),
+        duennKeinBuendel: duenn.nodes.some((n) => n._isEndpointBundle) === false,
+    }));
+`);
+if (epb) {
+    pruefe('Schwelle ist 3',                      epb.schwelle, 3);
+    pruefe('vier Endgeraete werden gebuendelt',   epb.hatBuendel, true);
+    pruefe('... und das Buendel zaehlt vier',     epb.kinder, 4);
+    pruefe('... haengt am richtigen Switch',      epb.buendelAnS1, 's1');
+    pruefe('Infra-Geist (AP) und Host bleiben',   epb.bleibt, true);
+    pruefe('die Endgeraete verschwinden einzeln', epb.endpointsWeg, true);
+    pruefe('genau eine Buendel-Kante',            epb.buendelKante, 1);
+    pruefe('echte Switch-Kante bleibt',           epb.echteKanteBleibt, true);
+    pruefe('aufgeklappt: kein Buendel',           epb.aufKeinBuendel, true);
+    pruefe('aufgeklappt: Endgeraete wieder da',   epb.aufEinzeln, true);
+    pruefe('zu duenn (2): kein Buendel',          epb.duennKeinBuendel, true);
+}
+
 // Hersteller aus der Chassis-ID. Der wertvollste Teil braucht KEINE Tabelle:
 // zwei Bits im ersten Byte sagen, ob die Adresse ueberhaupt einen Hersteller
 // haben kann. Eine lokal vergebene MAC (VM, Zufallsadresse, Generator) hat

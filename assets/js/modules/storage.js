@@ -97,6 +97,45 @@ export function toggleGroupOpen(pfad) {
     return offen;
 }
 
+// ── Endgeraete-Buendel: An/Aus und welche Switches aufgeklappt sind ────────
+//
+// Pro Browser, wie der Gruppen-Aufklappzustand — es ist eine Blickrichtung,
+// keine Eigenschaft der Karte. Zwei getrennte Schluessel: ob ueberhaupt
+// gebuendelt wird (ein Schalter), und welche einzelnen Switches gerade offen
+// stehen (eine Menge von Switch-IDs).
+export const NT_BUNDLE_KEY      = 'nt_' + PFX + 'bundle';
+export const NT_BUNDLE_OPEN_KEY = 'nt_' + PFX + 'bundle_open';
+
+// Voreingestellt AN: wer die Geister auf 'alle' stellt, will die Uebersicht
+// nicht gleich wieder von achtundvierzig Arbeitsplatzrechnern zugestellt
+// bekommen. Ausschalten zeigt sie wieder einzeln.
+export function loadBundleMode() {
+    try {
+        const v = localStorage.getItem(NT_BUNDLE_KEY);
+        return v === null ? true : v === '1';
+    } catch (e) { return true; }
+}
+export function saveBundleMode(an) {
+    try { localStorage.setItem(NT_BUNDLE_KEY, an ? '1' : '0'); } catch (e) {}
+}
+
+export function loadBundleOpen() {
+    try {
+        const roh = JSON.parse(localStorage.getItem(NT_BUNDLE_OPEN_KEY) || '{}');
+        return (roh && typeof roh === 'object' && !Array.isArray(roh)) ? roh : {};
+    } catch (e) { return {}; }
+}
+export function saveBundleOpen(offen) {
+    try { localStorage.setItem(NT_BUNDLE_OPEN_KEY, JSON.stringify(offen || {})); } catch (e) {}
+}
+/** Ein Buendel auf- oder zuklappen (am Switch). Liefert den neuen Stand. */
+export function toggleBundleOpen(switchId) {
+    const offen = loadBundleOpen();
+    if (offen[switchId]) { delete offen[switchId]; } else { offen[switchId] = true; }
+    saveBundleOpen(offen);
+    return offen;
+}
+
 // Der TATSAECHLICHE Zustand der Gruppenansicht, nicht die gespeicherte Wahl.
 //
 // Beides faellt seit der Schwelle auseinander: ist nichts gespeichert und die

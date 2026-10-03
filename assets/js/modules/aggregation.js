@@ -25,6 +25,7 @@
 // auf Zuruf. Das Zusammenfassen gab es da schon, die Ebenen nicht.
 
 import { t } from './i18n.js';
+import { INFRA_CAPS } from './device-caps.js';
 
 /**
  * Auf welchem Namen wird dieser Host zusammengefasst — oder gar nicht?
@@ -242,4 +243,140 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
         Object.keys(aggEdgeMap).map(function(k) { return aggEdgeMap[k]; }));
 
     return { nodes: aggNodes, edges: aggEdges };
+}
+
+
+// ── ENDGERÄTE BÜNDELN ──────────────────────────────────────────────────────
+//
+// An einem Access-Switch mit 48 Ports haengen 48 Geister, wenn man sie alle
+// zeigt. Diese Funktion fasst die ENDGERÄTE darunter zu EINEM Knoten je Switch
+// zusammen ("34 Endgeraete"), der sich per Klick aufklappt. Anders als der
+// Geisterfilter (5.3.2), der Geraete WEGWIRFT, bleibt hier alles erhalten —
+// nur die Flaeche schrumpft.
+//
+// WAS GEBÜNDELT WIRD — strenger als beim Filter, sonst buendelt man Switches:
+//   - ein Geist (unueberwacht)
+//   - der an GENAU EINEM Geraet haengt (ein Blatt, eine Kante)
+//   - ohne Infrastruktur-Faehigkeit (nicht Bridge/Router/WLAN AP)
+//
+// Die Umkehrung zum Filter ist Absicht. Dort gilt "keine Faehigkeiten = behalten"
+// (ein unbekanntes Geraet koennte ein unueberwachter Switch sein). Beim Buendeln
+// ist ein namenloses, EINSEITIG haengendes Blatt ohne Infra-Faehigkeit mit
+// grosser Mehrheit ein Endgeraet — PC, Drucker, Telefon —, und genau die sind
+// die achtundvierzig. Ein Switch meldet Bridge ODER haengt an mehreren Ports;
+// beides schliesst ihn hier aus.
+
+/** Ab wie vielen Endgeraeten an einem Switch sich ein Buendel lohnt. */
+export const BUENDEL_AB = 3;
+
+/**
+ * Ist dieser Knoten ein buendelbares Endgeraet?
+ *
+ * Erwartet den Knoten und seinen Grad (Anzahl Kanten). Die Infrastruktur-
+ * Faehigkeiten kommen aus build-elements (INFRA_CAPS), damit die Grenze an
+ * EINER Stelle steht — ein Switch, der hier anders eingestuft wuerde als dort,
+ * waere genau die Verwechslung, die diese Pruefung vermeiden soll.
+ */
+export function istEndgeraet(n, grad) {
+    if (!n || !n._isGhost) {
+        return false;
+    }
+    if (grad !== 1) {
+        return false;   // mehr als eine Kante -> kein Blatt, eher Infrastruktur
+    }
+    const caps = n._ghostCaps || [];
+    return !caps.some(function(c) { return INFRA_CAPS.indexOf(c) !== -1; });
+}
+
+/**
+ * Endgeraete je Switch zu einem Buendel-Knoten zusammenfassen.
+ *
+ * Spiegelt aggregateByGroup: eine reine Funktion ohne Seiteneffekte. `offen`
+ * ist die Menge der aufgeklappten Switch-IDs (pro Browser gespeichert, wie der
+ * Gruppen-Aufklappzustand seit 5.5.0). Ein aufgeklappter Switch zeigt seine
+ * Endgeraete wieder einzeln.
+ *
+ * @param {Array} nodes
+ * @param {Array} edges
+ * @param {Object} offen  switchId -> true
+ * @return {{nodes: Array, edges: Array}}
+ */
+export function aggregateEndpoints(nodes, edges, offen) {
+    const auf = offen || {};
+    const byId = Object.create(null);
+    (nodes || []).forEach(function(n) { byId[String(n.id)] = n; });
+
+    // Grad je Knoten und — fuer Blaetter — der einzige Nachbar.
+    const grad = Object.create(null);
+    const nachbar = Object.create(null);
+    (edges || []).forEach(function(e) {
+        const a = String(e.source || e.from || '');
+        const b = String(e.target || e.to || '');
+        if (!a || !b || a === b) return;
+        grad[a] = (grad[a] || 0) + 1;
+        grad[b] = (grad[b] || 0) + 1;
+        nachbar[a] = b;
+        nachbar[b] = a;
+    });
+
+    // Buendelbare Endgeraete je Switch sammeln.
+    const proSwitch = Object.create(null);   // switchId -> [endpointNode, ...]
+    (nodes || []).forEach(function(n) {
+        const id = String(n.id);
+        if (!istEndgeraet(n, grad[id] || 0)) return;
+        const sw = nachbar[id];
+        if (!sw || !byId[sw]) return;         // Nachbar nicht auf der Karte
+        (proSwitch[sw] = proSwitch[sw] || []).push(n);
+    });
+
+    // Welche Switches werden tatsaechlich gebuendelt: genug Endgeraete UND
+    // nicht aufgeklappt. Ein aufgeklappter oder zu duenn besetzter Switch
+    // laesst seine Endgeraete unveraendert durch.
+    const gebuendelt = Object.create(null);   // endpointId -> switchId
+    Object.keys(proSwitch).forEach(function(sw) {
+        if (auf[sw]) return;
+        if (proSwitch[sw].length < BUENDEL_AB) return;
+        proSwitch[sw].forEach(function(n) { gebuendelt[String(n.id)] = sw; });
+    });
+
+    // Knoten: alles Nicht-Gebuendelte unveraendert, plus ein Buendel je Switch.
+    const outNodes = [];
+    (nodes || []).forEach(function(n) {
+        if (!gebuendelt[String(n.id)]) outNodes.push(n);
+    });
+    Object.keys(proSwitch).forEach(function(sw) {
+        if (auf[sw] || proSwitch[sw].length < BUENDEL_AB) return;
+        const kinder = proSwitch[sw];
+        outNodes.push({
+            id: 'bundle_' + sw,
+            label: t('bundle.label', { n: kinder.length }),
+            host: '',
+            type: 'bundle',
+            severity: 0,
+            problems: 0,
+            _isEndpointBundle: true,
+            _bundleSwitch: sw,
+            _childCount: kinder.length,
+            groups: [], traffic: { in: 0, out: 0 }
+        });
+    });
+
+    // Kanten: die Kante eines gebuendelten Endgeraets wird zur Buendel-Kante.
+    // Alles andere bleibt, wie es ist (vor allem die Kanten zwischen echten
+    // Geraeten — dieselbe Lehre wie bei aggregateByGroup).
+    const outEdges = [];
+    const buendelKante = Object.create(null);   // switchId -> true (einmal je Switch)
+    (edges || []).forEach(function(e) {
+        const a = String(e.source || e.from || '');
+        const b = String(e.target || e.to || '');
+        const swA = gebuendelt[a];
+        const swB = gebuendelt[b];
+        if (!swA && !swB) { outEdges.push(e); return; }   // nichts Gebuendeltes
+        const sw = swA || swB;
+        if (buendelKante[sw]) return;                     // nur eine Buendel-Kante
+        buendelKante[sw] = true;
+        outEdges.push({ source: sw, target: 'bundle_' + sw, _isBundleEdge: true });
+    });
+
+    return { nodes: outNodes, edges: outEdges };
 }
