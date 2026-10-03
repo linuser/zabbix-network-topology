@@ -78,10 +78,35 @@ class NetworkTopologyDiag extends NetworkTopologyController {
             $entries = DiagLog::nachZeitSortiert($entries);
         }
 
+        // ── Tagesreihe ────────────────────────────────────────────────────
+        //
+        // Der Ring oben haelt eine Stunde und beantwortet "wie lange braucht
+        // die Karte gerade". Die Frage nach einem Update ist eine andere:
+        // "ist sie langsamer geworden als vorher". Dafuer die Tageszaehler.
+        $tage   = [];
+        $trend  = null;
+        if ($apcu && $uid > 0) {
+            $ymds = DiagLog::tage(time());
+            $tkeys = [];
+            foreach ($ymds as $ymd) {
+                $tkeys[] = DiagLog::tagesSchluessel(self::KEY_PREFIX, $uid, $ymd, 'n');
+                $tkeys[] = DiagLog::tagesSchluessel(self::KEY_PREFIX, $uid, $ymd, 'ms');
+            }
+            $tfound = apcu_fetch($tkeys);
+            if (is_array($tfound)) {
+                $tage  = DiagLog::tagesReihe($tfound, self::KEY_PREFIX, $uid, $ymds);
+                $trend = DiagLog::trend($tage);
+            }
+        }
+
         $this->jsonResponse([
             'entries' => array_values(array_slice($entries, -(self::MAX_ENTRIES + self::MAX_LAUT))),
             'apcu'    => $apcu,
             'uid'     => $uid,
+            // Nur volle Kartenaufbauten, keine Cache-Treffer — sonst sagte
+            // der Schnitt mehr darueber aus, wie viele Leute zugesehen haben.
+            'days'    => $tage,
+            'trend'   => $trend,
         ]);
     }
 
@@ -118,6 +143,27 @@ class NetworkTopologyDiag extends NetworkTopologyController {
 
         $entry['ts']  = time();
         $entry['seq'] = $seq;
+
+        // ── Tageszaehler ──────────────────────────────────────────────────
+        //
+        // NUR AUFRUFE, DIE WIRKLICH GERECHNET HABEN. Ein Cache-Treffer dauert
+        // 20 ms statt 1600 und wuerde den Tagesschnitt danach verschieben,
+        // wie viele Leute zugesehen haben — nicht, wie schnell die Karte ist.
+        // Und nur 'data': die anderen Actions sind klein und ihre Zeiten
+        // sagen ueber die Karte nichts.
+        //
+        // Zwei atomare Zaehler statt eines Mittelwerts: einen Mittelwert
+        // koennte man nicht nebenlaeufig fortschreiben, zwei Summen schon.
+        if (($entry['action'] ?? '') === 'data' && empty($entry['cache_hit'])
+                && !empty($entry['elapsed_ms'])) {
+            $ymd = gmdate('Ymd');
+            $ok1 = false;
+            $ok2 = false;
+            apcu_inc(DiagLog::tagesSchluessel(self::KEY_PREFIX, $uid, $ymd, 'n'),
+                1, $ok1, DiagLog::TAGE_TTL);
+            apcu_inc(DiagLog::tagesSchluessel(self::KEY_PREFIX, $uid, $ymd, 'ms'),
+                (int) round((float) $entry['elapsed_ms']), $ok2, DiagLog::TAGE_TTL);
+        }
 
         // Lauteste Aktionen in ihren eigenen Ring. Sie zaehlen in der
         // Zusammenfassung weiter mit, verdraengen aber nichts mehr.

@@ -95,6 +95,56 @@ function _aggStats(entries) {
     return byAction;
 }
 
+/**
+ * Der Verlauf ueber Tage — und was er bedeutet.
+ *
+ * Der Ring oben haelt eine Stunde: er sagt, wie lange die Karte GERADE
+ * braucht. Die Frage nach einem Update ist eine andere — ist sie langsamer
+ * geworden? Dafuer stehen hier die Tagesschnitte.
+ *
+ * NUR VOLLE KARTENAUFBAUTEN. Cache-Treffer dauern 20 ms statt 1600 und
+ * wuerden den Schnitt danach verschieben, wie viele Leute zugesehen haben.
+ */
+function _buildTage(tage, trend, theme) {
+    if (!tage || tage.length < 2) {
+        return null;
+    }
+    const wrap = el('div', '');
+    const max = tage.reduce(function(m, d) { return Math.max(m, d.avg || 0); }, 0) || 1;
+
+    if (trend) {
+        // Die Richtung bekommt eine Farbe, aber erst ab einer Groesse, bei der
+        // sie etwas heisst. Alles unter zehn Prozent ist Tagesschwankung, und
+        // sie rot zu faerben hiesse, Rauschen als Befund auszugeben.
+        const p = trend.prozent;
+        const deutlich = Math.abs(p) >= 10;
+        const farbe = !deutlich ? theme.sub : (p > 0 ? theme.crit : '#16a34a');
+        const z = el('div', 'font-size:12px;margin-bottom:8px;color:' + farbe
+            + (deutlich ? ';font-weight:600' : ''),
+            p > 0 ? t('diag.days.slower', { p: p, before: trend.vorher, now: trend.jetzt })
+                  : p < 0 ? t('diag.days.faster', { p: -p, before: trend.vorher, now: trend.jetzt })
+                  : t('diag.days.same', { now: trend.jetzt }));
+        wrap.appendChild(z);
+    }
+
+    tage.slice(-14).forEach(function(d) {
+        const zeile = el('div', 'display:flex;align-items:center;gap:8px;'
+            + 'font-size:11.5px;line-height:1.7');
+        zeile.appendChild(el('span', 'color:' + theme.sub + ';min-width:84px;'
+            + 'font-variant-numeric:tabular-nums', d.tag));
+        const balken = el('span', 'display:inline-block;height:9px;border-radius:2px;'
+            + 'background:' + (d.avg > 1000 ? theme.crit : d.avg > 500 ? theme.warn : theme.sub)
+            + ';opacity:0.55;width:' + Math.max(2, Math.round((d.avg / max) * 190)) + 'px');
+        zeile.appendChild(balken);
+        zeile.appendChild(el('span', 'color:' + theme.text + ';font-weight:600;'
+            + 'font-variant-numeric:tabular-nums', Math.round(d.avg) + ' ms'));
+        zeile.appendChild(el('span', 'color:' + theme.subSoft,
+            t('diag.days.calls', { n: d.n })));
+        wrap.appendChild(zeile);
+    });
+    return wrap;
+}
+
 function _buildSummary(byAction, theme) {
     const actions = Object.keys(byAction).sort();
     if (actions.length === 0) return '<div style="color:' + theme.subSoft + '">' + esc(t('diag.no_entries')) + '</div>';
@@ -488,6 +538,20 @@ export function renderDiag(wrap) {
         })();
     }
 
+    // Verlauf ueber Tage — gefuellt, sobald die Antwort da ist. Der Abschnitt
+    // bleibt leer, wenn es weniger als zwei Tage mit Aufrufen gibt: ein
+    // einzelner Tag ist kein Verlauf.
+    const tageWrap = document.createElement('div');
+    tageWrap.style.marginBottom = '24px';
+    tageWrap.style.display = 'none';
+    tageWrap.appendChild(el('h3',
+        'margin:0 0 8px;font-size:13px;color:' + theme.sub
+        + ';text-transform:uppercase;letter-spacing:0.04em',
+        t('diag.days.title')));
+    const tageBody = document.createElement('div');
+    tageWrap.appendChild(tageBody);
+    root.appendChild(tageWrap);
+
     const summaryWrap = document.createElement('div');
     summaryWrap.style.marginBottom = '24px';
     const summaryHead = document.createElement('div');
@@ -528,6 +592,15 @@ export function renderDiag(wrap) {
             const entries = data.entries || [];
             summaryBody.innerHTML = _buildSummary(_aggStats(entries), theme);
             logBody.innerHTML     = _buildLog(entries, theme);
+            const verlauf = _buildTage(data.days, data.trend, theme);
+            if (verlauf) {
+                while (tageBody.firstChild) tageBody.removeChild(tageBody.firstChild);
+                tageBody.appendChild(verlauf);
+                tageBody.appendChild(el('div',
+                    'font-size:11px;color:' + theme.subSoft + ';margin-top:8px;line-height:1.5',
+                    t('diag.days.hint')));
+                tageWrap.style.display = '';
+            }
         })
         .catch(function(e) {
             zeigeMeldung(summaryBody, t('diag.error', { msg: e.message }), theme.crit);
