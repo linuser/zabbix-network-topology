@@ -31,27 +31,6 @@ class DiagLog {
     }
 
     /**
-     * Eintraege in zeitliche Reihenfolge bringen — nach dem Zeitstempel,
-     * nicht nach der laufenden Nummer.
-     *
-     * Die Nummer taugt dafuer nicht. apcu_inc nimmt seine TTL NUR beim
-     * Anlegen des Schluessels: der Zaehler laeuft nach einer Stunde ab, so
-     * fleissig er auch benutzt wird, und faengt wieder bei 1 an. Alles Neue
-     * traegt danach kleinere Nummern als alles Alte und rutscht ans ENDE der
-     * Liste. Die Anzeige sieht dann eingefroren aus, waehrend sie munter
-     * weiterschreibt — genau so aufgefallen: die oberste Zeile blieb
-     * dieselbe, obwohl die Zusammenfassung drei neue Aufrufe zaehlte.
-     *
-     * Seit die lauten Aufrufe ihren eigenen Zaehler haben, waeren die Nummern
-     * ohnehin nicht mehr untereinander vergleichbar.
-     *
-     * Die Nummer bleibt als ZWEITES Kriterium: innerhalb derselben Sekunde
-     * ist sie das Einzige, was die Reihenfolge noch kennt.
-     *
-     * @param array $entries
-     * @return array aufsteigend, aeltester zuerst
-     */
-    /**
      * ── TAGESAGGREGATION ─────────────────────────────────────────────────
      *
      * Der Ring haelt eine Stunde. Damit laesst sich sagen, wie lange die
@@ -98,7 +77,13 @@ class DiagLog {
     public static function tage(int $jetzt, int $anzahl = self::TAGE): array {
         $raus = [];
         for ($i = $anzahl - 1; $i >= 0; $i--) {
-            $raus[] = gmdate('Ymd', $jetzt - $i * 86400);
+            // date(), NICHT gmdate(). Die Zeile darunter traegt ein Datum und
+            // der Satz darueber sagt "heute" — beides liest der Betrachter in
+            // SEINEM Kalender. Mit UTC-Toepfen hiesse die neuste Zeile bei
+            // UTC+13 "gestern", und der Tag wechselte um 13 Uhr Ortszeit.
+            // Zabbix setzt die Zeitzone aus dem Benutzerprofil, der Rest des
+            // Moduls rechnet ebenfalls lokal.
+            $raus[] = date('Ymd', $jetzt - $i * 86400);
         }
         return $raus;
     }
@@ -142,12 +127,23 @@ class DiagLog {
      */
     public const MIN_AUFRUFE = 5;
 
-    public static function trend(array $reihe): ?array {
+    public static function trend(array $reihe, string $heuteTag): ?array {
         $n = count($reihe);
         if ($n < 2) {
             return null;
         }
         $heute = $reihe[$n - 1];
+        // DER LETZTE EINTRAG IST NICHT ZWANGSLAEUFIG HEUTE. tagesReihe()
+        // laesst Tage ohne Aufrufe weg — wer den Diag-Tab oeffnet, ohne die
+        // Karte geladen zu haben (oder dessen Ladungen alle aus dem Cache
+        // kamen), hat heute keinen Eintrag, und der letzte waere ein
+        // aelterer Tag. Der Satz darueber sagt aber "heute". Dann lieber
+        // nichts sagen: eine Beschriftung, die eine andere Zahl nennt als
+        // die Zeile darunter, ist in diesem Projekt schon zweimal als
+        // Fehler aufgefallen.
+        if (($heute['tag'] ?? '') !== $heuteTag) {
+            return null;
+        }
         if ((int) $heute['n'] < self::MIN_AUFRUFE) {
             return null;
         }
@@ -174,6 +170,27 @@ class DiagLog {
         ];
     }
 
+    /**
+     * Eintraege in zeitliche Reihenfolge bringen — nach dem Zeitstempel,
+     * nicht nach der laufenden Nummer.
+     *
+     * Die Nummer taugt dafuer nicht. apcu_inc nimmt seine TTL NUR beim
+     * Anlegen des Schluessels: der Zaehler laeuft nach einer Stunde ab, so
+     * fleissig er auch benutzt wird, und faengt wieder bei 1 an. Alles Neue
+     * traegt danach kleinere Nummern als alles Alte und rutscht ans ENDE der
+     * Liste. Die Anzeige sieht dann eingefroren aus, waehrend sie munter
+     * weiterschreibt — genau so aufgefallen: die oberste Zeile blieb
+     * dieselbe, obwohl die Zusammenfassung drei neue Aufrufe zaehlte.
+     *
+     * Seit die lauten Aufrufe ihren eigenen Zaehler haben, waeren die Nummern
+     * ohnehin nicht mehr untereinander vergleichbar.
+     *
+     * Die Nummer bleibt als ZWEITES Kriterium: innerhalb derselben Sekunde
+     * ist sie das Einzige, was die Reihenfolge noch kennt.
+     *
+     * @param array $entries
+     * @return array aufsteigend, aeltester zuerst
+     */
     public static function nachZeitSortiert(array $entries): array {
         usort($entries, static function (array $a, array $b): int {
             return [(int) ($a['ts'] ?? 0), (int) ($a['seq'] ?? 0)]

@@ -95,7 +95,9 @@ class NetworkTopologyDiag extends NetworkTopologyController {
             $tfound = apcu_fetch($tkeys);
             if (is_array($tfound)) {
                 $tage  = DiagLog::tagesReihe($tfound, self::KEY_PREFIX, $uid, $ymds);
-                $trend = DiagLog::trend($tage);
+                // Der heutige Tag in DERSELBEN Form wie in der Reihe —
+                // trend() sagt sonst "heute" ueber einen aelteren Tag.
+                $trend = DiagLog::trend($tage, date('Y-m-d'));
             }
         }
 
@@ -156,7 +158,10 @@ class NetworkTopologyDiag extends NetworkTopologyController {
         // koennte man nicht nebenlaeufig fortschreiben, zwei Summen schon.
         if (($entry['action'] ?? '') === 'data' && empty($entry['cache_hit'])
                 && !empty($entry['elapsed_ms'])) {
-            $ymd = gmdate('Ymd');
+            // date(), NICHT gmdate() — siehe DiagLog::tage(). Lese- und
+            // Schreibseite muessen denselben Tagesbegriff benutzen, sonst
+            // landen Aufrufe im Topf eines Tages, den die Reihe nie liest.
+            $ymd = date('Ymd');
             $ok1 = false;
             $ok2 = false;
             apcu_inc(DiagLog::tagesSchluessel(self::KEY_PREFIX, $uid, $ymd, 'n'),

@@ -41,6 +41,11 @@ spl_autoload_register(static function (string $class): void {
 
 use Modules\NetworkTopology\Topology\DiagLog;
 
+// tage() rechnet seit dem Durchsicht-Befund mit date(), also der Zeitzone
+// des Benutzers. Fuer den Test wird sie festgenagelt, sonst haengt das
+// Ergebnis daran, wo der Rechner steht.
+date_default_timezone_set('UTC');
+
 $fehler = 0;
 
 function pruefe(string $was, $gegeben, $erwartet): void {
@@ -169,28 +174,28 @@ $langsamer = [
     ['tag' => '2026-10-02', 'n' => 20, 'avg' => 1000.0],
     ['tag' => '2026-10-03', 'n' => 20, 'avg' => 1500.0],
 ];
-$tr = DiagLog::trend($langsamer);
+$tr = DiagLog::trend($langsamer, '2026-10-03');
 pruefe('50 Prozent langsamer',      $tr['prozent'], 50);
 pruefe('vorher wird genannt',       $tr['vorher'],  1000.0);
 pruefe('jetzt auch',                $tr['jetzt'],   1500.0);
 
 $schneller = $langsamer;
 $schneller[2]['avg'] = 500.0;
-pruefe('schneller ist negativ',     DiagLog::trend($schneller)['prozent'], -50);
+pruefe('schneller ist negativ',     DiagLog::trend($schneller, '2026-10-03')['prozent'], -50);
 
 // EIN EINZELNER TAG IST KEIN VERLAUF.
-pruefe('ein Tag: keine Aussage',    DiagLog::trend([$langsamer[0]]), null);
-pruefe('gar nichts: keine Aussage', DiagLog::trend([]), null);
+pruefe('ein Tag: keine Aussage',    DiagLog::trend([$langsamer[0]], '2026-10-01'), null);
+pruefe('gar nichts: keine Aussage', DiagLog::trend([], '2026-10-03'), null);
 
 // ZU WENIGE AUFRUFE SIND KEINE MESSUNG. Zwei Ladungen an einem Tag ergeben
 // einen Schnitt, der mehr ueber den Zeitpunkt aussagt als ueber die Karte.
 $duenn = $langsamer;
 $duenn[2]['n'] = 2;
-pruefe('heute zu duenn: keine Aussage', DiagLog::trend($duenn), null);
+pruefe('heute zu duenn: keine Aussage', DiagLog::trend($duenn, '2026-10-03'), null);
 $duennVorher = $langsamer;
 $duennVorher[0]['n'] = 1;
 $duennVorher[1]['n'] = 1;
-pruefe('vorher zu duenn: keine Aussage', DiagLog::trend($duennVorher), null);
+pruefe('vorher zu duenn: keine Aussage', DiagLog::trend($duennVorher, '2026-10-03'), null);
 // Der Vergleich ist GEWICHTET: ein Tag mit zwanzig Aufrufen zaehlt mehr als
 // einer mit fuenf.
 $gewichtet = [
@@ -198,7 +203,16 @@ $gewichtet = [
     ['tag' => 'b', 'n' => 5,   'avg' => 2000.0],
     ['tag' => 'c', 'n' => 20,  'avg' => 1000.0],
 ];
-pruefe('gewichtet, nicht gemittelt', DiagLog::trend($gewichtet)['vorher'], 1047.6);
+pruefe('gewichtet, nicht gemittelt', DiagLog::trend($gewichtet, 'c')['vorher'], 1047.6);
+
+// DER LETZTE EINTRAG IST NICHT ZWANGSLAEUFIG HEUTE — der Befund aus der
+// Durchsicht. Wer den Diag-Tab oeffnet, ohne die Karte geladen zu haben, hat
+// heute keinen Eintrag; der letzte waere ein aelterer Tag, und der Satz
+// darueber saegte trotzdem "heute".
+pruefe('letzter Eintrag ist nicht heute: still',
+    DiagLog::trend($langsamer, '2026-10-04'), null);
+pruefe('... und am richtigen Tag wieder nicht',
+    DiagLog::trend($langsamer, '2026-10-03')['prozent'], 50);
 
 echo "\n";
 if ($fehler > 0) {

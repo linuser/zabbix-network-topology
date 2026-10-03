@@ -110,7 +110,11 @@ function _buildTage(tage, trend, theme) {
         return null;
     }
     const wrap = el('div', '');
-    const max = tage.reduce(function(m, d) { return Math.max(m, d.avg || 0); }, 0) || 1;
+    // NUR UEBER DIE GEZEICHNETEN TAGE skalieren. Ueber alle dreissig gerechnet
+    // drueckte ein einzelner alter Ausreisser jeden sichtbaren Balken auf die
+    // Mindestbreite — der Verlauf saehe flach aus, obwohl er es nicht ist.
+    const sichtbar = tage.slice(-14);
+    const max = sichtbar.reduce(function(m, d) { return Math.max(m, d.avg || 0); }, 0) || 1;
 
     if (trend) {
         // Die Richtung bekommt eine Farbe, aber erst ab einer Groesse, bei der
@@ -118,7 +122,11 @@ function _buildTage(tage, trend, theme) {
         // sie rot zu faerben hiesse, Rauschen als Befund auszugeben.
         const p = trend.prozent;
         const deutlich = Math.abs(p) >= 10;
-        const farbe = !deutlich ? theme.sub : (p > 0 ? theme.crit : '#16a34a');
+        // theme.ok statt eines festen Hex: mkTabTheme() liefert fuer jedes
+        // Thema eine passende Gruentoene, und ein fester Wert ist genau das,
+        // was die Farbregel dieses Projekts verbietet — auf hellem Grund kam
+        // #16a34a zudem nur auf rund 3,3:1 Kontrast.
+        const farbe = !deutlich ? theme.sub : (p > 0 ? theme.crit : theme.ok);
         const z = el('div', 'font-size:12px;margin-bottom:8px;color:' + farbe
             + (deutlich ? ';font-weight:600' : ''),
             p > 0 ? t('diag.days.slower', { p: p, before: trend.vorher, now: trend.jetzt })
@@ -127,7 +135,7 @@ function _buildTage(tage, trend, theme) {
         wrap.appendChild(z);
     }
 
-    tage.slice(-14).forEach(function(d) {
+    sichtbar.forEach(function(d) {
         const zeile = el('div', 'display:flex;align-items:center;gap:8px;'
             + 'font-size:11.5px;line-height:1.7');
         zeile.appendChild(el('span', 'color:' + theme.sub + ';min-width:84px;'
