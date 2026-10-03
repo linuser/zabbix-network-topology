@@ -92,6 +92,8 @@ class NetworkTopologySpark extends NetworkTopologyController {
         $trIn_items    = [];   // hostid -> [itemids, ...] alle In-Interfaces
         $trOut_items   = [];   // hostid -> [itemids, ...]
         $trIn_scale    = [];   // itemid -> Bit-Multiplier (8 fuer Bytes, 1 fuer Bits)
+        $trInByIdx     = [];   // hostid -> [ifIndex -> itemid]  (Port-Panel)
+        $trOutByIdx    = [];   // hostid -> [ifIndex -> itemid]
         $trOut_scale   = [];
 
         foreach ($items as $itemid => $item) {
@@ -113,10 +115,17 @@ class NetworkTopologySpark extends NetworkTopologyController {
                   || strpos($key, 'ifHCInOctets') !== false) {
                 $trIn_items[$hid][] = $itemid;
                 $trIn_scale[$itemid] = self::bitFaktor($key);
+                // Zusaetzlich je ifIndex merken — fuers Port-Panel, das die
+                // Kurve EINES Ports will, nicht die Hostsumme. Derselbe Index
+                // wie LldpEdgeBuilders port_idx, damit die Kante ihn findet.
+                $ix = self::ifIndexFromKey($key);
+                if ($ix !== '') $trInByIdx[$hid][$ix] = $itemid;
             } elseif (strpos($key, 'net.if.out') === 0 || strpos($key, 'ifOutOctets') !== false
                   || strpos($key, 'ifHCOutOctets') !== false) {
                 $trOut_items[$hid][] = $itemid;
                 $trOut_scale[$itemid] = self::bitFaktor($key);
+                $ix = self::ifIndexFromKey($key);
+                if ($ix !== '') $trOutByIdx[$hid][$ix] = $itemid;
             }
         }
 
@@ -228,11 +237,29 @@ class NetworkTopologySpark extends NetworkTopologyController {
             $tr_in_bucketed  = $this->bucketSumScaled($history_map, $trIn_items[$hid]  ?? [], $trIn_scale,  $timeFrom, 60);
             $tr_out_bucketed = $this->bucketSumScaled($history_map, $trOut_items[$hid] ?? [], $trOut_scale, $timeFrom, 60);
 
+            // Port-Kurven: je ifIndex eine eigene in/out-Reihe. Dieselbe
+            // Bucketung wie die Hostsumme, nur nicht aufsummiert. Das Panel
+            // zeigt sie fuer den EINEN Port der Kante — die Hostsumme wuerde
+            // dort die falsche Frage beantworten ("wie viel ueber ALLE Ports").
+            $ports = [];
+            $idxAll = array_keys(($trInByIdx[$hid] ?? []) + ($trOutByIdx[$hid] ?? []));
+            foreach ($idxAll as $ix) {
+                $inItem  = $trInByIdx[$hid][$ix]  ?? null;
+                $outItem = $trOutByIdx[$hid][$ix] ?? null;
+                $pin  = $inItem  ? $this->bucketSumScaled($history_map, [$inItem],  $trIn_scale,  $timeFrom, 60) : [];
+                $pout = $outItem ? $this->bucketSumScaled($history_map, [$outItem], $trOut_scale, $timeFrom, 60) : [];
+                $ports[(string) $ix] = [
+                    'in'  => $this->sample($pin,  30),
+                    'out' => $this->sample($pout, 30),
+                ];
+            }
+
             $result[$hid] = [
                 'cpu'         => $this->sample($cpu_vals,  30),
                 'ping'        => $this->sample($ping_ms,   30),
                 'traffic_in'  => $this->sample($tr_in_bucketed,  30),
                 'traffic_out' => $this->sample($tr_out_bucketed, 30),
+                'ports'       => $ports,
                 'since'       => $since_map[$hid] ?? null,
             ];
         }
@@ -268,6 +295,18 @@ class NetworkTopologySpark extends NetworkTopologyController {
      * Die Regel gehoert eigentlich an EINE Stelle. Bis dahin steht hier
      * wenigstens dabei, wo das Original liegt.
      */
+    /**
+     * Den ifIndex aus einem Traffic-Key ziehen — dieselbe Zahl wie der
+     * port_idx des LldpEdgeBuilder, damit die Kante ihren Port wiederfindet.
+     *
+     * net.if.in[ifHCInOctets.8]  -> 8
+     * net.if.in[8]               -> 8
+     * net.if.in[eth0]            -> '' (Agent-Interface, kein SNMP-Index)
+     */
+    private static function ifIndexFromKey(string $key): string {
+        return preg_match('/[.\[](\d+)\]$/', $key, $m) === 1 ? $m[1] : '';
+    }
+
     private static function bitFaktor(string $key): int {
         return strpos($key, 'net.if') === 0 ? 1 : 8;
     }

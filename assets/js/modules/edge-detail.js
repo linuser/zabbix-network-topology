@@ -37,6 +37,7 @@
 // ueber textContent gibt es die Escaping-Frage gar nicht erst.
 
 import { el, fmt } from './utils.js';
+import { fetchJson } from './http.js';
 import { hideDetail } from './detail-panel.js';
 import { t } from './i18n.js';
 import { utilizationColor, utilizationPct } from './traffic.js';
@@ -83,6 +84,75 @@ function hint(parent, text) {
  * `ed` ist das Cytoscape-Edge-Objekt, nicht nur .data() — die Endpunkte kommen
  * ueber source()/target(), deren Labels stehen nicht an der Kante.
  */
+// Eine kleine Sparkline als ECHTES SVG-Element (kein innerHTML — das Panel
+// ist bewusst DOM-gebaut, und die Werte kaemen zwar aus eigener Zahl, aber die
+// Regel gilt ohne Ausnahme). Geometrie wie drawSparkline im Tooltip.
+export function sparklineEl(values, color) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const w = 72, h = 18;
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', w);
+    svg.setAttribute('height', h);
+    svg.style.cssText = 'vertical-align:middle';
+    if (!values || !values.length) return svg;
+    const min = Math.min.apply(null, values);
+    const max = Math.max.apply(null, values);
+    const range = Math.max(max - min, 1);
+    const step = w / (values.length - 1 || 1);
+    const pts = values.map(function(v, i) {
+        return (i * step).toFixed(1) + ',' + (h - ((v - min) / range * (h - 2) + 1)).toFixed(1);
+    }).join(' ');
+    const line = document.createElementNS(NS, 'polyline');
+    line.setAttribute('points', pts);
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(line);
+    return svg;
+}
+
+// Die RX/TX-Kurve EINES Ports unter seine Zeile haengen — nachgeladen, weil
+// die History ein eigener Fetch ist (die Spark-Action, Port-Modus). Der Port
+// ist ueber seinen ifIndex adressiert, den die Kante seit diesem Release
+// mitbringt (portSrcIdx/portTgtIdx).
+//
+// GEISTER UND UNUEBERWACHTE SEITEN UEBERSPRINGEN: ein Geist hat keine Items,
+// die Anfrage liefe ins Leere. Ebenso ohne ifIndex (Agent-Interface,
+// manuelle Kante).
+function portSparkline(parent, hostId, ifIndex) {
+    const hid = String(hostId || '');
+    const ix  = String(ifIndex || '');
+    if (!hid || !ix || hid.indexOf('ghost_') === 0 || hid.indexOf('internet_') === 0) {
+        return;
+    }
+    const cfg = (typeof window !== 'undefined' && window.NT_CONFIG) || {};
+    if (!cfg.data_url) return;
+    const url = cfg.data_url.replace('network.topology.data', 'network.topology.spark')
+        + '&hostids%5B%5D=' + encodeURIComponent(hid);
+    const zeile = el('div',
+        'display:flex;align-items:center;gap:8px;margin:1px 0 4px 0;'
+        + 'font-size:10px;color:var(--nt-muted,#94a3b8)');
+    parent.appendChild(zeile);
+    fetchJson(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(data) {
+            const h = (data && data[hid]) || {};
+            const pr = (h.ports && h.ports[ix]) || {};
+            const rx = pr.in || [], tx = pr.out || [];
+            if (!rx.length && !tx.length) { if (zeile.parentNode) zeile.parentNode.removeChild(zeile); return; }
+            if (rx.length) {
+                zeile.appendChild(el('span', 'color:#16a34a;font-weight:600', 'RX'));
+                zeile.appendChild(sparklineEl(rx, '#22c55e'));
+            }
+            if (tx.length) {
+                zeile.appendChild(el('span', 'color:#2563eb;font-weight:600;margin-left:6px', 'TX'));
+                zeile.appendChild(sparklineEl(tx, '#3b82f6'));
+            }
+        })
+        .catch(function() { if (zeile.parentNode) zeile.parentNode.removeChild(zeile); });
+}
+
 export function showEdgeDetail(panel, ed, asMember) {
     // Collapsed bundle: the trunk's totals, not the lead member's own values
     // — unless a member row asked for exactly this member.
@@ -187,7 +257,9 @@ export function showEdgeDetail(panel, ed, asMember) {
         // nothing here, see memberSection()
     } else if (pS || pT) {
         row(panel, sLbl, null, el('b', '', pS || '?'));
+        portSparkline(panel, s && s.id(), d.portSrcIdx);
         row(panel, tLbl, null, el('b', '', pT || '?'));
+        portSparkline(panel, tg && tg.id(), d.portTgtIdx);
     } else {
         panel.appendChild(el('div', 'font-size:11px;color:var(--nt-muted,#94a3b8)',
             (istManuell || istGhost || istStale) ? t('edge.ports.none_kind') : t('edge.ports.none')));

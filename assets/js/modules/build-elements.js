@@ -491,6 +491,11 @@ export function buildEdgeElements(edges, nodes) {
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
                     portSrc: ports[src] || '', portTgt: ports[tgt] || '',
+                    // ifIndex je Seite, fuers Port-Panel: damit es die
+                    // Spark-Kurve genau dieses Ports anfragen kann. Derselbe
+                    // Index wie in der Spark-Action (port_idx vom Backend).
+                    portSrcIdx: (e.port_idx && e.port_idx[src]) || '',
+                    portTgtIdx: (e.port_idx && e.port_idx[tgt]) || '',
                     trafficIn: eIn, trafficOut: eOut, tLabel: tLbl, isLLDP: true,
                     // Discovery-Quelle(n): ['lldp'], ['cdp'], oder ['cdp','lldp']
                     // wenn die Verbindung von beiden Protokollen gemeldet wurde

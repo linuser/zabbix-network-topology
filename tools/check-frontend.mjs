@@ -491,6 +491,34 @@ if (epb) {
     pruefe('zu duenn (2): kein Buendel',          epb.duennKeinBuendel, true);
 }
 
+console.log('\n  Port-Sparkline: SVG aus Zahlen\n');
+const spk = szenario('spark-el', { lang: 'en_US' }, `
+    const dom = miniDom();
+    globalThis.document = dom.document;
+    const E = await import(${JSON.stringify(MODULE('edge-detail.js'))});
+    const svg = E.sparklineEl([1, 5, 2, 8, 3], '#22c55e');
+    const line = (svg.childNodes || []).find((c) => c.tagName === 'POLYLINE');
+    const pts = line ? (line.attrs.points || '') : '';
+    const leerSvg = E.sparklineEl([], '#22c55e');
+    console.log(JSON.stringify({
+        istSvg:   svg.tagName,
+        hatLinie: !!line,
+        punkte:   pts ? pts.split(' ').length : 0,
+        farbe:    line ? line.attrs.stroke : '',
+        // Erster Punkt bei x=0, letzter bei x=72 (Breite).
+        beginntBei0: pts.indexOf('0.0,') === 0 || pts.indexOf('0,') === 0,
+        leerKeineLinie: !(leerSvg.childNodes || []).some((c) => c.tagName === 'POLYLINE'),
+    }));
+`);
+if (spk) {
+    pruefe('ein SVG kommt heraus',          spk.istSvg, 'SVG');
+    pruefe('mit einer Polyline',            spk.hatLinie, true);
+    pruefe('fuenf Werte -> fuenf Punkte',   spk.punkte, 5);
+    pruefe('die Farbe wird gesetzt',        spk.farbe, '#22c55e');
+    pruefe('beginnt links bei x=0',         spk.beginntBei0, true);
+    pruefe('leere Werte: keine Linie',      spk.leerKeineLinie, true);
+}
+
 // Hersteller aus der Chassis-ID. Der wertvollste Teil braucht KEINE Tabelle:
 // zwei Bits im ersten Byte sagen, ob die Adresse ueberhaupt einen Hersteller
 // haben kann. Eine lokal vergebene MAC (VM, Zufallsadresse, Generator) hat
