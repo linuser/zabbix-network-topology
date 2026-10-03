@@ -159,7 +159,7 @@ function tile(value, label, colour, sub) {
  * injiziert build-elements.js erst im Client. Deshalb kommen sie wie die
  * Kanten aus der Cytoscape-Instanz.
  */
-function collect(nodes, cy) {
+export function collect(nodes, cy) {
     // Was kein ueberwachter Host ist, wird auch nicht als einer gezaehlt: ein
     // Ghost ist ein Geraet, ueber das wir nichts wissen, die Internet-Wolke im
     // Hierarchie-Layout ist gar kein Geraet. Beide tragen severity 0 und liefen
@@ -194,7 +194,15 @@ function collect(nodes, cy) {
 
     if (cy) {
         cy.edges().forEach(function(e) {
-            if (e.data('_isGhostEdge')) return;
+            // Synthetische Kanten zaehlen nicht als gemessene Links: der Ghost
+            // war nie gezaehlt, und ebensowenig gehoeren die Internet-Wolke
+            // (_isInternetEdge) und die Buendel-Kante (_isBundleEdge) in die
+            // Zahl "Edges"/"LLDP links". Sie tragen isLLDP:false, aber der KPI
+            // leitet lldp aus (edges - manual) ab und liest isLLDP nicht —
+            // deshalb hier ausschliessen, nicht ueber isLLDP. (Der Review-Fix,
+            // der isLLDP:false an die Buendel-Kante haengte, griff hier nie.)
+            if (e.data('_isGhostEdge') || e.data('_isInternetEdge')
+                    || e.data('_isBundleEdge')) return;
             edges++;
             if (String(e.id()).indexOf('ml_') === 0) manual++;
         });

@@ -167,7 +167,10 @@ export function utilizationPct(d) {
     const cap = (d && d.capBps) || 0;
     if (cap <= 0) return null;
     const raw = Math.max(d.trafficIn || 0, d.trafficOut || 0);
-    return Math.min(999, ((d.perLink ? raw : raw / 2) / cap) * 100);
+    // Untergrenze 0: ein negativer Zaehler (Backend normalerweise >= 0, aber
+    // ein kaputter Wert darf keine negative Auslastung ergeben) wuerde sonst
+    // als "-12 %" durchschlagen. Obergrenze 999 kappt den Ueberlauf.
+    return Math.max(0, Math.min(999, ((d.perLink ? raw : raw / 2) / cap) * 100));
 }
 
 export function applyTrafficHeatmap(cy) {
@@ -183,6 +186,13 @@ export function applyTrafficHeatmap(cy) {
         // Inline-Styles ueber den (bewusst dezenten) Ghost-Style aus dem
         // Stylesheet legen. Also auslassen.
         if (edge.data('_isGhostEdge')) return;
+        // §9 Dasselbe fuer die anderen SYNTHETISCHEN Kanten. Die Internet-Wolke
+        // (_isInternetEdge) hat einen eigenen, bewussten Stylesheet-Style (fett,
+        // blau, durchgezogen), und die Buendel-Kante (_isBundleEdge) traegt den
+        // Basis-Stil — beide haben keine gemessenen Daten. Ohne diesen Ausschluss
+        // legte die Heatmap ihren Inline-"idle"-Stil darueber (Inline schlaegt
+        // Stylesheet): die fette Uplink-Linie wurde duenn-grau-gestrichelt.
+        if (edge.data('_isInternetEdge') || edge.data('_isBundleEdge')) return;
         // Same for an ageing edge: nothing measured, and its dotted style is
         // the statement. It matters most inside a LAG, where a failed member
         // must stand out from the live ones next to it.

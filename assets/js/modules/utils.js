@@ -13,7 +13,11 @@ export function esc(s) {
 }
 
 export function fmt(b) {
-    b = +b || 0;
+    b = +b;
+    // Nicht-endlich oder negativ -> 0. Ein kaputter Zaehler schrieb sonst
+    // "Infinity Gb/s" oder "-5 b/s" an eine Kante; die Byterate ist per
+    // Definition endlich und >= 0.
+    if (!isFinite(b) || b < 0) b = 0;
     if (b >= 1e9) return (b / 1e9).toFixed(1) + ' Gb/s';
     if (b >= 1e6) return (b / 1e6).toFixed(1) + ' Mb/s';
     if (b >= 1e3) return (b / 1e3).toFixed(1) + ' Kb/s';

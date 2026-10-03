@@ -1702,6 +1702,37 @@ if (netbox) {
         netbox.quoting.indexOf('"sw,01",dcim.interface,a,"sw""02"') === 0, true);
 }
 
+// ── KPI: synthetische Kanten zaehlen nicht als gemessene Links ────────────
+//
+// Der Ghost-Edge war immer ausgeschlossen, die Internet-Wolke und die
+// Buendel-Kante nicht — beide sind ebenso synthetisch (kein gemessener Link,
+// kein Host am anderen Ende). Sie blaehten "Edges" und "LLDP links" auf. Der
+// Review-Fix haengte isLLDP:false an die Buendel-Kante, aber der KPI leitet
+// lldp aus (edges - manual) ab und liest isLLDP nie — der Fix griff hier nicht.
+console.log('\n  KPI: synthetische Kanten zaehlen nicht\n');
+const kpiZ = szenario('kpi-count', { lang: 'en_US' }, `
+    const { collect } = await import(${JSON.stringify(MODULE('kpi.js'))});
+    globalThis.window._ntLastData = {};   // keine lldp_quality -> 0 Ghosts
+    const mkEdge = (id, flags) => ({ id: () => id, data: (k) => (flags || {})[k] });
+    const cy = { edges: () => [
+        mkEdge('e0', {}),                          // echter Link
+        mkEdge('e1', {}),                          // echter Link
+        mkEdge('ml_1', {}),                        // manueller Link
+        mkEdge('eg', { _isGhostEdge: true }),      // Ghost
+        mkEdge('ei', { _isInternetEdge: true }),   // Internet-Wolke
+        mkEdge('eb', { _isBundleEdge: true }),     // Endgeraete-Buendel
+    ] };
+    const g = collect([], cy);
+    console.log(JSON.stringify({ edges: g.edges, manual: g.manual, lldp: g.lldp }));
+`);
+if (kpiZ) {
+    // 2 echte + 1 manuelle = 3 gezaehlte Kanten; die drei synthetischen nicht.
+    pruefe('KPI: nur echte + manuelle Kanten',   kpiZ.edges,  3);
+    pruefe('KPI: manuelle Kante erkannt',        kpiZ.manual, 1);
+    // lldp = edges - manual = 2. Zaehlten Internet/Buendel mit, stuende hier 4.
+    pruefe('KPI: LLDP-Links ohne synthetische',  kpiZ.lldp,   2);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);

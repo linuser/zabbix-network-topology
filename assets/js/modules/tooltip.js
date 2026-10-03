@@ -235,8 +235,14 @@ export function showEdgeTip(evt, edgeData, srcLabel, tgtLabel) {
     // trotzdem beides — und die Verlaufsabfrage lief wirklich los, mit einer
     // ID, zu der es keinen Host gibt. Gemeldet mit Screenshot, zusammen mit
     // demselben Fehler an Knoten und Panel.
+    // Buendel-Kante genauso: der Knoten bundle_<sw> ist kein Host, eine
+    // Verlaufsabfrage darauf liefe ins Leere. (Der render-tech-Handler laesst
+    // sie schon am mouseover aus; dies ist das Netz, falls showEdgeTip von
+    // woanders kommt.)
     const zuGeist = !!(edgeData._isGhostEdge || edgeData.isGhostEdge
-        || String(srcId).indexOf('ghost_') === 0 || String(tgtId).indexOf('ghost_') === 0);
+        || edgeData._isBundleEdge
+        || String(srcId).indexOf('ghost_') === 0 || String(tgtId).indexOf('ghost_') === 0
+        || String(srcId).indexOf('bundle_') === 0 || String(tgtId).indexOf('bundle_') === 0);
 
     function buildHtml(sparkSrc, sparkTgt) {
         const inArr  = (sparkSrc || sparkTgt)

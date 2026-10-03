@@ -89,7 +89,10 @@ function hint(parent, text) {
 // Regel gilt ohne Ausnahme). Geometrie wie drawSparkline im Tooltip.
 // Sekunden lesbar: "12d 4h", "3h 20m", "45m", "30s".
 function fmtUptime(sec) {
-    sec = Math.max(0, Math.floor(sec || 0));
+    sec = +sec;
+    // Nicht-endlich (Infinity/NaN) wuerde zu "Infinityd Infinityh"; auf 0.
+    if (!isFinite(sec)) sec = 0;
+    sec = Math.max(0, Math.floor(sec));
     const d = Math.floor(sec / 86400);
     const h = Math.floor((sec % 86400) / 3600);
     const m = Math.floor((sec % 3600) / 60);

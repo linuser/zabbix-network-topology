@@ -536,7 +536,12 @@ export function render(wrap, nodes, edges, dataUrl) {
     cy.on('mouseover', 'edge', function(e) {
         // A collapsed bundle shows its totals, not those of the lead member.
         const ed = trunkData(e.target);
-        if (ed._isInternetEdge) return;
+        // Internet-Wolke UND Buendel-Kante sind synthetisch: kein gemessener
+        // Traffic, der Nachbar (internet_root / bundle_<sw>) ist kein Host.
+        // Ein Tooltip zeigte sonst "0 b/s · lade Verlauf" und feuerte eine
+        // Spark-Abfrage mit einer ID, zu der es keinen Host gibt — dieselbe
+        // Klasse, die fuer Ghost-Kanten schon gemeldet war.
+        if (ed._isInternetEdge || ed._isBundleEdge) return;
         const src = e.target.source();
         const tgt = e.target.target();
         if (!src || !tgt) return;
@@ -552,6 +557,11 @@ export function render(wrap, nodes, edges, dataUrl) {
     // Verbindung, und ein Panel mittendrin waere im Weg.
     cy.on('tap', 'edge', function(e) {
         if (isLinkModeActive()) return;
+        // Buendel-Kante hat kein Detail: der Klick oeffnete sonst ein leeres
+        // Panel (synthetische Kante, kein gemessener Link). Wie die Internet-
+        // Wolke, die der mouseover-Zweig oben schon auslaesst.
+        const ed = trunkData(e.target);
+        if (ed._isBundleEdge || ed._isInternetEdge) return;
         hideTip();
         hideCtx();
         if (pnl) showEdgeDetail(pnl, e.target);
