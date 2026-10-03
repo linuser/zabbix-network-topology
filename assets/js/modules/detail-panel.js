@@ -31,6 +31,7 @@
 
 import { el, fmt, fmtItemValue, hostEditUrl } from './utils.js';
 import { SEV_COL, SEV_LBL, statusLabel, statusColor } from './severity.js';
+import { herstellerVon } from './oui.js';
 import { t } from './i18n.js';
 
 // Mapping von Backend-Type-String zu deutschem Label + Emoji-Icon.
@@ -241,7 +242,35 @@ export function showDetail(panel, d, cy) {
             (d._ghostSrc || []).join(', ').toUpperCase() || '—'));
         identitaet.push(idRow(t('detail.ghost.seen_by'),
             (d._ghostSeenBy || []).join(', ') || '—'));
-        if (d._ghostChassis) identitaet.push(idRow('MAC', d._ghostChassis));
+        if (d._ghostChassis) {
+            identitaet.push(idRow('MAC', d._ghostChassis));
+            // HERSTELLER AUS DER MAC — ohne eine einzige neue Abfrage: die
+            // Chassis-ID liegt ohnehin an jedem Geist, und ihre ersten drei
+            // Bytes sind die Hersteller-Kennung. Aus "unbekanntes Geraet an
+            // sw-og-2, Port 8" wird damit oft schon "Ubiquiti-Geraet an
+            // sw-og-2, Port 8".
+            //
+            // Die Zeile entsteht SOFORT und fuellt sich nach: die Tabelle wird
+            // beim ersten Mal nachgeladen (sie liegt bewusst nicht im Bundle),
+            // und ein Panel, das darauf wartet, fuehlt sich kaputt an.
+            const hz = idRow(t('detail.ghost.vendor'), '…');
+            identitaet.push(hz);
+            const ziel = hz.lastChild;
+            herstellerVon(d._ghostChassis).then(function(r) {
+                if (!ziel) return;
+                // JEDER ZUSTAND BEKOMMT EINEN EIGENEN SATZ. "unbekannt" heisst,
+                // dass unsere AUSWAHL die Kennung nicht fuehrt — das ist etwas
+                // anderes als "lokal vergeben", wo es per Definition keinen
+                // Hersteller gibt. Beides als "—" zu zeigen hiesse, eine
+                // unvollstaendige Liste wie eine Aussage ueber das Geraet
+                // klingen zu lassen.
+                ziel.textContent = r.zustand === 'treffer' ? r.hersteller
+                    : r.zustand === 'lokal'      ? t('detail.ghost.vendor.local')
+                    : r.zustand === 'multicast'  ? t('detail.ghost.vendor.multicast')
+                    : r.zustand === 'unbekannt'  ? t('detail.ghost.vendor.unknown')
+                    : '—';
+            }).catch(function() { if (ziel) ziel.textContent = '—'; });
+        }
         if (d._ghostCaps && d._ghostCaps.length) {
             identitaet.push(idRow(t('detail.ghost.caps'), d._ghostCaps.join(', ')));
         }

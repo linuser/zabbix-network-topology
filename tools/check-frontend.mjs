@@ -435,6 +435,64 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// Hersteller aus der Chassis-ID. Der wertvollste Teil braucht KEINE Tabelle:
+// zwei Bits im ersten Byte sagen, ob die Adresse ueberhaupt einen Hersteller
+// haben kann. Eine lokal vergebene MAC (VM, Zufallsadresse, Generator) hat
+// per Definition keinen — dort nachzuschlagen waere nicht nur sinnlos, ein
+// Treffer waere falsch.
+console.log('\n  OUI: welcher Hersteller, und wann keiner\n');
+const oui = szenario('oui', { lang: 'en_US' }, `
+    const O = await import(${JSON.stringify(MODULE('oui.js'))});
+    // Erfundene Zuweisungen, damit der Test nicht an der echten Liste haengt.
+    // Die ersten Bytes sind mit Bedacht gewaehlt: Bit 0 und Bit 1 muessen frei
+    // sein, sonst ist die Adresse Multicast oder lokal vergeben — beim ersten
+    // Anlauf standen hier AB: und AA:, und der Test fiel zu Recht.
+    O._setzeTabelle({ v: { 'Beispiel Netzwerk': '0011220033AA', 'Zweiter': '3CECEF' } });
+    const lese = async (c) => { const r = await O.herstellerVon(c); return [r.zustand, r.hersteller]; };
+    console.log(JSON.stringify({
+        // Schreibweisen, wie sie aus dem Feld kommen
+        hexForm:   O.ouiVon('00 11 22 33 44 55'),
+        doppel:    O.ouiVon('00:11:22:33:44:55'),
+        nackt:     O.ouiVon('001122334455'),
+        // Kein vollstaendiger Bezeichner -> lieber nichts sagen
+        zuKurz:    O.ouiVon('00:11:22'),
+        zuLang:    O.ouiVon('00112233445566'),
+        name:      O.ouiVon('sw-edge-03'),
+        leer:      O.ouiVon(''),
+        // Die zwei Bits
+        lokal:     O.istLokal('02:00:00:00:23:36'),
+        nichtLokal: O.istLokal('00:11:22:33:44:55'),
+        multicast: O.istMulticast('01:00:5E:00:00:01'),
+        // Und was daraus folgt
+        treffer:   await lese('00:11:22:33:44:55'),
+        zweiter:   await lese('3C:EC:EF:01:02:03'),
+        unbekannt: await lese('1C:1B:0D:DD:EE:FF'),
+        lokalFund: await lese('02:00:00:00:23:36'),
+        mcFund:    await lese('01:00:5E:00:00:01'),
+        muell:     await lese('nicht-eine-mac'),
+    }));
+`);
+if (oui) {
+    pruefe('Hex-Form mit Leerzeichen',        oui.hexForm, '001122');
+    pruefe('Doppelpunkt-Form',                oui.doppel,  '001122');
+    pruefe('nackte Form',                     oui.nackt,   '001122');
+    pruefe('zu kurz: keine Auskunft',         oui.zuKurz,  '');
+    pruefe('zu lang: keine Auskunft',         oui.zuLang,  '');
+    pruefe('ein Name ist keine MAC',          oui.name,    '');
+    pruefe('leer bleibt leer',                oui.leer,    '');
+    pruefe('lokal vergeben wird erkannt',     oui.lokal,   true);
+    pruefe('... und global nicht verwechselt', oui.nichtLokal, false);
+    pruefe('Multicast wird erkannt',          oui.multicast, true);
+    pruefe('Treffer nennt den Hersteller',    oui.treffer, ['treffer', 'Beispiel Netzwerk']);
+    pruefe('zweiter Hersteller ebenso',       oui.zweiter, ['treffer', 'Zweiter']);
+    // NICHT dasselbe wie "lokal": eine unvollstaendige Auswahl darf nicht
+    // klingen wie eine Aussage ueber das Geraet.
+    pruefe('nicht in der Auswahl: unbekannt', oui.unbekannt, ['unbekannt', '']);
+    pruefe('lokal wird nicht nachgeschlagen', oui.lokalFund, ['lokal', '']);
+    pruefe('Multicast ebenso',                oui.mcFund,    ['multicast', '']);
+    pruefe('Unsinn ist unbrauchbar',          oui.muell,     ['unbrauchbar', '']);
+}
+
 // Aus einem Geist einen Host machen. Geprueft wird, WAS die Action bekommt —
 // die Nutzlast ist die Stelle, an der ein Name von einem fremden Geraet und
 // eine Melder-ID zusammenkommen.
