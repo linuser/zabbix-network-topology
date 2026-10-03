@@ -91,6 +91,7 @@ final class MetricExtractor {
         $port_name_rank = [];   // hid => [ifIndex => Rang der Quelle]
         $lldp_ports     = [];   // hid => [snmpindex => ['id'=>?, 'desc'=>?]]
         $lldp_meta      = [];   // hid => [snmpindex => ['desc'|'caps'|'chassis']]
+        $lldp_named     = [];   // hid => [snmpindex => true] — Index hat schon einen Namen
         $host_cpu       = [];
         // hrProcessorLoad: Summe und Kernzahl getrennt, damit am Ende ein
         // echter Mittelwert steht und nicht eine Kette von Halbierungen.
@@ -385,6 +386,52 @@ final class MetricExtractor {
                     : ((strpos($key, 'cdp')  !== false)  ? 'cdp'
                     : ((strpos($key, 'lldp') !== false)  ? 'lldp' : 'other')));
                 $lldp_raw[] = ['hostid' => $hid, 'key_' => $key, 'lastvalue' => $val, 'src' => $src];
+                // Merken, dass dieser SNMPINDEX einen Namen hat — die
+                // Chassis-Synthese unten darf ihn dann nicht noch einmal
+                // ueber die MAC einfuehren (sonst: falsche Aufspaltung).
+                $lldp_named[$hid][HostMetadata::ifaceParam($key)] = true;
+            }
+        }
+
+        // ── NACHBAR OHNE NAMEN, ABER MIT CHASSIS-MAC ──────────────────────────
+        //
+        // GEFUNDEN AN ECHTER HARDWARE (03.10.2026). Ein managed Switch meldet
+        // ueber LLDP einen vollstaendigen Datensatz — Chassis-MAC,
+        // Port, SysDesc, Capability — aber KEINEN SysName. Bis hierher wurde ein
+        // Nachbar NUR ueber den Namen eingefuehrt (oben, !empty($val)), also fiel
+        // dieses reale Geraet komplett heraus: kein Nachbar, kein Geist, keine
+        // Kante. Jede snmpsim-Fixture dieses Projekts hatte einen Namen — nur
+        // echte Hardware zeigte die Luecke.
+        //
+        // Jetzt: hat ein Index KEINEN Namen, aber eine brauchbare Chassis-MAC,
+        // wird der Nachbar ueber die MAC eingefuehrt. LldpEdgeBuilder loest
+        // MAC-foermige Namen ohnehin auf (macForm/macUsable) — unaufgeloest wird
+        // daraus ein Geist, und die Herstellererkennung macht im Panel "Hewlett
+        // Packard" daraus.
+        //
+        // Als lldpRemSysName[<idx>] eingetragen, damit der Builder ueber denselben
+        // SNMPINDEX die Metadaten (desc/caps/chassis) findet, die oben schon
+        // abgelegt sind. Lief zu diesem Zeitpunkt die Schleife durch, stehen
+        // lldp_meta UND lldp_named vollstaendig.
+        foreach ($lldp_meta as $hid => $idxmap) {
+            foreach ($idxmap as $idx => $meta) {
+                if (isset($lldp_named[$hid][$idx])) {
+                    continue;   // hat schon einen Namen
+                }
+                $chassis = (string) ($meta['chassis'] ?? '');
+                if ($chassis === '') {
+                    continue;
+                }
+                // Nur eine echte MAC taugt als Identitaet. Ein lokal vergebener
+                // String oder eine andere Chassis-Subtype-Form wird NICHT zur
+                // Identitaet geraten. Null- und Broadcast-MAC ebenso wenig: die
+                // melden Geraete, die ihre eigene nicht kennen.
+                $hex = strtoupper(preg_replace('/[^0-9A-Fa-f]/', '', $chassis));
+                if (strlen($hex) !== 12 || $hex === '000000000000' || $hex === 'FFFFFFFFFFFF') {
+                    continue;
+                }
+                $lldp_raw[] = ['hostid' => $hid, 'key_' => 'lldpRemSysName[' . $idx . ']',
+                               'lastvalue' => $chassis, 'src' => 'lldp'];
             }
         }
 

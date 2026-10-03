@@ -36,6 +36,7 @@ spl_autoload_register(static function (string $class): void {
 });
 
 use Modules\NetworkTopology\Topology\MetricExtractor;
+use Modules\NetworkTopology\Topology\LldpEdgeBuilder;
 
 $failures = 0;
 
@@ -347,6 +348,67 @@ $mV = MetricExtractor::extract([
 ]);
 check('Vorlagenform unveraendert (in)',          $mV['traffic']['v']['in']  ?? null, 10.0);
 check('Vorlagenform unveraendert (out)',         $mV['traffic']['v']['out'] ?? null, 20.0);
+
+// ── Nachbar ohne Namen, aber mit Chassis-MAC ──────────────────────────────
+//
+// GEFUNDEN AN ECHTER HARDWARE. Ein managed Switch meldet ueber LLDP
+// einen vollstaendigen Datensatz — Chassis-MAC, Port, SysDesc, Capability —
+// aber KEINEN SysName. Bis hierher identifizierte das Modul Nachbarn nur ueber
+// den Namen, also fiel dieses reale Geraet komplett heraus: kein Nachbar, kein
+// Geist, keine Kante. Jede snmpsim-Fixture hatte einen Namen; nur echte
+// Hardware zeigte die Luecke.
+//
+// Jetzt gilt: leerer Name + brauchbare Chassis-MAC -> der Nachbar wird ueber
+// die MAC identifiziert. LldpEdgeBuilder loest MAC-foermige Namen ohnehin auf,
+// und die Herstellererkennung macht daraus im Panel "Hewlett Packard".
+echo "\n  Nachbar ohne Namen, aber mit Chassis-MAC\n\n";
+
+$hpe = MetricExtractor::extract([
+    ['hostid' => 's', 'key_' => 'lldpRemSysName[0.73.1]',       'name' => '', 'lastvalue' => ''],
+    ['hostid' => 's', 'key_' => 'lldpRemChassisId[0.73.1]',     'name' => '', 'lastvalue' => '3C 11 22 33 44 55'],
+    ['hostid' => 's', 'key_' => 'lldpRemPortDesc[0.73.1]',      'name' => '', 'lastvalue' => '8'],
+    ['hostid' => 's', 'key_' => 'lldpRemSysDesc[0.73.1]',       'name' => '', 'lastvalue' => 'Example managed switch, firmware X.Y'],
+    ['hostid' => 's', 'key_' => 'lldpRemSysCapEnabled[0.73.1]', 'name' => '', 'lastvalue' => '20 00'],
+]);
+check('leerer Name + Chassis-MAC: ein Nachbar entsteht', count($hpe['lldp_raw']), 1);
+$n = $hpe['lldp_raw'][0] ?? [];
+check('... identifiziert ueber die MAC',   $n['lastvalue'] ?? null, '3C 11 22 33 44 55');
+check('... als LLDP markiert',             $n['src'] ?? null, 'lldp');
+check('... am selben SNMPINDEX wie das Meta',
+    strpos((string) ($n['key_'] ?? ''), '[0.73.1]') !== false, true);
+
+// Ende zu Ende: der Builder macht daraus einen Geist.
+$rHpe = LldpEdgeBuilder::build(
+    ['s' => ['hostid' => 's', 'host' => 'sg300', 'name' => 'sg300', 'interfaces' => []]],
+    $hpe['lldp_raw'], $hpe['lldp_ports'], [], [], $hpe['lldp_meta']);
+check('Builder: genau ein Geist',          count($rHpe['unmatched']), 1);
+check('Builder: keine Falschkante',        count($rHpe['edges']), 0);
+
+// Ein echter Name hat Vorrang: liegt er vor, wird NICHT zusaetzlich ueber die
+// MAC ein zweiter Nachbar erzeugt — sonst entstuende eine falsche Aufspaltung.
+$beides = MetricExtractor::extract([
+    ['hostid' => 's', 'key_' => 'lldpRemSysName[0.5.1]',   'name' => '', 'lastvalue' => 'sw-real'],
+    ['hostid' => 's', 'key_' => 'lldpRemChassisId[0.5.1]', 'name' => '', 'lastvalue' => '3C 11 22 33 44 55'],
+]);
+check('Name vorhanden: genau ein Nachbar', count($beides['lldp_raw']), 1);
+check('... und zwar der Name, nicht die MAC', $beides['lldp_raw'][0]['lastvalue'], 'sw-real');
+
+// Eine unbrauchbare Chassis-MAC (alles Null) erzeugt KEINEN Nachbarn: viele
+// Geraete, die ihre eigene MAC nicht kennen, melden sie, eine Zuordnung waere
+// geraten.
+$null = MetricExtractor::extract([
+    ['hostid' => 's', 'key_' => 'lldpRemSysName[0.9.1]',   'name' => '', 'lastvalue' => ''],
+    ['hostid' => 's', 'key_' => 'lldpRemChassisId[0.9.1]', 'name' => '', 'lastvalue' => '00 00 00 00 00 00'],
+]);
+check('Null-MAC: kein Nachbar',            count($null['lldp_raw']), 0);
+
+// Ein Chassis, das gar keine MAC ist (lokal vergebener String), erzeugt
+// ebenfalls keinen MAC-Nachbarn — wir raten keine Identitaet.
+$str = MetricExtractor::extract([
+    ['hostid' => 's', 'key_' => 'lldpRemSysName[0.11.1]',   'name' => '', 'lastvalue' => ''],
+    ['hostid' => 's', 'key_' => 'lldpRemChassisId[0.11.1]', 'name' => '', 'lastvalue' => 'some-local-id'],
+]);
+check('Nicht-MAC-Chassis: kein Nachbar',   count($str['lldp_raw']), 0);
 
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
