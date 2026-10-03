@@ -2,6 +2,76 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.5.2 — 2026-10-04
+
+### Updating from 5.5.1 — replace the directory, and that is all
+
+No new action, no template change, and the widget scripts are unchanged
+except for one English label fix. Replace the module directory, `chown`,
+reload php-fpm, then reload the topology page once with a cache bypass,
+because the bundle changed. Nothing stored is touched.
+
+### A quality pass — six parallel reviews, and what they turned up
+
+All seventeen gates were green on 5.5.1; this release is what they do not
+see. Six focused reviews (security, backend logic, frontend logic,
+theme/colour, duplication/i18n, test coverage) ran over the whole module,
+and every finding below was reproduced against the code before it was
+fixed. The headline: no security vulnerability, and the two correctness
+clusters were both the "draw one cable as two" error the edge builder
+exists to prevent.
+
+### Fixed
+
+- **Two order-dependent false splits in LLDP edge building.** A reporter
+  that announced a neighbour first *without* a port (a scalar
+  `lldpRemSysName`, or CDP/MNDP) and then *with* one drew two edges for the
+  one cable; reversing the item order drew one. And a scalar
+  `lldpRemChassisId` slipped past the no-name guard, so a host with a
+  scalar name got both a real neighbour and a MAC ghost. Both are fixed and
+  carry counter-checks that fail without the fix. The number of edges no
+  longer depends on the order Zabbix returns the items.
+- **Synthetic edges no longer count, style or probe as real links.** The
+  ghost edge was already excluded everywhere; the internet-cloud uplink and
+  the collapsed-endpoint bundle were not, though neither is a measured link
+  with a host at the far end. They inflated the "Edges" and "LLDP links"
+  KPIs, the traffic heatmap overwrote the bold internet uplink with its
+  faint idle style on every render, and hovering a bundle fired a history
+  request to a node id that is not a host. (The 5.5.1 fix that tagged the
+  bundle edge `isLLDP:false` never took effect in the KPI, which does not
+  read that flag — it does now, by excluding the edge.)
+- **Tint badges were illegible in dark mode.** The palette had bright
+  dark-mode text colours but no matching tint background, so code hardcoded
+  the pale light tint behind text that flipped bright — bright-on-pale in
+  dark. New `--nt-ok/warn/crit-bg` tokens fix the maintenance/ack badges
+  and the geo banners; a few hardcoded light chrome colours (a tab
+  separator, an export-menu hover that hid its own row, preset borders)
+  went to tokens too.
+- **A handful of i18n defects a gate could not see.** `toolbar.on`/`off`
+  were declared twice in both language files (the first, dead); the health
+  metric labels in the German file were still English
+  (Offline/Stale/Critical/Unacked → Offline/Veraltet/Kritisch/Unquittiert);
+  and one table-widget string was German. None changes behaviour; all are
+  now correct.
+
+### For contributors
+
+- The test net grew where the bugs were. **ci:parity** now also guards the
+  compliance check-key set between the JS view and the PHP action — a
+  second JS↔PHP duplicate nothing watched — and the health formula's stale
+  window and severity cutoff, not just its weights and colour thresholds.
+  **ci:i18n** now diffs the `de.js`/`en.js` key sets, so a key missing from
+  one language fails the build instead of shipping a bare key. **ci:xss**
+  now also flags `${…}` interpolation into `innerHTML`, not only `+`
+  concatenation. **ci:frontend** gained a hostile-label scenario for the
+  LLDP-quality view, the most untrusted data the module renders.
+- Confirmed solid, so no one re-audits it: no security vulnerability
+  (output encoding is applied throughout, every write action carries the
+  full POST/CSRF/permission/throttle set, PortScan cannot be steered off a
+  user's own hosts, and the inline config cannot break out of its script
+  tag); the health-score formula is identical on both sides to the digit;
+  and the shared widget blocks are byte-identical to their source.
+
 ## v5.5.1 — 2026-10-03
 
 ### Updating from 5.5.0 — replace the directory, and that is all
