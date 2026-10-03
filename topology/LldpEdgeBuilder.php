@@ -1499,6 +1499,29 @@ final class LldpEdgeBuilder {
                 return $m;
             }
         }
+        // Regel 4: ein Melder, der diesen Nachbarn ueber dieses Protokoll
+        // schon OHNE Port gemeldet hat, meldet ihn jetzt MIT Port. Das ist
+        // dasselbe Kabel, nur praeziser — kein zweites.
+        //
+        // Ohne diese Regel hing die Zahl der Kanten an der REIHENFOLGE der
+        // Items: eine skalare Nachbarmeldung (lldpRemSysName ohne Index, auch
+        // CDP/MNDP) VOR der per-Port-Tabelle ergab zwei Kanten, die umgekehrte
+        // Reihenfolge eine. Regel 1 kann die leere Port-Menge des portlosen
+        // Mitglieds nicht schneiden, und Regel 3 ueberspringt es, weil der
+        // Melder es (portlos) bereits gemeldet hat — es fiel also durch.
+        //
+        // Reporter-eng gehalten ($rid, nicht beide Enden): echte LAG-Mitglieder
+        // tragen beide einen Port und werden hier NICHT ueber-vereint. Regel 3
+        // hat zuvor jedes Mitglied zurueckgegeben, das dieser Melder noch gar
+        // nicht kennt; was hier bleibt, hat er schon gemeldet — ein leerer
+        // Port-Satz heisst dann genau "portlos gemeldet". Die portlose Meldung
+        // nimmt so die ERSTE geportete auf; eine zweite mit anderem Port
+        // spaltet dann korrekt wieder ab.
+        foreach ($members as $m) {
+            if (empty($keys[$m][$rid])) {
+                return $m;
+            }
+        }
         return null;
     }
 

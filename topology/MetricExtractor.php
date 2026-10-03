@@ -429,7 +429,29 @@ final class MetricExtractor {
         foreach ($lldp_meta as $hid => $idxmap) {
             foreach ($idxmap as $idx => $meta) {
                 if (isset($lldp_named[$hid][$idx])) {
-                    continue;   // hat schon einen Namen
+                    continue;   // hat schon einen Namen (gleicher SNMPINDEX)
+                }
+                // SKALARER FALL. Ein bracket-loses lldpRemChassisId hat als
+                // ifaceParam den Key-NAMEN ('lldpRemChassisId', mit Buchstaben)
+                // — einen anderen Pseudo-Index als ein skalares lldpRemSysName
+                // ('lldpRemSysName'). Der isset-Guard oben vergleicht aber
+                // Index gegen Index und greift deshalb nicht: er sah den Namen
+                // unter 'lldpRemSysName', die MAC unter 'lldpRemChassisId'. Ein
+                // Host mit skalarem Namen bekam so aus derselben Meldung einen
+                // ECHTEN Nachbarn UND einen MAC-Geist — die falsche Aufspaltung.
+                //
+                // Ein echter SNMPINDEX ist rein numerisch (0.5.1); nur die
+                // skalare Form traegt Buchstaben. Hat der Host irgendeinen
+                // skalaren Namen, ist DER der Nachbar, und ein skalarer Chassis
+                // synthetisiert nicht. Der indexierte Echt-Hardware-Fall
+                // (cd34dff) bleibt unberuehrt, und ein skalarer Chassis OHNE
+                // Namen fuehrt weiter zu einem Geist.
+                if (preg_match('/[A-Za-z]/', (string) $idx)) {
+                    foreach ($lldp_named[$hid] ?? [] as $nidx => $_) {
+                        if (preg_match('/[A-Za-z]/', (string) $nidx)) {
+                            continue 2;
+                        }
+                    }
                 }
                 $chassis = (string) ($meta['chassis'] ?? '');
                 if ($chassis === '') {

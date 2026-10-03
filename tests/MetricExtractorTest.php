@@ -410,6 +410,24 @@ $str = MetricExtractor::extract([
 ]);
 check('Nicht-MAC-Chassis: kein Nachbar',   count($str['lldp_raw']), 0);
 
+// SKALARER Fall (bracket-los): lldpRemSysName und lldpRemChassisId ohne Index
+// haben verschiedene ifaceParam-Pseudo-Indizes ('lldpRemSysName' gegen
+// 'lldpRemChassisId'). Der indexbasierte Guard griff dort nicht — ein Host mit
+// skalarem Namen bekam aus derselben Meldung einen echten Nachbarn UND einen
+// MAC-Geist. Das ist dieselbe falsche Aufspaltung wie oben, nur skalar.
+$skalar = MetricExtractor::extract([
+    ['hostid' => 's', 'key_' => 'lldpRemSysName',   'name' => '', 'lastvalue' => 'realneighbor'],
+    ['hostid' => 's', 'key_' => 'lldpRemChassisId', 'name' => '', 'lastvalue' => '02 5E 10 00 00 01'],
+]);
+check('skalarer Name + Chassis: ein Nachbar', count($skalar['lldp_raw']), 1);
+check('... und zwar der Name, nicht die MAC', $skalar['lldp_raw'][0]['lastvalue'], 'realneighbor');
+// Ein skalarer Chassis OHNE Namen fuehrt weiter zu einem Geist (der No-Name-
+// Fix gilt auch skalar) — unterdrueckt wird nur das Doppel, nicht die Synthese.
+$skalarNurMac = MetricExtractor::extract([
+    ['hostid' => 's', 'key_' => 'lldpRemChassisId', 'name' => '', 'lastvalue' => '02 5E 10 00 00 01'],
+]);
+check('skalarer Chassis ohne Name: ein Geist', count($skalarNurMac['lldp_raw']), 1);
+
 // ── Link-Uptime je Port ───────────────────────────────────────────────────
 //
 // sysUpTime (Host) minus ifLastChange (Interface) = wie lange der Link steht.

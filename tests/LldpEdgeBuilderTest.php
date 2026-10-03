@@ -988,6 +988,31 @@ $rNoPort = LldpEdgeBuilder::build($hLag, [
 ]);
 check('ohne Port: eine Kante wie bisher',          count($rNoPort['edges']), 1);
 
+// Regel 4 / Gegenprobe zur FALSCHEN Aufspaltung: derselbe Melder meldet
+// denselben Nachbarn ueber dasselbe Protokoll erst OHNE Port (skalares
+// lldpRemSysName) und dann MIT Port. Das ist dasselbe Kabel, nicht zwei.
+// Vorher haengte die Zahl an der Item-Reihenfolge: portlos-dann-geportet
+// gab zwei, die umgekehrte Reihenfolge eine. Beide Richtungen pruefen.
+$rMixedA = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName',         'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]',  'lastvalue' => 'acc', 'src' => 'lldp'],
+]);
+check('portlos dann geportet: eine Kante',         count($rMixedA['edges']), 1);
+$rMixedB = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]',  'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName',         'lastvalue' => 'acc', 'src' => 'lldp'],
+]);
+check('geportet dann portlos: eine Kante',         count($rMixedB['edges']), 1);
+// Der portlose Bericht nimmt aber nur die ERSTE geportete Meldung auf; ein
+// echtes zweites Kabel (anderer Port) spaltet danach korrekt wieder ab —
+// Regel 4 darf keine echten LAG-Member verschlucken.
+$rMixedC = LldpEdgeBuilder::build($hLag, [
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName',         'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.1]',  'lastvalue' => 'acc', 'src' => 'lldp'],
+    ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.2.1]',  'lastvalue' => 'acc', 'src' => 'lldp'],
+]);
+check('portlos + zwei Ports: zwei Kanten',         count($rMixedC['edges']), 2);
+
 // nt:uplink auf einem Member-Port landet an DIESEM Member.
 $eUp = LldpEdgeBuilder::uplinkEdges($hLag, ['acc' => ['host' => 'core', 'port' => '2']],
     $rLag['edges']);
