@@ -284,6 +284,10 @@ window.NT_CONFIG = <?= json_encode([
     // gebunden). Das JS sendet es mit; NetworkTopologyMaintenance prueft es via
     // CCsrfTokenHelper::check -> echter CSRF-Schutz statt nur X-Requested-With.
     'csrf_token' => \CCsrfTokenHelper::get('network.topology.maintenance'),
+    // Aus einem unueberwachten Nachbarn einen Host machen. Eigener Token:
+    // CCsrfTokenHelper bindet ihn an die Action, ein Token der Wartung
+    // wuerde hier also nicht gelten — und soll es auch nicht.
+    'create_host_csrf' => \CCsrfTokenHelper::get('network.topology.create_host'),
     // Optionaler Provider-Name für die Internet-Wolke im Hierarchie-Layout.
     // Aus URL-Parameter ?internet=Vodafone gelesen; leer = "Internet" als Default.
     'internet_label' => (string) ($data['internet_label'] ?? ''),

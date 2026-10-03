@@ -435,6 +435,58 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// Aus einem Geist einen Host machen. Geprueft wird, WAS die Action bekommt —
+// die Nutzlast ist die Stelle, an der ein Name von einem fremden Geraet und
+// eine Melder-ID zusammenkommen.
+console.log('\n  Geist zu Host: was die Action bekommt\n');
+const gcreate = szenario('ghost-create', { lang: 'en_US' }, `
+    const G = await import(${JSON.stringify(MODULE('ghost-create.js'))});
+    const geist = (name, src) => ({ _isGhost: true, host: name, label: name,
+        _ghostSrc: src ? [src] : [] });
+    const einzeln = G.ghostRequestItem(geist('sw-edge-03', 'lldp'),
+        { nb: '10839', port: 'Gi1/0/8' });
+    console.log(JSON.stringify({
+        item: einzeln,
+        // Ein echter Host ist kein Geist und darf hier nicht durchrutschen.
+        keinGeist: G.ghostRequestItem({ host: 'lab-sw-01' }, { nb: '1', port: 'p' }),
+        ohneName:  G.ghostRequestItem(geist(''), { nb: '1', port: 'p' }),
+        // Ohne Uplink trotzdem anlegbar — nur ohne Tag.
+        ohneUplink: G.ghostRequestItem(geist('drucker-og'), null),
+        // Dubletten: derselbe Geist aus Karte UND Tabelle ausgewaehlt.
+        dubletten: G.ghostRequestItems([
+            { node: geist('a'), uplink: { nb: '1', port: 'p1' } },
+            { node: geist('A'), uplink: { nb: '2', port: 'p2' } },
+            { node: geist('b'), uplink: { nb: '3', port: 'p3' } },
+        ]).map((i) => i.name),
+        // Teilerfolg wird benannt, nicht gerundet.
+        ok:      G.createResultText({ created: [1, 2], failed: [] }),
+        teils:   G.createResultText({ created: [1], failed: [{ error: 'already exists' }] }),
+        keiner:  G.createResultText({ created: [], failed: [{ error: 'bad name' }] }),
+        nichts:  G.createResultText({ created: [], failed: [] }),
+        // Der Bestaetigungssatz nennt Zahl und Namen.
+        fragt1:  G.confirmText([{ name: 'sw-edge-03' }], 'Lasttest').indexOf('sw-edge-03') >= 0,
+        fragtN:  G.confirmText([{ name: 'a' }, { name: 'b' }], 'Lasttest').indexOf('2') >= 0,
+    }));
+`);
+if (gcreate) {
+    pruefe('Name, Melder-ID, Port, Quelle',  gcreate.item,
+        { name: 'sw-edge-03', reporter_hostid: '10839', port: 'Gi1/0/8', via: 'lldp' });
+    pruefe('ein echter Host faellt durch',   gcreate.keinGeist, null);
+    pruefe('ohne Namen kein Host',           gcreate.ohneName,  null);
+    pruefe('ohne Uplink: Name ja, Port leer',
+        gcreate.ohneUplink && gcreate.ohneUplink.port, '');
+    pruefe('... und der Melder leer',
+        gcreate.ohneUplink && gcreate.ohneUplink.reporter_hostid, '');
+    pruefe('Dubletten fallen raus (auch Gross/Klein)', gcreate.dubletten, ['a', 'b']);
+    pruefe('alles angelegt wird gezaehlt',   /2 host/.test(gcreate.ok), true);
+    pruefe('Teilerfolg nennt beide Zahlen',
+        /1/.test(gcreate.teils) && /already exists/.test(gcreate.teils), true);
+    pruefe('nichts angelegt nennt den Grund', /bad name/.test(gcreate.keiner), true);
+    pruefe('gar nichts versucht ist eigener Fall', gcreate.nichts, 'Nothing was created.');
+    pruefe('Rueckfrage nennt den Namen',     gcreate.fragt1, true);
+    pruefe('... und bei mehreren die Zahl',  gcreate.fragtN, true);
+}
+
 // Die Kompressionserkennung im Diag-Tab. Der wichtigere Teil der Pruefung
 // sind die Faelle, in denen NICHTS gesagt werden darf: ein Hinweis, der auf
 // einer korrekt eingerichteten Anlage erscheint, kostet Vertrauen in alle

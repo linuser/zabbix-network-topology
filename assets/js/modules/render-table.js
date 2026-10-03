@@ -22,6 +22,9 @@ import { parseQuery, matchQuery, nodeToQueryFields } from './query.js';
 import { loadSnapshot, computeDiff, formatSnapshotAge } from './diff-mode.js';
 import { loadFilterPresets, saveFilterPresets, loadGhostMode } from './storage.js';
 import { injectGhostNodes } from './build-elements.js';
+import { ghostRequestItems, createGhostHosts, createResultText,
+         confirmText } from './ghost-create.js';
+import { toast } from './toast.js';
 import { NT_TABLE_MODE_KEY, NT_ITEMS_PATTERN_KEY, NT_ITEMS_HIDE_EMPTY_KEY,
          NT_ITEMS_HEATMAP_KEY } from './storage.js';
 import { showDetail } from './detail-panel.js';
@@ -72,6 +75,34 @@ const UPLINK_INFRA = { switch: 1, router: 1, firewall: 1 };
 
 // hostid => [{ nb, port, stale }, ...], beste Antwort zuerst.
 let _uplinks = {};
+// Die Knoten MIT Geistern. _renderNodes haelt bewusst die rohen
+// Referenzen (damit ein erneutes Rendern nicht auf bereits injizierten
+// Daten aufsetzt) — wer die Geister braucht, braucht diese hier.
+let _nodesMitGeistern = [];
+// Der Knopf "N Hosts anlegen" — gemerkt, damit er nach jedem Filterwechsel
+// nachgefuehrt werden kann.
+let _geisterKnopf = null;
+
+/**
+ * Welche Geister stehen GERADE in der Tabelle?
+ *
+ * Immer frisch berechnet, nie gemerkt. Eine Beschriftung, die eine andere
+ * Zahl nennt als die Tabelle zeigt, ist schlimmer als keine — und genau das
+ * ist in diesem Projekt schon einmal passiert (der Collapse-Knopf sagte
+ * "off (921)", waehrend 921 Knoten eingeklappt waren).
+ */
+function sichtbareGeister() {
+    return (_nodesMitGeistern || [])
+        .filter(function(n) { return n._isGhost && passesFilter(n); });
+}
+
+/** Beschriftung und Sichtbarkeit des Knopfes an den Filter anpassen. */
+function geisterKnopfNachfuehren() {
+    if (!_geisterKnopf) return;
+    const n = sichtbareGeister().length;
+    _geisterKnopf.style.display = n ? '' : 'none';
+    if (n) _geisterKnopf.textContent = '\u2795 ' + t('ghost.create.btn', { n: n });
+}
 
 export function buildUplinks(nodes, edges) {
     const byId = {};
@@ -903,6 +934,57 @@ function buildFilterBar(nodes, groupNames, theme) {
     csvBtn.addEventListener('click', exportHostsCsv);
     bar.appendChild(csvBtn);
 
+    // ── Aus den sichtbaren Geistern Hosts machen ───────────────────────────
+    //
+    // KEINE AUSWAHL MIT KAESTCHEN, sondern der Filter, den diese Tabelle
+    // ohnehin hat. "port:lab-sw-01" eingeben, nachsehen, was dasteht, dann
+    // druecken — dieselbe Bedienung wie beim CSV-Export daneben, und es gibt
+    // keinen zweiten Zustand, der von dem abweichen koennte, was man sieht.
+    //
+    // Der Knopf wird IMMER gebaut und per display ein- und ausgeblendet: er
+    // muss sich beim Filtern nachfuehren lassen, und die Werkzeugleiste wird
+    // dabei nicht neu gebaut.
+    if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
+        const mkBtn = document.createElement('button');
+        mkBtn.type = 'button';
+        mkBtn.id = 'nt-table-mkhosts';
+        mkBtn.title = t('ghost.create.btn_tip');
+        mkBtn.style.cssText = 'padding:3px 8px;border:1px solid ' + theme.border
+            + ';border-radius:' + NT_R.sm + ';font-size:12px;background:' + theme.surface
+            + ';color:' + theme.text + ';font-family:inherit;cursor:pointer';
+        mkBtn.addEventListener('click', function() {
+            const cfg = window.NT_CONFIG || {};
+            const grp = (cfg.selected_groupids || [])[0];
+            if (!grp) { toast(t('ghost.create.nogroup'), 'warn'); return; }
+            // BEIM KLICK NEU BERECHNET, nicht aus einer Closure: angelegt
+            // wird, was in diesem Moment in der Tabelle steht.
+            const items = ghostRequestItems(sichtbareGeister().map(function(n) {
+                return { node: n, uplink: (_uplinks[String(n.id)] || [])[0] };
+            }));
+            if (!items.length) { toast(t('ghost.create.none'), 'warn'); return; }
+            const grpName = (cfg.selected_group_names || [])[0] || String(grp);
+            if (!window.confirm(confirmText(items, grpName))) return;
+            mkBtn.disabled = true;
+            createGhostHosts(items, grp).then(function(res) {
+                mkBtn.disabled = false;
+                if (res && res.error) {
+                    toast(t('ghost.create.failed', { why: String(res.error) }), 'warn');
+                    return;
+                }
+                const schief = res && res.failed && res.failed.length;
+                toast(createResultText(res), schief ? 'warn' : 'ok');
+            }).catch(function(e) {
+                mkBtn.disabled = false;
+                toast(t('ghost.create.failed', {
+                    why: (e && e.message) ? e.message : '?'
+                }), 'warn');
+            });
+        });
+        bar.appendChild(mkBtn);
+        _geisterKnopf = mkBtn;
+        geisterKnopfNachfuehren();
+    }
+
     // Counter rechts
     const counter = document.createElement('div');
     counter.id = 'nt-table-count';
@@ -1267,6 +1349,7 @@ export function renderTable(wrap, nodes, edges) {
         nodes = _mitGeistern.nodes;
         edges = _mitGeistern.edges;
     }
+    _nodesMitGeistern = nodes;
 
     // Uplinks EINMAL je Render, nicht je Zeile: buildUplinks laeuft ueber alle
     // Kanten, und rowHtml wird pro Host gerufen. Der Text haengt zusaetzlich am
@@ -1373,6 +1456,8 @@ export function renderTable(wrap, nodes, edges) {
 
         const r = buildTable(realNodes, baseUrl, theme);
         tableArea.innerHTML = r.html;
+        // Der Knopf nennt eine Zahl aus dem Filter — er muss mit.
+        geisterKnopfNachfuehren();
         const counter = document.getElementById('nt-table-count');
         if (counter) {
             // Geister sind KEINE Hosts und duerfen den Zaehler nicht

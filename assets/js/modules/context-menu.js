@@ -18,6 +18,8 @@ import { getPathStart, isPathActive, setPathStart,
 import { showPathList } from './path-list.js';
 import { resetHighlight } from './highlight.js';
 import { toast } from './toast.js';
+import { ghostRequestItem, createGhostHosts, createResultText,
+         confirmText } from './ghost-create.js';
 import { isSimulated, isSimActive, simulatedCount,
          toggleSimulatedHost, clearSimulation } from './whatif.js';
 import { isFocusActive, getFocusId, getFocusHops,
@@ -215,22 +217,58 @@ export function showCtx(cx, cy2, d) {
         _ctx.appendChild(gh);
 
         if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
-            _ctx.appendChild(_ctxRow(t('ctx.ghost.create'), '#0275b8', function() {
-                // Gruppe vorbelegen: die erste der gerade gewaehlten. Eine
-                // bessere Vermutung gibt es nicht — der Nachbar traegt keine
-                // Gruppenzugehoerigkeit, er ist ja nirgends erfasst. Im
-                // Formular laesst sich das aendern.
-                const cfg  = window.NT_CONFIG || {};
-                const grp  = (cfg.selected_groupids || [])[0];
-                const note = seenBy
-                    ? 'Discovered via ' + via + ' by ' + seenBy + ' (Network Topology)'
-                    : 'Discovered via ' + via + ' (Network Topology)';
-                const url = hostEditUrl(window.location.origin + base, {
-                    host: d.label || d.host || '',
-                    description: note.slice(0, 250),
-                    'groupids[]': grp || '',
+            _ctx.appendChild(_ctxRow(t('ghost.create.menu'), '#0275b8', function() {
+                // HIER STAND ZABBIX' HOST-FORMULAR, geoeffnet mit
+                // ?host=…&description=…&groupids[]=…. Auf 7.0.31 nachgemessen:
+                // NUR groupids kommt an. Name und Beschreibung wurden
+                // stillschweigend verworfen — das Formular ging auf, war leer,
+                // und abgetippt werden musste trotzdem genau das, was eine
+                // Sekunde vorher auf der Karte stand. Die Zabbix-Doku fuehrt
+                // groupids als Seitenparameter, den Hostnamen nicht.
+                //
+                // Jetzt legt die Action den Host an. Nur so laesst sich auch
+                // nt:uplink setzen, und damit sitzt der neue Host sofort an
+                // der richtigen Stelle auf der Karte.
+                const cfg = window.NT_CONFIG || {};
+                const grp = (cfg.selected_groupids || [])[0];
+                if (!grp) { toast(t('ghost.create.nogroup'), 'warn'); return; }
+
+                // Melder und Port von der Geisterkante holen — dieselbe
+                // Quelle, aus der die Tabellenspalte "Connected to" liest.
+                const cy = window._ntCy;
+                let uplink = null;
+                if (cy) {
+                    const kante = cy.edges().filter(function(e) {
+                        return e.data('_isGhostEdge')
+                            && (e.data('target') === d.id || e.data('source') === d.id);
+                    })[0];
+                    if (kante) {
+                        const melder = kante.data('source') === d.id
+                            ? kante.data('target') : kante.data('source');
+                        const ports = kante.data('ports') || {};
+                        uplink = { nb: melder, port: ports[melder] || '' };
+                    }
+                }
+                const item = ghostRequestItem(d, uplink);
+                if (!item) { toast(t('ghost.create.none'), 'warn'); return; }
+
+                const grpName = (cfg.selected_group_names || [])[0] || String(grp);
+                // GEFRAGT WIRD VOR DEM ANLEGEN. Ein Host ist nicht mit einem
+                // Klick wieder weg.
+                if (!window.confirm(confirmText([item], grpName))) return;
+
+                createGhostHosts([item], grp).then(function(res) {
+                    if (res && res.error) {
+                        toast(t('ghost.create.failed', { why: String(res.error) }), 'warn');
+                        return;
+                    }
+                    const schief = res && res.failed && res.failed.length;
+                    toast(createResultText(res), schief ? 'warn' : 'ok');
+                }).catch(function(e) {
+                    toast(t('ghost.create.failed', {
+                        why: (e && e.message) ? e.message : '?'
+                    }), 'warn');
                 });
-                window.open(url, '_blank', 'noopener,noreferrer');
             }));
         }
 

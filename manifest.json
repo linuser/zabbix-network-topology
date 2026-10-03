@@ -68,6 +68,10 @@
             "class": "NetworkTopologyMaintenance",
             "layout": "layout.json"
         },
+        "network.topology.create_host": {
+            "class": "NetworkTopologyCreateHost",
+            "layout": "layout.json"
+        },
         "network.topology.links": {
             "class": "NetworkTopologyLinks",
             "layout": "layout.json"
