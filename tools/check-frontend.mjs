@@ -458,6 +458,18 @@ const epb = szenario('endpoints', { lang: 'en_US' }, `
     const zu = A.aggregateEndpoints(nodes, edges, {});
     const ids = zu.nodes.map((n) => n.id).sort();
     const b = zu.nodes.find((n) => n._isEndpointBundle);
+    // DER BUENDEL-KNOTEN WURDE NIE LIVE GERENDERT (auf der Rig entstand kein
+    // Buendel, alles Infrastruktur). Also hier pruefen, dass build-elements
+    // Knoten UND die minimale Buendel-Kante ohne Absturz zeichnet.
+    const B = await import(${JSON.stringify(MODULE('build-elements.js'))});
+    let renderOk = false, bundleEl = null, bundleEdgeEl = null;
+    try {
+        const ne = B.buildNodeElements(zu.nodes, false);
+        const ee = B.buildEdgeElements(zu.edges, zu.nodes);
+        bundleEl = ne.find((x) => x.data && x.data._isEndpointBundle);
+        bundleEdgeEl = ee.find((x) => x.data && x.data._isBundleEdge);
+        renderOk = true;
+    } catch (e) { renderOk = 'THROW: ' + e.message; }
     const auf = A.aggregateEndpoints(nodes, edges, { s1: true });
     const duenn = A.aggregateEndpoints(
         [sw('s2'), geist('x1'), geist('x2')],
@@ -475,6 +487,9 @@ const epb = szenario('endpoints', { lang: 'en_US' }, `
         aufKeinBuendel: auf.nodes.some((n) => n._isEndpointBundle) === false,
         aufEinzeln: ['e1','e2','e3','e4'].every((x) => auf.nodes.map((n)=>n.id).indexOf(x) >= 0),
         duennKeinBuendel: duenn.nodes.some((n) => n._isEndpointBundle) === false,
+        renderOk: renderOk,
+        bundleEl: !!bundleEl,
+        bundleEdgeEl: !!bundleEdgeEl,
     }));
 `);
 if (epb) {
@@ -489,6 +504,9 @@ if (epb) {
     pruefe('aufgeklappt: kein Buendel',           epb.aufKeinBuendel, true);
     pruefe('aufgeklappt: Endgeraete wieder da',   epb.aufEinzeln, true);
     pruefe('zu duenn (2): kein Buendel',          epb.duennKeinBuendel, true);
+    pruefe('build-elements zeichnet ohne Absturz',   epb.renderOk, true);
+    pruefe('... der Buendel-Knoten wird zum Element', epb.bundleEl, true);
+    pruefe('... und die Buendel-Kante auch',          epb.bundleEdgeEl, true);
 }
 
 console.log('\n  Port-Sparkline: SVG aus Zahlen\n');

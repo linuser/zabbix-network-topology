@@ -130,7 +130,7 @@ function portSparkline(parent, hostId, ifIndex) {
     const cfg = (typeof window !== 'undefined' && window.NT_CONFIG) || {};
     if (!cfg.data_url) return;
     const url = cfg.data_url.replace('network.topology.data', 'network.topology.spark')
-        + '&hostids%5B%5D=' + encodeURIComponent(hid);
+        + '&hostids%5B%5D=' + encodeURIComponent(hid) + '&ports=1';
     const zeile = el('div',
         'display:flex;align-items:center;gap:8px;margin:1px 0 4px 0;'
         + 'font-size:10px;color:var(--nt-muted,#94a3b8)');

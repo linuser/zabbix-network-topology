@@ -375,6 +375,21 @@ export function buildEdgeElements(edges, nodes) {
             return;
         }
 
+        // Endgeraete-Buendel-Kante: eine reine Darstellungskante zum
+        // Buendel-Knoten. KEIN Traffic, KEIN isLLDP — ohne eigenen Zweig fiele
+        // sie in den Default-Pfad unten und wuerde zur vollwertigen
+        // LLDP-Kante: der LLDP-Toggle wuerde sie verstecken, die KPI-Zeile
+        // zaehlte sie als echten Link, und sie erbte den Node-Summen-Traffic
+        // des Switches. Die Buendel-Kennung bleibt fuers Styling erhalten.
+        if (e._isBundleEdge) {
+            elements.push({
+                data: { id: e.id || ('ebundle_' + i), source: src, target: tgt,
+                        trafficIn: 0, trafficOut: 0, tLabel: '', isLLDP: false,
+                        _isBundleEdge: true }
+            });
+            return;
+        }
+
         // Synthetische Internet-Edges: ohne Traffic-Berechnung, ohne LLDP-Flag
         if (e._isInternetEdge) {
             elements.push({

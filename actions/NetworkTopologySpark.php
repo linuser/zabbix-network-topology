@@ -39,7 +39,7 @@ class NetworkTopologySpark extends NetworkTopologyController {
 
     protected function checkInput(): bool {
         if (!$this->requireAjax()) return false;
-        $ret = $this->validateInput(['hostids' => 'array_id']);
+        $ret = $this->validateInput(['hostids' => 'array_id', 'ports' => 'in 0,1']);
         if (!$ret) {
             $this->jsonResponse(['error' => 'Invalid input']);
         }
@@ -54,6 +54,9 @@ class NetworkTopologySpark extends NetworkTopologyController {
         $_t0 = microtime(true);
         if (!$this->throttle('spark', 60, 10)) return;
         $hostids  = $this->getInput('hostids', []);
+        // Ob die per-Port-Kurven mitgeliefert werden (Kanten-Panel) oder nicht
+        // (Knoten-Tooltip). Default aus: die Masse der Aufrufe sind Tooltips.
+        $wantPorts = (string) $this->getInput('ports', '0') === '1';
 
         // Defensive: Spark wird vom Tooltip einzeln pro Host getriggert,
         // realistisch sind 1-5 hostids pro Call. Cap bei 50 verhindert
@@ -241,8 +244,15 @@ class NetworkTopologySpark extends NetworkTopologyController {
             // Bucketung wie die Hostsumme, nur nicht aufsummiert. Das Panel
             // zeigt sie fuer den EINEN Port der Kante — die Hostsumme wuerde
             // dort die falsche Frage beantworten ("wie viel ueber ALLE Ports").
+            //
+            // NUR AUF ANFORDERUNG (ports=1). Der Knoten-Tooltip ruft dieselbe
+            // Action, braucht aber nur cpu/ping/Hostsumme — ihm die ports-Map
+            // jedes Mal mitzuschicken, bei einem 48-Port-Switch, waere eine
+            // vielfache Nutzlast fuer nichts. Nur das Kanten-Panel fragt sie an.
             $ports = [];
-            $idxAll = array_keys(($trInByIdx[$hid] ?? []) + ($trOutByIdx[$hid] ?? []));
+            $idxAll = $wantPorts
+                ? array_keys(($trInByIdx[$hid] ?? []) + ($trOutByIdx[$hid] ?? []))
+                : [];
             foreach ($idxAll as $ix) {
                 $inItem  = $trInByIdx[$hid][$ix]  ?? null;
                 $outItem = $trOutByIdx[$hid][$ix] ?? null;
@@ -304,7 +314,11 @@ class NetworkTopologySpark extends NetworkTopologyController {
      * net.if.in[eth0]            -> '' (Agent-Interface, kein SNMP-Index)
      */
     private static function ifIndexFromKey(string $key): string {
-        return preg_match('/[.\[](\d+)\]$/', $key, $m) === 1 ? $m[1] : '';
+        // Das schliessende ] ist optional: manche Templates fuehren den Key
+        // klammerlos als ifHCInOctets.8 statt net.if.in[ifHCInOctets.8]. Hier
+        // kommen nur Traffic-Keys an (die Klassifikation oben), ihre
+        // Endzahl IST der ifIndex — eine Fehlzuordnung ist damit ausgeschlossen.
+        return preg_match('/[.\[](\d+)\]?$/', $key, $m) === 1 ? $m[1] : '';
     }
 
     private static function bitFaktor(string $key): int {
