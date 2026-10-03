@@ -317,7 +317,7 @@ class WidgetNetworkTopologyTable extends CWidget {
         html += '</tbody></table>';
         if (this._maxRows > 0 && total > this._maxRows) {
             html += '<div style="padding:4px 8px;font-size:10px;color:' + this._COL_SUB + '">'
-                + '… ' + (total - this._maxRows) + ' weitere (Limit ' + this._maxRows + ')</div>';
+                + '… ' + (total - this._maxRows) + ' more (limit ' + this._maxRows + ')</div>';
         }
         html += '</div>';
         root.innerHTML = html;
