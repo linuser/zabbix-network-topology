@@ -82,12 +82,29 @@ function thresholds(src) {
     return [...found].sort((a, b) => b - a);
 }
 
+/**
+ * Weitere Formel-Konstanten, die ebenfalls auf beiden Seiten gleich sein
+ * muessen, aber NICHT in die Gewichte/Farbschwellen fallen: das Stale-Fenster
+ * (STALE_S, 3-stellig) und der Severity-Cutoff fuer "critical" (>= 4,
+ * EINSTELLIG — die Schwellen-Regex oben verlangt zwei Stellen und sah ihn nie).
+ * Beide koennen driften, ohne dass ein Score sichtbar kaputtgeht, bis eine
+ * Hostgroup auf Karte und Dashboard verschiedene Zahlen zeigt.
+ */
+function formulaConstants(src) {
+    const stale = src.match(/STALE_S\s*=\s*(\d+)/);
+    const sev   = src.match(/severity\s*\|\|\s*0\s*\)\s*>=\s*(\d+)/);
+    return {
+        stale:   stale ? Number(stale[1]) : null,
+        sevcrit: sev   ? Number(sev[1])   : null
+    };
+}
+
 console.log('Health-Score-Formel');
 
 const health = {};
 for (const [label, path] of Object.entries(HEALTH_FILES)) {
     const src = read(path);
-    health[label] = { w: weights(src), t: thresholds(src) };
+    health[label] = { w: weights(src), t: thresholds(src), c: formulaConstants(src) };
 }
 
 const EXPECTED_KEYS = ['offline', 'stale', 'critical', 'unacked'];
@@ -118,6 +135,20 @@ if (extraction_ok) {
     }
     else {
         pass(`Schwellen identisch ([${ta}])`);
+    }
+
+    for (const [k, lbl] of [['stale', 'Stale-Fenster STALE_S'], ['sevcrit', 'Severity-Cutoff (>=)']]) {
+        const va = health[a].c[k];
+        const vb = health[b].c[k];
+        if (va === null || vb === null) {
+            fail(`${lbl} nicht gefunden (${a}=${va}, ${b}=${vb}) — Formel umgebaut? Dann dieses Skript nachziehen.`);
+        }
+        else if (va !== vb) {
+            fail(`${lbl} weicht ab: ${a}=${va}, ${b}=${vb}`);
+        }
+        else {
+            pass(`${lbl} identisch (${va})`);
+        }
     }
 }
 
@@ -186,6 +217,58 @@ for (const { name, re, files } of BLOCKS) {
         for (const [h, fs] of hashes) {
             console.log(`         ${h}  ${fs.join(', ')}`);
         }
+    }
+}
+
+// ── 3. Compliance-Pruefschluessel JS ↔ PHP ──────────────────────────────────
+//
+// Ein zweites Duplikat derselben Klasse wie die Health-Formel: die Compliance-
+// Ansicht steht auf BEIDEN Seiten. Das Frontend (render-compliance.js,
+// COMPLIANCE_CHECKS) baut die Spalten aus einer Schlusselliste; das Backend
+// (NetworkTopologyCompliance.php, $agg) zaehlt pro Schluessel. Die Namen muessen
+// exakt uebereinstimmen — tun sie es nicht, zaehlt das Backend einen Schluessel,
+// den die Spalte nie zeigt, oder die Spalte sucht einen, den das Backend nie
+// liefert, und rendert fuer jeden Host stumm "kein Wert". Kein bestehendes Gate
+// las beide Dateien; genau dafuer gibt es check-parity.
+
+console.log('\nCompliance-Pruefschluessel (JS ↔ PHP)');
+
+function complianceKeysJs(src) {
+    const block = src.match(/COMPLIANCE_CHECKS\s*=\s*\[([\s\S]*?)\];/);
+    if (!block) return null;
+    const out = new Set();
+    const re = /\bkey:\s*'([a-z0-9_]+)'/gi;
+    let m;
+    while ((m = re.exec(block[1])) !== null) out.add(m[1]);
+    return out;
+}
+
+function complianceKeysPhp(src) {
+    const block = src.match(/\$agg\s*=\s*\[([\s\S]*?)\];/);
+    if (!block) return null;
+    const out = new Set();
+    const re = /'([a-z0-9_]+)'\s*=>/gi;
+    let m;
+    while ((m = re.exec(block[1])) !== null) out.add(m[1]);
+    return out;
+}
+
+const compJs  = complianceKeysJs(read('assets/js/modules/render-compliance.js'));
+const compPhp = complianceKeysPhp(read('actions/NetworkTopologyCompliance.php'));
+
+if (!compJs || compJs.size === 0) {
+    fail('COMPLIANCE_CHECKS nicht gefunden — Struktur umgebaut? Dann dieses Skript nachziehen.');
+}
+else if (!compPhp || compPhp.size === 0) {
+    fail('$agg in NetworkTopologyCompliance.php nicht gefunden — Struktur umgebaut? Dann dieses Skript nachziehen.');
+}
+else {
+    const nurJs  = [...compJs].filter((k) => !compPhp.has(k));
+    const nurPhp = [...compPhp].filter((k) => !compJs.has(k));
+    if (nurJs.length)  fail(`nur in JS (Spalte ohne Backend-Wert): ${nurJs.join(', ')}`);
+    if (nurPhp.length) fail(`nur in PHP (Wert ohne Spalte): ${nurPhp.join(', ')}`);
+    if (!nurJs.length && !nurPhp.length) {
+        pass(`${compJs.size} Schluessel identisch (${[...compJs].sort().join(', ')})`);
     }
 }
 

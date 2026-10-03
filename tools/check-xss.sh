@@ -40,14 +40,21 @@ STRICT=0
 # in HTML interpolierter Item-Key; Item-Keys sind im Audit ohnehin alle esc()t.
 UNTRUSTED='\.(label|host|name|proxy_name|proxy_group_name|note|raw|ip|iftype|desc|message)\b|\b(neighbor|sysName|hostname|srcLabel|tgtLabel)\b'
 
-# Kandidaten: Zeile konkateniert einen untrusted Wert per '+' in einen
-# String UND wirkt HTML-artig (enthaelt '<' oder innerHTML/insertAdjacentHTML/
-# document.write), aber KEIN esc( auf derselben Zeile. Sichere Nicht-HTML-
+# Kandidaten: Zeile bringt einen untrusted Wert in einen HTML-String UND wirkt
+# HTML-artig (enthaelt '<' oder innerHTML/insertAdjacentHTML/document.write),
+# aber KEIN esc( auf derselben Zeile. Zwei Interpolationsformen:
+#
+#   'x' + d.label + 'y'        — String-Konkatenation per '+'
+#   `x${d.label}y`             — Template-Literal ${...}
+#
+# Die zweite fehlte bis zum Audit: das Hauptmodul zielt auf ES2019 und nutzt
+# Template-Literale, aber der Tripwire sah nur '+'. eslint no-unsanitized fing
+# es ueber den AST, der Grep-Tripwire nicht. Jetzt beide. Sichere Nicht-HTML-
 # Senken (textContent/.style/.title/dataset/…) werden ausgefiltert.
 mapfile -t hits < <(
   grep -rnE "(innerHTML|insertAdjacentHTML|document\.write|<[a-zA-Z/]|>['\"])" "${JS_DIRS[@]}" --include='*.js' 2>/dev/null \
     | grep -vE '/(leaflet|cytoscape|cola|dagre|dist)' \
-    | grep -E "\+[^+]*($UNTRUSTED)" \
+    | grep -E '\+[^+]*('"$UNTRUSTED"')|\$\{[^}]*('"$UNTRUSTED"')[^}]*\}' \
     | grep -v 'esc(' \
     | grep -vE '\.textContent|\.style|\.title *=|\.dataset|\.value\b|createElement|getElementById|querySelector|addEventListener|classList|^\s*[0-9]+:\s*//' \
     || true

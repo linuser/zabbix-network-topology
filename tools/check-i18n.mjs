@@ -252,12 +252,64 @@ for (const abs of dateien(ROOT).sort()) {
     }
 }
 
+// ── de.js ↔ en.js: dieselbe Schluesselmenge ─────────────────────────────────
+//
+// CLAUDE.md verlangt jeden t()-Schluessel in BEIDEN Sprachdateien. Fehlt er in
+// en.js (der Fallback-Sprache), faellt t() auf den nackten Schluessel zurueck:
+// ein englischer Nutzer sieht "toolbar.bundle" statt eines Textes. KEIN Gate
+// schlug darauf an — dieser Extraktor sucht DEUTSCHEN Text im Code, und de.js
+// wie en.js stehen sogar auf der Erlaubt-Liste. Ein reiner Schluessel-Abgleich
+// schliesst die Luecke. (Doppelte Schluessel innerhalb einer Datei faengt er
+// nicht — die kollabieren beim Import; das ist ein eigener Lint-Fall.)
+let keyFehler = 0;
+// Schluessel aus dem Dateitext ziehen, NICHT per import(): die Dateien sind
+// reines `export default { ... }` ohne eigene import-Zeile, und node kann dann
+// CJS/ESM nicht unterscheiden — ein import() druckt eine Reparse-Warnung in den
+// CI-Log. Jeder Schluessel steht als 'key': am Zeilenanfang; das reicht.
+function i18nKeys(path) {
+    let src = '';
+    try { src = readFileSync(new URL('../' + path, import.meta.url), 'utf8'); }
+    catch (e) { return new Set(); }
+    const out = new Set();
+    const re = /^\s*'([^']+)'\s*:/gm;
+    let m;
+    while ((m = re.exec(src)) !== null) out.add(m[1]);
+    return out;
+}
+{
+    const dk = i18nKeys('assets/js/modules/i18n/de.js');
+    const ek = i18nKeys('assets/js/modules/i18n/en.js');
+    const nurDe = [...dk].filter((k) => !ek.has(k));
+    const nurEn = [...ek].filter((k) => !dk.has(k));
+    console.log('');
+    if (!dk.size || !ek.size) {
+        console.log('  [FAIL] Sprachdatei leer oder nicht lesbar');
+        keyFehler++;
+    }
+    if (nurDe.length) {
+        console.log(`  [FAIL] nur in de.js (fehlt in en.js): ${nurDe.join(', ')}`);
+        keyFehler += nurDe.length;
+    }
+    if (nurEn.length) {
+        console.log(`  [FAIL] nur in en.js (fehlt in de.js): ${nurEn.join(', ')}`);
+        keyFehler += nurEn.length;
+    }
+    if (!keyFehler) {
+        console.log(`  [PASS] de.js und en.js tragen dieselben ${dk.size} Schluessel`);
+    }
+}
+
 if (treffer > 0) {
     console.log(`\ncheck-i18n: ${treffer} deutsche(r) String(s) in ${geprueft} Dateien.`);
     console.log('Hauptmodul-JS: ueber t(), Schluessel in de.js UND en.js.');
     console.log('PHP: _(\'English\') — wie in NetworkTopologyLinks.php:119.');
     console.log('Widgets: schlicht Englisch, dort gibt es kein t().');
+}
+if (keyFehler > 0) {
+    console.log(`\ncheck-i18n: ${keyFehler} Schluessel ohne Gegenstueck in der anderen Sprachdatei.`);
+}
+if (treffer > 0 || keyFehler > 0) {
     process.exit(1);
 }
 
-console.log(`check-i18n: kein deutscher UI-Text (${geprueft} Dateien).`);
+console.log(`check-i18n: kein deutscher UI-Text, de.js/en.js synchron (${geprueft} Dateien).`);

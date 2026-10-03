@@ -1733,6 +1733,50 @@ if (kpiZ) {
     pruefe('KPI: LLDP-Links ohne synthetische',  kpiZ.lldp,   2);
 }
 
+// ── LLDP-Quality: fremde Nachbarnamen sind das Untrusteste ────────────────
+//
+// render-lldp-quality zeigt LLDP/CDP-Nachbarnamen fremder Geraete — die Daten,
+// vor denen die Projektregel am deutlichsten warnt — und trug bisher KEINE
+// Ausgabe-Pruefung (nur eslint-Suppressions). Ein Reporter-Label und ein
+// unmatched Nachbarname, beide wie Markup, duerfen Text bleiben und kein
+// Element erzeugen. Der Renderer baut synchron aus window._ntLastData.
+console.log('\n  LLDP-Quality: ein Nachbarname wird kein Markup\n');
+const lq = szenario('lldp-quality', { lang: 'en_US' }, `
+    const { renderLldpQuality } = await import(${JSON.stringify(MODULE('render-lldp-quality.js'))});
+    const dom = miniDom();
+    globalThis.document = dom.document;
+    const boeseLabel = '<img src=x onerror=alert(1)>';
+    const boeseNachbar = '<svg onload=alert(2)>';
+    globalThis.window._ntLastData = { lldp_quality: [
+        { id: '1', label: boeseLabel, matched: 3, self: 0,
+          unmatched: [{ raw: boeseNachbar, src: 'lldp' }], ambiguous: [] }
+    ] };
+    const wrap = dom.el('div');
+    renderLldpQuality(wrap);
+    // Dieser Renderer baut per innerHTML-Zeichenkette (_makeDiv). miniDom parst
+    // die NICHT zu Elementen, also saehe querySelectorAll('img') hier nie etwas
+    // — eine Leerpruefung. Stattdessen alle innerHTML-Strings einsammeln und
+    // TEXTUELL pruefen: die escapte Form muss da sein, die rohe NICHT.
+    const allHtml = (n) => (n.innerHTML || '') + (n.childNodes || []).map(allHtml).join('');
+    const s = allHtml(wrap);
+    console.log(JSON.stringify({
+        labelRoh:    s.indexOf(boeseLabel) >= 0,
+        nachbarRoh:  s.indexOf(boeseNachbar) >= 0,
+        labelEsc:    s.indexOf('&lt;img src=x') >= 0,
+        nachbarEsc:  s.indexOf('&lt;svg onload') >= 0,
+        matched:     /<[^>]*>3</.test(s) || s.indexOf('>3<') >= 0,
+    }));
+`);
+if (lq) {
+    // Die rohe Markup-Form darf NIRGENDS im HTML stehen (sonst injizierbar) …
+    pruefe('LLDP-Q: Reporter-Label nicht roh',    lq.labelRoh,   false);
+    pruefe('LLDP-Q: Nachbarname nicht roh',       lq.nachbarRoh, false);
+    // … und der Wert muss trotzdem — escaped — angekommen sein.
+    pruefe('LLDP-Q: Reporter-Label escaped da',   lq.labelEsc,   true);
+    pruefe('LLDP-Q: Nachbarname escaped da',      lq.nachbarEsc, true);
+    pruefe('LLDP-Q: Matched-Zahl steht da',       lq.matched,    true);
+}
+
 console.log('');
 if (fehler > 0) {
     console.error(`✖ ${fehler} Befund(e).`);
