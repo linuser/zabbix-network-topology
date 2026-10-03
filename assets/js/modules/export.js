@@ -469,7 +469,7 @@ export function setupExportMenu(bar, isFirstRun) {
         // label defensiv escapen — aktuell immer statisch/i18n, aber so ist der
         // Helfer auch gegen ein kuenftiges dynamisches Label sicher.
         row.innerHTML = '<span>' + icon + '</span><span>' + esc(label) + '</span>';
-        row.addEventListener('mouseover', function() { this.style.background = '#f8fafc'; });
+        row.addEventListener('mouseover', function() { this.style.background = 'var(--nt-surface-2,#f8fafc)'; });
         row.addEventListener('mouseout',  function() { this.style.background = ''; });
         row.addEventListener('click', function() { expMenu.style.display = 'none'; fn(); });
         expMenu.appendChild(row);

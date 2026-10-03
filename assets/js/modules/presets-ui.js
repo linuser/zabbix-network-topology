@@ -47,7 +47,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     const wrap = document.createElement('div');
     wrap.id = 'nt-preset-wrap';
     wrap.style.cssText = 'display:inline-flex;align-items:center;gap:2px;margin-left:8px;'
-        + 'padding-left:8px;border-left:1px solid #e2e8f0';
+        + 'padding-left:8px;border-left:1px solid var(--nt-line,#e2e8f0)';
 
     // Aktives Preset als Tripel {name, scope, scopeKey} — eindeutig identifizierbar
     // auch wenn zwei Presets gleichen Namens (verschiedene Scopes) existieren.
@@ -121,7 +121,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
 
         function addHeader(label) {
             const h = document.createElement('div');
-            h.style.cssText = 'padding:6px 14px 2px;font-size:10px;color:#94a3b8;'
+            h.style.cssText = 'padding:6px 14px 2px;font-size:10px;color:var(--nt-muted,#94a3b8);'
                 + 'text-transform:uppercase;letter-spacing:0.5px';
             h.textContent = label;
             ddMenu.appendChild(h);
@@ -129,7 +129,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
 
         if (groupset.length === 0 && global.length === 0) {
             const empty = document.createElement('div');
-            empty.style.cssText = 'padding:12px 14px;font-size:12px;color:#94a3b8;font-style:italic';
+            empty.style.cssText = 'padding:12px 14px;font-size:12px;color:var(--nt-muted,#94a3b8);font-style:italic';
             empty.textContent = t('presets.empty');
             ddMenu.appendChild(empty);
             return;
@@ -256,7 +256,7 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
         _active = { name: saved.name, scope: saved.scope, scopeKey: saved.scopeKey };
         saveActivePreset(saved.name, saved.scope, saved.scopeKey);
         // Kurzes visuelles Feedback
-        saveBtn.style.background = '#dcfce7';
+        saveBtn.style.background = 'var(--nt-ok-bg,#dcfce7)';
         setTimeout(function() { saveBtn.style.background = ''; }, 600);
     });
 

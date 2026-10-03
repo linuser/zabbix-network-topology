@@ -27,6 +27,9 @@
     --nt-ok-text:     #166534;   /* text on a green tint */
     --nt-warn-text:   #92400e;   /* text on an amber tint */
     --nt-crit-text:   #9c1a25;   /* text on a red tint */
+    --nt-ok-bg:       #dcfce7;   /* green tint behind ok-text */
+    --nt-warn-bg:     #fef3c7;   /* amber tint behind warn-text */
+    --nt-crit-bg:     #fee2e2;   /* red tint behind crit-text */
     --nt-shadow:      0 4px 16px rgba(0,0,0,0.12);
 }
 #nt-root.nt-dark,
@@ -46,6 +49,13 @@
     --nt-ok-text:     #4ade80;
     --nt-warn-text:   #fbbf24;
     --nt-crit-text:   #fca5a5;
+    /* Dunkle Tints hinter dem HELL umschlagenden Text. Hartkodiert war hier
+       der blasse Hell-Tint (#fef3c7/#dcfce7), auf dem der dunkle Text sass —
+       im Dunkelmodus schlug der Text aber auf #fbbf24/#4ade80 um und stand
+       damit hell auf hell. Eigene dunkle Tints loesen das. */
+    --nt-ok-bg:       #0f2a16;
+    --nt-warn-bg:     #3a2d0a;
+    --nt-crit-bg:     #3a1416;
     --nt-shadow:      0 4px 16px rgba(0,0,0,0.5);
 }
 

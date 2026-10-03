@@ -104,12 +104,12 @@ function buildPopup(node) {
         const row = mk('div', 'margin-top:4px');
         if (node.maintenance) {
             row.appendChild(mk('span',
-                'background:#fef3c7;color:var(--nt-warn-text,#92400e);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
+                'background:var(--nt-warn-bg,#fef3c7);color:var(--nt-warn-text,#92400e);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
                 t('geo.maintenance')));
         }
         if (node.acknowledged) {
             row.appendChild(mk('span',
-                'background:#dcfce7;color:var(--nt-ok-text,#166534);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
+                'background:var(--nt-ok-bg,#dcfce7);color:var(--nt-ok-text,#166534);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
                 '\u2714 Acked'));
         }
         root.appendChild(row);
@@ -151,7 +151,7 @@ function showToast(message) {
     const toast = document.createElement('div');
     toast.id = 'nt-toast';
     toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);'
-        + 'z-index:10001;background:#fef3c7;color:var(--nt-warn-text,#92400e);padding:12px 18px;border-radius:8px;'
+        + 'z-index:10001;background:var(--nt-warn-bg,#fef3c7);color:var(--nt-warn-text,#92400e);padding:12px 18px;border-radius:8px;'
         + 'font-size:13px;line-height:1.5;max-width:520px;'
         + 'box-shadow:0 4px 16px rgba(0,0,0,0.2);border:1px solid #f59e0b;'
         + 'cursor:pointer;font-family:sans-serif';
@@ -309,7 +309,7 @@ export function renderGeo(wrap, nodes, edges, dataUrl) {
         const missing = totalHosts - geoHosts;
         const banner = document.createElement('div');
         banner.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);'
-            + 'z-index:1000;background:#fef3c7;color:var(--nt-warn-text,#92400e);padding:6px 14px;border-radius:6px;'
+            + 'z-index:1000;background:var(--nt-warn-bg,#fef3c7);color:var(--nt-warn-text,#92400e);padding:6px 14px;border-radius:6px;'
             + 'font-size:12px;font-weight:500;box-shadow:0 2px 6px rgba(0,0,0,0.15);'
             + 'border:1px solid #f59e0b';
         banner.textContent = '\u26A0 ' + t('geo.missing_coords', { missing: missing, total: totalHosts });

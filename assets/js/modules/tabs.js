@@ -138,7 +138,7 @@ export function ensureBaseToolbar(wrap) {
         const tw = document.createElement('div');
         tw.id = 'nt-tab-wrap';
         tw.style.cssText = 'display:flex;gap:2px;margin-right:8px;padding-right:8px;'
-                         + 'border-right:1px solid #e2e8f0;flex-shrink:0';
+                         + 'border-right:1px solid var(--nt-line,#e2e8f0);flex-shrink:0';
         TABS.forEach(function(item) {
             const b = document.createElement('button');
             b.id = item.id; b.textContent = item.lbl;

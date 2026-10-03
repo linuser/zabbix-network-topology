@@ -93,7 +93,7 @@ function _markRefresh(ok, err) {
         b = document.createElement('div');
         b.id = 'nt-refresh-warn';
         b.style.cssText = 'position:absolute;top:10px;right:12px;z-index:9;'
-            + 'background:#fef3c7;color:#92400e;border:1px solid #f59e0b;border-radius:6px;'
+            + 'background:var(--nt-warn-bg,#fef3c7);color:var(--nt-warn-text,#92400e);border:1px solid #f59e0b;border-radius:6px;'
             + 'padding:4px 10px;font:600 11px sans-serif;box-shadow:0 2px 6px rgba(0,0,0,0.12)';
         wrap.appendChild(b);
     }
