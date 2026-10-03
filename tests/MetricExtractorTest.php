@@ -410,6 +410,43 @@ $str = MetricExtractor::extract([
 ]);
 check('Nicht-MAC-Chassis: kein Nachbar',   count($str['lldp_raw']), 0);
 
+// ── Link-Uptime je Port ───────────────────────────────────────────────────
+//
+// sysUpTime (Host) minus ifLastChange (Interface) = wie lange der Link steht.
+// Beide opportunistisch gelesen; die Rechnung samt Counter-Wrap in
+// HostMetadata, hier nur die Erfassung und der Nachlauf.
+echo "\n  Link-Uptime je Port\n\n";
+
+$mUp = MetricExtractor::extract([
+    ['hostid' => 'h', 'key_' => 'sysUpTime',          'name' => '', 'lastvalue' => '1000000'],
+    ['hostid' => 'h', 'key_' => 'ifLastChange[3]',    'name' => '', 'lastvalue' => '400000'],
+    ['hostid' => 'h', 'key_' => 'ifLastChange[4]',    'name' => '', 'lastvalue' => '0'],
+]);
+check('Port 3: (sys-last)/100 Sekunden', $mUp['port_uptime']['h']['3'] ?? null, 6000);
+check('Port 4: ifLastChange 0 = volle Uptime', $mUp['port_uptime']['h']['4'] ?? null, 10000);
+
+// Ohne sysUpTime keine Aussage — der Port taucht gar nicht auf.
+$mNo = MetricExtractor::extract([
+    ['hostid' => 'h', 'key_' => 'ifLastChange[3]', 'name' => '', 'lastvalue' => '400000'],
+]);
+check('ohne sysUpTime: kein port_uptime',
+    isset($mNo['port_uptime']['h']), false);
+
+// Zwei Stuecke (merge): sysUpTime und ifLastChange desselben Hosts liegen
+// IMMER im selben Stueck (Chunking nach Host), aber verschiedene Hosts in
+// verschiedenen — das Ergebnis muss beide tragen.
+$m1 = MetricExtractor::extract([
+    ['hostid' => 'a', 'key_' => 'sysUpTime', 'name' => '', 'lastvalue' => '500000'],
+    ['hostid' => 'a', 'key_' => 'ifLastChange[1]', 'name' => '', 'lastvalue' => '100000'],
+]);
+$m2 = MetricExtractor::extract([
+    ['hostid' => 'b', 'key_' => 'sysUpTime', 'name' => '', 'lastvalue' => '300000'],
+    ['hostid' => 'b', 'key_' => 'ifLastChange[1]', 'name' => '', 'lastvalue' => '50000'],
+]);
+$mm = MetricExtractor::merge($m1, $m2);
+check('merge haelt Host a',  $mm['port_uptime']['a']['1'] ?? null, 4000);
+check('merge haelt Host b',  $mm['port_uptime']['b']['1'] ?? null, 2500);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

@@ -373,6 +373,23 @@ Values coming back → port-to-port works. Whether the index `<LocalPort>` exist
 > *measured* per-link figure sit next to edges with an *estimated* node total. For
 > comparing colours between edges, use % mode.
 
+### Optional: how long the link has been up
+
+The edge panel shows **link uptime** per port ("up for 12d 4h") when the data
+is there. It is read **opportunistically** — the module does not add anything
+to collect it, and nothing changes if you never set it up:
+
+| Item key | OID | Purpose |
+|---|---|---|
+| `sysUpTime` | `1.3.6.1.2.1.1.3.0` | device uptime (TimeTicks) — usually already collected |
+| `ifLastChange[{#SNMPINDEX}]` | `1.3.6.1.2.1.2.2.1.9` | sysUpTime when the interface last changed state |
+
+The uptime is `sysUpTime - ifLastChange`, computed in the module. `sysUpTime`
+ships with most interface templates; `ifLastChange` usually does **not**, so
+add it to your own interface discovery if you want the figure. This is a
+change to *your* template, not the module's — the module reads it only where
+it exists, so there is no re-import and no forced change for anyone else.
+
 ### Several cables between the same two devices (LAG, bonding)
 
 Since **v5.4.0** each cable is its own edge. What decides whether they can be

@@ -346,6 +346,23 @@ Kommen Werte zurück → Port-zu-Port geht. Ob der Index-`<LokalPort>` als
 > mit *geschätzter* Node-Summe; für den direkten Farbvergleich zwischen Kanten also den
 > %-Modus nutzen.
 
+### Optional: wie lange der Link schon steht
+
+Das Kanten-Panel zeigt die **Link-Uptime** je Port („steht seit 12d 4h"),
+wenn die Daten da sind. Gelesen wird sie **opportunistisch** — das Modul
+ergänzt nichts, um sie zu erheben, und wer sie nie einrichtet, merkt nichts:
+
+| Item-Key | OID | Zweck |
+|---|---|---|
+| `sysUpTime` | `1.3.6.1.2.1.1.3.0` | Geräte-Uptime (TimeTicks) — meist ohnehin erhoben |
+| `ifLastChange[{#SNMPINDEX}]` | `1.3.6.1.2.1.2.2.1.9` | sysUpTime zum letzten Zustandswechsel des Interfaces |
+
+Die Uptime ist `sysUpTime - ifLastChange`, berechnet im Modul. `sysUpTime`
+bringt fast jedes Interface-Template mit; `ifLastChange` meist **nicht** —
+wer die Zahl will, ergänzt es in seiner eigenen Interface-Discovery. Das ist
+eine Änderung an *deinem* Template, nicht am Modul-Template — das Modul liest
+es nur, wo es existiert, also kein Re-Import und kein Zwang für andere.
+
 ### Mehrere Kabel zwischen denselben zwei Geräten (LAG, Bonding)
 
 Seit **v5.4.0** ist jedes Kabel eine eigene Kante. Ob sie sich auseinander

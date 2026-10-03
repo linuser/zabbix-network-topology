@@ -118,7 +118,8 @@ final class LldpEdgeBuilder {
     public static function build(array $hosts, array $lldp_raw,
             array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
             array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
-            array $port_names = [], array $rtt = [], array $port_status = []): array {
+            array $port_names = [], array $rtt = [], array $port_status = [],
+            array $port_uptime = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         self::$truncated = 0;
 
@@ -572,6 +573,12 @@ final class LldpEdgeBuilder {
                     $my_metrics ??= [];
                     $my_metrics['down'] = (bool) $port_status[$rid][$pidx];
                 }
+                // Wie lange dieser Link schon steht (Sekunden) — aus
+                // sysUpTime - ifLastChange, in MetricExtractor berechnet.
+                if (isset($port_uptime[$rid][$pidx])) {
+                    $my_metrics ??= [];
+                    $my_metrics['uptime'] = (int) $port_uptime[$rid][$pidx];
+                }
             }
 
             // Den gemeldeten Nachbar-Port auf ein Interface DES NACHBARN
@@ -604,6 +611,10 @@ final class LldpEdgeBuilder {
                     if (isset($port_status[$rhid][$fidx])) {
                         $far_metrics ??= [];
                         $far_metrics['down'] = (bool) $port_status[$rhid][$fidx];
+                    }
+                    if (isset($port_uptime[$rhid][$fidx])) {
+                        $far_metrics ??= [];
+                        $far_metrics['uptime'] = (int) $port_uptime[$rhid][$fidx];
                     }
                     // Der Name, den der Nachbar SELBST fuer diesen Port fuehrt,
                     // schlaegt den angekuendigten Text: "Gi1/0/9" ist brauchbarer

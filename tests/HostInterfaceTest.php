@@ -183,6 +183,25 @@ pruefe('Agent-Interface mit Namen bleibt stehen',
 pruefe('Schluessel ohne Klammer bleibt er selbst',
     HostMetadata::ifaceParam('system.cpu.load'), 'system.cpu.load');
 
+echo "\n  linkUptimeSec: wie lange der Link schon steht\n\n";
+
+// sysUpTime 1.000.000 Ticks (= 10.000 s), Port wechselte bei 400.000 Ticks.
+// Differenz 600.000 Ticks = 6.000 s.
+pruefe('Differenz / 100 = Sekunden',
+    HostMetadata::linkUptimeSec(1000000, 400000), 6000);
+// ifLastChange = 0: seit Boot unveraendert -> volle sysUpTime.
+pruefe('ifLastChange 0: Uptime = sysUpTime',
+    HostMetadata::linkUptimeSec(1000000, 0), 10000);
+// Counter-Wrap: last liegt vor dem Ueberlauf, sys danach.
+pruefe('Wrap: 2^32 wird addiert',
+    HostMetadata::linkUptimeSec(100, 4294967200), 1);
+// Kein sysUpTime -> keine Aussage.
+pruefe('ohne sysUpTime: null',       HostMetadata::linkUptimeSec(0, 400000), null);
+pruefe('negatives sysUpTime: null',  HostMetadata::linkUptimeSec(-5, 0), null);
+// Strings aus der API (TimeTicks kommen als Zeichenkette).
+pruefe('Zeichenketten zaehlen als Zahl',
+    HostMetadata::linkUptimeSec('1000000', '400000'), 6000);
+
 echo "\n";
 if ($fehler > 0) {
     fwrite(STDERR, "✖ {$fehler} Befund(e).\n");

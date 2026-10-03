@@ -73,6 +73,36 @@ final class HostMetadata {
      * "net.if.status[ifOperStatus.3]" → "ifOperStatus.3" → normalisiert "3").
      * Ohne Bracket: ganzer Key.
      */
+    /**
+     * Link-Uptime in Sekunden aus sysUpTime und ifLastChange.
+     *
+     * ifLastChange (IF-MIB) ist der sysUpTime-Wert im Moment, als das
+     * Interface seinen aktuellen Betriebszustand annahm. Die Uptime ist also
+     * sysUpTime JETZT minus ifLastChange — beide in TimeTicks (1/100 s).
+     *
+     * ifLastChange = 0 heisst: seit dem Boot unveraendert -> Uptime = sysUpTime
+     * (der Link ist, solange das Geraet laeuft).
+     *
+     * COUNTER-WRAP: sysUpTime ist ein 32-Bit-TimeTicks und laeuft nach ~497
+     * Tagen ueber. Steht ifLastChange VOR einem Ueberlauf und sysUpTime schon
+     * danach, ist die rohe Differenz negativ — dann 2^32 Ticks addieren. Das
+     * ist der einzige Fall, in dem last > sys plausibel ist.
+     *
+     * Gibt null zurueck, wenn sich nichts sagen laesst (kein sysUpTime).
+     */
+    public static function linkUptimeSec($sysUpTimeTicks, $ifLastChangeTicks): ?int {
+        $sys  = (int) $sysUpTimeTicks;
+        $last = (int) $ifLastChangeTicks;
+        if ($sys <= 0 || $last < 0) {
+            return null;
+        }
+        $diff = $sys - $last;
+        if ($diff < 0) {
+            $diff += 4294967296;   // 2^32 TimeTicks
+        }
+        return intdiv($diff, 100);
+    }
+
     public static function ifaceParam(string $key): string {
         $p = strpos($key, '[');
         if ($p === false) return $key;

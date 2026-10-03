@@ -57,6 +57,8 @@ final class MetricExtractor {
         //   iface_count   Anzahl beobachteter Interfaces (Kontext)
         $host_iface     = [];   // hid => ['down'=>N, 'errors'=>X, 'discards'=>X, 'count'=>N]
         $port_status    = [];   // hid => [ifIndex => true(=down) | false(=up)]
+        $iface_lastchg  = [];   // hid => [ifIndex => ifLastChange (TimeTicks)]
+        $sys_uptime     = [];   // hid => sysUpTime (TimeTicks)
         $iface_oper     = [];   // hid => [ifaceParam => operStatus]  (Roh-Sammlung)
         $iface_admin    = [];   // hid => [ifaceParam => adminStatus] (fuer Korrelation)
         $host_speed     = [];   // hid => max Link-Speed in bps (Weathermap-Kapazitaet)
@@ -249,6 +251,17 @@ final class MetricExtractor {
                 $iface_oper[$hid][HostMetadata::ifaceParam($key)] = (int) $val;
             } elseif (strpos($key, 'ifAdminStatus') !== false) {
                 $iface_admin[$hid][HostMetadata::ifaceParam($key)] = (int) $val;
+            } elseif (strpos($key, 'ifLastChange') !== false) {
+                // Wann das Interface zuletzt seinen Zustand wechselte
+                // (sysUpTime-Wert zu dem Zeitpunkt). Die Uptime daraus steht
+                // unten im Nachlauf — hier erst die Rohwerte sammeln, weil
+                // sysUpTime desselben Hosts spaeter im Stueck kommen kann.
+                $iface_lastchg[$hid][HostMetadata::ifaceParam($key)] = (int) $val;
+            } elseif (strpos($key, 'sysUpTime') !== false) {
+                // Ein Wert je Host (SNMP sysUpTime). Der groesste gewinnt, falls
+                // mehrere Keys matchen (hrSystemUptime neben sysUpTime).
+                $u = (int) $val;
+                if ($u > ($sys_uptime[$hid] ?? 0)) $sys_uptime[$hid] = $u;
             } elseif (strpos($key, 'ifInErrors') !== false || strpos($key, 'ifOutErrors') !== false
                   || ($agent_if && preg_match('/net\.if\.(?:in|out)\[[^\]]*,errors\]/', $key))) {
                 if (!isset($host_iface[$hid])) $host_iface[$hid] = ['down'=>0,'errors'=>0.0,'discards'=>0.0,'count'=>0];
@@ -665,6 +678,24 @@ final class MetricExtractor {
         }
 
 
+        // ── Link-Uptime je Port ───────────────────────────────────────────
+        // sysUpTime (Host) minus ifLastChange (Interface), die Rechnung samt
+        // Counter-Wrap in HostMetadata. Erst JETZT, weil beide Werte erst nach
+        // der Schleife vollstaendig vorliegen.
+        $port_uptime = [];   // hid => [ifIndex => Sekunden]
+        foreach ($iface_lastchg as $hid => $perIdx) {
+            $sys = $sys_uptime[$hid] ?? 0;
+            if ($sys <= 0) {
+                continue;   // ohne sysUpTime keine Aussage
+            }
+            foreach ($perIdx as $ix => $last) {
+                $up = HostMetadata::linkUptimeSec($sys, $last);
+                if ($up !== null) {
+                    $port_uptime[$hid][$ix] = $up;
+                }
+            }
+        }
+
         return [
             'traffic'  => $host_traffic,
             'iface'    => $host_iface,
@@ -681,6 +712,7 @@ final class MetricExtractor {
             'port_discards' => $port_discards,
             'port_names'    => $port_names,
             'port_status'   => $port_status,
+            'port_uptime'   => $port_uptime,
             'lldp_ports'   => $lldp_ports,
             'lldp_meta'    => $lldp_meta,
         ];

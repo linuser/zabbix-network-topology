@@ -548,7 +548,12 @@ export function buildEdgeElements(edges, nodes) {
                     // Link-Kapazitaet in bps (0 = unbekannt) fuer Weathermap;
                     // perLink=true → echte Port-Metrik statt Node-Schaetzung
                     capBps: eCap, perLink: perLink,
-                    portErr: portErr, portDrop: portDrop }
+                    portErr: portErr, portDrop: portDrop,
+                    // Link-Uptime je Seite (Sekunden, aus port_metrics.uptime).
+                    // Per Seite, nicht als einzelner Wert: die beiden Ports
+                    // einer Leitung koennen verschieden lange stehen.
+                    portSrcUptime: (pmSrc && pmSrc.uptime !== undefined) ? pmSrc.uptime : null,
+                    portTgtUptime: (pmTgt && pmTgt.uptime !== undefined) ? pmTgt.uptime : null }
         });
     });
     return annotateBundles(elements);

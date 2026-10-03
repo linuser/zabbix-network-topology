@@ -87,6 +87,26 @@ function hint(parent, text) {
 // Eine kleine Sparkline als ECHTES SVG-Element (kein innerHTML — das Panel
 // ist bewusst DOM-gebaut, und die Werte kaemen zwar aus eigener Zahl, aber die
 // Regel gilt ohne Ausnahme). Geometrie wie drawSparkline im Tooltip.
+// Sekunden lesbar: "12d 4h", "3h 20m", "45m", "30s".
+function fmtUptime(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return d + 'd ' + h + 'h';
+    if (h > 0) return h + 'h ' + m + 'm';
+    if (m > 0) return m + 'm';
+    return sec + 's';
+}
+
+// "up for X" unter die Port-Zeile, wenn die Uptime bekannt ist.
+function portUptimeRow(parent, sec) {
+    if (sec === null || sec === undefined) return;
+    parent.appendChild(el('div',
+        'font-size:10px;color:var(--nt-muted,#94a3b8);margin:0 0 4px 0',
+        t('edge.port.uptime', { t: fmtUptime(sec) })));
+}
+
 export function sparklineEl(values, color) {
     const NS = 'http://www.w3.org/2000/svg';
     const w = 72, h = 18;
@@ -257,8 +277,10 @@ export function showEdgeDetail(panel, ed, asMember) {
         // nothing here, see memberSection()
     } else if (pS || pT) {
         row(panel, sLbl, null, el('b', '', pS || '?'));
+        portUptimeRow(panel, d.portSrcUptime);
         portSparkline(panel, s && s.id(), d.portSrcIdx);
         row(panel, tLbl, null, el('b', '', pT || '?'));
+        portUptimeRow(panel, d.portTgtUptime);
         portSparkline(panel, tg && tg.id(), d.portTgtIdx);
     } else {
         panel.appendChild(el('div', 'font-size:11px;color:var(--nt-muted,#94a3b8)',

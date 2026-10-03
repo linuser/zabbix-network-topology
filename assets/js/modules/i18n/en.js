@@ -431,6 +431,7 @@ export default {
     'path.no_data': 'no link data',
     'path.link_trouble': 'This link reports ports down, errors or discards \u2014 open it for the numbers.',
     // Kanten-Detailpanel (edge-detail.js)
+    'edge.port.uptime': 'up for {t}',
     'edge.sec.ports': 'Ports',
     'edge.sec.traffic': 'Traffic',
     'edge.sec.health': 'Both hosts (all interfaces)',

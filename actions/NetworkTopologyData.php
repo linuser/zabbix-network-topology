@@ -582,6 +582,11 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // 32bit, ifHighSpeed = Mbps 64bit; matcht auch die modernen
                     // net.if.speed[ifHighSpeed.X]-Template-Keys via Substring)
                     'ifHighSpeed', 'ifSpeed',
+                    // Link-Uptime: wann das Interface zuletzt wechselte
+                    // (ifLastChange) und seit wann das Geraet laeuft
+                    // (sysUpTime). Opportunistisch — nur wo ein Template
+                    // sie sammelt, sonst bleibt die Uptime im Panel leer.
+                    'ifLastChange', 'sysUpTime',
                     // Interface-NAMEN. Ohne sie heisst der Port "9" statt
                     // "Gi1/0/9" — und die Normalisierung, die der Gegenseite
                     // Messwerte verschafft, hat nichts zu vergleichen.
@@ -718,7 +723,8 @@ class NetworkTopologyData extends NetworkTopologyController {
                               $metrics['ping'] ?? [],
                               // Zustand je Port: die Kantenfarbe soll den Port
                               // meinen und nicht den Durchschnitt des Gehaeuses.
-                              $metrics['port_status'] ?? []);
+                              $metrics['port_status'] ?? [],
+                              $metrics['port_uptime'] ?? []);
         $edges          = $lldp['edges'];
         // ── 5a0. ERKLAERTE UPLINKS (nt:uplink-Tag) ────────────────────────
         // Geraete ohne Nachbarprotokoll — USV, PDU, Drucker — haengen an einem

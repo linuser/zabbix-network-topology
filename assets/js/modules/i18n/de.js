@@ -436,6 +436,7 @@ export default {
     'path.no_data': 'keine Verbindungsdaten',
     'path.link_trouble': 'Diese Verbindung meldet Ports down, Fehler oder Verworfene \u2014 anklicken f\u00fcr die Zahlen.',
     // Kanten-Detailpanel (edge-detail.js)
+    'edge.port.uptime': 'steht seit {t}',
     'edge.sec.ports': 'Ports',
     'edge.sec.traffic': 'Traffic',
     'edge.sec.health': 'Beide Hosts (alle Interfaces)',
