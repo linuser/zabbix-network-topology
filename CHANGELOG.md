@@ -2,6 +2,85 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.5.1 — 2026-10-03
+
+### Updating from 5.5.0 — replace the directory, and that is all
+
+**No "Scan directory", no new template, no widget change.** There is a new
+action (`network.topology.create_host`), but `loadManifest()` reads
+`manifest.json` from disk on every request, so the route is live the moment
+the files are in place. The five widget scripts are byte-identical to 5.5.0.
+
+Replace the module directory, `chown`, reload php-fpm, then reload the
+topology page once with a cache bypass, because the bundle changed. Layouts,
+manual links, pins, notes and presets stay where they are.
+
+### Added
+
+- **A switch's unmonitored endpoints fold into one node.** A top-of-rack
+  switch with forty workstations and phones hanging off it drew forty ghost
+  nodes, and the forty said nothing a single number would not. They now
+  collapse into one bundle per switch, labelled with the count; a click opens
+  it. Infrastructure neighbours — anything reporting Bridge, Router or WLAN AP
+  — are never bundled, because those are the map. The toggle is in the
+  toolbar and the state is kept per browser.
+- **RX/TX sparkline per port, from data the map already had.** Hovering a
+  physical link now shows the recent traffic on each end's port as a small
+  inline graph. No new items and no extra load: the values were already being
+  fetched for the port counters, and the port detail opts in to the per-port
+  series with a single flag so tooltips stay cheap.
+- **How long a link has been up.** When a host collects `ifLastChange`, the
+  port detail shows the uptime of that link — `sysUpTime − ifLastChange`,
+  wrap-safe across the 32-bit TimeTicks rollover at ~497 days. It is read
+  opportunistically: nothing to re-import, and ports without the item simply
+  do not show the row.
+- **Turn an unmonitored neighbour into a monitored host.** A ghost discovered
+  over LLDP/CDP can be created as a Zabbix host from its detail panel —
+  pre-filled from what the neighbour reported, placed where it already sits on
+  the map. Admin-only, CSRF-guarded, throttled, and every client-supplied id
+  is cut against the API.
+- **The vendor, read out of the chassis MAC.** A ghost with no system name
+  but a chassis MAC now shows its manufacturer from the IEEE OUI table, and
+  says so plainly when the address is locally administered and therefore has
+  no vendor. The OUI table is fetched lazily and is not in the bundle.
+- **A daily average on the diagnostics tab, so "did it get slower?" has an
+  answer.** The hour-long ring buffer could say how fast the map is right now
+  but not whether an update made it slower. A per-day average of the calls
+  that actually computed — cache hits excluded — now answers that, with the
+  trend against the preceding days.
+- **A note when responses arrive uncompressed,** with the measured factor, so
+  the one gzip setting that most helps a large map is easy to find.
+
+### Fixed
+
+- **A neighbour with a chassis but no system name is no longer invisible.**
+  Edge building keyed members off the reported system name; a device that
+  reported only a chassis id produced no member and dropped off the map
+  entirely. It is now synthesised from the chassis, guarded so a real name is
+  never overwritten. Proven on real hardware.
+- **Traffic direction comes from the item key, not its name.** In/out was read
+  from the item's display name, which a user can rename; it now reads the
+  `net.if.(in|out)` key, which they cannot.
+- **Endpoint bundles are not collapsed as leaves, and bundle edges render as
+  bundle edges.** Two bugs the review caught in the new features before anyone
+  saw them live: the leaf-collapse pass would have swallowed a bundle, and a
+  bundle's edge fell through to the normal LLDP styling.
+- **Five corrections to the daily series** found on review — a trend that
+  could label an older day "today", UTC-vs-local day boundaries, a hardcoded
+  colour, and a bar scale that spanned all thirty days instead of the drawn
+  ones.
+
+### For contributors
+
+- **`ci:ghost`** — a seventeenth gate. One place now says a ghost is not a
+  host, and the gate keeps every caller going through it. The gate chain is
+  seventeen.
+- **The frontend gate learned the views where the reported bugs actually
+  were.** The bundling render, the sparkline SVG, the ghost-create payload,
+  the vendor lookup and the ghost severity are all exercised headlessly now —
+  because the expensive bugs this cycle were in what the UI *emits*, which no
+  logic test had ever looked at.
+
 ## v5.5.0 — 2026-10-02
 
 ### Updating from 5.4.1 — replace the directory, and that is all
