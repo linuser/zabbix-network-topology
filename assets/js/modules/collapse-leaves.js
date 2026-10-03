@@ -94,7 +94,12 @@ export function leafCandidates(cy) {
     if (!cy || (cy.destroyed && cy.destroyed())) return [];
     const raus = [];
     cy.nodes('[!isGroup]').forEach(function(n) {
-        if (n.data('_isGhost') || n.data('_isInternet')) return;
+        // _isEndpointBundle mit ausschliessen: ein Buendel IST schon eine
+        // eingeklappte Darstellung von N Endgeraeten. Collapse-Leaves wuerde
+        // es als EIN Blatt am Switch einklappen und damit den "N Endgeraete"-
+        // Knoten verstecken (und als 1 zaehlen statt N). Zwei Entclutter-
+        // Features duerfen sich nicht gegenseitig die Arbeit wegnehmen.
+        if (n.data('_isGhost') || n.data('_isInternet') || n.data('_isEndpointBundle')) return;
         // Kanten ohne Schleifen zählen; eine Schleife machte aus einem Blatt
         // rechnerisch einen Verteiler.
         const kanten = n.connectedEdges().filter(function(e) {

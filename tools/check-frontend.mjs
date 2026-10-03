@@ -1267,6 +1267,11 @@ const blaetter = szenario('collapse', { lang: 'en_US' }, `
     kanten.push({ id: 'eg', source: 'dist', target: 'geist' });
     knoten.push({ id: 'paarA' }, { id: 'paarB' });
     kanten.push({ id: 'ep', source: 'paarA', target: 'paarB' });
+    // Ein ENDGERAETE-Buendel am Verteiler. Es ist selbst schon eine
+    // eingeklappte Darstellung und darf von Collapse-Leaves NICHT noch einmal
+    // eingeklappt werden — sonst verschwaende der "N Endgeraete"-Knoten.
+    knoten.push({ id: 'ebnd', _isEndpointBundle: true });
+    kanten.push({ id: 'ebe', source: 'dist', target: 'ebnd' });
 
     const cy = mkCy(knoten, kanten);
     const gesehen = [];
@@ -1296,7 +1301,7 @@ const blaetter = szenario('collapse', { lang: 'en_US' }, `
 `);
 if (blaetter) {
     // Vier Zugaenge plus das Buendel-Blatt; Geist und Paar zaehlen nicht.
-    pruefe('Buendel-Blatt zaehlt, Geist und Paar nicht', blaetter.kandidaten, 5);
+    pruefe('LAG-Blatt zaehlt, Geist/Paar/Endgeraete-Buendel nicht', blaetter.kandidaten, 5);
     pruefe('vor dem Einklappen: off mit der Vorschau', blaetter.anfang, 'Collapse leaves: off (5)');
     pruefe('nach dem Einklappen sagt sie on',          blaetter.nachEin, 'Collapse leaves: on (5)');
     pruefe('und zaehlt die wirklich versteckten',      blaetter.versteckt, 5);
