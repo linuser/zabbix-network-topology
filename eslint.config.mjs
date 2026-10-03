@@ -53,6 +53,12 @@ export default [
                 Blob: 'readonly', FileReader: 'readonly', Event: 'readonly', CSS: 'readonly',
                 ResizeObserver: 'readonly', btoa: 'readonly',
                 confirm: 'readonly', prompt: 'readonly',
+                // Fuer die Kompressionserkennung im Diag-Tab: die
+                // Resource-Timing-API sagt, ob eine Antwort komprimiert ueber
+                // die Leitung kam, und CompressionStream misst nach, was gzip
+                // daraus machen wuerde — statt ein Verhaeltnis zu schaetzen.
+                performance: 'readonly', TextEncoder: 'readonly',
+                CompressionStream: 'readonly', Response: 'readonly',
                 cytoscape: 'readonly', cytoscapeCola: 'readonly',
                 L: 'readonly', CWidget: 'readonly',
             },

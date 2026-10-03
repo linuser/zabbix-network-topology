@@ -121,6 +121,67 @@ function _buildSummary(byAction, theme) {
     return html + '</tbody></table>';
 }
 
+// ── Gehen die Antworten komprimiert ueber die Leitung? ───────────────────
+//
+// Die Kartenantwort ist bei 1000 Hosts rund 1,2 MB JSON. Am Lasttest
+// gemessen: gzip macht daraus 73 KB, also 17:1. Unkomprimiert geht dieselbe
+// Karte alle zwei Minuten je Betrachter in voller Groesse ueber die Leitung.
+//
+// IM LAN MERKT DAS NIEMAND, und das gehoert zur Aussage dazu: 1,2 MB bei
+// Gigabit sind rund 10 ms. Der Hinweis zielt auf die Lage, in der Monitoring
+// tatsaechlich angesehen wird — ueber VPN, aus dem Homeoffice, vom Mobil-
+// geraet. Bei 10 Mbit/s wird aus 1,2 MB rund eine Sekunde, bei 2 Mbit/s
+// fuenf. Das ist dort mehr, als am SQL ueberhaupt zu holen waere.
+//
+// Warum der Browser das feststellt und nicht PHP: das Modul weiss nicht, was
+// der Webserver hinter ihm mit der Antwort macht. Die Resource-Timing-API
+// weiss es — encodedBodySize ist die Groesse auf der Leitung,
+// decodedBodySize die danach. Sind sie gleich, wurde nicht komprimiert.
+//
+// Und warum nicht selbst komprimieren (ob_gzhandler, gzencode): das ist
+// Aufgabe des Webservers. Ein Modul, das sich daran vorbeimogelt, bricht
+// Content-Length und Caching an Stellen, die niemand bei ihm sucht.
+
+/** Ab welcher Antwortgroesse der Hinweis ueberhaupt lohnt. */
+export const KOMPRESSION_AB = 256 * 1024;
+
+/**
+ * Welche Antworten kamen unkomprimiert an?
+ *
+ * Erwartet Resource-Timing-Eintraege (oder dieselbe Form). Gibt null zurueck,
+ * wenn nichts zu sagen ist — lieber schweigen als raten.
+ *
+ * DREI FAELLE, IN DENEN KEINE AUSSAGE MOEGLICH IST, und die deshalb nicht als
+ * "unkomprimiert" durchgehen duerfen:
+ *
+ *   transferSize === 0   aus dem Cache beantwortet, es ging nichts ueber die
+ *                        Leitung. Ueber die Kompression sagt das nichts.
+ *   encodedBodySize === 0 die Groesse ist nicht einsehbar (fremde Herkunft
+ *                        ohne Timing-Allow-Origin).
+ *   unter der Schwelle   bei kleinen Antworten ist der Hinweis Laerm.
+ */
+export function kompressionsBefund(eintraege, schwelle) {
+    const ab = (typeof schwelle === 'number' && schwelle >= 0) ? schwelle : KOMPRESSION_AB;
+    let roh = 0;
+    let anzahl = 0;
+    let groesste = null;
+    (eintraege || []).forEach(function(e) {
+        if (!e) return;
+        const codiert   = Number(e.encodedBodySize) || 0;
+        const decodiert = Number(e.decodedBodySize) || 0;
+        const transfer  = Number(e.transferSize)    || 0;
+        if (transfer <= 0 || codiert <= 0 || decodiert <= 0) return;
+        if (decodiert < ab) return;
+        if (codiert !== decodiert) return;          // komprimiert, alles gut
+        roh += decodiert;
+        anzahl++;
+        if (!groesste || decodiert > groesste.bytes) {
+            groesste = { name: String(e.name || ''), bytes: decodiert };
+        }
+    });
+    return anzahl > 0 ? { anzahl: anzahl, roh: roh, groesste: groesste } : null;
+}
+
 /**
  * Aktionen, die beim blossen Ansehen der Karte entstehen.
  *
@@ -367,6 +428,65 @@ export function renderDiag(wrap) {
                     : t('diag.update.unreachable'));
             });
     });
+
+    // ── Kompression ────────────────────────────────────────────────────
+    //
+    // Nur wenn es etwas zu sagen gibt: kompressionsBefund() liefert null,
+    // sobald die Lage unklar oder die Antwort klein ist. Ein Hinweis, der
+    // immer dasteht, wird nicht gelesen.
+    const befund = (typeof performance !== 'undefined' && performance.getEntriesByType)
+        ? kompressionsBefund(performance.getEntriesByType('resource'))
+        : null;
+    if (befund) {
+        const kWrap = document.createElement('div');
+        kWrap.style.marginBottom = '24px';
+        kWrap.appendChild(el('h3',
+            'margin:0 0 8px;font-size:13px;color:' + theme.sub
+            + ';text-transform:uppercase;letter-spacing:0.04em',
+            t('diag.gzip.title')));
+        const kBox = el('div',
+            'font-size:12px;line-height:1.6;padding:10px 12px;border-radius:4px;'
+            + 'border:1px solid ' + theme.border + ';background:' + theme.surface
+            + ';color:' + theme.text);
+        kBox.appendChild(el('div', 'font-weight:600;margin-bottom:4px',
+            t('diag.gzip.found', { n: befund.anzahl, size: _bytes(befund.roh) })));
+        const kZahl = el('div', 'color:' + theme.sub, t('diag.gzip.measuring'));
+        kBox.appendChild(kZahl);
+        kBox.appendChild(el('div', 'color:' + theme.sub + ';margin-top:6px',
+            t('diag.gzip.how')));
+        kWrap.appendChild(kBox);
+        root.appendChild(kWrap);
+
+        // DIE ERSPARNIS WIRD GEMESSEN, NICHT GESCHAETZT — und ohne dafuer
+        // etwas nachzuladen: window._ntLastData liegt bereits im Speicher,
+        // neu serialisiert ergibt es dieselbe Nutzlast. Ein Verhaeltnis aus
+        // einer Faustregel waere hier besonders unangebracht, weil es genau
+        // die Zahl ist, auf die hin jemand seinen Webserver umstellt.
+        (function() {
+            const roh = window._ntLastData;
+            if (!roh || typeof CompressionStream === 'undefined') {
+                kZahl.textContent = t('diag.gzip.unknown');
+                return;
+            }
+            try {
+                const bytes = new TextEncoder().encode(JSON.stringify(roh));
+                const cs = new CompressionStream('gzip');
+                const w  = cs.writable.getWriter();
+                w.write(bytes);
+                w.close();
+                new Response(cs.readable).arrayBuffer().then(function(buf) {
+                    const gz = buf.byteLength;
+                    kZahl.textContent = t('diag.gzip.measured', {
+                        raw:   _bytes(bytes.length),
+                        gz:    _bytes(gz),
+                        ratio: (bytes.length / Math.max(1, gz)).toFixed(1)
+                    });
+                }).catch(function() { kZahl.textContent = t('diag.gzip.unknown'); });
+            } catch (e) {
+                kZahl.textContent = t('diag.gzip.unknown');
+            }
+        })();
+    }
 
     const summaryWrap = document.createElement('div');
     summaryWrap.style.marginBottom = '24px';

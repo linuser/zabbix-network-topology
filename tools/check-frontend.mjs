@@ -435,6 +435,58 @@ if (uplink) {
     pruefe('hosts-Kante ist kein Kabel',         uplink.hosting, false);
 }
 
+// Die Kompressionserkennung im Diag-Tab. Der wichtigere Teil der Pruefung
+// sind die Faelle, in denen NICHTS gesagt werden darf: ein Hinweis, der auf
+// einer korrekt eingerichteten Anlage erscheint, kostet Vertrauen in alle
+// anderen Hinweise dieses Tabs.
+console.log('\n  Diag: kam die Antwort unkomprimiert an\n');
+const gzip = szenario('gzip', { lang: 'en_US' }, `
+    const D = await import(${JSON.stringify(MODULE('render-diag.js'))});
+    const e = (dec, cod, tr, name) => ({ name: name || 'x',
+        decodedBodySize: dec, encodedBodySize: cod, transferSize: tr });
+    const MB = 1024 * 1024;
+    const b = (liste, schwelle) => D.kompressionsBefund(liste, schwelle);
+    console.log(JSON.stringify({
+        schwelle: D.KOMPRESSION_AB,
+        // Der Fall, um den es geht: gross, uebertragen, codiert == decodiert.
+        treffer:  (b([e(MB, MB, MB, 'data')]) || {}).anzahl,
+        bytes:    (b([e(MB, MB, MB, 'data')]) || {}).roh,
+        groesste: ((b([e(MB, MB, MB, 'gross'), e(600000, 600000, 600000, 'klein')])
+                    || {}).groesste || {}).name,
+        // Komprimiert -> nichts zu melden.
+        komprimiert: b([e(MB, 70000, 70000, 'data')]),
+        // Aus dem Cache (transferSize 0) -> keine Aussage moeglich.
+        ausCache:    b([e(MB, MB, 0, 'data')]),
+        // Groesse nicht einsehbar (fremde Herkunft) -> keine Aussage.
+        unsichtbar:  b([e(MB, 0, MB, 'data')]),
+        // Unter der Schwelle -> Laerm, also still.
+        klein:       b([e(1000, 1000, 1000, 'data')]),
+        // Leere und kaputte Eingaben duerfen nicht sprengen.
+        leer:        b([]),
+        nichts:      b(null),
+        muell:       b([null, undefined, {}]),
+        // Mehrere Treffer werden summiert, nicht nur gezaehlt.
+        summe:       (b([e(MB, MB, MB, 'a'), e(MB, MB, MB, 'b')]) || {}).roh,
+        // Eigene Schwelle wird beachtet.
+        eigene:      (b([e(1000, 1000, 1000, 'data')], 500) || {}).anzahl,
+    }));
+`);
+if (gzip) {
+    pruefe('Schwelle ist 256 KB',                 gzip.schwelle, 262144);
+    pruefe('unkomprimiert wird erkannt',          gzip.treffer,  1);
+    pruefe('... mit der rohen Groesse',           gzip.bytes,    1048576);
+    pruefe('die groesste Antwort wird benannt',   gzip.groesste, 'gross');
+    pruefe('komprimiert: kein Hinweis',           gzip.komprimiert, null);
+    pruefe('aus dem Cache: keine Aussage',        gzip.ausCache,    null);
+    pruefe('Groesse nicht einsehbar: keine Aussage', gzip.unsichtbar, null);
+    pruefe('unter der Schwelle: still',           gzip.klein,       null);
+    pruefe('leere Liste: still',                  gzip.leer,        null);
+    pruefe('null statt Liste sprengt nichts',     gzip.nichts,      null);
+    pruefe('kaputte Eintraege sprengen nichts',   gzip.muell,       null);
+    pruefe('mehrere werden summiert',             gzip.summe,       2097152);
+    pruefe('eigene Schwelle wird beachtet',       gzip.eigene,      1);
+}
+
 // Der Management-Tab sortiert Hosts in Ebenen (Firewall, Router, Switch,
 // Wireless, Server, Storage, Hausautomation, Geraete). Welche Ebene ein Host
 // bekommt, entscheidet sein Typ — und ein UNBEKANNTER Typ landet absichtlich

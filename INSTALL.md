@@ -325,6 +325,43 @@ Two things need a manual follow-up:
 
 Everything user-side is preserved. The map layout and manual links live server-side — in `module.config` and the user profile, not tied to the module name. Pins, notes, filter presets and toolbar settings live in `localStorage`, whose keys were never tied to the module name either. Host tags (`nt:parent`) are unaffected anyway.
 
+### Compression — the largest single saving, and it is not in the module
+
+A map of 1000 hosts is about **1.2 MB of JSON**, and it reloads every two
+minutes per viewer. Measured on the load-test rig: **gzip turns those 1.2 MB
+into 73 KB, a factor of 17**. Uncompressed it is not only the module —
+Zabbix' own `jsLoader.php` is another 1 MB on every page load, and
+`cytoscape.min.js` 357 KB. The official Zabbix container images compress
+`text/css` but leave `application/javascript` and PHP responses alone.
+
+**On a local network you will not notice this.** 1.2 MB at gigabit is about
+10 ms. It matters where monitoring is actually looked at: over VPN, from
+home, on a phone. At 10 Mbit/s those 1.2 MB are a second, at 2 Mbit/s five —
+more than anything that could be gained inside the module.
+
+The Diag tab measures this for your installation and says what gzip would
+make of your own map, so you do not have to take the numbers above on trust.
+
+nginx:
+
+```nginx
+gzip on;
+gzip_types application/json application/javascript text/css text/plain;
+gzip_min_length 1024;
+```
+
+Apache:
+
+```apache
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json application/javascript text/css text/plain
+</IfModule>
+```
+
+Compression belongs in the web server, not in the module: a module that
+compresses its own responses breaks `Content-Length` and caching in places
+nobody would look for it.
+
 ### Uninstall
 
 ```bash
@@ -681,6 +718,43 @@ Zwei Dinge musst du danach von Hand nachziehen:
 - **Lesezeichen.** Die Ansicht liegt jetzt unter `zabbix.php?action=network.topology.view`.
 
 Alles Nutzerseitige bleibt erhalten. Kartenanordnung und manuelle Links liegen serverseitig — an `module.config` und am Benutzerprofil, nicht am Modulnamen. Pins, Notizen, Filter-Presets und Toolbar-Einstellungen liegen im `localStorage`, dessen Schlüssel nie an den Modulnamen gebunden waren. Host-Tags (`nt:parent`) sind ohnehin unberührt.
+
+### Kompression — die größte Einzelersparnis, und sie liegt nicht im Modul
+
+Eine Karte mit 1000 Hosts ist rund **1,2 MB JSON** und lädt alle zwei Minuten
+je Betrachter neu. Am Lasttestfeld gemessen: **gzip macht aus diesen 1,2 MB
+genau 73 KB, Faktor 17**. Unkomprimiert ist dabei nicht nur das Modul —
+Zabbix' eigener `jsLoader.php` ist bei jedem Seitenaufruf ein weiteres MB,
+`cytoscape.min.js` 357 KB. Die offiziellen Zabbix-Container komprimieren
+`text/css`, lassen `application/javascript` und PHP-Antworten aber aus.
+
+**Im lokalen Netz merkt man davon nichts.** 1,2 MB bei Gigabit sind rund
+10 ms. Es zählt dort, wo Monitoring tatsächlich angesehen wird: über VPN, aus
+dem Homeoffice, vom Mobilgerät. Bei 10 Mbit/s wird aus 1,2 MB eine Sekunde,
+bei 2 Mbit/s fünf — mehr, als im Modul selbst überhaupt zu holen wäre.
+
+Der Diag-Tab misst das für deine Installation und sagt, was gzip aus deiner
+eigenen Karte machen würde; die Zahlen oben muss man also nicht glauben.
+
+nginx:
+
+```nginx
+gzip on;
+gzip_types application/json application/javascript text/css text/plain;
+gzip_min_length 1024;
+```
+
+Apache:
+
+```apache
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json application/javascript text/css text/plain
+</IfModule>
+```
+
+Komprimieren gehört in den Webserver, nicht ins Modul: eines, das seine
+Antworten selbst komprimiert, bricht `Content-Length` und Caching an Stellen,
+an denen niemand bei ihm sucht.
 
 ### Deinstallation
 
