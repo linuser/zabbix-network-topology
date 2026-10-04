@@ -39,6 +39,21 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 
 ![Item pivot / Item-Pivot](screenshots/items-table.jpg)
 
+**Endpoint bundling** — unmonitored leaf neighbours (workstations, phones, printers, cameras) fold into a single node with a count instead of cluttering the map; expand it on click. One node here stands for four endpoints on an access switch.
+*Endgeräte-Bündelung — nicht überwachte Blatt-Nachbarn (Arbeitsplätze, Telefone, Drucker, Kameras) landen in einem Knoten mit Anzahl, statt die Karte zu überladen; Aufklappen per Klick. Ein Knoten steht hier für vier Endgeräte an einem Access-Switch.*
+
+![Endpoint bundling / Endgeräte-Bündelung](screenshots/bundle.jpg)
+
+**Per-link detail** — click an edge for the port pair, the LLDP/CDP confirmation, link uptime (`sysUpTime − ifLastChange`) and a per-port RX/TX sparkline.
+*Link-Detail — Klick auf eine Kante zeigt das Portpaar, die LLDP/CDP-Bestätigung, die Link-Uptime (`sysUpTime − ifLastChange`) und einen RX/TX-Sparkline je Port.*
+
+![Per-link detail / Link-Detail](screenshots/link-panel.jpg)
+
+**Multi-group clustering** — select two or more host groups and the map draws each as its own lassoed, labelled cluster, with the links that cross between them kept visible. Here two sites, Berlin and München.
+*Multi-Gruppen-Cluster — mehrere Hostgruppen wählen, und die Karte zeichnet jede als eigenes umrandetes, beschriftetes Cluster; die Verbindungen dazwischen bleiben sichtbar. Hier zwei Standorte, Berlin und München.*
+
+![Multi-group clustering / Multi-Gruppen-Cluster](screenshots/cluster-groups.jpg)
+
 <table>
 <tr>
 <td width="50%"><img src="screenshots/management.jpg" alt="Management"><br><sub><b>Management</b> — hosts grouped by device type, with problem badges and CPU/RAM per tile.<br><i>Hosts nach Gerätetyp gruppiert, mit Problem-Badges und CPU/RAM je Kachel.</i></sub></td>
