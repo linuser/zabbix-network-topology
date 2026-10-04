@@ -21,6 +21,8 @@ screenshots do it in confidence.
 | `switch24.snmprec` | 24 ports with names and aliases, counters in the ifTable |
 | `tplink-lldp.snmprec` | The two-part LLDP index (no TimeMark) that made discovery find nothing at all — issue #15 |
 | `kunde-a.snmprec`, `kunde-b.snmprec` | Two sites sharing the same private address, one of them reporting a neighbour by IP — issue #14 |
+| `lab-access-endpoints.snmprec` | An access switch with four unmonitored endpoint neighbours (workstation/phone/printer/camera, Station/Telephone caps) — the bundle node that folds them into one, plus `ifLastChange` per port for link uptime |
+| `lab-core-01.snmprec` | A core switch that reports `lab-access-endpoints` back on its downlink — the confirmed switch-to-switch edge used to show the per-port RX/TX sparkline and link uptime |
 
 The **community string selects the device**: one snmpsim serves all of them, and
 a host configured with `{$SNMP_COMMUNITY} = aruba-cdp` talks to
