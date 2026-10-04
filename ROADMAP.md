@@ -385,6 +385,39 @@ Fall ist der erste Schritt.
 Switches — gibt `dot1dStpPortState` ueberhaupt etwas her, und laesst sich
 forwarding von blocking je Port verlaesslich lesen? Erst messen, dann bauen.
 
+### Gestackte Switches und MLAG — ein Knoten oder zwei?
+
+Zwei verwandte Faelle, die beide nicht sauber aus LLDP/CDP fallen. Aus einer
+Nutzerfrage im 10/2026 („koennt ihr auch gestackte Switches abbilden? jeder
+Hersteller hat sein Verfahren, es gibt aber auch den herstelleruebergreifenden
+Begriff MLAG").
+
+**Ein Stack ist heute schon ein Knoten — unbeabsichtigt richtig.** Ein Stack
+(Cisco StackWise/VSS, Juniper Virtual Chassis, Aruba VSF, …) tritt mit EINER
+Management-IP und EINER LLDP-Chassis-ID auf, also zeichnet die Karte ihn als
+einen Knoten. Das ist das gewuenschte Bild. Was fehlt, ist die Information
+DAHINTER: wie viele Einheiten im Stack, welche ist der Master, ist ein Member
+ausgefallen. Das steht nicht in der Nachbartabelle, sondern in der
+`ENTITY-MIB` (`entPhysicalTable`, mehrere physische Einheiten unter einem
+Chassis) — ein Standard-OID, kein Herstellertrick, und damit der erste Schritt:
+die Member-Zahl und ihren Zustand als Badge an den Stack-Knoten, etwa
+„Stack ×4".
+
+**MLAG ist der schwierige Fall.** Hier bleiben es ZWEI Switches mit je eigener
+Management-IP, die einem Downstream-Geraet gemeinsam ein LAG anbieten. Aus
+dessen LLDP kommen zwei verschiedene Chassis-IDs, die Karte zeichnet also
+korrekt zwei Kanten zu zwei Knoten — und verdeckt damit, dass die beiden ein
+MLAG-Paar sind. „MLAG" ist dabei kein IEEE-Standard wie LACP (802.3ad),
+sondern der herstellerneutrale Sammelbegriff; jeder nennt es anders (Cisco
+vPC, Arista/Dell MLAG, Cumulus CLAG, Juniper MC-LAG), und jeder legt die
+Peer-Beziehung in eine EIGENE MIB. Ein einheitliches OID gibt es nicht.
+
+Der ehrliche Schnitt: den Stack-Fall ueber die `ENTITY-MIB` zuerst, weil er
+standardisiert und sofort nuetzlich ist. Die MLAG-Erkennung braucht pro
+Hersteller eine eigene Probe — und wie bei STP und FDB gilt: erst auf echter
+Hardware messen, ob die Peer-MIB verlaeslich das Paar nennt, dann ein
+Paar-Lasso wie bei den Gruppen-Clustern ziehen. Nicht spekulativ bauen.
+
 ### Link Quality Score
 
 Ein Wert je Kante aus Errors, Drops, Flaps, Speed und Auslastung — statt nur
