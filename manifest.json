@@ -4,7 +4,7 @@
     "name": "Network Topology for Zabbix",
     "version": "5.5.2",
     "author": "PlaNet Fox | Alexander Fox",
-    "description": "Interactive network topology map with Cytoscape.js, clustering and severity filter",
+    "description": "Interactive network topology on its own page: LLDP/CDP links drawn port-to-port with a measured weathermap, severity rings, clustering and host-group view, ghost nodes for unmonitored neighbours, plus table, geo, health and stats views. Not a widget; five optional dashboard widgets ship alongside.",
     "namespace": "NetworkTopology",
     "actions": {
         "network.topology.view": {

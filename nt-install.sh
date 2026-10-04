@@ -24,10 +24,12 @@ export PATH="/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
 
 readonly MODULE="network_topology"
 # Dieses Skript installiert das HAUPTMODUL, und das laeuft auf 7.0 LTS genauso
-# wie auf 7.4. Nur die Dashboard-Widgets brauchen 7.4 — sie werden hier nicht
-# installiert. Vorher stand hier 7.4, und der Check meldete auf einer 7.0-LTS
-# "Modul braucht 7.4+", also eine Warnung vor einer Kombination, die die
-# Dokumentation ausdruecklich empfiehlt.
+# wie auf 7.4. Die Dashboard-Widgets ebenfalls (auf 7.0.30 nachgemessen) — sie
+# werden hier nur nicht mitinstalliert, weil sie eigene Module sind. Vorher
+# stand hier 7.4, und der Check meldete auf einer 7.0-LTS "Modul braucht 7.4+",
+# also eine Warnung vor einer Kombination, die die Dokumentation ausdruecklich
+# empfiehlt. Die alte "Widgets brauchen 7.4"-Notiz war eine Beobachtung mit
+# erfundener Begruendung und ist widerlegt.
 readonly MIN_MAJOR=7 MIN_MINOR=0
 readonly MAX_UNPACKED=$((100 * 1024 * 1024))   # 100 MiB — Cap gegen Zip-Bomben
 readonly REQUIRED_FILES=(
@@ -216,7 +218,7 @@ cmd_check() {
         ok "Widget: $w (v${wv:-?})"
     done
     if [[ $found_w -eq 0 ]]; then
-        echo "  ${C_DIM}i${C_RST} keine Dashboard-Widgets installiert (optional, brauchen Zabbix 7.4)"
+        echo "  ${C_DIM}i${C_RST} keine Dashboard-Widgets installiert (optional, laufen auf 7.0 LTS + 7.4)"
     fi
 
     if command -v php >/dev/null 2>&1; then

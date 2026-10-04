@@ -129,7 +129,16 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
   exists in Zabbix**. They appear dashed, with their origin (who reported
   them) and — where the device provides it — vendor, device type and MAC from
   the LLDP table. For admins, a menu entry opens Zabbix' own host form
-  **pre-filled**; the host is created by Zabbix, not by the module.
+  **pre-filled**; the host is created by Zabbix, not by the module. Where the
+  neighbour gives no name but a chassis MAC, the vendor is read from the IEEE
+  OUI table (and it says so plainly when the address is locally administered
+  and has no vendor).
+- **Unmonitored endpoints bundled** — a switch with dozens of workstations,
+  printers and phones hanging off it drew dozens of ghost nodes that said
+  nothing a single number would not. They now fold into one bundle node per
+  switch, labelled with the count; a click opens it. Infrastructure neighbours
+  (Bridge/Router/WLAN AP) are never bundled — the opposite of the "network
+  gear only" filter: nothing is thrown away, only folded. Toggle in the toolbar.
 - **Device type from the protocol** — the icon comes from the host name and
   templates first, matching **model series, not vendor names**: a plain "UniFi"
   or "Omada" covers gateways, switches, cameras and access points alike and
@@ -153,7 +162,7 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 
 **More UI**
 
-Per-host detail panel (severity, metrics, interface, proxy, action buttons) · ghost nodes in three steps (off, network gear only, all) · per-edge detail panel (ports, utilization, errors and discards at the port, match confidence) · the computed path as a list · fullscreen · zoom + fit · mini-map · severity filter pills · search field with a small query language · layout presets.
+Per-host detail panel (severity, metrics, interface, proxy, action buttons) · ghost nodes in three steps (off, network gear only, all) · per-edge detail panel (ports, utilization, a per-port RX/TX sparkline, how long the link has been up, errors and discards at the port, match confidence) · the computed path as a list · fullscreen · zoom + fit · mini-map · severity filter pills · search field with a small query language · layout presets.
 
 The map renders **light or dark to match your Zabbix theme** — there is no
 switch of its own. It decides by measuring the page's actual background
@@ -277,7 +286,7 @@ found had been in the module since the code was written.
 > Die Widgets nutzen die Daten-Action des Hauptmoduls und laden Cytoscape aus
 > dessen Assets; ohne es zeigen sie eine Fehlermeldung. Erst das Hauptmodul.
 
-Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · **Kennzahlen-Zeile** über der Karte · **Ghost-Knoten** für per LLDP gemeldete Geräte ohne Host in Zabbix · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · **fünf Dashboard-Widgets** · Wallboard-Modus · DE/EN.
+Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · **Kennzahlen-Zeile** über der Karte · **Ghost-Knoten** für per LLDP gemeldete Geräte ohne Host in Zabbix, **unüberwachte Endgeräte je Switch gebündelt** · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · **fünf Dashboard-Widgets** · Wallboard-Modus · DE/EN.
 
 ### Features
 
@@ -328,7 +337,16 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
   Herkunftsangabe (wer sie gemeldet hat) und — sofern das Gerät es liefert —
   Hersteller, Gerätetyp und MAC aus der LLDP-Tabelle. Für Admins öffnet ein
   Menüeintrag Zabbix' eigenes Host-Formular **vorbefüllt**; angelegt wird der
-  Host von Zabbix, nicht vom Modul.
+  Host von Zabbix, nicht vom Modul. Meldet der Nachbar keinen Namen, aber eine
+  Chassis-MAC, kommt der Hersteller aus der IEEE-OUI-Tabelle (und sagt klar
+  dazu, wenn die Adresse lokal vergeben ist und keinen Hersteller hat).
+- **Unüberwachte Endgeräte gebündelt** — ein Switch mit Dutzenden
+  Arbeitsplatzrechnern, Druckern und Telefonen zeichnete Dutzende Ghost-Knoten,
+  die nichts sagten, was eine einzelne Zahl nicht auch sagt. Sie klappen jetzt
+  zu einem Bündel-Knoten je Switch zusammen, beschriftet mit der Anzahl; ein
+  Klick öffnet ihn. Infrastruktur-Nachbarn (Bridge/Router/WLAN AP) werden nie
+  gebündelt — das Gegenteil des „nur Netzgeräte"-Filters: nichts wird
+  weggeworfen, nur eingeklappt. Umschalter in der Toolbar.
 - **Gerätetyp aus dem Protokoll** — welches Symbol ein Knoten bekommt, leitet
   sich zuerst aus Name und Template ab, und zwar über **Modellreihen, nicht über
   Herstellernamen**: ein bloßes „UniFi" oder „Omada" umfasst Gateways, Switches,
@@ -353,7 +371,7 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 
 **Weitere UI**
 
-Detail-Panel je Host (Severity, Metriken, Interface, Proxy, Action-Buttons) · Detail-Panel je Kante (Ports, Auslastung, Errors und Discards am Port, Zuordnungssicherheit) · der berechnete Pfad als Liste · Fullscreen · Zoom + Fit · Mini-Map · Severity-Filter-Pills · Suchfeld mit Query-Sprache · Layout-Presets.
+Detail-Panel je Host (Severity, Metriken, Interface, Proxy, Action-Buttons) · Detail-Panel je Kante (Ports, Auslastung, RX/TX-Sparkline je Port, wie lange der Link schon steht, Errors und Discards am Port, Zuordnungssicherheit) · der berechnete Pfad als Liste · Fullscreen · Zoom + Fit · Mini-Map · Severity-Filter-Pills · Suchfeld mit Query-Sprache · Layout-Presets.
 
 Die Karte zeichnet **hell oder dunkel wie dein Zabbix-Theme** — einen eigenen
 Schalter gibt es nicht. Entschieden wird an der gemessenen Hintergrundfarbe
