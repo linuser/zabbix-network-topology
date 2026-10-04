@@ -359,6 +359,32 @@ Aus einem rohen FDB-Abzug wird damit eine Aussage.
 `tools/nt-lldp-probe.sh` — auf echten Switches messen, ob die BRIDGE-MIB
 herausrückt und ob `dot1dBasePortIfIndex` gefüllt ist. Ein Nachmittag.
 
+### Spanning-Tree — aktiver gegen geblockten Pfad
+
+Die Karte zeichnet die PHYSISCHE Nachbarschaft aus LLDP/CDP, nicht den
+Weiterleitungszustand. Ein durch STP geblockter Redundanzlink erscheint
+deshalb als normale Kante — LLDP laeuft auch ueber einen blocking-Port, und
+`ifOperStatus` meldet ihn weiter als up. Zwei Switches mit zwei Kabeln und
+aktivem Spanning-Tree sehen auf der Karte aus wie zwei aktive Pfade, obwohl
+einer blockt. Aus einer Nutzerfrage im 10/2026 („beruecksichtigt das Tool den
+Spanning-Tree, oder zeichnet es doppelte Pfade als aktiv?").
+
+Was es HEUTE schon unterscheidet: die Weathermap. Ein geblockter Link traegt
+nur BPDUs, liegt also bei ~0 gemessener Auslastung, waehrend der aktive Pfad
+sich nach Last faerbt. Den lebenden Pfad erkennt man an den Zahlen — nur nicht
+an einer Beschriftung.
+
+Der Schritt dahin: `dot1dStpPortState` aus der BRIDGE-MIB lesen
+(forwarding/blocking/listening/learning, OID `1.3.6.1.2.1.17.2.15.1.3`) und
+geblockte Kanten dimmen oder stricheln, mit einem Status-Hinweis im
+Kanten-Panel. Pro VLAN wird es feiner — MSTP/PVST melden je Instanz einen
+Zustand, teils nur ueber eine VLAN-Kontext-Community; der einfache dot1dStp-
+Fall ist der erste Schritt.
+
+**Erster Schritt:** wie beim FDB-Probe ein kleines Messskript auf echten
+Switches — gibt `dot1dStpPortState` ueberhaupt etwas her, und laesst sich
+forwarding von blocking je Port verlaesslich lesen? Erst messen, dann bauen.
+
 ### Link Quality Score
 
 Ein Wert je Kante aus Errors, Drops, Flaps, Speed und Auslastung — statt nur
