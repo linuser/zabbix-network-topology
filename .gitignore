@@ -20,3 +20,6 @@ tools/devnet/modul/
 # Die Belege stehen in tools/devnet/geraete/ und gehoeren in den Commit,
 # das hier erzeugt "node tools/devnet/erzeuge-geraete.mjs" in Sekunden neu.
 tools/devnet/geraete-generiert/
+
+# Claude Code project instructions — local only, not published
+CLAUDE.md
