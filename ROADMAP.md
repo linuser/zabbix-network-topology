@@ -709,6 +709,53 @@ wenn er eine Idee oder ein MVP hat.
 der VLAN-Ansicht. Drei Einträge, ein Thema — wer hier anfängt, sollte alle drei
 gelesen haben.
 
+### Dienst-/Abhängigkeitskarte — eine URL und was unter ihr hängt
+
+Eine andere Frage als „welches Kabel wohin": nicht die physische Topologie,
+sondern die **logische Abhängigkeit**. Oben eine Webseite (URL), darunter, woran
+sie hängt — Webserver, PHP-FPM-Dienst, Datenbank. Aus einer Nutzerfrage im
+10/2026 („bekommen wir es hin, eine Webseiten-URL darzustellen und daran die
+Abhängigkeiten — Webserver, DB, PHP?").
+
+**Die Kante ist hier gerichtet** („A braucht B") und trägt weder Port noch
+Traffic noch Laufzeit. Das ist dieselbe Gabelung wie bei
+[Nachbarschaft jenseits von LLDP](#nachbarschaft-jenseits-von-lldpcdp-ip-bgp-ospf-bridge):
+zweiter Graph zum Umschalten, oder zusätzliche, *typisierte* Kanten im selben
+Graphen (`src: ['depends']`). Früh zu entscheiden — davon hängt ab, ob
+Weathermap, Pfad-BFS, Root Cause und What-if einen Filter bekommen oder eine
+zweite Codebahn.
+
+**Die Datenquelle gibt es schon, und zwar gleich mehrfach:**
+
+1. **Zabbix-Services (Business-Service-Baum).** Das IST bereits ein Baum
+   „Webseite → Webserver/PHP/DB" mit Statusvererbung. `service.get` liefert über
+   Eltern/Kind die Kanten fertig — kein Nachbau. Derselbe Datenpfad, der unter
+   „SLA-Bezug auf der Karte" schon an 7.4 geprüft wurde (dort über
+   `selectProblemEvents`).
+2. **Web-Szenario als URL-Knoten.** Ein Host mit einem HTTP-Check (`web.test.*`)
+   wird der Webseiten-Knoten — mit Antwortzeit und Statuscode als echtem
+   Messwert, nicht nur als Kästchen.
+3. **Manuelle Links** kann das Modul **heute schon** (serverseitig gespeichert).
+   Webserver→DB von Hand ziehen geht sofort; die Grenze ist, dass beide Enden
+   Hosts sein müssen und eine URL kein Host ist.
+4. Eine Tag-/Macro-Konvention (`{$DEPENDS_ON}`, Tag `depends-on:db-01`) wäre die
+   explizite, autorengesteuerte Variante.
+
+**Die gute Nachricht:** Root Cause und What-if passen konzeptionell *perfekt* auf
+Abhängigkeiten — „DB down → Webseite rot" ist genau das, was die beiden heute
+schon rechnen. Die Maschine existiert; sie muss nur eine Nicht-Kabel-Kante
+akzeptieren.
+
+**Erster Schnitt (MVP):** eine eigene **Dienst-Ebene**, die den Zabbix-Services-
+Baum liest und als gerichteten Graphen zeichnet, Web-Szenario-Host oben.
+**Read-only** zuerst — nur zeichnen plus Status (rot/grün) —, Weathermap und
+What-if auf diesen Kanten erst danach. Manuelle Links füllen Lücken, die die
+Services nicht abdecken.
+
+**Am 2026-10-05 auf der Demo** ein kleiner Services-Baum als Beleg angelegt
+(Online-Shop → Webserver/PHP/Datenbank), um zu zeigen, dass die Quelle trägt —
+die Modul-Ansicht selbst ist dieser Roadmap-Punkt, nicht das Gezeigte.
+
 ### Standortansicht für MSPs
 
 Deutschland → München → Firewall/Core/12 Switches.
