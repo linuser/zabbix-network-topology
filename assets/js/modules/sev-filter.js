@@ -75,11 +75,19 @@ export function buildSevFilter(bar, cy) {
     wrap.style.cssText = 'display:flex;align-items:center;gap:5px;margin-left:10px;'
         + 'padding-left:8px;border-left:1px solid var(--nt-line);flex-shrink:0';
 
+    // Eine Pille je Zabbix-Severity 0..5 — Farben aus SEV_COL (severity.js),
+    // damit die Pille dieselbe Farbe traegt wie der Ring am Knoten. Vorher
+    // standen hier nur fuenf Pillen mit den Werten 0,2,3,4,5: Severity 1
+    // (Information) hatte gar keine, und Severity 5 (Disaster) war faelschlich
+    // als "High" beschriftet — es gab also keinen Weg, gezielt NUR Disaster
+    // oder NUR High zu zeigen. Jetzt ist jede Stufe einzeln waehlbar; ein
+    // Klick aus leerem Filter zeigt genau diese eine Stufe.
     [{ sev: 0, col: '#22c55e', lbl: t('sev.ok') },
-     { sev: 2, col: '#06b6d4', lbl: t('sev.info') },
-     { sev: 3, col: '#f59e0b', lbl: t('sev.warn') },
-     { sev: 4, col: '#f97316', lbl: t('sev.avg') },
-     { sev: 5, col: '#ef4444', lbl: t('sev.high') }].forEach(function(sd) {
+     { sev: 1, col: '#06b6d4', lbl: t('sev.info') },
+     { sev: 2, col: '#f59e0b', lbl: t('sev.warn') },
+     { sev: 3, col: '#f97316', lbl: t('sev.avg') },
+     { sev: 4, col: '#ef4444', lbl: t('sev.high') },
+     { sev: 5, col: '#991b1b', lbl: t('sev.crit') }].forEach(function(sd) {
         const pill = document.createElement('button');
         pill.dataset.sev = sd.sev;
         pill.style.cssText = 'display:flex;align-items:center;gap:3px;padding:2px 7px;'

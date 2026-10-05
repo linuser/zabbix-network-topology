@@ -305,6 +305,21 @@ export function showDetail(panel, d, cy) {
         if (sec < 86400) return t('detail.ago', { v: Math.floor(sec / 3600) + 'h' });
         return t('detail.ago', { v: Math.floor(sec / 86400) + 'd' });
     };
+
+    // "Zuletzt gesehen" als Zeile in der Identitaets-Liste. Vor allem bei einem
+    // offline/stale-Host die Frage, die das Panel bisher nicht beantwortete:
+    // seit wann ist es still? (Der Offline-Banner nennt down_since; last_seen
+    // ist der letzte EINGANG von Daten.) Bei online ein ruhiges "vor Xs".
+    // Absolute Zeit als Tooltip. fmtAgo steht erst hier — die Zeile wird darum
+    // jetzt angehaengt, die Liste rendert ohnehin erst spaeter.
+    if (!istGeist && d.last_seen && d.last_seen > 0) {
+        const lsRow = idRow(t('detail.last_seen'), fmtAgo(d.last_seen));
+        try {
+            lsRow.lastChild.setAttribute('title', new Date(d.last_seen * 1000).toLocaleString());
+        } catch (e) {}
+        identitaet.push(lsRow);
+    }
+
     // Stale-Banner: orangener Hinweis wenn Host zwar online aber Items
     // veraltet sind — separate Box, kommt NACH dem Offline-Banner falls beide
     // zutreffen (selten, aber moeglich wenn Zabbix unavailable=false meldet
