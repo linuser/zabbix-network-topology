@@ -2,6 +2,43 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.5.3 — 2026-10-06
+
+### Zabbix 8 support
+
+The main module and the five widgets now load on **Zabbix 8** as well — verified
+on 8.0.0rc1. Until this release the graph tabs (Technical, Management,
+Dependencies, Geo) came up blank there, with no error in the module's own code.
+
+The cause was outside the module. Zabbix 8 defines `Array.prototype.xor` in its
+`js/common.js` with `Object.defineProperty`, whose omitted attributes default to
+**non-writable and non-configurable**. Cytoscape builds its collection prototype
+on top of `Array.prototype` and merges its own `xor()` method onto it with
+`Object.assign`; that write cannot shadow the inherited, now non-writable
+property and throws, so Cytoscape aborts at load and `window.cytoscape` is never
+defined. On 7.0 and 7.4 the same line is a plain assignment (writable), so they
+were never affected — and stay unaffected here.
+
+A small guard (`nt-assign-guard.js`) swaps `Object.assign` for a
+`defineProperty`-fallback variant **only while Cytoscape loads**, then restores
+the original. It engages solely when the broken descriptor is actually present,
+so on 7.x it is a true no-op; the Zabbix `xor` helper is left intact and no
+Cytoscape update is needed. A depth counter keeps two widgets on one dashboard
+from restoring the original mid-load.
+
+### Updating from 5.5.2 — replace the directory, reload with a cache bypass
+
+No new action, no template change, nothing stored is touched. Replace the module
+directory, `chown`, reload php-fpm, then load the topology page once with a cache
+bypass — the view now pulls in one new script file, and the topology widget
+changed too (same guard, widget version 3.2.1).
+
+### Changed
+
+- Zabbix 8: guard `Object.assign` so Cytoscape loads, wired into the page view
+  and the topology widget loader (`nt-assign-guard.js`).
+- README and badges now list Zabbix 8 (7.0 LTS / 7.4 / 8.0).
+
 ## v5.5.2 — 2026-10-04
 
 ### Updating from 5.5.1 — replace the directory, and that is all

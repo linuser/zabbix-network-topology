@@ -12,7 +12,7 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 
 ### Requirements
 
-- **Zabbix 7.0 LTS or 7.4+** (frontend) — the dashboard widgets (section 3) included
+- **Zabbix 7.0 LTS, 7.4 or 8.0** (frontend) — the dashboard widgets (section 3) included
 - **PHP 8.x** with php-fpm (or your web server's PHP handler)
 - **`unzip`** on the frontend host. Minimal installs don't always ship it: `sudo apt install unzip` or `sudo dnf install unzip`
 - Write access to the Zabbix UI `modules/` directory and the ability to reload php-fpm

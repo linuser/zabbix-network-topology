@@ -2,7 +2,7 @@
     "manifest_version": 2.0,
     "id": "network_topology",
     "name": "Network Topology for Zabbix",
-    "version": "5.5.2",
+    "version": "5.5.3",
     "author": "PlaNet Fox | Alexander Fox",
     "description": "Interactive network topology on its own page: LLDP/CDP links drawn port-to-port with a measured weathermap, severity rings, clustering and host-group view, ghost nodes for unmonitored neighbours, plus table, geo, health and stats views. Not a widget; five optional dashboard widgets ship alongside.",
     "namespace": "NetworkTopology",

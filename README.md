@@ -1,10 +1,10 @@
 # Network Topology for Zabbix
 
-Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisation, built on Cytoscape.js and Leaflet.
-*Zabbix 7.0 LTS / 7.4 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.*
+Zabbix 7.0 LTS / 7.4 / 8.0 frontend module for interactive network topology visualisation, built on Cytoscape.js and Leaflet.
+*Zabbix 7.0 LTS / 7.4 / 8.0 Frontend-Modul für interaktive Netzwerk-Topologie-Visualisierungen mit Cytoscape.js und Leaflet.*
 
-![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4-red)
-![Version](https://img.shields.io/badge/version-5.5.2-blue)
+![Status](https://img.shields.io/badge/zabbix-7.0_LTS_%2B_7.4_%2B_8.0-red)
+![Version](https://img.shields.io/badge/version-5.5.3-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
 **[🌐 zabfox.de](https://zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](INSTALL.md)** · **[🤝 Contributing](CONTRIBUTING.md)**
@@ -79,7 +79,7 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 
 ### What is this?
 
-**Network Topology for Zabbix** is a frontend module for **Zabbix 7.0 LTS and 7.4** that visualises hosts, host groups, problems, traffic, health status and geo data as an **interactive network topology** — instead of seeing hosts as a flat list, you see _how_ they connect (discovered via LLDP/CDP), where it hurts, and what follows from it.
+**Network Topology for Zabbix** is a frontend module for **Zabbix 7.0 LTS, 7.4 and 8.0** that visualises hosts, host groups, problems, traffic, health status and geo data as an **interactive network topology** — instead of seeing hosts as a flat list, you see _how_ they connect (discovered via LLDP/CDP), where it hurts, and what follows from it.
 
 > **This is a page, not a dashboard widget.** The main module adds its own entry
 > under **Monitoring → Network Topology**: a full screen with its own tabs, filters
@@ -88,8 +88,8 @@ Zabbix 7.0 LTS / 7.4 frontend module for interactive network topology visualisat
 >
 > | What | Needed? | Requires |
 > |---|---|---|
-> | **Main module** — the topology page | **required**, this is the product | Zabbix 7.0 LTS or 7.4 |
-> | **Five dashboard widgets** — tiles for existing dashboards | optional extras | Zabbix **7.0 LTS or 7.4**, and the main module installed *and* enabled |
+> | **Main module** — the topology page | **required**, this is the product | Zabbix 7.0 LTS, 7.4 or 8.0 |
+> | **Five dashboard widgets** — tiles for existing dashboards | optional extras | Zabbix **7.0 LTS, 7.4 or 8.0**, and the main module installed *and* enabled |
 >
 > The widgets read the main module's data action and load Cytoscape from its
 > assets; without it they show an error. Install the main module first.
@@ -237,7 +237,7 @@ All consume the same `network.topology.data` action (no second backend) and shar
 
 > **The widgets do not work standalone** — for two reasons: the data action `network.topology.data` is registered by the **main module**, and the topology widget additionally loads Cytoscape.js from its directory (`modules/network_topology/assets/js/`), so the ~360 KB library ships only once. Without the main module — or with it disabled — the tiles show an error ("main module unreachable" / "Cytoscape.js not loaded"). So install in this order: **main module first, widgets second.**
 
-> **Zabbix version:** both the **main module and the widgets** run on **7.0 LTS and 7.4**. An earlier note here said the widgets were 7.4-only — on 7.0.28 in July they registered but stayed on "Loading…". Re-tested on **7.0.30** on 2026-09-24 with all five on one dashboard: topology, KPI, health, table and items all render, no console errors. What changed in between is not established, so if a 7.0 of yours does hang, that is worth a report.
+> **Zabbix version:** both the **main module and the widgets** run on **7.0 LTS and 7.4**. An earlier note here said the widgets were 7.4-only — on 7.0.28 in July they registered but stayed on "Loading…". Re-tested on **7.0.30** on 2026-09-24 with all five on one dashboard: topology, KPI, health, table and items all render, no console errors. What changed in between is not established, so if a 7.0 of yours does hang, that is worth a report. Since **5.5.3** the module and the widgets also load on **Zabbix 8** (verified on 8.0.0rc1) — an 8.0 change to `Array.prototype.xor` had kept Cytoscape from loading; see the changelog.
 
 ### Security
 
@@ -262,7 +262,7 @@ Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inse
 - Geo tab needs hosts with `inventory.location_lat` + `location_lon`
 - LLDP edges need neighbour items via SNMP → [LLDP-SETUP.md](LLDP-SETUP.md)
 - Zabbix 7.0+ for proxy group info (empty on 6.x)
-- Everything runs on **7.0 LTS and 7.4** — widgets included, re-tested on 7.0.30
+- Everything runs on **7.0 LTS, 7.4 and 8.0** — widgets included; 7.x re-tested on 7.0.30, 8.0 verified on 8.0.0rc1
 
 ### Feedback & contributing
 
@@ -285,7 +285,7 @@ found had been in the module since the code was written.
 
 ### Was ist das?
 
-**Network Topology for Zabbix** ist ein Frontend-Modul für **Zabbix 7.0 LTS und 7.4**, das Hosts, Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es, _wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
+**Network Topology for Zabbix** ist ein Frontend-Modul für **Zabbix 7.0 LTS, 7.4 und 8.0**, das Hosts, Hostgruppen, Probleme, Traffic, Health-Status und Geodaten als **interaktive Netzwerk-Topologie** visualisiert — statt Hosts nur in Listen zu sehen, zeigt es, _wie_ sie zusammenhängen (via LLDP/CDP entdeckt), wo es klemmt und was daraus folgt.
 
 > **Das ist eine Seite, kein Dashboard-Widget.** Das Hauptmodul legt einen eigenen
 > Eintrag unter **Monitoring → Network Topology** an: eine vollständige Ansicht mit
