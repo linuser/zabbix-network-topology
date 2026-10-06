@@ -251,27 +251,34 @@ class WidgetNetworkTopology extends CWidget {
             callback();
             return;
         }
-        var self    = this;
-        var base    = 'modules/network_topology/assets/js/';
-        var scripts = [base + 'cytoscape.min.js'];
-        var loaded  = 0;
-        scripts.forEach(function (src) {
-            if (document.querySelector('script[src="' + src + '"]')) {
-                loaded++;
-                if (loaded === scripts.length) { self._libsOk = true; callback(); }
-                return;
-            }
+        var self = this;
+        var base = 'modules/network_topology/assets/js/';
+
+        // Ein Skript laden; cb(true) bei Erfolg, cb(false) bei Fehler. Ein
+        // bereits vorhandenes Tag zaehlt als geladen (zweites Widget auf dem
+        // Dashboard).
+        var loadScript = function (src, cb) {
+            if (document.querySelector('script[src="' + src + '"]')) { cb(true); return; }
             var s = document.createElement('script');
             s.src = src;
-            s.onload  = function () {
-                loaded++;
-                if (loaded === scripts.length) { self._libsOk = true; callback(); }
-            };
-            s.onerror = function () {
-                loaded++;
-                if (loaded === scripts.length) { callback(); }
-            };
+            s.onload  = function () { cb(true); };
+            s.onerror = function () { cb(false); };
             document.head.appendChild(s);
+        };
+
+        // Zabbix 8 macht Array.prototype.xor nicht beschreibbar — Cytoscape
+        // bricht dann beim Laden ab und window.cytoscape bleibt undefined, ohne
+        // Fehler im eigenen Code. Erst den Guard laden, on() VOR dem
+        // Cytoscape-Laden, off() danach. Auf 7.x ein No-op. Siehe
+        // nt-assign-guard.js. Der Guard zaehlt verschachtelte on()/off() mit,
+        // damit zwei Widgets auf einem Dashboard sich nicht in die Quere kommen.
+        loadScript(base + 'nt-assign-guard.js', function () {
+            if (window.NT_ASSIGN_GUARD) window.NT_ASSIGN_GUARD.on();
+            loadScript(base + 'cytoscape.min.js', function (ok) {
+                if (window.NT_ASSIGN_GUARD) window.NT_ASSIGN_GUARD.off();
+                self._libsOk = (ok && typeof cytoscape !== 'undefined');
+                callback();
+            });
         });
     }
 
