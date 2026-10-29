@@ -28,6 +28,8 @@
 // linearly across the tiers from 2 to 8 px, the label color is the line
 // color slightly darkened.
 import { trunkData, bundleLabel } from './parallel-links.js';
+import { t } from './i18n.js';
+import { linkQualityScore } from './link-quality.js';
 
 export const DEFAULT_SCALES = {
     traffic: { bounds: [10e3, 100e3, 1e6, 10e6],
@@ -130,6 +132,14 @@ let _weathermap = false;
 export function setWeathermapMode(on) { _weathermap = !!on; }
 export function isWeathermapMode() { return _weathermap; }
 
+// Link-Quality-Modus: Kantenfarbe nach Güte-Score (link-quality.js) statt
+// Auslastung. Schliesst den Weathermap-Modus gegenseitig aus (die Toolbar
+// schaltet den jeweils anderen ab) — eine Kante kann nur EINE Aussage farblich
+// tragen.
+let _linkQuality = false;
+export function setLinkQualityMode(on) { _linkQuality = !!on; }
+export function isLinkQualityMode() { return _linkQuality; }
+
 function utilizationTier(pct) {
     return UTIL_TIERS.find(function(x) { return pct < x.max; });
 }
@@ -210,13 +220,30 @@ export function applyTrafficHeatmap(cy) {
             }
             return;
         }
+        // UniFi-WLAN-Assoziation (Client<->AP, oder AP<->AP-Mesh): keine
+        // Kabel-Auslastung, sondern eine Funkverbindung. Eigener Stil -- cyan,
+        // gepunktet -- damit sie sich klar von verkabelten Links abhebt; die
+        // Weathermap-/Health-/STP-Logik unten gilt fuer sie nicht (ueber eine
+        // WLAN-Zuordnung sagt Port-Auslastung nichts). Der Durchsatz (uplink.rx/
+        // tx des Clients) bleibt ueber das Stylesheet-Label data(tLabel).
+        if (edge.data('_unifiWireless')) {
+            const wc = dark ? '#22d3ee' : '#0891b2';   // cyan
+            edge.style('width', 2);
+            edge.style('line-color', wc);
+            edge.style('color', wc);
+            edge.style('line-style', 'dotted');
+            edge.style('line-dash-pattern', [2, 4]);
+            edge.style('opacity', dark ? 0.75 : 0.7);
+            edge.removeStyle('label');
+            return;
+        }
         // A collapsed bundle is coloured from its TOTALS (parallel-links.js).
         const trunk = edge.hasClass('nt-trunk');
         const ed = trunk ? trunkData(edge) : edge.data();
         const tIn  = ed.trafficIn  || 0;
         const tOut = ed.trafficOut || 0;
         const total = Math.max(tIn, tOut);   // Spitzenwert entscheidet
-        let t = trafficTier(total);
+        let tier = trafficTier(total);
 
         // Weathermap-Modus: Auslastungs-% statt absoluter Traffic — sofern
         // die Kapazitaet bekannt ist. Edges ohne Kapazitaet fallen auf die
@@ -226,7 +253,28 @@ export function applyTrafficHeatmap(cy) {
             wmPct = utilizationPct(ed);
             if (wmPct !== null) {
                 const u = utilizationTier(wmPct);
-                t = { w: u.w, col: u.col, tcol: u.col, dash: total <= 0 };
+                tier = { w: u.w, col: u.col, tcol: u.col, dash: total <= 0 };
+            }
+        }
+
+        // Link-Quality-Modus: Farbe nach Güte-Score. Der Score enthaelt
+        // Errors/Drops/Down/Auslastung/Flap bereits — darum wird der
+        // Health-Override unten uebersprungen, wenn ein Score vorliegt. Kanten
+        // ohne gemessene Daten (lqScore null) fallen auf das normale Styling
+        // zurueck.
+        let lqScore = null;
+        if (_linkQuality) {
+            const lq = linkQualityScore(ed);
+            if (lq) {
+                lqScore = lq.score;
+                // Breite je Güte-Band (schlechter = dicker), an denselben
+                // Schwellen wie die Baender in link-quality.js. Als if/else-Kette
+                // statt verschachteltem Ternary — so will es der Hausstil.
+                let lw = 2.5;
+                if (lqScore < 40) lw = 4;
+                else if (lqScore < 65) lw = 3.5;
+                else if (lqScore < 85) lw = 3;
+                tier = { w: lw, col: lq.color, tcol: lq.color, dash: false };
             }
         }
 
@@ -253,9 +301,13 @@ export function applyTrafficHeatmap(cy) {
         const ifErr  = ed.ifaceErr  || 0;
         const ifDrop = ed.ifaceDrop || 0;
 
-        let w = t.w, col = t.col, dashPat = t.dash ? [4, 8] : [6, 5];
-        let op = dark ? (t.dash ? 0.85 : 0.95) : (t.dash ? 0.75 : 0.9);
-        if (ifDownRatio >= 0.5) {
+        let w = tier.w, col = tier.col, dashPat = tier.dash ? [4, 8] : [6, 5];
+        let op = dark ? (tier.dash ? 0.85 : 0.95) : (tier.dash ? 0.75 : 0.9);
+        // Im Link-Quality-Modus traegt der Score die Farbe (enthaelt Health
+        // schon) — Override nur ausserhalb bzw. fuer ungemessene Kanten.
+        if (lqScore !== null) {
+            dashPat = [6, 5];
+        } else if (ifDownRatio >= 0.5) {
             w = Math.max(w, 4); col = '#dc2626'; dashPat = [4, 4]; op = 0.95;
         } else if (ifErr > HEALTH_ERR_THRESHOLD) {
             w = Math.max(w, 4); col = '#f97316'; dashPat = [6, 5]; op = 0.9;
@@ -274,9 +326,22 @@ export function applyTrafficHeatmap(cy) {
         if (trunk) w = Math.min(w + Math.min(1.5 * (n - 1), 3), 10);
         else if (n > 1) w = Math.min(w, 3);
 
+        // STP-geblockt (dot1dStpPortState=blocking an einem Ende): der Link
+        // traegt LLDP und meldet "up", LEITET aber nicht weiter. Als parkende
+        // Redundanz zeichnen -- klar gedimmt, lang gestrichelt, in einem kuehlen
+        // Ton, damit er nicht wie ein aktiver Pfad aussieht. NACH dem
+        // Health-Override: ein echter Ausfall (rot) bleibt die wichtigere Aussage.
+        const stpBlk = ed._isStpBlocked && ifDownRatio < 0.5;
+        if (stpBlk) {
+            col = dark ? '#94a3b8' : '#64748b';
+            dashPat = [2, 4];
+            op = 0.4;
+            w = Math.max(2, Math.min(w, 2.5));
+        }
+
         edge.style('width',      w);
         edge.style('line-color', col);
-        edge.style('color',      t.tcol);
+        edge.style('color',      tier.tcol);
         edge.style('line-style', 'dashed');
         edge.style('line-dash-pattern', dashPat);
         edge.style('opacity', op);
@@ -287,6 +352,10 @@ export function applyTrafficHeatmap(cy) {
         const lead = n > 1 && edge.data('bundleIdx') === 0;
         if (n > 1 && !lead) {
             edge.style('label', '');
+        } else if (stpBlk) {
+            edge.style('label', t('edge.label.stp_blocked'));
+        } else if (_linkQuality && lqScore !== null && (n <= 1 || lead)) {
+            edge.style('label', String(lqScore));
         } else if (_weathermap && lead) {
             const bd = trunkData(edge, true);
             const bPct = utilizationPct(bd);

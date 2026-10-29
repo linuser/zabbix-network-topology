@@ -101,11 +101,9 @@ const TAB_DEFS = [
     { id: 'nt-tab-mgmt',       key: 'tabs.mgmt',       tab: 'mgmt'   },
     { id: 'nt-tab-tree',       key: 'tabs.table',      tab: 'tree'   },
     { id: 'nt-tab-geo',        key: 'tabs.geo',        tab: 'geo'    },
+    { id: 'nt-tab-plan',       key: 'tabs.plan',       tab: 'plan'   },
     { id: 'nt-tab-health',     key: 'tabs.health',     tab: 'health' },
     { id: 'nt-tab-stats',      key: 'tabs.stats',      tab: 'stats'  },
-    // Dependencies: Zabbix-Services-Baum als gerichtete Abhaengigkeitskarte.
-    // Holt seine Daten selbst (dataOptional) und braucht keine Graph-Knoten.
-    { id: 'nt-tab-services',   key: 'tabs.services',   tab: 'services',   dataOptional: true },
     { id: 'nt-tab-lldpq',      key: 'tabs.lldpq',      tab: 'lldpq',      dataOptional: true },
     // Compliance zeigt Security-Posture pro Host ("Agent ohne TLS",
     // SNMP-Versionen) — nur fuer Admins.

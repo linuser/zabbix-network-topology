@@ -91,11 +91,11 @@ import { renderTable, cleanupTable } from './modules/render-table.js';
 import { renderManagement } from './modules/render-mgmt.js';
 import { render, setSetupToolbarCallback } from './modules/render-tech.js';
 import { renderGeo, cleanupGeo } from './modules/render-geo.js';
+import { renderPlan, cleanupPlan } from './modules/render-plan.js';
 import { renderDiag } from './modules/render-diag.js';
 import { renderHealth } from './modules/render-health.js';
 import { renderStats } from './modules/render-stats.js';
 import { renderCompliance } from './modules/render-compliance.js';
-import { renderServices, cleanupServices } from './modules/render-services.js';
 import { renderLldpQuality } from './modules/render-lldp-quality.js';
 import { notifyTopoChanges } from './modules/topo-notify.js';
 import { setupToolbar, setRenderCallback as setToolbarRenderCallback } from './modules/toolbar.js';
@@ -231,6 +231,10 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     if (_activeTab === 'geo' && tab !== 'geo') {
         cleanupGeo();
     }
+    // Plan-Tab verlassen: dessen Leaflet-Map (CRS.Simple) ebenso sauber abbauen.
+    if (_activeTab === 'plan' && tab !== 'plan') {
+        cleanupPlan();
+    }
     // Wenn wir den Tabellen-Tab verlassen, Detail-Panel-Container aus body entfernen
     if (_activeTab === 'tree' && tab !== 'tree') {
         cleanupTable();
@@ -239,11 +243,6 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     // abbauen — sonst feuert der Observer weiter gegen ein zerstoertes cy.
     if (_activeTab === 'tech' && tab !== 'tech') {
         destroyGroupHulls();
-    }
-    // Beim Verlassen des Dependencies-Tabs dessen eigene Cytoscape-Instanz
-    // abbauen (sie ist getrennt von window._ntCy).
-    if (_activeTab === 'services' && tab !== 'services') {
-        cleanupServices();
     }
     _activeTab = tab;
     try { localStorage.setItem(NT_TAB_KEY, tab); } catch (e) {}
@@ -261,11 +260,11 @@ function switchTab(tab, wrap, nodes, edges, dataUrl) {
     if      (tab === 'mgmt')   renderManagement(wrap, nodes, edges);
     else if (tab === 'tree')   renderTable(wrap, nodes, edges);
     else if (tab === 'geo')    renderGeo(wrap, nodes, edges, dataUrl);
+    else if (tab === 'plan')   renderPlan(wrap, nodes, edges, dataUrl);
     else if (tab === 'diag')   renderDiag(wrap);
     else if (tab === 'health') renderHealth(wrap, nodes);
     else if (tab === 'stats')      renderStats(wrap, nodes);
     else if (tab === 'compliance') renderCompliance(wrap);
-    else if (tab === 'services')   renderServices(wrap);
     else if (tab === 'lldpq')      renderLldpQuality(wrap);
     else                           render(wrap, nodes, edges, dataUrl);
     ensureBaseToolbar(wrap);
@@ -440,8 +439,13 @@ function init() {
             }
             // lldp_quality mit durchreichen — der LLDP-Q-Tab liest es aus
             // _ntLastData (ohne dieses Feld waere der Tab immer leer).
+            // expected_links MUSS mit durch: die KPI-Leiste liest die Soll/Ist-
+            // Abweichungen aus _ntLastData.expected_links (kpi.js). Ohne dieses
+            // Feld blieb die "Expected"-Pille immer leer, obwohl das Backend die
+            // Abweichungen liefert — die Payload trug sie, nur diese Teilmenge nicht.
             window._ntLastData = { nodes: data.nodes || [], edges: data.edges || [],
-                                   lldp_quality: data.lldp_quality || [], url: url };
+                                   lldp_quality: data.lldp_quality || [],
+                                   expected_links: data.expected_links || null, url: url };
             notifyTopoChanges(data.topo_changes);
             switchTab(_activeTab, wrap, data.nodes || [], data.edges || [], url);
 

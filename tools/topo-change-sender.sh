@@ -36,19 +36,43 @@ ZBX_PASS="${ZBX_PASS:-changeme}"
 GROUPIDS="${GROUPIDS:-}"                                   # z.B. "24,25" — leer = Fehler
 SENDER_HOST="${SENDER_HOST:-Zabbix server}"                # Host dem die Trapper-Items gehoeren
 SENDER_CONF="${SENDER_CONF:-/etc/zabbix/zabbix_agentd.conf}"
+ZBX_CACERT="${ZBX_CACERT:-}"                               # CA-Bundle fuer eine interne CA
+ZBX_INSECURE="${ZBX_INSECURE:-0}"                          # 1 = TLS-Pruefung AUS (nur Labor!)
 
 if [[ -z "$GROUPIDS" ]]; then
     echo "GROUPIDS ist leer — kommasepariert setzen (z.B. GROUPIDS=24,25)" >&2
     exit 1
 fi
 
+# TLS: standardmaessig VERIFIZIEREN. Ueber diese Verbindung gehen Benutzername,
+# Passwort und das Session-Cookie — das fruehere stille "-k" (Zertifikat egal)
+# war ein MITM-Risiko (Security-Review). Interne CA per ZBX_CACERT einbinden;
+# ZBX_INSECURE=1 schaltet die Pruefung nur fuers Testlabor ab, und laut, nie still.
+CURL_TLS=()
+if [[ -n "$ZBX_CACERT" ]]; then
+    CURL_TLS+=(--cacert "$ZBX_CACERT")
+elif [[ "$ZBX_INSECURE" == "1" ]]; then
+    CURL_TLS+=(-k)
+    echo "WARN: ZBX_INSECURE=1 — TLS-Zertifikat wird NICHT geprueft (nur fuers Labor)." >&2
+fi
+
 JAR=$(mktemp /tmp/nt_topo_jar.XXXXXX)
-trap 'rm -f "$JAR"' EXIT
+# Passwort NICHT als Prozessargument (es stuende in der curl-Argumentliste und
+# damit in /proc fuer andere lokale Prozesse, Security-Review F03). Stattdessen
+# in eine 0600-Datei, die curl per "@" liest. Die Antwort landet ebenfalls in
+# einer Datei (nicht in einer Shell-Variable, die als Python-Argument ginge und
+# bei grossem Graphen ein "Argument list too long" ausloeste, F07). Alles beim
+# Exit weg.
+PWFILE=$(mktemp /tmp/nt_topo_pw.XXXXXX)
+RESPFILE=$(mktemp /tmp/nt_topo_resp.XXXXXX)
+chmod 600 "$PWFILE" "$RESPFILE"
+printf '%s' "$ZBX_PASS" > "$PWFILE"
+trap 'rm -f "$JAR" "$PWFILE" "$RESPFILE"' EXIT
 
 # 1. Frontend-Login (Session-Cookie in die Jar)
-curl -sfk -c "$JAR" -o /dev/null \
+curl -sf "${CURL_TLS[@]}" -c "$JAR" -o /dev/null \
     --data-urlencode "name=$ZBX_USER" \
-    --data-urlencode "password=$ZBX_PASS" \
+    --data-urlencode "password@$PWFILE" \
     --data-urlencode "enter=Sign in" \
     "$ZBX_URL/index.php"
 
@@ -58,16 +82,18 @@ IFS=',' read -ra GIDS <<< "$GROUPIDS"
 for g in "${GIDS[@]}"; do
     QS="$QS&groupids%5B%5D=$g"
 done
-RESP=$(curl -sfk -b "$JAR" -H "X-Requested-With: XMLHttpRequest" \
-    "$ZBX_URL/zabbix.php?$QS")
+curl -sf "${CURL_TLS[@]}" -b "$JAR" -H "X-Requested-With: XMLHttpRequest" \
+    -o "$RESPFILE" "$ZBX_URL/zabbix.php?$QS"
 
 # 3. topo_changes + health extrahieren (python3 statt jq — praktisch immer
 #    da). Ausgabe zeilenweise: count / text / health_avg / health_min —
-#    text enthaelt Leerzeichen, deshalb kein wortbasiertes read.
-OUT="$(python3 - "$RESP" <<'PYEOF'
+#    text enthaelt Leerzeichen, deshalb kein wortbasiertes read. Die Antwort
+#    kommt aus der Datei (argv traegt nur den kurzen Dateinamen, F07).
+OUT="$(python3 - "$RESPFILE" <<'PYEOF'
 import json, sys
 try:
-    d = json.loads(sys.argv[1])
+    with open(sys.argv[1], encoding='utf-8') as _f:
+        d = json.loads(_f.read())
 except Exception:
     print(0); print('parse-error'); print(''); print('')
     raise SystemExit

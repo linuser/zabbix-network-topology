@@ -81,9 +81,15 @@ class NetworkTopologyCreateHost extends NetworkTopologyController {
     }
 
     protected function checkPermissions(): bool {
-        // Hosts anlegen ist Admin-Sache — deckt sich mit can_edit im
-        // Frontend, das den Eintrag nur Admins zeigt.
-        return $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN;
+        // Hosts anlegen ist Admin-Sache UND braucht das UI-Konfigurationsrecht
+        // fuer Hosts — genau wie Zabbix' eigener Host-Controller
+        // (CControllerHostCreate prueft UI_CONFIGURATION_HOSTS). Eine Rolle kann
+        // die Host-Konfiguration sperren, waehrend der Benutzertyp Admin bleibt;
+        // ohne diese zweite Pruefung legte das Modul dann Hosts an, die die
+        // native Oberflaeche verweigert (Security-Review F01). Gleiches Muster
+        // wie NetworkTopologyMaintenance mit UI_CONFIGURATION_MAINTENANCE.
+        return $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN
+            && $this->checkAccess(\CRoleHelper::UI_CONFIGURATION_HOSTS);
     }
 
     protected function doAction(): void {
@@ -159,6 +165,10 @@ class NetworkTopologyCreateHost extends NetworkTopologyController {
                 'reporter_host' => $mhost,
                 'port'          => (string) ($g['port'] ?? ''),
                 'via'           => (string) ($g['via'] ?? ''),
+                // Management-IP aus lldpRemManAddr (vom Client aus dem
+                // Geisterknoten). GhostHost prueft sie und macht daraus ein
+                // SNMP-Interface; ungueltig/leer -> interfacelos wie bisher.
+                'ip'            => (string) ($g['ip'] ?? ''),
             ]);
             if (!$gebaut['ok']) {
                 $fehler[] = [

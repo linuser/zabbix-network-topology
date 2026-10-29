@@ -15,8 +15,17 @@
  * @param dark        Dunkles Theme?
  * @param knotenzahl  Wie viele Knoten gezeichnet werden. Entscheidet, ab
  *                    welchem Zoom Beschriftungen erscheinen — siehe unten.
+ * @param sizeFactor  Punktgroesse-Faktor (storage.nodeSizeFactor): 0,7/1,0/1,35.
+ *                    Skaliert Knoten UND deren Beschriftung gemeinsam, damit die
+ *                    Karte bei vielen Hosts entzerrt — nicht nur die Kreise,
+ *                    denn gedraengt sind vor allem die Label-Boxen. Fehlt der
+ *                    Wert (Altaufrufe), ist er 1,0 = unveraendert.
  */
-export function buildCytoscapeStyle(dark, knotenzahl) {
+export function buildCytoscapeStyle(dark, knotenzahl, sizeFactor) {
+    const f = (sizeFactor && sizeFactor > 0) ? sizeFactor : 1;
+    // Auf ganze Pixel runden — Cytoscape vertraegt Brueche, aber ganze Werte
+    // zeichnen schaerfer. Minimum 1, damit ein kleiner Faktor nichts auf 0 druckt.
+    const px = function(n) { return Math.max(1, Math.round(n * f)); };
     // Ab wann eine Beschriftung ueberhaupt gezeichnet wird. Cytoscape
     // vergleicht Schriftgroesse MAL Zoom mit diesem Wert; 8 heisst also, dass
     // bei Zoom 0,73 noch jedes der 200 Labels steht. Genau das war der Grund,
@@ -27,17 +36,17 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
 
     return [
         { selector: 'node[!isGroup]', style: {
-            'width': 96, 'height': 96, 'background-opacity': 0, 'border-width': 0,
+            'width': px(96), 'height': px(96), 'background-opacity': 0, 'border-width': 0,
             'background-image': 'data(bgImage)',
             'background-fit': 'contain', 'background-clip': 'none',
             'label': 'data(label)', 'text-valign': 'bottom', 'text-halign': 'center',
-            'font-size': 11, 'font-family': 'sans-serif',
+            'font-size': px(11), 'font-family': 'sans-serif',
             'color': dark ? '#e2e8f0' : '#334155',
             // Deckende Label-Box: bei 0.75/0.85 liefen die gestrichelten
             // Kantenlinien durch den Hostnamen (aus dem Feld gemeldet). Farbe
             // bleibt themenabhängig — Canvas erreicht kein var(), deshalb der
             // Hex je nach dark-Flag, nicht fest weiß.
-            'text-margin-y': 6, 'text-background-opacity': 1,
+            'text-margin-y': px(6), 'text-background-opacity': 1,
             'text-background-color': dark ? '#1e293b' : '#f8fafc',
             'text-background-padding': '3px', 'text-background-shape': 'roundrectangle',
             'min-zoomed-font-size': labelSchwelle,
@@ -48,6 +57,15 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
         // als vorher. Im Graphen bleiben sie, nur gezeichnet werden sie nicht:
         // cy.nodes() zaehlt sie weiter, also stimmt die Kopfzeile.
         { selector: '.nt-leaf-hidden', style: { 'display': 'none' }},
+        // UniFi-Client-Endgeraete: standardmaessig ausgeblendet (client-focus.js),
+        // ein Klick auf ihren AP/Switch blendet nur dessen Clients ein. Ihre Kanten
+        // blendet Cytoscape mit aus, sobald ein Endpunkt display:none ist.
+        { selector: '.nt-client-hidden', style: { 'display': 'none' }},
+        // VLAN-Filter (vlan-filter.js): was NICHT auf dem gewaehlten VLAN liegt,
+        // wird gedimmt statt versteckt -- der Kontext (wo liegt das VLAN im Netz)
+        // bleibt. Kanten staerker gedimmt als Knoten, wie beim Pfad-Highlight.
+        { selector: 'node.nt-vlan-off', style: { 'opacity': 0.12 }},
+        { selector: 'edge.nt-vlan-off', style: { 'opacity': 0.05 }},
         // Der Elternknoten sagt, wie viele hinter ihm liegen.
         { selector: 'node[_blaetter]', style: {
             // Das Abzeichen wird HIER zusammengesetzt und nicht in die Daten
@@ -78,7 +96,7 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
             'background-opacity': 1,
             'background-color': 'data(sevColor)',
             'background-image': 'none',
-            'width': 38, 'height': 38,
+            'width': px(38), 'height': px(38),
             'border-width': 2,
             'border-color': dark ? '#0d1117' : '#ffffff',
             'min-zoomed-font-size': 13,   // Labels erst bei staerkerem Zoom
@@ -139,7 +157,7 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
             'background-image': 'none',
             'background-opacity': 0.10,
             'background-color': dark ? '#94a3b8' : '#64748b',
-            'width': 44, 'height': 44,
+            'width': px(44), 'height': px(44),
             'border-width': 2, 'border-style': 'dashed',
             'border-color': dark ? '#64748b' : '#94a3b8', 'border-opacity': 0.9,
             'opacity': 0.7,
@@ -157,11 +175,11 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
             'shape': 'round-rectangle',
             'background-color': dark ? '#475569' : '#cbd5e1',
             'background-opacity': 0.9,
-            'width': 58, 'height': 36,
+            'width': px(58), 'height': px(36),
             'border-width': 2, 'border-style': 'solid',
             'border-color': dark ? '#94a3b8' : '#64748b',
             'color': dark ? '#e2e8f0' : '#334155',
-            'font-size': 10, 'font-weight': 600,
+            'font-size': px(10), 'font-weight': 600,
             'text-valign': 'center', 'text-halign': 'center',
             'min-zoomed-font-size': 7,
         }},
@@ -172,6 +190,62 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
         { selector: 'edge[?_isFreshEdge]', style: {
             'underlay-color': '#16a34a', 'underlay-opacity': 0.22,
             'underlay-padding': 4,
+        }},
+        // Ring-/Loop-Erkennung (Toggle "◯ Rings"). Wie die Glorie oben: ein
+        // underlay-Halo, KEINE eigene Linienfarbe — Weathermap/STP bleiben
+        // sichtbar, der Ring faellt zusaetzlich auf. Drei Stufen:
+        //   safe    — Zyklus mit blockendem STP-Zweig: gewollte Redundanz (cyan)
+        //   unknown — Zyklus ohne STP-Daten: Ring, aber nicht beurteilbar (grau)
+        //   open    — Zyklus, STP blockt NICHTS: Loop-Gefahr (rot, kraeftiger)
+        { selector: 'edge.nt-ring-safe', style: {
+            'underlay-color': dark ? '#22d3ee' : '#0891b2', 'underlay-opacity': 0.22,
+            'underlay-padding': 4,
+        }},
+        { selector: 'edge.nt-ring-unknown', style: {
+            'underlay-color': dark ? '#94a3b8' : '#64748b', 'underlay-opacity': 0.18,
+            'underlay-padding': 3,
+        }},
+        { selector: 'edge.nt-ring-open', style: {
+            'underlay-color': dark ? '#f87171' : '#dc2626', 'underlay-opacity': 0.4,
+            'underlay-padding': 6,
+        }},
+        // Ring, dessen Host instabiles STP hat (Topology-Changes flappen) ->
+        // Loop-Fruehwarnung. Amber, kraeftiger als "sicher", schwaecher als "open".
+        { selector: 'edge.nt-ring-churn', style: {
+            'underlay-color': dark ? '#f59e0b' : '#d97706', 'underlay-opacity': 0.38,
+            'underlay-padding': 5,
+        }},
+        // Aktiver Broadcast-Storm im Ring -> ein Loop laeuft JETZT. Staerkstes
+        // Signal: kraeftiges Rot, breiter Halo, ueber allem anderen.
+        { selector: 'edge.nt-ring-storm', style: {
+            'underlay-color': dark ? '#ef4444' : '#b91c1c', 'underlay-opacity': 0.55,
+            'underlay-padding': 8,
+        }},
+        // MAC-Flapping im Ring -> MACs wandern, ein Loop laeuft. Rot, zwischen
+        // Storm und "open".
+        { selector: 'edge.nt-ring-flap', style: {
+            'underlay-color': dark ? '#f87171' : '#dc2626', 'underlay-opacity': 0.46,
+            'underlay-padding': 7,
+        }},
+        // Soll/Ist-Overlay: eine ERWARTETE Verbindung (nt:expect), die NICHT
+        // gemessen wird — rot gestrichelt zwischen den beiden Hosts, mit Label.
+        // Eine GEZEICHNETE Kante (kein Halo), weil die Verbindung real fehlt;
+        // expected-links.js injiziert sie und entfernt sie bei Toggle-Aus.
+        { selector: 'edge.nt-expected', style: {
+            'width': 2.5,
+            'line-color': dark ? '#f87171' : '#dc2626',
+            'line-style': 'dashed',
+            'line-dash-pattern': [6, 4],
+            'curve-style': 'bezier',
+            'target-arrow-shape': 'none',
+            'opacity': 0.9,
+            'z-index': 25,
+            'label': 'data(tLabel)',
+            'font-size': 9,
+            'color': dark ? '#fca5a5' : '#b91c1c',
+            'text-background-color': dark ? '#1e293b' : '#ffffff',
+            'text-background-opacity': 0.85,
+            'text-background-padding': 2,
         }},
         // Alternde Kante: zuletzt gemeldet, aber gerade nicht. Deutlich
         // schwaecher als eine lebende, aber KRAEFTIGER als eine Ghost-Kante —
@@ -188,6 +262,16 @@ export function buildCytoscapeStyle(dark, knotenzahl) {
             'line-style': 'dashed', 'line-dash-pattern': [2, 5],
             'opacity': 0.45, 'curve-style': 'straight',
             'label': '', 'source-text-offset': 0, 'target-text-offset': 0,
+        }},
+        // UniFi-Funkverbindung (Client<->AP, AP<->AP-Mesh): cyan, gepunktet.
+        // Fallback fuer den Fall, dass die Weathermap (traffic.js) noch nicht
+        // gelaufen ist -- dort steht derselbe Stil als Inline-Override, weil
+        // traffic.js sonst jede Kante nach Auslastung umfaerbt.
+        { selector: 'edge[?_unifiWireless]', style: {
+            'width': 2, 'line-color': dark ? '#22d3ee' : '#0891b2',
+            'color': dark ? '#22d3ee' : '#0891b2',
+            'line-style': 'dotted', 'line-dash-pattern': [2, 4],
+            'opacity': dark ? 0.75 : 0.7,
         }},
         // Manuell gezogene Kanten. Seit 5.0.1 gibt es zwei Ebenen, und man muss
         // ihnen ansehen, welche man vor sich hat: eine geteilte Kante ist eine

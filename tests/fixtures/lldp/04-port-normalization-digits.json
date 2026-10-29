@@ -1,0 +1,19 @@
+{
+  "name": "port-normalization-digits-distinct",
+  "vendor": "Cisco-style (synthetic)",
+  "source": "hand-built",
+  "description": "1/0/1 must NOT normalise onto 1/0/11. The neighbour reports GigabitEthernet1/0/1 while the host only has Gi1/0/11 — no port match, but the name edge still stands.",
+  "hosts": {
+    "sw": {"host": "sw-p", "name": "Switch P"},
+    "nb": {"host": "nb-p", "name": "Neighbour P"}
+  },
+  "lldp_raw": [
+    {"hostid": "sw", "key_": "lldpRemSysName[3]", "lastvalue": "nb-p", "src": "lldp"}
+  ],
+  "lldp_ports": { "sw": { "3": {"desc": "GigabitEthernet1/0/1"} } },
+  "port_names": { "nb": {"7": "Gi1/0/11"}, "sw": {"3": "Gi1/0/3"} },
+  "expect": {
+    "edges": [{"a": "sw", "b": "nb"}],
+    "ports": [{"a": "sw", "b": "nb", "match": ""}]
+  }
+}

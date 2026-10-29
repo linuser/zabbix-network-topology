@@ -49,6 +49,45 @@ final class NodeBuilder {
         $host_iface         = $metrics['iface'];
         $host_speed         = $metrics['speed'];
         $host_ping          = $metrics['ping'];
+        // WLAN-Funkmodule je UniFi-AP (band => {channel,width,std,cu}) und die
+        // Client-Zahl je AP. Seit 5.5.83 liegen BEIDE als eigene Items am
+        // AP-Host selbst (klassische Controller-API, derselbe API-Key) — der
+        // frühere Cross-Host-IP-Join (WlanResolver) entfällt.
+        $host_radios        = $metrics['radios'] ?? [];
+        $host_wlan_clients  = $metrics['wlan_clients'] ?? [];
+        $host_ssids         = $metrics['ssids'] ?? [];
+        $host_wlan_sat      = $metrics['wlan_satisfaction'] ?? [];
+        // VLAN-Mitgliedschaft je Host (hid => {vlans, byIfIndex, access}), aus
+        // nt.vlan.walk via VlanParser. Fuer den VLAN-Filter (Knoten + Kanten).
+        $host_vlan          = $metrics['vlan'] ?? [];
+        // STP-Portzustaende je Host (ifIndex => state). Fuer das Node-Flag
+        // "blockt dieser Host IRGENDWO einen Port" — das trennt eine echte
+        // Loop-Gefahr von Redundanz, die STP auf einem Link bremst, den die
+        // Karte nicht als Kante sieht (geblockte Ports tragen oft keinen
+        // LLDP-Nachbarn). Siehe rings.js.
+        $host_port_stp      = $metrics['port_stp'] ?? [];
+        // Port-Status je Host (ifIndex => true=down|false=up). Ein down-Port
+        // meldet bei RouterOS discarding(2) — das ist kein geblockter Loop, nur
+        // eine tote Buchse. Ohne diese Schranke galt jeder Host mit toten Ports
+        // als "STP blocking".
+        $host_port_status   = $metrics['port_status'] ?? [];
+        // STP-Topology-Change-Rate je Host (changes/s). Ueber der Schwelle gilt
+        // der Baum als instabil -> Loop-Fruehwarnung (Stufe 3a). Konstante wie
+        // die Health-Formel, nicht per Makro (vererbte Template-Makros sind aus
+        // dem Modul nicht sauber lesbar). Ein stabiler Baum sitzt bei ~0; ein
+        // einzelnes Reconverge ist ein kurzer Blip, ein Loop haelt es oben.
+        $host_stp_churn     = $metrics['stp_churn'] ?? [];
+        $STP_CHURN_THRESH   = 0.1;
+        // Broadcast-Storm (Stufe 3b): hoechste Broadcast-Paketrate ueber die Ports
+        // eines Hosts. Normal sind ein paar Pakete/s (ARP/DHCP); ein Loop treibt die
+        // Schleifen-Ports in die Tausende. Schwelle als Konstante wie oben.
+        $host_bcast_max     = $metrics['bcast_max'] ?? [];
+        $BCAST_STORM_THRESH = 200.0;
+        // MAC-Flapping (Stufe 3c): Anzahl MACs, die den Port gewechselt haben
+        // (nt-mac-flap-sender.sh). Ein, zwei Moves sind normal (Geraet umgesteckt,
+        // Roaming-Client); erst mehr deutet auf einen Loop. Konstante wie oben.
+        $host_mac_flap      = $metrics['mac_flap'] ?? [];
+        $MAC_FLAP_THRESH    = 2;
 
         $host_icon_override = $tags['icon_override'];
         $host_show_keys     = $tags['show_keys'];
@@ -72,6 +111,9 @@ final class NodeBuilder {
         // und ohne sie faellt die Typerkennung genau auf den alten Stand zurueck.
         $lldp_host_caps     = $context['lldp_host_caps'] ?? [];
         $lldp_speakers      = $context['lldp_speakers']  ?? [];
+        // SLA-Relevanz je Host (hostid => [{service, slo}, ...]). Optional: ohne
+        // Services ist die Karte leer, der Knoten traegt dann kein SLA-Feld.
+        $host_sla           = $context['sla'] ?? [];
 
         // ── 6. BUILD NODES ────────────────────────────────────────────────
         $nodes = [];
@@ -128,6 +170,28 @@ final class NodeBuilder {
                     if ($from_hints !== '') {
                         $detected_type = $from_hints;
                     }
+                }
+            }
+            // UniFi-Clients (Endgeraete am Controller) haengen am Template
+            // "UniFi Network API - Client". Als eigene Klasse 'client' fuehren,
+            // damit sie NICHT als 'server' fehlkategorisiert werden (Management-/
+            // Tabellensicht zeigte sie unter "Servers") und die Karte sie als
+            // Endgeraete behandeln kann. Schlaegt den Heuristik-Fallback, aber
+            // NICHT das explizite nt:icon — eine bewusste Setzung gewinnt weiter.
+            $is_client = false;
+            $has_icon_override = isset($host_icon_override[$hid]);
+            foreach ($tpls as $tpl) {
+                if (stripos((string) $tpl, 'UniFi Network API - Client') !== false) {
+                    // NUR ohne explizites nt:icon: dann Typ 'client' + per Flag
+                    // auf der Karte ausgeblendet. MIT Override gewinnt die bewusste
+                    // Setzung VOLL — Typ UND Sichtbarkeit: der Host bleibt sichtbar
+                    // und behaelt sein Wunsch-Icon (sonst verschwaende ein bewusst
+                    // gesetzter Client-Host trotzdem von der Karte). Review 5.5.90.
+                    if (!$has_icon_override) {
+                        $is_client = true;
+                        $detected_type = 'client';
+                    }
+                    break;
                 }
             }
             $effective_type = $host_icon_override[$hid] ?? $detected_type;
@@ -219,11 +283,50 @@ final class NodeBuilder {
                 // Werte sind pro Sekunde (nach Zabbix-Preprocessing 'change per second')
                 // oder als absolute Counter — Frontend zeigt nur "> threshold".
                 'iface_health' => $host_iface[$hid] ?? ['down'=>0, 'errors'=>0.0, 'discards'=>0.0, 'count'=>0],
+                // Blockt dieser Host IRGENDEINEN Port per STP? (dot1dStpPortState==2
+                // an einem beliebigen Port, auch ohne LLDP-Nachbarn). Die
+                // Ring-Klassifizierung wertet das aus: ein Ring, dessen Host
+                // irgendwo blockt, ist von STP gezaehmt (sicher), kein Loop.
+                'stp_block'   => self::hasActiveStpBlock($host_port_stp[$hid] ?? [], $host_port_status[$hid] ?? []),
+                // STP-Instabilitaet: Topology-Change-Rate ueber der Schwelle ->
+                // "STP unstable" (Loop-Fruehwarnung). Rate wird mitgegeben, damit
+                // das Panel sie zeigen kann.
+                'stp_churn'   => isset($host_stp_churn[$hid]) && $host_stp_churn[$hid] > $STP_CHURN_THRESH,
+                'stp_churn_rate' => isset($host_stp_churn[$hid]) ? round((float) $host_stp_churn[$hid], 3) : null,
+                // Broadcast-Storm: lautester Port ueber der Schwelle = aktiver Loop.
+                'bcast_storm' => isset($host_bcast_max[$hid]) && $host_bcast_max[$hid] > $BCAST_STORM_THRESH,
+                'bcast_rate'  => isset($host_bcast_max[$hid]) ? round((float) $host_bcast_max[$hid]) : null,
+                // MAC-Flapping: mehr als ein paar MACs wechseln den Port = Loop.
+                'mac_flap'    => isset($host_mac_flap[$hid]) && $host_mac_flap[$hid] > $MAC_FLAP_THRESH,
+                'mac_flap_n'  => isset($host_mac_flap[$hid]) ? (int) $host_mac_flap[$hid] : null,
                 // Max Link-Speed (bps) — Weathermap-Kapazitaet. 0 = unbekannt.
                 'link_speed'  => $host_speed[$hid] ?? 0,
                 'cpu'         => $host_cpu[$hid]       ?? null,
                 'memory'      => $host_memory[$hid]    ?? null,
                 'ping'        => $host_ping[$hid]      ?? null,
+                // WLAN-Funkmodule (UniFi-AP): band => {channel,width,std,cu}; null
+                // bei Nicht-APs (spart Payload).
+                'radios'      => !empty($host_radios[$hid]) ? $host_radios[$hid] : null,
+                // WLAN-Client-Zahl je AP (wlan.clients am AP-Host selbst); null,
+                // wo kein solches Item existiert — dann fehlt Badge/Zeile ehrlich.
+                'wlan_clients' => isset($host_wlan_clients[$hid]) ? (int) $host_wlan_clients[$hid] : null,
+                // Ausgestrahlte SSIDs (wlan.ssids, nach Name zusammengefasst); null
+                // bei Nicht-APs oder ohne das Item.
+                'ssids'       => !empty($host_ssids[$hid]) ? $host_ssids[$hid] : null,
+                // WLAN-Satisfaction (0..100); null ohne das Item. Trigger darauf
+                // faerbt den AP, das ist nur der angezeigte Wert.
+                'wlan_satisfaction' => isset($host_wlan_sat[$hid]) ? (int) $host_wlan_sat[$hid] : null,
+                // VLAN-Mitgliedschaft (NT VLAN by SNMP): vlans = [{id,name}] fuer
+                // den VLAN-Waehler, vlan_by_if = ifIndex -> [VLAN-IDs] fuer den
+                // Kanten-Kreuzabgleich, vlan_access = ifIndex -> Access-VLAN (PVID).
+                // null, wo der Host keinen nt.vlan.walk liefert (spart Payload).
+                'vlans'       => empty($host_vlan[$hid]['vlans']) ? null
+                                 : array_map(static fn($v) => ['id' => $v['id'], 'name' => $v['name']],
+                                             $host_vlan[$hid]['vlans']),
+                'vlan_by_if'  => !empty($host_vlan[$hid]['byIfIndex']) ? $host_vlan[$hid]['byIfIndex'] : null,
+                // UniFi-Client-Endgeraet (Template „… - Client")? Steuert Karte
+                // (Default ausgeblendet, Klick-Fokus) und Kategorie in den Views.
+                'is_client'   => $is_client,
                 // Inventory-Geo: leere Strings -> null. Lat/Lon werden als
                 // Floats geliefert, Frontend nutzt nur Hosts mit beiden Werten.
                 'lat'         => isset($h['inventory']['location_lat']) && $h['inventory']['location_lat'] !== ''
@@ -235,6 +338,11 @@ final class NodeBuilder {
                 'extra_items' => $extra_items,
                 // Custom-Links aus nt:link-Tags (Kontextmenü)
                 'links'       => $host_links[$hid] ?? [],
+                // SLA-Relevanz: haengt ein aktives Problem dieses Hosts an einem
+                // Zabbix-Service? Nur gesetzt, wenn ja — sonst faellt das Feld
+                // weg und das Frontend liest ein leeres []/false.
+                'sla_relevant' => isset($host_sla[(string) $hid]),
+                'sla_services' => $host_sla[(string) $hid] ?? [],
             ];
         }
 
@@ -259,5 +367,28 @@ final class NodeBuilder {
             'nodes'        => $nodes,
             'lldp_quality' => $lldp_quality_out,
         ];
+    }
+
+    /**
+     * Blockt der Host einen Port per STP AN EINEM AKTIVEN LINK? Ein down-Port
+     * meldet bei RouterOS discarding(2) — das ist kein geblockter Loop, nur eine
+     * tote Buchse. Nur state 2 an einem Port, der NICHT explizit down ist, zaehlt.
+     *
+     * Nur bei EXPLIZIT aktivem Link zaehlen: port_status ist true(down),
+     * false(up) oder FEHLT (unknown/notPresent/admin-down, oder kein oper-Item).
+     * Ein fehlender Eintrag heisst "Link nicht als aktiv belegt" -> zaehlt NICHT,
+     * wie die Faceplate, die bei fehlendem oper ebenfalls kein Badge zeigt. So
+     * kippt ein down- oder unbekannter Port nicht faelschlich auf "STP blocking".
+     *
+     * @param array<int|string,int>  $stp     ifIndex => dot1dStpPortState
+     * @param array<string,bool>     $status  ifIndex => true(down)|false(up)
+     */
+    private static function hasActiveStpBlock(array $stp, array $status): bool {
+        foreach ($stp as $ifx => $st) {
+            if ($st === 2 && ($status[(string) $ifx] ?? true) === false) {
+                return true;
+            }
+        }
+        return false;
     }
 }

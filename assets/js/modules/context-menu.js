@@ -205,7 +205,8 @@ export function showCtx(cx, cy2, d) {
         // Zeile — lieber nichts zeigen als eine leere Beschriftung. Die Angaben
         // liefert das Template erst, seit es lldpRemSysDesc / SysCapEnabled /
         // ChassisId mit einsammelt; aeltere Installationen sehen hier nichts.
-        [[d._ghostCaps && d._ghostCaps.length ? d._ghostCaps.join(', ') : '', 'ctx.ghost.caps'],
+        [[d._ghostMgmtIp  || '', 'ctx.ghost.mgmt'],
+         [d._ghostCaps && d._ghostCaps.length ? d._ghostCaps.join(', ') : '', 'ctx.ghost.caps'],
          [d._ghostDesc    || '', 'ctx.ghost.desc'],
          [d._ghostChassis || '', 'ctx.ghost.chassis']].forEach(function(pair) {
             if (!pair[0]) return;
@@ -217,7 +218,7 @@ export function showCtx(cx, cy2, d) {
 
         _ctx.appendChild(gh);
 
-        if (window.NT_CONFIG && window.NT_CONFIG.can_edit) {
+        if (window.NT_CONFIG && window.NT_CONFIG.can_create_host) {
             _ctx.appendChild(_ctxRow(t('ghost.create.menu'), '#0275b8', function() {
                 // HIER STAND ZABBIX' HOST-FORMULAR, geoeffnet mit
                 // ?host=…&description=…&groupids[]=…. Auf 7.0.31 nachgemessen:

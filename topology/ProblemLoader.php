@@ -36,7 +36,7 @@ final class ProblemLoader {
      * aggregierten Maps zurueck.
      *
      * @return array{severity: array, problems: array, ack_total: array,
-     *               ack_acked: array, problem_list: array}
+     *               ack_acked: array, problem_list: array, event_hosts: array}
      */
     public static function load(array $hostids): array {
         // Trigger-API liefert die Severity (= worst-case pro Host).
@@ -77,7 +77,40 @@ final class ProblemLoader {
             'ack_total'    => $acks['ack_total'],
             'ack_acked'    => $acks['ack_acked'],
             'problem_list' => $acks['problem_list'],
+            // eventid → [hostid, ...] fuer den SLA-Join (SlaResolver). Die
+            // Service-API liefert betroffene EVENTS je Service; der Weg zum Host
+            // fuehrt ueber genau diese Karte. Rein berechnet aus den schon
+            // geholten Problemen + Triggern, kein weiterer API-Call.
+            'event_hosts'  => self::eventHostMap($problems, $triggers),
         ];
+    }
+
+    /**
+     * REIN: eventid → [hostid, ...].
+     *
+     * Ein Problem traegt eine eventid und eine objectid (= triggerid); der Host
+     * haengt am Trigger (selectHosts). Dieselbe triggerid→hosts-Zuordnung wie in
+     * aggregateProblems(), nur nach eventid geschluesselt — gebraucht vom
+     * SLA-Join, der von der Service-API eine Liste betroffener eventids bekommt
+     * und wissen muss, welcher Host dahintersteht.
+     *
+     * @return array<string, string[]>  eventid => [hostid, ...]
+     */
+    public static function eventHostMap(array $problems, array $triggers): array {
+        $trigger_hosts = [];
+        foreach ($triggers as $t) {
+            $trigger_hosts[(string) ($t['triggerid'] ?? '')] = array_column($t['hosts'] ?? [], 'hostid');
+        }
+        $map = [];
+        foreach ($problems as $p) {
+            $eid = (string) ($p['eventid'] ?? '');
+            if ($eid === '') {
+                continue;
+            }
+            $tid = (string) ($p['objectid'] ?? '');
+            $map[$eid] = $trigger_hosts[$tid] ?? [];
+        }
+        return $map;
     }
 
     /**

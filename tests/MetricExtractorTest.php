@@ -78,6 +78,27 @@ $items = [
     ['hostid' => 'h2', 'key_' => 'ifOperStatus[3]',       'name' => 'Interface 3: Oper status',      'lastvalue' => '6'],
 
     ['hostid' => 'h2', 'key_' => 'lldpRemSysName',        'name' => 'LLDP neighbour',                'lastvalue' => 'sw-core'],
+
+    // STP-Portzustand (NT Spanning-Tree by SNMP): Port 1 blocking(2), Port 2 forwarding(5).
+    ['hostid' => 'h2', 'key_' => 'nt.if.stp[1]',          'name' => 'STP port state',                'lastvalue' => '2'],
+    ['hostid' => 'h2', 'key_' => 'nt.if.stp[2]',          'name' => 'STP port state',                'lastvalue' => '5'],
+    // Noch nicht gepollt: leerer lastvalue -> NICHT als Zustand 0 speichern.
+    ['hostid' => 'h2', 'key_' => 'nt.if.stp[9]',          'name' => 'STP port state',                'lastvalue' => ''],
+    // STP-Topology-Change-Rate (Loop-Fruehwarnung, Stufe 3a). Leerer Wert raus.
+    ['hostid' => 'h2', 'key_' => 'nt.stp.topchanges',     'name' => 'STP topchanges/s',              'lastvalue' => '0.42'],
+    ['hostid' => 'h1', 'key_' => 'nt.stp.topchanges',     'name' => 'STP topchanges/s',              'lastvalue' => ''],
+    // Broadcast-Rate je Port (Stufe 3b): je Host das Maximum.
+    ['hostid' => 'h2', 'key_' => 'nt.if.bcast[1]',        'name' => 'bcast/s',                       'lastvalue' => '12'],
+    ['hostid' => 'h2', 'key_' => 'nt.if.bcast[7]',        'name' => 'bcast/s',                       'lastvalue' => '3400.5'],
+    ['hostid' => 'h2', 'key_' => 'nt.if.bcast[9]',        'name' => 'bcast/s',                       'lastvalue' => ''],
+    // MAC-Flap-Count (Trapper, Stufe 3c).
+    ['hostid' => 'h2', 'key_' => 'nt.mac.flap',           'name' => 'mac flap',                      'lastvalue' => '5'],
+
+    // EIGEN-Identitaet (lldpLocChassisId / dot1dBaseBridgeAddress), Rohform mit
+    // Leerzeichen wie von Zabbix geliefert. Leerer Wert wird NICHT eingetragen.
+    ['hostid' => 'h2', 'key_' => 'nt.self.chassis',       'name' => 'self chassis',                  'lastvalue' => '02 00 5E 0A 11 01'],
+    ['hostid' => 'h2', 'key_' => 'nt.self.basemac',       'name' => 'self base mac',                 'lastvalue' => '02 00 5E 0A 11 01'],
+    ['hostid' => 'h2', 'key_' => 'nt.self.chassis',       'name' => 'self chassis (leer)',           'lastvalue' => ''],
 ];
 
 $m = MetricExtractor::extract($items);
@@ -104,6 +125,18 @@ check('lldp_raw: Quelle klassifiziert',        $m['lldp_raw'][0]['src']  ?? null
 echo "\n§3 Per-Interface-Traffic/-Speed\n";
 check('port_traffic: ifHCInOctets[1] -> bits/s (x8)', $m['port_traffic']['h2']['1']['in'] ?? null, 8000.0);
 check('port_speed: ifHighSpeed[1] -> 1e9 bps',        $m['port_speed']['h2']['1']         ?? null, 1.0e9);
+check('port_stp: nt.if.stp[1] -> blocking(2)',        $m['port_stp']['h2']['1']           ?? null, 2);
+check('port_stp: nt.if.stp[2] -> forwarding(5)',      $m['port_stp']['h2']['2']           ?? null, 5);
+check('port_stp: leerer Wert NICHT als state 0',      isset($m['port_stp']['h2']['9']),   false);
+check('stp_churn: Rate geparst',                      $m['stp_churn']['h2']              ?? null, 0.42);
+check('stp_churn: leerer Wert NICHT gesammelt',       isset($m['stp_churn']['h1']),       false);
+check('bcast_max: Maximum ueber Ports',               $m['bcast_max']['h2']              ?? null, 3400.5);
+check('mac_flap: Count geparst',                      $m['mac_flap']['h2']               ?? null, 5);
+
+echo "\nEigen-MAC (CDP-only-Aufloesung)\n";
+check('host_self_mac: chassis + basemac gesammelt',   count($m['host_self_mac']['h2'] ?? []), 2);
+check('host_self_mac: Rohform behalten',              $m['host_self_mac']['h2'][0] ?? null, '02 00 5E 0A 11 01');
+check('host_self_mac: leerer Wert NICHT gesammelt',   in_array('', $m['host_self_mac']['h2'] ?? [], true), false);
 
 // ── §3 Remote-Port + CDP-Regression (eigene Items, damit die Zaehler oben
 //     unberuehrt bleiben) ─────────────────────────────────────────────────
@@ -115,6 +148,10 @@ $items3 = [
     ['hostid' => 'a', 'key_' => 'lldpRemSysName[0.8.1]',       'name' => 'LLDP neighbor',              'lastvalue' => 'pve'],
     ['hostid' => 'a', 'key_' => 'lldpRemPortId[0.8.1]',        'name' => 'LLDP port-id',               'lastvalue' => '3C EC EF 79 2C 88'],
     ['hostid' => 'a', 'key_' => 'lldpRemPortDesc[0.8.1]',      'name' => 'LLDP port-desc',             'lastvalue' => 'nic0'],
+    ['hostid' => 'a', 'key_' => 'lldpRemChassisId[0.8.1]',     'name' => 'LLDP chassis-id',            'lastvalue' => '3C EC EF 79 2C 88'],
+    ['hostid' => 'a', 'key_' => 'lldpRemChassisIdSubtype[0.8.1]', 'name' => 'LLDP chassis-id subtype', 'lastvalue' => '4'],
+    // Management-IP (lldpRemManAddr): das Template liefert sie als fertige IP.
+    ['hostid' => 'a', 'key_' => 'lldpRemManAddr[0.8.1]',       'name' => 'LLDP mgmt-ip',               'lastvalue' => '192.0.2.9'],
     // CDP: DeviceId = Nachbar, DevicePort = PORT (darf NICHT als Nachbar zaehlen)
     ['hostid' => 'a', 'key_' => 'cdpCacheDeviceId[7.4]',       'name' => 'CDP neighbor',               'lastvalue' => 'switch-x'],
     ['hostid' => 'a', 'key_' => 'cdpCacheDevicePort[7.4]',     'name' => 'CDP port',                   'lastvalue' => 'GigabitEthernet0/1'],
@@ -126,6 +163,15 @@ check('net.if-Form out: bits/s direkt',                $m3['port_traffic']['a'][
 check('lldp_ports: PortDesc erfasst',                  $m3['lldp_ports']['a']['0.8.1']['desc'] ?? null, 'nic0');
 check('lldp_ports: PortId erfasst',                    $m3['lldp_ports']['a']['0.8.1']['id']   ?? null, '3C EC EF 79 2C 88');
 check('cdpCacheDevicePort -> lldp_ports (kein Nachbar)', $m3['lldp_ports']['a']['7.4']['desc'] ?? null, 'GigabitEthernet0/1');
+// Chassis-ID und -Subtype landen getrennt in lldp_meta. Entscheidend: der
+// Subtype-Key (Substring 'lldpRemChassisId') darf NICHT in der chassis-Branch
+// landen — sonst ueberschriebe '4' die MAC.
+check('lldp_meta: ChassisId erfasst',                  $m3['lldp_meta']['a']['0.8.1']['chassis']         ?? null, '3C EC EF 79 2C 88');
+check('lldp_meta: Subtype getrennt (keine Kollision)', $m3['lldp_meta']['a']['0.8.1']['chassis_subtype'] ?? null, '4');
+// Mgmt-IP landet unter demselben SNMPINDEX wie der Rest der Nachbarzeile und
+// NICHT in der chassis-Branch (beide tragen den Substring 'lldpRem...').
+check('lldp_meta: Mgmt-IP erfasst',                    $m3['lldp_meta']['a']['0.8.1']['mgmt_ip']          ?? null, '192.0.2.9');
+check('lldp_meta: Mgmt-IP ueberschreibt Chassis nicht', $m3['lldp_meta']['a']['0.8.1']['chassis']         ?? null, '3C EC EF 79 2C 88');
 // Regression: nur ECHTE Nachbarn in lldp_raw (SysName + cdpCacheDeviceId = 2).
 check('lldp_raw: genau 2 Nachbarn (Port NICHT dabei)', count($m3['lldp_raw']), 2);
 $raw_vals = array_map(static fn($r) => $r['lastvalue'], $m3['lldp_raw']);
@@ -185,6 +231,16 @@ check('Hostids bleiben Hostids',          isset($amStueck['port_traffic']['h2'])
 // Der erste Aufruf mit leerem Akkumulator darf nichts verlieren.
 $leer = MetricExtractor::merge([], MetricExtractor::extract($mA));
 check('leerer Akkumulator liefert das Stueck', $leer == MetricExtractor::extract($mA), true);
+
+// host_self_mac: DESSELBEN Hosts chassis + basemac ueber zwei Stuecke verteilt
+// (Item-Stueckelung) duerfen sich nicht gegenseitig verdraengen — '+' auf der
+// Host-Map wuerde die zweite MAC verlieren, der host_self_mac-Zweig in merge()
+// haengt die Listen stattdessen an.
+$selfA = [['itemid' => '7', 'hostid' => 'hx', 'key_' => 'nt.self.chassis', 'name' => 'c', 'value_type' => '1', 'lastvalue' => '02 00 5E 0A 11 01']];
+$selfB = [['itemid' => '8', 'hostid' => 'hx', 'key_' => 'nt.self.basemac', 'name' => 'b', 'value_type' => '1', 'lastvalue' => '02 00 5E 0A 11 02']];
+$selfMerged = MetricExtractor::merge(MetricExtractor::extract($selfA), MetricExtractor::extract($selfB));
+check('merge host_self_mac: beide MACs ueberleben die Stueckelung',
+    count($selfMerged['host_self_mac']['hx'] ?? []), 2);
 
 // ── hrStorageType als OID und hrProcessorLoad ueber mehrere Kerne ────────
 //
@@ -485,6 +541,106 @@ $m2 = MetricExtractor::extract([
 $mm = MetricExtractor::merge($m1, $m2);
 check('merge haelt Host a',  $mm['port_uptime']['a']['1'] ?? null, 4000);
 check('merge haelt Host b',  $mm['port_uptime']['b']['1'] ?? null, 2500);
+
+// UniFi-Ports (Vorlage „UniFi Network API – Device"): port.state/port.speed
+// speisen die Oper/Admin-Korrelation bzw. port_speed, damit Knoten-Health und
+// Auslastungs-Divisor OHNE Sonderpfad greifen. Werte erfunden, Form gemessen
+// 2026-10-26. Kein Per-Port-Traffic (API liefert keins).
+$u = MetricExtractor::extract([
+    ['hostid' => 'usw', 'key_' => 'port.state[1]', 'name' => '', 'lastvalue' => 'UP'],
+    ['hostid' => 'usw', 'key_' => 'port.state[2]', 'name' => '', 'lastvalue' => 'DOWN'],
+    ['hostid' => 'usw', 'key_' => 'port.state[3]', 'name' => '', 'lastvalue' => 'UP'],
+    ['hostid' => 'usw', 'key_' => 'port.speed[1]', 'name' => '', 'lastvalue' => '1000000000'],
+    ['hostid' => 'usw', 'key_' => 'port.speed[2]', 'name' => '', 'lastvalue' => '0'],
+]);
+check('UniFi: ein Port down gezaehlt',        $u['iface']['usw']['down'] ?? null, 1);
+check('UniFi: drei Ports gezaehlt',           $u['iface']['usw']['count'] ?? null, 3);
+check('UniFi: Port 2 im port_status (down)',  $u['port_status']['usw']['2'] ?? null, true);
+check('UniFi: Port 1 im port_status (up)',    $u['port_status']['usw']['1'] ?? null, false);
+check('UniFi: port.speed -> port_speed',      $u['port_speed']['usw']['1'] ?? null, 1.0e9);
+check('UniFi: speed 0 nicht gemerkt',         isset($u['port_speed']['usw']['2']), false);
+check('UniFi: kein Per-Port-Traffic',         isset($u['port_traffic']['usw']), false);
+
+// UniFi geraeteweiter Uplink-Durchsatz: uplink.rx/tx -> uplink_rate[hid][in/out].
+$ur = MetricExtractor::extract([
+    ['hostid' => 'usw', 'key_' => 'uplink.rx', 'name' => '', 'lastvalue' => '1569752'],
+    ['hostid' => 'usw', 'key_' => 'uplink.tx', 'name' => '', 'lastvalue' => '116656'],
+    ['hostid' => 'leer', 'key_' => 'uplink.rx', 'name' => '', 'lastvalue' => ''],
+]);
+check('UniFi: uplink.rx -> uplink_rate in',   $ur['uplink_rate']['usw']['in'] ?? null, 1569752.0);
+check('UniFi: uplink.tx -> uplink_rate out',  $ur['uplink_rate']['usw']['out'] ?? null, 116656.0);
+check('UniFi: leerer uplink.rx nicht gemerkt', isset($ur['uplink_rate']['leer']), false);
+
+// WLAN: Funkmodule je Band (radio.*, Integration-API) + Client-Zahl (wlan.clients)
+// + Funkauslastung (wlan.cu[band], Prozent), beide aus der klassischen API, seit
+// 5.5.83 am AP-Host selbst. Werte erfunden, Form gemessen. channelWidth Hz -> MHz,
+// cu wird in die radios-Map des jeweiligen Bands gefaltet.
+$w = MetricExtractor::extract([
+    ['hostid' => 'ap',  'key_' => 'radio.channel[2.4]',      'name' => '', 'lastvalue' => '6'],
+    ['hostid' => 'ap',  'key_' => 'radio.standard[2.4]',     'name' => '', 'lastvalue' => '802.11n'],
+    ['hostid' => 'ap',  'key_' => 'radio.channelWidth[2.4]', 'name' => '', 'lastvalue' => '20000000'],
+    ['hostid' => 'ap',  'key_' => 'radio.channel[5]',        'name' => '', 'lastvalue' => '36'],
+    ['hostid' => 'ap',  'key_' => 'radio.standard[5]',       'name' => '', 'lastvalue' => '802.11ac'],
+    ['hostid' => 'ap',  'key_' => 'radio.channelWidth[5]',   'name' => '', 'lastvalue' => '40000000'],
+    ['hostid' => 'ap',  'key_' => 'wlan.clients',            'name' => '', 'lastvalue' => '5'],
+    ['hostid' => 'ap',  'key_' => 'wlan.cu[2.4]',            'name' => '', 'lastvalue' => '28'],
+    ['hostid' => 'ap',  'key_' => 'wlan.cu[5]',              'name' => '', 'lastvalue' => '22.4'],
+    ['hostid' => 'ap',  'key_' => 'radios.txRestries[2.4]',  'name' => '', 'lastvalue' => '9.8'],
+    ['hostid' => 'ap',  'key_' => 'radios.txRestries[5]',    'name' => '', 'lastvalue' => '4'],
+    ['hostid' => 'ap',  'key_' => 'wlan.satisfaction',       'name' => '', 'lastvalue' => '92'],
+    ['hostid' => 'idle','key_' => 'wlan.satisfaction',       'name' => '', 'lastvalue' => '-1'],
+    ['hostid' => 'ap',  'key_' => 'wlan.ssids',             'name' => '', 'lastvalue' =>
+        '[{"ssid":"Office WiFi","clients":3,"guest":false},{"ssid":"Guest WiFi","clients":1,"guest":true}]'],
+    ['hostid' => 'bad', 'key_' => 'wlan.ssids',             'name' => '', 'lastvalue' => 'kein json'],
+    ['hostid' => 'leer','key_' => 'wlan.clients',            'name' => '', 'lastvalue' => ''],
+]);
+check('WLAN: radio 2.4 Kanal',   $w['radios']['ap']['2.4']['channel'] ?? null, 6);
+check('WLAN: radio 2.4 Standard', $w['radios']['ap']['2.4']['std'] ?? null, '802.11n');
+check('WLAN: radio 2.4 Breite Hz->MHz', $w['radios']['ap']['2.4']['width'] ?? null, 20);
+check('WLAN: radio 5 Kanal',     $w['radios']['ap']['5']['channel'] ?? null, 36);
+check('WLAN: radio 5 Breite 40MHz', $w['radios']['ap']['5']['width'] ?? null, 40);
+// Client-Zahl jetzt direkt aus extract() (wlan.clients am AP-Host).
+check('WLAN: wlan.clients -> wlan_clients', $w['wlan_clients']['ap'] ?? null, 5);
+check('WLAN: leere wlan.clients nicht gemerkt', isset($w['wlan_clients']['leer']), false);
+// Funkauslastung in die radios-Map gefaltet, gerundet auf ganze Prozent.
+check('WLAN: wlan.cu[2.4] -> radios cu', $w['radios']['ap']['2.4']['cu'] ?? null, 28);
+check('WLAN: wlan.cu[5] gerundet',       $w['radios']['ap']['5']['cu'] ?? null, 22);
+// Retries (radios.txRestries, Template-Tippfehler) -> radios.retr, 1 Nachkommastelle.
+check('WLAN: txRestries[2.4] -> radios retr', $w['radios']['ap']['2.4']['retr'] ?? null, 9.8);
+check('WLAN: txRestries[5] -> radios retr',   $w['radios']['ap']['5']['retr'] ?? null, 4.0);
+// SSIDs: JSON dekodiert, Name/Clients/Guest uebernommen; kaputtes JSON verworfen.
+check('WLAN: ssids Name',        $w['ssids']['ap'][0]['ssid'] ?? null,    'Office WiFi');
+check('WLAN: ssids Clients',     $w['ssids']['ap'][0]['clients'] ?? null, 3);
+check('WLAN: ssids Guest-Flag',  $w['ssids']['ap'][1]['guest'] ?? null,   true);
+check('WLAN: kaputtes ssids-JSON verworfen', isset($w['ssids']['bad']),   false);
+check('WLAN: wlan.satisfaction -> wlan_satisfaction', $w['wlan_satisfaction']['ap'] ?? null, 92);
+check('WLAN: negatives satisfaction (-1 idle) verworfen', isset($w['wlan_satisfaction']['idle']), false);
+
+// UniFi CPU/Memory: nackte Keys cpu.utilization/memory.utilization (Device-
+// Template, direkter Prozentwert). Lagen bisher nicht im erkannten Satz, darum
+// zeigten UniFi-Geraete „not collected" trotz vorhandenem Wert.
+$um = MetricExtractor::extract([
+    ['hostid' => 'u', 'key_' => 'cpu.utilization',    'name' => '', 'lastvalue' => '6'],
+    ['hostid' => 'u', 'key_' => 'memory.utilization', 'name' => '', 'lastvalue' => '34.3'],
+]);
+check('UniFi: cpu.utilization -> cpu',    $um['cpu']['u'] ?? null,    6.0);
+check('UniFi: memory.utilization -> mem', $um['memory']['u'] ?? null, 34);
+
+// VLAN: nt.vlan.walk -> VlanParser -> metrics['vlan'][hid]. Ein Walk-Text mit
+// VLAN 10 auf Bridge-Ports 1,2 (Maske C0) -> ifIndex 101,102.
+$vm = MetricExtractor::extract([[
+    'hostid' => 'sw', 'key_' => 'nt.vlan.walk', 'name' => '',
+    'lastvalue' =>
+        ".1.3.6.1.2.1.17.7.1.4.3.1.2.10 = Hex-STRING: C0 00 00 00\n"
+      . ".1.3.6.1.2.1.17.1.4.1.2.1 = INTEGER: 101\n"
+      . ".1.3.6.1.2.1.17.1.4.1.2.2 = INTEGER: 102\n",
+]]);
+check('VLAN: nt.vlan.walk -> vlan[hid] gesetzt', isset($vm['vlan']['sw']),            true);
+check('VLAN: eine VLAN erkannt',                 count($vm['vlan']['sw']['vlans'] ?? []), 1);
+check('VLAN: byIfIndex 101 -> [10]',             $vm['vlan']['sw']['byIfIndex'][101] ?? null, [10]);
+check('VLAN: leerer Walk -> kein Eintrag',
+    isset(MetricExtractor::extract([['hostid' => 'x', 'key_' => 'nt.vlan.walk', 'name' => '', 'lastvalue' => '']])['vlan']['x']),
+    false);
 
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"

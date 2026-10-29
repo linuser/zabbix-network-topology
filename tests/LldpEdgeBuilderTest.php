@@ -122,7 +122,13 @@ $port_traffic3 = [
 ];
 $port_speed3 = ['aruba' => ['8' => 1.0e9, '20' => 1.0e9]];
 
-$r3    = LldpEdgeBuilder::build($hosts3, $lldp_raw3, $lldp_ports3, $port_traffic3, $port_speed3);
+// port_stp nach ifIndex gekeyt wie port_traffic: Port 8 blocking(2), Port 20 forwarding(5).
+// port_names fuer pve, damit der ferne Port 'nic0' auf ifIndex 5 aufloest und das
+// ferne Ende seinen STP-Zustand traegt (sonst bliebe ein nur fern gemeldetes
+// Blocking unsichtbar).
+$r3    = LldpEdgeBuilder::build($hosts3, $lldp_raw3, $lldp_ports3, $port_traffic3, $port_speed3,
+                               port_names: ['pve' => ['5' => 'nic0']],
+                               port_stp: ['aruba' => ['8' => 2, '20' => 5], 'pve' => ['5' => 2]]);
 $e_pve = findEdge($r3['edges'], 'aruba', 'pve') ?? [];
 $e_tp  = findEdge($r3['edges'], 'aruba', 'tp')  ?? [];
 
@@ -134,6 +140,9 @@ check('PortId-Fallback wenn kein PortDesc',            $e_tp['ports']['tp']     
 check('Per-Link-Traffic in (bps)',   $e_pve['port_metrics']['aruba']['in']    ?? null, 1000000.0);
 check('Per-Link-Traffic out (bps)',  $e_pve['port_metrics']['aruba']['out']   ?? null, 2000000.0);
 check('Per-Link-Speed als Divisor',  $e_pve['port_metrics']['aruba']['speed'] ?? null, 1.0e9);
+check('STP blocking(2) am lokalen Port -> port_metrics.stp', $e_pve['port_metrics']['aruba']['stp'] ?? null, 2);
+check('STP forwarding(5) am anderen Port',                   $e_tp['port_metrics']['aruba']['stp']  ?? null, 5);
+check('STP am FERNEN Ende -> port_metrics[pve].stp',         $e_pve['port_metrics']['pve']['stp']   ?? null, 2);
 
 // Ohne §3-Maps (alte Aufrufer): keine Port-/Metrik-Felder, aber auch kein Crash.
 $r3b = LldpEdgeBuilder::build($hosts3, $lldp_raw3);
@@ -208,6 +217,18 @@ $rU2 = LldpEdgeBuilder::build($hU,
     [['hostid' => 'cli', 'key_' => 'uplink.id', 'lastvalue' => 'aaaaaaaa-0000-0000-0000-000000000000', 'src' => 'unifi']]);
 check('unbekannter Uplink -> keine Kante',  count($rU2['edges']),      0);
 check('unbekannter Uplink -> unmatched',    count($rU2['unmatched']),  1);
+
+// UniFi-Kante traegt den geraeteweiten Uplink-Durchsatz des Kindes (uplink.rx/tx),
+// da sie keinen lokalen Port hat. Melder = 'cli' (= from), also port_metrics['cli'].
+// Werte erfunden, bit/s. Ehrlich geraeteweit, kein Per-Port-Wert.
+$rU3 = LldpEdgeBuilder::build($hU, $rawU,
+    uplink_rate: ['cli' => ['in' => 1569752.0, 'out' => 116656.0]]);
+check('UniFi-Kante: Uplink-in am Melder',  $rU3['edges'][0]['port_metrics']['cli']['in']  ?? null, 1569752.0);
+check('UniFi-Kante: Uplink-out am Melder', $rU3['edges'][0]['port_metrics']['cli']['out'] ?? null, 116656.0);
+check('UniFi-Kante: kein speed/cap (keine Auslastungsfarbe)',
+    isset($rU3['edges'][0]['port_metrics']['cli']['speed']), false);
+// Ohne uplink_rate bleibt die Kante ohne Metrik (ehrlich leer statt 0).
+check('ohne uplink_rate keine Metrik', isset($rU['edges'][0]['port_metrics']['cli']), false);
 
 // ── Beidseitige Bestaetigung ────────────────────────────────────────────────
 //
@@ -655,6 +676,154 @@ $rC3 = LldpEdgeBuilder::build($hMac, [
     ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.2.1]', 'lastvalue' => '00:00:00:00:00:00', 'src' => 'lldp'],
 ], [], [], [], ['acc1' => ['0.1.1' => ['chassis' => '00 00 00 00 00 00']]]);
 check('Null-MAC: keine Zuordnung', count($rC3['unmatched']), 1);
+
+// Widerspruch: Eigen-MAC eines Hosts == Chassis, das ein anderer Switch per
+// sicherem Namenstreffer einem ANDEREN Host zuordnet. Dann ist "wem gehoert
+// die MAC" nicht zu entscheiden -> MAC wird nicht verwendet (Geist), nicht
+// geraten. Bewusste Verhaltensaenderung durch den Eigen-Seed (Review-Finding).
+$Mx = '02 5E AA 00 00 0C';
+$rawConf = [
+    // acc2 nennt core beim NAMEN und bringt Chassis Mx mit -> Mx gehoert core.
+    ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.1.1]', 'lastvalue' => 'lab-core', 'src' => 'lldp'],
+    // acc2 nennt zusaetzlich jemanden NUR per Mx.
+    ['hostid' => 'acc2', 'key_' => 'lldpRemSysName[0.2.1]', 'lastvalue' => $Mx, 'src' => 'cdp'],
+];
+$metaConf = ['acc2' => ['0.1.1' => ['chassis' => '02:5e:aa:00:00:0c']]];
+// Ohne Eigen-Seed: Mx wird per Namens-Lernen core zugeordnet -> kein Geist.
+$rNoConf = LldpEdgeBuilder::build($hMac, $rawConf, [], [], [], $metaConf);
+check('ohne Widerspruch: Mx loest per chassis auf (kein Geist)',
+    count($rNoConf['quality']['acc2']['unmatched'] ?? []), 0);
+// Mit Eigen-Seed acc1==Mx: Widerspruch (acc1 vs core) -> Mx unbrauchbar -> Geist.
+$rConf = LldpEdgeBuilder::build($hMac, $rawConf, [], [], [], $metaConf,
+    host_self_mac: ['acc1' => [$Mx]]);
+check('Widerspruch Eigen-MAC vs Namenstreffer: Mx-Zeile wird Geist',
+    count($rConf['quality']['acc2']['unmatched'] ?? []), 1);
+
+// ── lldpRemChassisIdSubtype: eine ID mit Subtype != 4 ist KEINE MAC (5.5.96) ──
+// Gleicher Aufbau wie der Chassis-Treffer oben ($rawCh: acc1 nennt core beim
+// Namen + bringt die Chassis-ID mit, acc2 nennt jemanden NUR per MAC). Meldet
+// acc1 dazu den Subtype 5 (Netzadresse/IP), ist die ID 02:5e:aa:00:00:0c KEINE
+// MAC -> sie darf acc2s MAC-Zeile nicht an core lehren -> acc2 bleibt unmatched.
+$metaSub5 = ['acc1' => ['0.1.1' => ['chassis' => '02:5e:aa:00:00:0c', 'chassis_subtype' => '5']]];
+$rSub5 = LldpEdgeBuilder::build($hMac, $rawCh, [], [], [], $metaSub5);
+check('Subtype 5 (IP): Chassis NICHT als MAC -> acc2 unmatched',
+    count($rSub5['unmatched']), 1);
+check('Subtype 5: keine Chassis-Kante zum Core',
+    findEdge($rSub5['edges'], 'core', 'acc2'), null);
+
+// Subtype 4 (als MIB-Text "macAddress(4)") verhaelt sich wie ohne Erhebung:
+// die Zahl 4 wird herausgezogen, die ID bleibt eine MAC -> Chassis-Treffer.
+$metaSub4 = ['acc1' => ['0.1.1' => ['chassis' => '02:5e:aa:00:00:0c', 'chassis_subtype' => 'macAddress(4)']]];
+$rSub4 = LldpEdgeBuilder::build($hMac, $rawCh, [], [], [], $metaSub4);
+check('Subtype 4 (MAC): Chassis-Treffer wie gehabt',
+    (findEdge($rSub4['edges'], 'core', 'acc2') ?? [])['match'] ?? null, 'chassis');
+
+// ── lldpRemManAddr: Treffer ueber die Management-IP (5.5.97) ────────────────
+// Der Nachbar nennt einen Namen, der auf KEINEN Host passt, strahlt aber eine
+// Management-IP aus (lldpRemManAddr), die zu genau einem ueberwachten Host
+// gehoert -> Kante ueber die IP, kein Geist. Letzter Pfad: laeuft erst, wenn
+// Name und Chassis nichts getroffen haben.
+$hMgmt = [
+    'rep' => ['host' => 'sw-rep', 'name' => 'sw-rep', 'interfaces' => [['ip' => '10.0.0.1']]],
+    'tgt' => ['host' => 'fw-xyz', 'name' => 'fw-xyz', 'interfaces' => [['ip' => '10.9.9.9']]],
+];
+$rawMgmt  = [['hostid' => 'rep', 'key_' => 'lldpRemSysName[0.5.1]', 'lastvalue' => 'opnsense.localdomain.alias', 'src' => 'lldp']];
+$metaMgmt = ['rep' => ['0.5.1' => ['mgmt_ip' => '10.9.9.9']]];
+$rMg = LldpEdgeBuilder::build($hMgmt, $rawMgmt, [], [], [], $metaMgmt);
+$eMg = findEdge($rMg['edges'], 'rep', 'tgt') ?? [];
+check('Mgmt-IP-Treffer: Kante entsteht',       $eMg !== [], true);
+check('Mgmt-IP-Treffer: als mgmt_ip markiert', $eMg['match'] ?? null, 'mgmt_ip');
+check('Mgmt-IP-Treffer: nichts unmatched',     count($rMg['unmatched']), 0);
+
+// Unbekannte IP -> kein Treffer, aber der Geist traegt die Mgmt-IP.
+$rMgX = LldpEdgeBuilder::build($hMgmt, $rawMgmt, [], [], [], ['rep' => ['0.5.1' => ['mgmt_ip' => '10.9.9.250']]]);
+check('Unbekannte Mgmt-IP: bleibt Geist',  count($rMgX['unmatched']), 1);
+check('Geist traegt die Mgmt-IP',          $rMgX['quality']['rep']['unmatched'][0]['mgmt_ip'] ?? null, '10.9.9.250');
+
+// Mehrdeutige IP (zwei Hosts teilen sie) -> kein Treffer (falsche Kante waere
+// schlimmer als keine, dieselbe Regel wie beim Namen und bei der Chassis-MAC).
+$hMgmt2 = $hMgmt + ['tgt2' => ['host' => 'fw-abc', 'name' => 'fw-abc', 'interfaces' => [['ip' => '10.9.9.9']]]];
+$rMg2 = LldpEdgeBuilder::build($hMgmt2, $rawMgmt, [], [], [], $metaMgmt);
+check('Mehrdeutige Mgmt-IP: keine Kante',        findEdge($rMg2['edges'], 'rep', 'tgt'), null);
+check('Mehrdeutige Mgmt-IP: als mehrdeutig vermerkt', count($rMg2['quality']['rep']['ambiguous'] ?? []), 1);
+check('Mehrdeutige Mgmt-IP: nicht als Geist',    count($rMg2['unmatched']), 0);
+
+// Mgmt-IP == Eigen-IP des Melders -> keine Selbstkante.
+$rSelf = LldpEdgeBuilder::build($hMgmt, $rawMgmt, [], [], [], ['rep' => ['0.5.1' => ['mgmt_ip' => '10.0.0.1']]]);
+check('Mgmt-IP == Eigen-IP: keine Selbstkante', findEdge($rSelf['edges'], 'rep', 'rep'), null);
+
+// ── CDP-only: Nachbar nur per MAC, aufgeloest ueber die EIGEN-Identitaet ────
+//
+// Nachgestellt an zwei echten Cisco SB (2026-10-18), Werte hier ERFUNDEN
+// (02:.. = lokal verwaltet). swB kennt seinen Nachbarn NUR ueber CDP:
+// cdpCacheDeviceId = dessen MAC, der LLDP-SysName ist leer. Kein anderer
+// Switch meldet diese MAC je mit Namen. Ohne die Eigen-Identitaet wurde daraus
+// ein Geist; mit ihr (lldpLocChassisId / dot1dBaseBridgeAddress je Host) trifft
+// die MAC direkt. Technische Namen bewusst NICHT die MAC, sonst griffe das
+// Namens-Matching und der MAC-Pfad bliebe ungeprueft.
+$macA = '02 00 5E 0A 11 01';   // Eigen-MAC von swA
+$macB = '02 00 5E 0A 11 02';   // Eigen-MAC von swB
+$hCisco = [
+    'swA' => ['host' => 'edge-sw-a', 'name' => 'edge-sw-a'],
+    'swB' => ['host' => 'edge-sw-b', 'name' => 'edge-sw-b'],
+];
+// swB sieht swA nur als CDP-MAC (kein Name); swA sieht swB per Name.
+$rawCisco = [
+    ['hostid' => 'swA', 'key_' => 'lldpRemSysName[0.72.1]', 'lastvalue' => 'edge-sw-b', 'src' => 'lldp'],
+    ['hostid' => 'swB', 'key_' => 'cdpCacheDeviceId[49.2]', 'lastvalue' => $macA,       'src' => 'cdp'],
+];
+
+// OHNE Eigen-Identitaet: die nackte CDP-MAC bleibt ein Geist.
+$rCiscoA = LldpEdgeBuilder::build($hCisco, $rawCisco);
+check('CDP-only ohne Eigen-MAC: MAC bleibt offen (Geist)',
+    count($rCiscoA['quality']['swB']['unmatched'] ?? []), 1);
+
+// MIT Eigen-Identitaet (Rohform mit Leerzeichen wie von Zabbix geliefert):
+$selfMac = [
+    'swA' => [$macA, $macA],   // chassis + basemac, identisch
+    'swB' => [$macB],
+];
+$rCisco = LldpEdgeBuilder::build($hCisco, $rawCisco, host_self_mac: $selfMac);
+$eCisco = findEdge($rCisco['edges'], 'swA', 'swB') ?? [];
+check('CDP-only: genau eine Kante, kein Geist', count($rCisco['edges']), 1);
+check('CDP-only: nichts mehr unmatched',        count($rCisco['unmatched']), 0);
+check('CDP-only: beide Protokolle an der Kante', $eCisco['src'] ?? null, ['cdp', 'lldp']);
+
+// Eigen-MAC zweier Hosts gleich (Stack/HA): nicht raten -> Geist bleibt.
+$rCiscoDup = LldpEdgeBuilder::build($hCisco, $rawCisco, host_self_mac: [
+    'swA' => [$macA],
+    'swB' => [$macA],   // dieselbe MAC -> widerspruechlich
+]);
+check('CDP-only: geteilte Eigen-MAC bleibt offen',
+    count($rCiscoDup['quality']['swB']['unmatched'] ?? []), 1);
+
+// ── Opake Hex-CDP-ID, die keine 6-Byte-MAC ist (Liberamente-Fork, mmajer #7) ──
+//
+// Eine CDP Device-ID kann eine leerzeichengetrennte Hex-Folge sein, die NICHT
+// sechs Byte lang ist (fuenf hier). macForm nimmt nur 6 Byte, also schnitt
+// cleanNeighbor sie frueher auf "01" und traf einen Host namens "01" — eine
+// erfundene Kante. Jetzt bleibt die volle ID erhalten, keine Namens-Fallbacks.
+$hOpaque = [
+    'sw'  => ['host' => 'switch-lab', 'name' => 'Switch Lab'],
+    'x01' => ['host' => '01',         'name' => 'Short Token Host'],
+];
+$rawOpaque = [['hostid' => 'sw', 'key_' => 'cdpCacheDeviceId[7.1]', 'lastvalue' => '01 02 03 04 05', 'src' => 'cdp']];
+$rOpaque = LldpEdgeBuilder::build($hOpaque, $rawOpaque);
+check('5-Byte-Hex: keine Kante zum Host "01"', findEdge($rOpaque['edges'], 'sw', 'x01'), null);
+check('5-Byte-Hex: gar keine Kante',           count($rOpaque['edges']), 0);
+check('5-Byte-Hex: volle ID im Geist erhalten',
+    (bool) preg_grep('/01 02 03 04 05/', $rOpaque['unmatched']), true);
+// Zwei verschiedene 01-xx-IDs duerfen NICHT zu einem Phantom-Geist "01" kollabieren.
+$rawTwo = [
+    ['hostid' => 'sw', 'key_' => 'cdpCacheDeviceId[7.1]', 'lastvalue' => '01 02 03 04 05', 'src' => 'cdp'],
+    ['hostid' => 'sw', 'key_' => 'cdpCacheDeviceId[7.2]', 'lastvalue' => '01 aa bb cc dd', 'src' => 'cdp'],
+];
+$rTwo = LldpEdgeBuilder::build(['sw' => ['host' => 'switch-lab', 'name' => 'Switch Lab']], $rawTwo);
+check('zwei Hex-IDs bleiben zwei Beobachtungen', count($rTwo['unmatched']), 2);
+// Eine echte 6-Byte-MAC bleibt unveraendert (nur 5 Byte sind opak): weiter macForm-Pfad.
+$rawMac6 = [['hostid' => 'sw', 'key_' => 'cdpCacheDeviceId[7.1]', 'lastvalue' => '02 11 22 33 44 55', 'src' => 'cdp']];
+$rMac6 = LldpEdgeBuilder::build(['sw' => ['host' => 'switch-lab', 'name' => 'Switch Lab']], $rawMac6);
+check('6-Byte-MAC weiter als MAC behandelt (unbekannt -> Geist, keine Kante)', count($rMac6['edges']), 0);
 
 // ── Issue #16: Port-Metrik mit net.if.in[ifIndex]-Items, Ende zu Ende ──────
 //

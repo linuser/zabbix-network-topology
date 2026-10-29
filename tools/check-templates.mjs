@@ -29,11 +29,13 @@
 // eine echte Fehlerklasse zuverlaessig faengt, ist mehr wert als eines, das
 // alles halb prueft.
 //
-// Vier Regeln, jede aus einem Fehler entstanden, der real passiert ist:
+// Fuenf Regeln, jede aus einem Fehler entstanden, der real passiert ist:
 //   1. Jeder Gruppeneintrag braucht ein uuid.
 //   2. Derselbe Gruppenname braucht ueberall dasselbe uuid.
 //   3. Dasselbe uuid darf nur an EINEM Gruppennamen haengen.
 //   4. JEDES uuid in der Datei muss ein echtes UUIDv4 sein.
+//   5. Jeder `type:`-Wert muss eine echte Zabbix-Export-Konstante sein
+//      (Anlass TRAPPER-statt-TRAP in 5.5.42; die Regel steht weiter unten).
 //
 // Regel 4 ist die, die am laengsten unentdeckt blieb, und sie betrifft nicht
 // nur Gruppen. In den zwei kaputten Templates waren fuenf uuids von Hand
@@ -215,6 +217,118 @@ function checkUuidFormat(file, text) {
     return problems.length === 0;
 }
 
+// ── Regel 5 — das `type`-Feld gegen die Zabbix-Export-Enums ──────────────
+//
+// Anlass: 5.5.42 gab dem neuen Trapper-Item nt.mac.flap den Typ TRAPPER statt
+// TRAP. Zabbix lehnt den Import ab —
+//
+//   Invalid tag "/zabbix_export/.../item(…)/type": unexpected constant "TRAPPER".
+//
+// — aber kein Gate sah es: check-templates prueft(e) nur UUIDs, und TRAPPER ist
+// syntaktisch sauberes YAML. Es fiel erst beim Anwender auf, 5.5.43 reparierte
+// es. Seither prueft das Gate auch diese eine Stelle.
+//
+// BEWUSST ENG, wie der Rest der Datei (kein Schema-Parser). Zwei Beobachtungen
+// machen es ohne Parser zuverlaessig:
+//   - Ein Preprocessing-Schritt ist ein Listeneintrag ("- type: X"), ein
+//     Item-/LLD-/Prototyp-Typ ein bares Feld ("type: X"). Die beiden Enums sind
+//     disjunkt; die Form trennt sie, ohne die Kontexte verwechseln zu koennen.
+//   - TRAPPER steht in KEINER der Enums — die Trennung faengt den Anlass also
+//     doppelt sicher.
+// Das bare `type:` wird gegen eine UNION geprueft (Item- + Makro- + Graph-
+// Typen), weil ein Template neben Items auch Makros und Graphen tragen darf, die
+// alle ein bares `type:` fuehren. Das haelt die Pruefung falsch-treffer-frei und
+// faengt trotzdem jeden erfundenen Konstanten-Namen. Gegen alle mitgelieferten
+// Templates gegengeprueft, bevor das Gate scharf wurde; ein Selbsttest unten
+// stellt sicher, dass es nicht still alles durchwinkt.
+
+// Item-Typen (CXmlConstantName) + Makro-Typen + Graph-/Graph-Item-Typen: alles,
+// was in einem Template-Export legitim hinter einem BAREN `type:` stehen darf.
+const BARE_TYPES = new Set([
+    // item / LLD rule / item prototype
+    'ZABBIX_PASSIVE', 'ZABBIX_ACTIVE', 'TRAP', 'SIMPLE', 'INTERNAL', 'SNMP_TRAP',
+    'EXTERNAL', 'DB_MONITOR', 'IPMI', 'SSH', 'TELNET', 'CALCULATED', 'JMX',
+    'DEPENDENT', 'HTTP_AGENT', 'SNMP_AGENT', 'SCRIPT', 'BROWSER',
+    // macro (unter macros:)
+    'TEXT', 'SECRET_TEXT', 'VAULT',
+    // graph / graph item
+    'NORMAL', 'STACKED', 'PIE', 'EXPLODED', 'SINGLE', 'GRAPH_SUM',
+]);
+
+// Preprocessing-Schritt-Typen (Listenform "- type:"), Zabbix 7.0+.
+const PREPROC_TYPES = new Set([
+    'MULTIPLIER', 'RTRIM', 'LTRIM', 'TRIM', 'REGEX', 'BOOL_TO_DECIMAL',
+    'OCTAL_TO_DECIMAL', 'HEX_TO_DECIMAL', 'SIMPLE_CHANGE', 'CHANGE_PER_SECOND',
+    'XMLPATH', 'JSONPATH', 'IN_RANGE', 'MATCHES_REGEX', 'NOT_MATCHES_REGEX',
+    'CHECK_JSON_ERROR', 'CHECK_XML_ERROR', 'CHECK_REGEX_ERROR',
+    'DISCARD_UNCHANGED', 'DISCARD_UNCHANGED_HEARTBEAT', 'JAVASCRIPT',
+    'PROMETHEUS_PATTERN', 'PROMETHEUS_TO_JSON', 'CSV_TO_JSON', 'STR_REPLACE',
+    'VALIDATE_NOT_SUPPORTED', 'XML_TO_JSON', 'SNMP_WALK_VALUE',
+    'SNMP_WALK_TO_JSON', 'SNMP_GET_VALUE',
+]);
+
+/**
+ * Prueft jeden `type:`-Wert einer Template-Datei gegen die passende Enum.
+ * Nur fuer templates/ gedacht — Dashboard-Widgets fuehren eigene (klein
+ * geschriebene) type-Werte, die hier nichts zu suchen haben.
+ */
+function checkTypes(file, text) {
+    const lines = text.split('\n');
+    const problems = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const code = lines[i].replace(/#.*$/, '');
+
+        // Preprocessing-Schritt: Listenform.
+        let m = /^\s*- type:\s*([A-Z0-9_]+)\s*$/.exec(code);
+        if (m) {
+            if (!PREPROC_TYPES.has(m[1])) {
+                problems.push(`unbekannter Preprocessing-Typ: ${m[1]} (Zeile ${i + 1})`);
+            }
+            continue;
+        }
+
+        // Item / LLD / Prototyp / Makro / Graph: bares Feld. Nur GROSS_BUCHSTABEN-
+        // Konstanten; andere type-Felder (etwa klein geschriebene) ignoriert das
+        // Muster bewusst.
+        m = /^\s*type:\s*([A-Z0-9_]+)\s*$/.exec(code);
+        if (m && !BARE_TYPES.has(m[1])) {
+            problems.push(
+                `unbekannter Item-Typ: ${m[1]} (Zeile ${i + 1}) — Zabbix weist den Import ab`
+            );
+        }
+    }
+
+    if (problems.length) {
+        console.log(`  [FAIL] ${file}`);
+        for (const p of problems) console.log(`         ${p}`);
+        failures += problems.length;
+    }
+    return problems.length === 0;
+}
+
+// Selbsttest: das Gate muss einen erfundenen Item-Typ UND einen erfundenen
+// Preprocessing-Typ melden. Ein Gate, das nach einem Umbau still alles durch-
+// laesst, ist schlimmer als keines — darum hier bewiesen, bevor die echten
+// Dateien laufen. Schlaegt der Selbsttest an, ist das Muster oder die Enum
+// kaputt, nicht das Template.
+(function selfTest() {
+    const before = failures;
+    const bad = 'items:\n  - key: x\n    type: TRAPPER\n'
+        + '    preprocessing:\n      - type: BOGUS_STEP\n';
+    const quiet = [];
+    const realLog = console.log;
+    console.log = (s) => quiet.push(s);
+    const ok = checkTypes('<selbsttest>', bad);
+    console.log = realLog;
+    const caught = failures - before;
+    failures = before;   // der Selbsttest zaehlt nicht als echter Fund
+    if (ok || caught !== 2) {
+        console.log(`  [FAIL] Selbsttest: erwartete 2 Funde (TRAPPER, BOGUS_STEP), bekam ${caught}`);
+        failures++;
+    }
+})();
+
 let seen = 0;
 for (const dir of ['templates', 'dashboards']) {
     let entries;
@@ -234,6 +348,10 @@ for (const dir of ['templates', 'dashboards']) {
         // Regel 4 laeuft ueber jede Datei, auch ueber die ohne Gruppenliste —
         // ein Dashboard-Export traegt ebenfalls uuids.
         const fmt_ok = checkUuidFormat(path, text);
+
+        // Regel 5 (type-Enums) nur fuer Templates — Dashboards fuehren eigene
+        // type-Werte (Widgets), die nicht gegen die Item-Enum gehoeren.
+        if (dir === 'templates') checkTypes(path, text);
 
         const r = checkGroups(path, text);
         if (r === null && fmt_ok) {

@@ -33,6 +33,7 @@ Alle sechs Module müssen installiert **und aktiviert** sein:
 | `network_topology_table_widget` | NT Table |
 | `network_topology_kpi_widget` | NT KPI |
 | `network_topology_items_widget` | NT Items |
+| `network_topology_faceplate_widget` | NT Faceplate |
 
 Fehlt eines, scheitert der Import mit „unknown widget type".
 

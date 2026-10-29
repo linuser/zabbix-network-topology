@@ -23,9 +23,10 @@ import {
     loadGroupOpen, toggleGroupOpen,
     loadBundleMode, loadBundleOpen, toggleBundleOpen,
     loadPositions, savePositions, loadPinned, loadNotes, loadLinks, addLink,
-    loadLayout, loadTapholdMs
+    loadLayout, loadTapholdMs, nodeSizeFactor
 } from './storage.js';
 import { aggregateByGroup, aggregateEndpoints, aggregateHostingChildren } from './aggregation.js';
+import { configureLayoutHistory, syncLayoutHistoryNodes, markBeforeDrag, commitDrag } from './layout-history.js';
 import { applyHighlight, resetHighlight, getActiveHighlightId } from './highlight.js';
 import { isPathActive, clearPathState } from './path-highlight.js';
 import { clearSimulation, isSimActive, recomputeSimulation } from './whatif.js';
@@ -50,13 +51,18 @@ import { collapseLeaves, bindCollapse, leafCandidates, collapsePref,
          COLLAPSE_SCHWELLE } from './collapse-leaves.js';
 import { buildLayoutConfig, letzterLayoutGrund } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
-import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements } from './build-elements.js';
+import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements, tagWlanAp } from './build-elements.js';
 import { isFocusActive, filterToFocus, dropFocus, renderFocusBanner } from './focus-mode.js';
+import { initClientFocus, revealClientsOf, hideAllClients, isClientNode } from './client-focus.js';
 import { toast, toastTruncatedOnce } from './toast.js';
 import { fetchJson } from './http.js';
 import { setupGroupHulls, destroyGroupHulls } from './group-hulls.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
-import { NT_GROUP_CLUSTER_KEY, loadGhostMode } from './storage.js';
+import { NT_GROUP_CLUSTER_KEY, loadGhostMode, loadRings, loadExpected, loadVlanFilter } from './storage.js';
+import { applyRings } from './rings.js';
+import { applyExpected } from './expected-links.js';
+import { applyVlanFilter } from './vlan-filter.js';
+import { perfBegin, perfMark } from './perf.js';
 
 // ── Cross-Module-Glue: setupToolbar lebt im Hauptmodul ─────────────────────
 // (es ist 228 Zeilen und ist eng mit render() und vielen Buttons verknüpft;
@@ -106,6 +112,7 @@ function _markRefresh(ok, err) {
 // (im Hauptmodul). Daher nicht hier — bleibt im Hauptmodul.
 
 export function render(wrap, nodes, edges, dataUrl) {
+    perfBegin('render tech (' + nodes.length + ' nodes, ' + edges.length + ' edges)');
     const pnl = document.getElementById('nt-detail');
     if (!nodes.length) {
         wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
@@ -276,7 +283,11 @@ export function render(wrap, nodes, edges, dataUrl) {
     const perfMode = _perfPref !== null ? _perfPref : (nodes.length >= PERF_THRESHOLD);
     window._ntPerfMode = perfMode;
 
+    // UniFi-Client -> AP-Namen auf die Rohknoten schreiben, bevor die Knoten-
+    // Elemente gebaut werden (Tooltip/Detail lesen n.wlan_ap).
+    tagWlanAp(nodes, edges);
     const elements = buildNodeElements(nodes, perfMode).concat(buildEdgeElements(edges, nodes));
+    perfMark('elements built (' + elements.length + ')');
 
     // ── Cleanup vorheriger Tab-State ───────────────────────────────────────
     if (window._ntEdgeAnim)     { clearInterval(window._ntEdgeAnim);     window._ntEdgeAnim     = null; }
@@ -383,10 +394,15 @@ export function render(wrap, nodes, edges, dataUrl) {
     const cy = cytoscape({
         container: cyDiv,
         elements: elements,
-        style: buildCytoscapeStyle(dark, nodes.length),
+        style: buildCytoscapeStyle(dark, nodes.length, nodeSizeFactor()),
         layout: _initialLayout,
         userZoomingEnabled: true, userPanningEnabled: true, boxSelectionEnabled: false,
-        minZoom: 0.1, maxZoom: 4,
+        // minZoom klemmt fit(): bei 1000+ Knoten ist das gesamte Layout breiter
+        // als 10x Viewport, und mit 0.1 kann fit() nicht weit genug herauszoomen
+        // — die Karte zeigt dann einen leeren Ausschnitt (gemessen 2026-10-28,
+        // 2000-Host-Lasttest). Fuer grosse Graphen tiefer herauszoomen lassen;
+        // kleine behalten die 0.1-Grenze gegen versehentliches Wegzoomen.
+        minZoom: nodes.length > 800 ? 0.02 : 0.1, maxZoom: 4,
         // Performance bei grossen Graphen (~150-200+ Hosts): Kanten waehrend
         // Pan/Zoom ausblenden und den Viewport als Textur cachen -> deutlich
         // fluessigeres Pannen/Zoomen. motionBlur aus (Default) gegen Ghosting.
@@ -398,8 +414,17 @@ export function render(wrap, nodes, edges, dataUrl) {
         tapholdDuration: loadTapholdMs(),
     });
 
+    perfMark('cytoscape init + style');
+
     // Performance-Modus: einfache Severity-Punkte statt SVG-Pie-Knoten.
     if (perfMode) cy.nodes('[!isGroup]').addClass('nt-perf');
+
+    // UniFi-Client-Endgeraete ab Frame 1 ausblenden (client-focus.js). Sie
+    // bleiben im Graphen (das Layout positioniert sie neben ihrem AP), sind aber
+    // unsichtbar, bis ein Klick auf den AP sie einblendet. Ihre Kanten blendet
+    // Cytoscape mit aus. Hier VOR dem Layout gesetzt — display:none aendert nicht
+    // die Graphzugehoerigkeit, die Positionen entstehen trotzdem.
+    initClientFocus(cy);
 
     // Bei Cluster nach dem Cytoscape-Init das eigentliche Layout fahren.
     // setTimeout damit das Canvas seine Größe bekommt.
@@ -411,7 +436,9 @@ export function render(wrap, nodes, edges, dataUrl) {
         const _innerLayout = loadLayout();
         setTimeout(function() {
             if (cy && !cy.destroyed()) {
-                runGroupClusterLayout(cy, groupNames, _clusterMode, null, _innerLayout);
+                perfMark('cluster layout start (after +50ms defer)');
+                runGroupClusterLayout(cy, groupNames, _clusterMode,
+                    function() { perfMark('cluster layout done'); }, _innerLayout);
             }
         }, 50);
     }
@@ -528,6 +555,12 @@ export function render(wrap, nodes, edges, dataUrl) {
             }
         }
         showDetail(pnl, e.target.data(), cy);
+
+        // UniFi-Clients: Klick auf einen Nicht-Client blendet GENAU dessen
+        // Client-Endgeraete ein (und alle anderen wieder aus). Ein Klick auf
+        // einen Client selbst laesst die aktuelle Auswahl stehen. Ein Knoten
+        // ohne Clients blendet so die zuletzt gezeigten sauber wieder aus.
+        if (!isClientNode(e.target)) revealClientsOf(clickedId);
     });
 
     cy.on('mouseover', 'node[!isGroup]', function(e) {
@@ -580,6 +613,7 @@ export function render(wrap, nodes, edges, dataUrl) {
             hideCtx();
             resetHighlight(cy);
             clearPathState(cy);
+            hideAllClients();   // Klick ins Leere: Client-Endgeraete wieder aus
         }
     });
 
@@ -659,6 +693,21 @@ export function render(wrap, nodes, edges, dataUrl) {
     applyBundleView(cy);
     bindBundleView(cy, applyTrafficHeatmap);
 
+    // Ring-/Loop-Hervorhebung, wenn der Toggle an ist. NACH applyBundleView,
+    // damit der Zyklen-Graph die zusammengeklappten Trunk-Kanten sieht (ein
+    // Paar statt N parallelen). Nur Styling, keine Layout-Abhaengigkeit.
+    if (loadRings()) applyRings(cy);
+
+    // Soll/Ist-Overlay (nt:expect): abweichende erwartete Kanten einzeichnen,
+    // wenn der Toggle an ist. NACH applyBundleView wie die Ringe.
+    if (loadExpected()) applyExpected(cy);
+
+    // VLAN-Filter wieder anwenden, wenn eins gewaehlt ist (NT VLAN by SNMP).
+    // NACH applyBundleView, damit die zusammengeklappten Trunk-Kanten die
+    // VLAN-Daten tragen. Ohne VLAN-Daten ist der gespeicherte Wert leer.
+    const _vlanSel = loadVlanFilter();
+    if (_vlanSel) applyVlanFilter(cy, _vlanSel);
+
     // Blaetter einklappen. NACH applyBundleView, weil das Buendeln
     // entscheidet, wie viele Kanten ein Knoten sichtbar hat — und damit, ob
     // er als Blatt zaehlt.
@@ -717,6 +766,7 @@ export function render(wrap, nodes, edges, dataUrl) {
 
     setupMinimap(cy, wrap);
     applyManualLinks(cy);
+    perfMark('overlays done (bundle/rings/expected/collapse/manual-links)');
     showMinimap();
 
     // Build the focus banner AFTER the wrap cleanup above (which also swept
@@ -743,6 +793,18 @@ export function render(wrap, nodes, edges, dataUrl) {
             if (isPinned) n.lock();
         });
     })();
+
+    // ── Undo/Redo der Anordnung ────────────────────────────────────────────
+    // Persistenz wie der Auto-Save unten: in focus mode NICHT speichern (dort
+    // ist die Anordnung bewusst fluechtig). Reset der Historie nur bei echtem
+    // Ansichtswechsel (andere Knotenmenge) — ein In-Place-Refresh laesst sie
+    // stehen. grab merkt sich den Vor-Drag-Zustand, dragfree sichert ihn.
+    configureLayoutHistory({
+        persist: function(cyInst) { if (!isFocusActive()) savePositions(cyInst); }
+    });
+    syncLayoutHistoryNodes(cy);
+    cy.on('grab', 'node[!isGroup]', function() { markBeforeDrag(cy); });
+    cy.on('dragfree', 'node[!isGroup]', function() { commitDrag(cy); });
 
     // ── Drag → Position speichern (debounced) ──────────────────────────────
     // NOT in focus mode: savePositions stores the COMPLETE state of the view,
@@ -773,14 +835,30 @@ export function render(wrap, nodes, edges, dataUrl) {
     // Nach automatischem Layout Position einmalig speichern — likewise
     // skipped in focus mode (same reasoning as the dragfree save above).
     cy.one('layoutstop', function() {
+        perfMark('layoutstop fired');
+        // layoutstop feuert, wenn das Layout (inkl. Animation) fertig ist — die
+        // Buchhaltung danach (Positionen sichern, Fit, Traffic/Labels/Ringe) kann
+        // kurz danach laufen. Frueher 800ms; gemessen (NT-PERF) war das fast die
+        // Haelfte der 1,4s bis "Karte nutzbar", ohne Grund. 250ms reicht und
+        // bleibt hinter dem letzten Fit (+600ms ab Render-Start), sodass der nicht
+        // ueber diese Positionen draufrendert.
         setTimeout(function() {
             if (window._ntCy) {
-                if (!isFocusActive()) savePositions(window._ntCy);
+                // Nach einem Datei-Import (layout-file.js importLayout) einmal
+                // NICHT zurueckspeichern: der Import hat die Positionen schon
+                // gemergt und persistiert; im Cluster-Modus wuerde dieser Save
+                // die Cluster-Ausgabe darueberlegen und den Import verwerfen.
+                const skipSave = window._ntSkipNextLayoutSave === true;
+                window._ntSkipNextLayoutSave = false;
+                if (!isFocusActive() && !skipSave) savePositions(window._ntCy);
                 window._ntCy.fit(window._ntCy.nodes(), 40);
                 applyTrafficHeatmap(window._ntCy);
                 applyPortLabels(window._ntCy);
+                if (loadRings()) applyRings(window._ntCy);
+                if (loadExpected()) applyExpected(window._ntCy);
+                perfMark('post-layout overlays done (traffic/labels/rings) — map usable');
             }
-        }, 800);
+        }, 250);
     });
 
     // ── Auto-Refresh ──────────────────────────────────────────────────────
@@ -890,4 +968,6 @@ export function render(wrap, nodes, edges, dataUrl) {
             })
             .catch(function(err) { _markRefresh(false, err); });   // Netz-/HTTP-/Parse-Fehler → Badge
     }, _refreshMs);
+
+    perfMark('render() synchronous end (layout/overlays follow async)');
 }

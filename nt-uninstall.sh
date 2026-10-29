@@ -37,6 +37,9 @@ readonly WIDGETS=(
     "network_topology_table_widget"
     "network_topology_kpi_widget"
     "network_topology_items_widget"
+    "network_topology_faceplate_widget"
+    "network_topology_plan_widget"
+    "network_topology_wlan_widget"
 )
 # Alte Namen aus 4.x. Wer von dort kommt, hat sie evtl. noch liegen — und
 # manche Handinstallation hat das QUELLverzeichnis als Namen genommen

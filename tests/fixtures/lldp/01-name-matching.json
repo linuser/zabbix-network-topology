@@ -1,0 +1,21 @@
+{
+  "name": "name-matching-basics",
+  "vendor": "vendor-neutral (synthetic)",
+  "source": "hand-built",
+  "description": "A neighbour sysName matches by exact technical name and by FQDN+uppercase; an unknown neighbour stays unmatched and draws no false edge.",
+  "hosts": {
+    "h1": {"host": "sw-core", "name": "Core Switch"},
+    "h2": {"host": "sw-acc1", "name": "Access 1"},
+    "h3": {"host": "fw-01",   "name": "Firewall"}
+  },
+  "lldp_raw": [
+    {"hostid": "h2", "key_": "lldpRemSysName", "lastvalue": "sw-core",           "src": "lldp"},
+    {"hostid": "h3", "key_": "lldpRemSysName", "lastvalue": "SW-CORE.fritz.box", "src": "lldp"},
+    {"hostid": "h1", "key_": "lldpRemSysName", "lastvalue": "printer-xyz",       "src": "lldp"}
+  ],
+  "expect": {
+    "edges": [{"a": "h2", "b": "h1"}, {"a": "h3", "b": "h1"}],
+    "edge_count": 2,
+    "unmatched_contains": ["printer-xyz"]
+  }
+}

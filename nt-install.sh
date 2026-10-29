@@ -12,7 +12,7 @@
 # If <zip> is omitted it looks for  ./network_topology.zip  then ~/network_topology.zip
 # The module is ALWAYS installed as  <ui>/modules/network_topology  (the name is mandatory).
 #
-# Requirements: bash, unzip, sudo (or run as root), a Zabbix 7.4+ frontend.
+# Requirements: bash, unzip, sudo (or run as root), a Zabbix 7.0 LTS+ frontend (7.0/7.4/8.0).
 # Autodetect override:  ZBX_UI_PATH=/path/to/zabbix/ui  ./nt-install.sh ...
 
 set -uo pipefail   # NICHT -e: check() erwartet fehlschlagende Tests; kritische
@@ -210,7 +210,8 @@ cmd_check() {
     local w wdir wv found_w=0
     for w in network_topology_widget network_topology_health_widget \
              network_topology_table_widget network_topology_kpi_widget \
-             network_topology_items_widget; do
+             network_topology_items_widget network_topology_faceplate_widget \
+             network_topology_plan_widget network_topology_wlan_widget; do
         wdir="$UI/modules/$w"
         [[ -d "$wdir" ]] || continue
         found_w=1
@@ -419,6 +420,6 @@ case "${1:-}" in
     update)
         if [[ "${2:-}" == "--rollback" ]]; then cmd_rollback
         else zip=$(find_zip "${2:-}") || exit 1; do_deploy update "$zip"; fi ;;
-    ""|-h|--help|help) sed -n '3,22p' "$0" | sed 's/^#[[:space:]]\{0,1\}//' ;;
+    ""|-h|--help|help) sed -n '3,17p' "$0" | sed 's/^#[[:space:]]\{0,1\}//' ;;
     *) die "Unbekanntes Kommando: ${1:-} (install | update | check)";;
 esac

@@ -1,8 +1,10 @@
 // geo-providers.js — Tile-Provider-Liste für die Geomap-Ansicht.
 //
-// Die Liste matcht 1:1 die in Zabbix native vordefinierten Provider
+// Die Liste matcht die in Zabbix native vordefinierten Provider
 // (Administration → General → Geographical maps), damit User dieselbe
-// Vertrautheit haben.
+// Vertrautheit haben — plus einen Zusatz, den Zabbix nicht mitbringt:
+// "Esri World Imagery" als WELTWEITES Luftbild (USGS Imagery ist nur in den
+// USA hochaufloesend). Siehe Lizenzhinweis am Eintrag.
 //
 // ⚠ Stamen Toner Lite und Stamen Terrain wurden 2023 zu Stadia Maps migriert
 //    und benötigen seither einen API-Key oder Domain-Authentifizierung.
@@ -71,6 +73,23 @@ export const GEO_PROVIDERS = [
         url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
         attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>',
         maxZoom: 16
+    },
+    {
+        // Weltweites Luftbild — das, was USGS Imagery ausserhalb der USA nicht
+        // liefert. Der klassische arcgisonline.com-Endpunkt laeuft OHNE API-Key
+        // (so nutzt ihn auch esri-leaflet); die Attribution unten ist dabei
+        // PFLICHT und darum fest verdrahtet. Fuer produktiven/kommerziellen
+        // Dauerbetrieb lenkt Esri auf ein ArcGIS-Konto mit Token
+        // (ibasemaps-api.arcgis.com) — wer das braucht, ersetzt die URL dort.
+        // KEINE Google-Earth-/Maps-Kacheln: lizenzrechtlich gesperrt und in
+        // Leaflet ohnehin nicht nutzbar. Tile-Reihenfolge {z}/{y}/{x} wie bei
+        // den USGS-ArcGIS-Endpunkten darueber.
+        id: 'esri-imagery',
+        label: 'Esri World Imagery',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar '
+                   + 'Geographics, and the GIS User Community',
+        maxZoom: 19
     }
 ];
 

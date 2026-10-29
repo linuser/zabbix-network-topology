@@ -25,6 +25,7 @@ import { makeNodeImage } from './icons.js';
 import { SEV_COL, statusColor } from './severity.js';
 import { annotateBundles } from './parallel-links.js';
 import { INFRA_CAPS } from './device-caps.js';
+import { t } from './i18n.js';
 
 // Synthetische Internet-Wolke + Edges injizieren, falls nötig.
 // Mutiert NICHT die Eingabe-Arrays — gibt neue Arrays zurück.
@@ -127,6 +128,7 @@ export function injectGhostNodes(nodes, edges, lldpQuality, modus) {
                     _ghostDesc:    '',  // Hersteller/Modell (lldpRemSysDesc)
                     _ghostCaps:    [],  // Bridge / Router / WLAN AP / Telephone
                     _ghostChassis: '',  // Basis-MAC (lldpRemChassisId)
+                    _ghostMgmtIp:  '',  // Management-IP (lldpRemManAddr) — echte Adresse
                     groups: [], traffic: { in: 0, out: 0 }
                 };
             }
@@ -142,6 +144,7 @@ export function injectGhostNodes(nodes, edges, lldpQuality, modus) {
             // waere schlechter als eine zu nehmen.
             if (!g._ghostDesc && u && u.desc)       g._ghostDesc    = String(u.desc);
             if (!g._ghostChassis && u && u.chassis) g._ghostChassis = String(u.chassis);
+            if (!g._ghostMgmtIp && u && u.mgmt_ip)  g._ghostMgmtIp  = String(u.mgmt_ip);
             if (!g._ghostCaps.length && u && u.caps && u.caps.length) {
                 g._ghostCaps = u.caps.slice();
             }
@@ -220,6 +223,18 @@ export function buildNodeElements(nodes, perfMode) {
             cpu: n.cpu, memory: n.memory, ping: n.ping, traffic: n.traffic,
             iface_health: n.iface_health || null,
             link_speed: n.link_speed || 0,
+            // Blockt dieser Host irgendwo per STP? -> Ring-Klassifizierung
+            // (rings.js) wertet es als "STP ist aktiv, kein Loop".
+            _stpBlock: n.stp_block === true,
+            // STP instabil (Topology-Changes steigen schnell) -> Loop-Fruehwarnung.
+            _stpChurn: n.stp_churn === true,
+            _stpChurnRate: (typeof n.stp_churn_rate === 'number') ? n.stp_churn_rate : null,
+            // Broadcast-Storm (lautester Port ueber der Schwelle) -> aktiver Loop.
+            _bcastStorm: n.bcast_storm === true,
+            _bcastRate: (typeof n.bcast_rate === 'number') ? n.bcast_rate : null,
+            // MAC-Flapping (MACs wechseln den Port, vom Sender gepusht) -> Loop.
+            _macFlap: n.mac_flap === true,
+            _macFlapN: (typeof n.mac_flap_n === 'number') ? n.mac_flap_n : null,
             type: n.type, host: n.host, ip: n.ip, iftype: n.iftype,
             groups: n.groups, _primaryGroup: n._primaryGroup,
             // Proxy-Felder durchreichen. Sie fehlten hier, und das schlug an
@@ -247,8 +262,27 @@ export function buildNodeElements(nodes, perfMode) {
             // Extra-Items aus nt:show-Tags + icon_override-Flag
             extra_items:  n.extra_items || [],
             icon_override: !!n.icon_override,
+            // WLAN (UniFi-AP): Funkmodule {band:{channel,width,std}} + Client-Zahl
+            // (per IP-Join vom SNMP-AP). null/undefined bei Nicht-APs. Badge (icons.js)
+            // und WLAN-Sektion (detail-panel.js) lesen das.
+            radios: n.radios || null,
+            wlan_clients: (typeof n.wlan_clients === 'number') ? n.wlan_clients : null,
+            ssids: (n.ssids && n.ssids.length) ? n.ssids : null,
+            wlan_satisfaction: (typeof n.wlan_satisfaction === 'number') ? n.wlan_satisfaction : null,
+            is_client: !!n.is_client,
+            // UniFi-Client: Name des APs, an dem er haengt (aus der uplink.id-
+            // Kante). render-tech ruft tagWlanAp VOR buildNodeElements und setzt
+            // n.wlan_ap; Tooltip + Detail-Panel nennen ihn. null bei Nicht-Clients.
+            wlan_ap: n.wlan_ap || null,
+            // VLANs, auf denen dieses Geraet liegt (NT VLAN by SNMP): [{id,name}]
+            // fuer den VLAN-Waehler/Filter; null, wo kein nt.vlan.walk vorliegt.
+            vlans: (n.vlans && n.vlans.length) ? n.vlans : null,
             // Custom-Links aus nt:link-Tags (Kontextmenü)
             links:        n.links || [],
+            // SLA-Relevanz: haengt ein aktives Problem an einem Zabbix-Service?
+            // KPI-Pille (Filter) und Detail-Panel-Badge lesen das.
+            sla_relevant: !!n.sla_relevant,
+            sla_services: n.sla_services || [],
             pinned: false,   // wird nach cy-Init aus localStorage gesetzt
             note:   ''       // dito
         };
@@ -267,6 +301,7 @@ export function buildNodeElements(nodes, perfMode) {
             nodeData._ghostDesc    = n._ghostDesc    || '';
             nodeData._ghostCaps    = n._ghostCaps    || [];
             nodeData._ghostChassis = n._ghostChassis || '';
+            nodeData._ghostMgmtIp  = n._ghostMgmtIp  || '';
         }
         // Aggregat-Marker durchreichen, damit context-menu sie erkennt
         if (n._isAggregate) {
@@ -306,6 +341,26 @@ export function buildNodeElements(nodes, perfMode) {
 // - Internet-Edges (e._isInternetEdge) bekommen einen eigenen leeren
 //   Traffic-Datensatz und werden NICHT als isLLDP markiert (sonst würde
 //   der LLDP-Toggle sie verstecken).
+// UniFi-Client -> an welchem AP haengt er? Aus der uplink.id-Kante (src 'unifi')
+// den AP-Namen auf den Client-ROHKNOTEN schreiben, VOR buildNodeElements, damit
+// Tooltip und Detail-Panel ihn ohne Graph-Zugriff nennen koennen. Nur wenn das
+// andere Ende wirklich ein AP ist (type 'wireless') -- ein kabelgebundener
+// Client an einem Switch bekommt KEIN wlan_ap (sonst stuende dort faelschlich
+// ein Switch als "AP"). Mutiert die uebergebenen Rohknoten.
+export function tagWlanAp(nodes, edges) {
+    if (!nodes || !edges) return;
+    const byId = {};
+    nodes.forEach(function(n) { byId[String(n.id)] = n; });
+    edges.forEach(function(e) {
+        if ((e.src || []).indexOf('unifi') === -1) return;
+        const a = byId[String(e.source || e.from || '')];
+        const b = byId[String(e.target || e.to || '')];
+        if (!a || !b) return;
+        if (a.is_client && b.type === 'wireless')      a.wlan_ap = b.label || b.host || '';
+        else if (b.is_client && a.type === 'wireless') b.wlan_ap = a.label || a.host || '';
+    });
+}
+
 export function buildEdgeElements(edges, nodes) {
     const elements = [];
     const nodeIds = {}, edgeSeen = {};
@@ -408,7 +463,7 @@ export function buildEdgeElements(edges, nodes) {
                    + (tgtNode && tgtNode.traffic ? tgtNode.traffic.out : 0);
         const srcDead = (srcNode || {}).severity || 0;
         const tgtDead = (tgtNode || {}).severity || 0;
-        const tLabel = (srcDead >= 5 || tgtDead >= 5) ? '\u26A0 No Connection'
+        const tLabel = (srcDead >= 5 || tgtDead >= 5) ? t('edge.label.no_connection')
                      : (tIn || tOut) ? '\u2193' + fmt(tIn / 2) + '\n\u2191' + fmt(tOut / 2) : '';
         // Edge-Health aus den iface_health-Aggregaten beider Endpunkte:
         // worst-case (max) → wenn EITHER seite Down-Interfaces oder Errors meldet,
@@ -499,9 +554,19 @@ export function buildEdgeElements(edges, nodes) {
             // defekten Uplink traegt es sonst an jeder seiner Kanten.
             if (pm.errors   !== undefined) portErr  = pm.errors;
             if (pm.discards !== undefined) portDrop = pm.discards;
-            tLbl = (srcDead >= 5 || tgtDead >= 5) ? '⚠ No Connection'
+            tLbl = (srcDead >= 5 || tgtDead >= 5) ? t('edge.label.no_connection')
                  : (eIn || eOut) ? '↓' + fmt(eIn) + '\n↑' + fmt(eOut) : '';
         }
+
+        // UniFi-WLAN-Assoziation: eine uplink.id-Kante (src 'unifi') ist
+        // DRAHTLOS, wenn ein Ende ein Client ist (Client haengt per WLAN am AP)
+        // oder BEIDE Enden APs sind (Mesh). AP->Switch ueber uplink.id bleibt
+        // kabelgebunden. traffic.js zeichnet drahtlose Kanten eigen (cyan,
+        // gepunktet), das Detail-Panel markiert den Peer mit dem WLAN-Glyph.
+        const _isUnifiEdge = (e.src || []).indexOf('unifi') !== -1;
+        const _unifiWireless = _isUnifiEdge && (
+            (srcNode && srcNode.is_client) || (tgtNode && tgtNode.is_client)
+            || (srcNode && tgtNode && srcNode.type === 'wireless' && tgtNode.type === 'wireless'));
 
         elements.push({
             data: { id: 'e' + i, source: src, target: tgt,
@@ -553,7 +618,22 @@ export function buildEdgeElements(edges, nodes) {
                     // Per Seite, nicht als einzelner Wert: die beiden Ports
                     // einer Leitung koennen verschieden lange stehen.
                     portSrcUptime: (pmSrc && pmSrc.uptime !== undefined) ? pmSrc.uptime : null,
-                    portTgtUptime: (pmTgt && pmTgt.uptime !== undefined) ? pmTgt.uptime : null }
+                    portTgtUptime: (pmTgt && pmTgt.uptime !== undefined) ? pmTgt.uptime : null,
+                    // STP-Zustand je Ende (dot1dStpPortState: 2=blocking,
+                    // 5=forwarding, 1/3/4/6 = disabled/listening/learning/broken).
+                    // _isStpBlocked, wenn IRGENDEIN Ende blockt: ein geblockter
+                    // Redundanzlink traegt LLDP und meldet "up", leitet aber nicht
+                    // weiter -- die Karte strichelt/dimmt ihn statt ihn als aktiv
+                    // zu zeichnen.
+                    stpSrc: (pmSrc && pmSrc.stp !== undefined) ? pmSrc.stp : null,
+                    stpTgt: (pmTgt && pmTgt.stp !== undefined) ? pmTgt.stp : null,
+                    _isStpBlocked: !!((pmSrc && pmSrc.stp === 2) || (pmTgt && pmTgt.stp === 2)),
+                    // UniFi-Funkverbindung (Client<->AP oder AP<->AP-Mesh) —
+                    // traffic.js faerbt sie cyan/gepunktet, nicht nach Auslastung.
+                    _unifiWireless: _unifiWireless,
+                    // VLANs auf dieser Kante (NT VLAN by SNMP, "mindestens ein
+                    // Ende") -> VLAN-Filter; null ohne VLAN-Daten.
+                    vlans: (e.vlans && e.vlans.length) ? e.vlans : null }
         });
     });
     return annotateBundles(elements);

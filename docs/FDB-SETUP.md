@@ -3,7 +3,7 @@
 How the module answers **"which switch port is this MAC on?"**, and the four
 Zabbix items you add to a switch to make it work.
 
-**🇬🇧 English**
+*[← Documentation index](README.md)*
 
 > This is new and opt-in. Without the items below, the finder simply has no data
 > for that switch and says so — nothing else in the module changes.

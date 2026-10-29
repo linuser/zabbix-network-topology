@@ -40,6 +40,43 @@ const TIER_ORDER = {
 };
 const TIER_DEFAULT = 4;   // unbekannte Device-Types landen bei "Server"
 
+// Platziert Tiers von oben nach unten und BRICHT breite Tiers in mehrere
+// Unterzeilen um, damit das Gesamtbild grob quadratisch bleibt.
+//
+// Warum: die Tier-Presets (hops/hierarchy) legten jeden Tier in EINE Zeile,
+// x = i*nodeGap, ohne Obergrenze. Gemessen am 2000-Host-Lasttest (2026-10-28):
+// ein Zugangs-Tier mit 768 Knoten wurde ~115.000 px breit bei ~1.700 px Hoehe.
+// Cytoscape' fit() klemmt gegen minZoom und zeigt dann nur einen leeren
+// Ausschnitt — die Karte schien LEER, obwohl alle Knoten da waren (kein Hang,
+// kein Fehler). Ein breiter Access-Tier ist bei jedem realen 1000+-Host-Netz
+// der Normalfall, nicht die Ausnahme.
+//
+// maxPerRow ~ sqrt(N) haelt das Raster quadratisch: ein Tier, das breiter als
+// das waere, wird mehrzeilig gestapelt (Unterzeilen im nodeGap-Raster), die
+// Tier-Trennung (tierGap) kommt zwischen zwei Tiers obendrauf. Kleine Tiers
+// (unter maxPerRow) bleiben unveraendert einzeilig.
+function placeTiersWrapped(tiersInOrder, nodeGap, tierGap, totalNodes) {
+    const maxPerRow = Math.max(12, Math.ceil(Math.sqrt(totalNodes || 1)));
+    const positions = {};
+    let y = 0;
+    tiersInOrder.forEach(function(reihe) {
+        if (!reihe || !reihe.length) return;
+        const rows = Math.ceil(reihe.length / maxPerRow);
+        const perRow = Math.ceil(reihe.length / rows);
+        for (let r = 0; r < rows; r++) {
+            const slice = reihe.slice(r * perRow, (r + 1) * perRow);
+            const breite = (slice.length - 1) * nodeGap;
+            const startX = -breite / 2;
+            slice.forEach(function(node, i) {
+                positions[String(node.id)] = { x: startX + i * nodeGap, y: y };
+            });
+            y += nodeGap;                 // Unterzeile: enges, quadratisches Raster
+        }
+        y += (tierGap - nodeGap);         // Tier-Trennung oben drauf
+    });
+    return positions;
+}
+
 // Berechnet feste Positionen (preset) für alle Knoten basierend auf ihrem
 // device-type. Innerhalb einer Tier werden die Knoten gleichmäßig
 // horizontal verteilt. Internet-Knoten (id beginnt mit 'internet_') landet
@@ -76,22 +113,10 @@ function buildHierarchyPositions(nodes) {
     });
 
     const tiers = Object.keys(byTier).map(Number).sort(function(a, b) { return a - b; });
-    const positions = {};
-
-    tiers.forEach(function(tier, tierIdx) {
-        const row = byTier[tier];
-        // Horizontal zentrieren um x=0
-        const totalWidth = (row.length - 1) * nodeGap;
-        const startX = -totalWidth / 2;
-        row.forEach(function(node, i) {
-            positions[String(node.id)] = {
-                x: startX + i * nodeGap,
-                y: tierIdx * tierGap
-            };
-        });
-    });
-
-    return positions;
+    // Breite Tiers umbrechen, sonst schrumpft fit() tausende Knoten auf
+    // Sub-Pixel — siehe placeTiersWrapped().
+    const ordered = tiers.map(function(tier) { return byTier[tier]; });
+    return placeTiersWrapped(ordered, nodeGap, tierGap, nodes.length);
 }
 
 /**
@@ -228,21 +253,18 @@ function buildHopTierPositions(nodes, edges) {
         (byTier[t2] = byTier[t2] || []).push(n);
     });
 
-    const positions = {};
-    Object.keys(byTier).map(Number).sort(function(a, b) { return a - b; })
-        .forEach(function(tier, idx) {
-            const reihe = byTier[tier];
-            reihe.sort(function(a, b) {
+    // Tiers in Reihenfolge sortieren, Knoten je Tier nach Severity/Label, dann
+    // mit Umbruch platzieren: ein breiter Hop-Tier (tausend Zugangsknoten) wird
+    // mehrzeilig statt kilometerbreit — siehe placeTiersWrapped().
+    const ordered = Object.keys(byTier).map(Number).sort(function(a, b) { return a - b; })
+        .map(function(tier) {
+            byTier[tier].sort(function(a, b) {
                 return (b.severity || 0) - (a.severity || 0)
                     || String(a.label || '').localeCompare(String(b.label || ''));
             });
-            const breite = (reihe.length - 1) * nodeGap;
-            reihe.forEach(function(node, i) {
-                positions[String(node.id)] = { x: -breite / 2 + i * nodeGap, y: idx * tierGap };
-            });
+            return byTier[tier];
         });
-
-    return positions;
+    return placeTiersWrapped(ordered, nodeGap, tierGap, nodes.length);
 }
 
 // Position fuer Knoten OHNE gespeicherte Koordinate — Geister vor allem.

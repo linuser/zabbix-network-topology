@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # nt-fdb-add-items.sh — legt die vier walk[]-Items fuer den MAC-Finder auf einem
-# Switch an (siehe FDB-SETUP.md). EIN Befehl statt vier Klicks in der UI.
+# Switch an (siehe docs/FDB-SETUP.md). EIN Befehl statt vier Klicks in der UI.
 #
 # Aufruf:
 #   NT_ZBX_URL='https://<zabbix>/api_jsonrpc.php' \

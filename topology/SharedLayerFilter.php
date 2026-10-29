@@ -109,16 +109,41 @@ class SharedLayerFilter {
                 continue;
             }
 
-            // View-Key: sortierte Group-IDs mit "_" verbunden, optional "_grp".
-            $base = substr($view, -4) === '_grp' ? substr($view, 0, -4) : $view;
-            $gids = array_filter(explode('_', $base), static function ($g) {
-                return $g !== '';
-            });
+            // View-Key: sortierte Group-IDs mit "_" verbunden, optional mit
+            // Suffix "_grp" (Group-View) oder "_plan" (Plan-Modus). Beide hier
+            // abtrennen — sonst landet "grp"/"plan" als Pseudo-Group-ID im
+            // explode() und faellt durch die Sichtbarkeitspruefung, die die
+            // ganze Ansicht verwirft (die geteilte Plan-Anordnung verschwand so
+            // bei jedem Laden; derselbe Suffix-Fix wie in NodePositions).
+            $base = $view;
+            foreach (['_grp', '_plan'] as $suffix) {
+                if (substr($base, -strlen($suffix)) === $suffix) {
+                    $base = substr($base, 0, -strlen($suffix));
+                    break;
+                }
+            }
+            // HOST+HOPS-ANSICHT. Ihr View-Key ist nicht gruppen-, sondern HOST-
+            // skaliert: "host<hostid>_h<hops>" (storage.js _hostViewKey). Ueber
+            // die Gruppen-IDs geprueft fiel er immer durch — "host10084" und "h2"
+            // sind keine Gruppen —, und die ganze geteilte Host/Hops-Anordnung
+            // verschwand beim Laden (vom externen Security-Review reproduziert).
+            // Stattdessen gegen die sichtbaren Host-IDs halten: wer den Host nicht
+            // sehen darf, bekommt auch die Anordnung nicht.
+            if (preg_match('/^host(\d{1,20})_h\d{1,3}$/', $base, $m)) {
+                if (!isset($visible_hostids[$m[1]])) {
+                    continue;
+                }
+            }
+            else {
+                $gids = array_filter(explode('_', $base), static function ($g) {
+                    return $g !== '';
+                });
 
-            // Eine leere Auswahl ist kein Verrat — sie nennt keine Gruppe.
-            foreach ($gids as $g) {
-                if (!isset($visible_groupids[$g])) {
-                    continue 2;
+                // Eine leere Auswahl ist kein Verrat — sie nennt keine Gruppe.
+                foreach ($gids as $g) {
+                    if (!isset($visible_groupids[$g])) {
+                        continue 2;
+                    }
                 }
             }
 

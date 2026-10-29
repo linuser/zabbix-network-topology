@@ -20,6 +20,8 @@ export const TYPE_ICON = {
     storage:  'M-11,-11 h22 v6 h-22z M-11,-2 h22 v6 h-22z M-11,7 h22 v6 h-22z M7,-8 a1.5,1.5 0 1,1 0,0.01 M7,1 a1.5,1.5 0 1,1 0,0.01',
     camera:   'M-11,-7 h15 l3,-4 h4 l3,4 h3 v14 h-28z M0,3 a5,5 0 1,1 0,0.01',
     printer:  'M-10,-1 h20 v9 h-20z M-7,-9 h14 v8 h-14z M-7,8 h14 v8 h-14z M-4,11 h8 M-4,14 h8',
+    // Endgeraet/Client — Monitor mit Standfuss (unterscheidet sich vom Server/Storage)
+    client:   'M-11,-10 h22 v14 h-22z M-8,-7 h16 v8 h-16z M-2,4 h4 v3 h-4z M-7,7 h14 v2 h-14z',
     // Gestapelte Karten — visualisiert eine Gruppe von Hosts (Group-View)
     group:    'M-11,-9 h18 v14 h-18z M-7,-13 h18 v14 h-18z M-3,-5 h8 M-3,-1 h8 M-3,3 h8',
     // Wolke — virtueller Internet-Knoten (Hierarchie-Layout)
@@ -60,6 +62,37 @@ function _imgCachePrune() {
     }
 }
 
+// „businessplan"-Glyph (Tabler, outline) als SVG-DOM-Knoten — das Zeichen der
+// SLA-Relevanz. Eine Quelle, von KPI-Pille UND Detail-Panel-Badge genutzt,
+// damit beide denselben Strich tragen. Bewusst createElementNS statt innerHTML
+// (no-unsanitized) und stroke=currentColor-faehig: die Farbe kommt vom Aufrufer,
+// damit hell/dunkel am Nutzungsort entschieden wird (CLAUDE.md: SVG erreicht
+// keine CSS-Variable). Pfade exakt aus @tabler/icons businessplan.svg (24er Grid).
+export function businessplanGlyph(color, size) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', String(size || 15));
+    svg.setAttribute('height', String(size || 15));
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', color || 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.style.flexShrink = '0';
+    ['M16 6m-5 0a5 3 0 1 0 10 0a5 3 0 1 0 -10 0',
+     'M11 6v4c0 1.657 2.239 3 5 3s5 -1.343 5 -3v-4',
+     'M11 10v4c0 1.657 2.239 3 5 3s5 -1.343 5 -3v-4',
+     'M11 14v4c0 1.657 2.239 3 5 3s5 -1.343 5 -3v-4',
+     'M7 9h-2.5a1.5 1.5 0 0 0 0 3h1a1.5 1.5 0 0 1 0 3h-2.5',
+     'M5 15v1m0 -8v1'].forEach(function(d) {
+        const p = document.createElementNS(NS, 'path');
+        p.setAttribute('d', d);
+        svg.appendChild(p);
+    });
+    return svg;
+}
+
 // Cache komplett leeren — z.B. nach Dark-Mode-Wechsel oder Pin/Note-Änderung,
 // wo die Cache-Keys den neuen Zustand noch nicht kennen.
 export function clearImgCache() {
@@ -77,7 +110,10 @@ export function makeNodeImage(d) {
         d._primaryGroup, d.problems || 0,
         d.pinned ? 1 : 0, d.note ? 1 : 0,
         d.acknowledged ? 1 : 0, d.maintenance ? 1 : 0,
-        d.unavailable ? 1 : 0, dark ? 'd' : 'l'
+        d.unavailable ? 1 : 0, dark ? 'd' : 'l',
+        // WLAN-Client-Zahl (AP-Badge) gehoert in den Schluessel, sonst zeigt der
+        // Bild-Cache die alte Zahl nach einer Aenderung.
+        (typeof d.wlan_clients === 'number') ? d.wlan_clients : ''
     ].join('|');
     if (_imgCache[key]) return _imgCache[key];
 
@@ -259,6 +295,20 @@ export function makeNodeImage(d) {
         p += '<text x="' + bX + '" y="' + bY + '" text-anchor="middle" dominant-baseline="central"'
            + ' font-family="sans-serif" font-size="' + (bLabel.length > 2 ? 8 : 10) + '"'
            + ' font-weight="700" fill="white">' + bLabel + '</text>';
+    }
+
+    // WLAN-Client-Badge (UniFi-AP): Zahl der verbundenen Clients, UNTEN rechts —
+    // nicht oben, wo Problem- und Maintenance-Badge sitzen. Blau (WLAN), damit es
+    // sich von der roten Problemzahl abhebt. Nur am wireless-Knoten mit Zahl.
+    if (d.type === 'wireless' && typeof d.wlan_clients === 'number') {
+        const cLabel = d.wlan_clients > 999 ? '999+' : String(d.wlan_clients);
+        const cR = cLabel.length > 2 ? 13 : 10;
+        const cX = C * 2 - cR - 2;
+        const cY = C * 2 - cR - 2;
+        p += '<circle cx="' + cX + '" cy="' + cY + '" r="' + cR + '" fill="#3b82f6" stroke="white" stroke-width="1.5"/>';
+        p += '<text x="' + cX + '" y="' + cY + '" text-anchor="middle" dominant-baseline="central"'
+           + ' font-family="sans-serif" font-size="' + (cLabel.length > 2 ? 8 : 10) + '"'
+           + ' font-weight="700" fill="white">' + cLabel + '</text>';
     }
 
     // Maintenance-Badge: oranger Schraubenschlüssel oben rechts. Wenn auch ein

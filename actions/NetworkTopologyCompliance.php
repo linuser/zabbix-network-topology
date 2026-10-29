@@ -6,6 +6,7 @@ declare(strict_types = 1);
 namespace Modules\NetworkTopology\Actions;
 
 use API;
+use Modules\NetworkTopology\Topology\FirmwareDrift;
 use Modules\NetworkTopology\Topology\ProblemLoader;
 
 /**
@@ -25,6 +26,7 @@ use Modules\NetworkTopology\Topology\ProblemLoader;
  *   no_template      — Host hat keinen Parent-Template
  *   stale_problem    — kritisches Problem (sev>=4) aelter als 7 Tage
  *   mtnc_no_comment  — Maintenance aktiv aber description leer
+ *   fw_drift         — Firmware weicht von der Mehrheit gleicher Modelle ab
  *
  * Request: groupids[] (Pflicht).
  * Response: { hosts: [...], aggregate: { check: count, ... }, total: N }
@@ -91,7 +93,8 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
                                         'maintenance_status', 'maintenanceid'],
             'groupids'              => $groupids,
             'selectInterfaces'      => ['type', 'details'],
-            'selectInventory'       => ['location_lat', 'location_lon', 'location'],
+            'selectInventory'       => ['location_lat', 'location_lon', 'location',
+                                        'model', 'software', 'software_full'],
             'selectParentTemplates' => ['templateid'],
             'monitored_hosts'       => true,
             'preservekeys'          => true
@@ -148,6 +151,25 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
             }
         }
 
+        // Firmware-/Modell-Abweichung: je Modell die Firmware vergleichen, die
+        // Minderheit flaggen. Reine Logik in FirmwareDrift (getestet) — hier nur
+        // Modell + Firmware je Host aus dem Inventory sammeln. Firmware =
+        // software_full, sonst software; Modell aus dem Inventory. Ohne beides
+        // kein Vergleich (der Host faellt still aus der Betrachtung).
+        $fw_input = [];
+        foreach ($hosts as $hid => $h) {
+            $inv   = $h['inventory'] ?? [];
+            $model = trim((string) ($inv['model'] ?? ''));
+            $fw    = trim((string) ($inv['software_full'] ?? ''));
+            if ($fw === '') {
+                $fw = trim((string) ($inv['software'] ?? ''));
+            }
+            if ($model !== '' && $fw !== '') {
+                $fw_input[(string) $hid] = ['model' => $model, 'fw' => $fw];
+            }
+        }
+        $fw_drift = FirmwareDrift::detect($fw_input);
+
         // ── Per-Host Checks evaluieren + Aggregat aufbauen ────────────────
         $out_hosts = [];
         $agg = [
@@ -160,6 +182,7 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
             'no_template'     => 0,
             'stale_problem'   => 0,
             'mtnc_no_comment' => 0,
+            'fw_drift'        => 0,
         ];
 
         foreach ($hosts as $hid => $h) {
@@ -223,12 +246,24 @@ class NetworkTopologyCompliance extends NetworkTopologyController {
                 $checks['mtnc_no_comment'] = true; $agg['mtnc_no_comment']++;
             }
 
-            $out_hosts[] = [
+            // Firmware weicht von der Modell-Mehrheit ab
+            if (isset($fw_drift[(string) $hid])) {
+                $checks['fw_drift'] = true; $agg['fw_drift']++;
+            }
+
+            $rec = [
                 'id'     => (string) $hid,
                 'host'   => (string) ($h['host'] ?? ''),
                 'label'  => (string) (($h['name'] ?? '') !== '' ? $h['name'] : ($h['host'] ?? '')),
                 'checks' => $checks,
             ];
+            // Detail nur fuer Abweichler: eigene Firmware, erwartete (Mehrheit),
+            // Modell und wie viele Geschwister die Mehrheits-Firmware fahren —
+            // damit das Panel "laeuft X, 11x Modell auf Y" zeigen kann.
+            if (isset($fw_drift[(string) $hid])) {
+                $rec['fw'] = $fw_drift[(string) $hid];
+            }
+            $out_hosts[] = $rec;
         }
 
         $payload = [

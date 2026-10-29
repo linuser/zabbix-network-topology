@@ -163,11 +163,17 @@ const VIER = [
     'widget/assets/js/widget.class.js',
     'widget_health/assets/js/widget.class.js',
     'widget_table/assets/js/widget.class.js',
-    'widget_kpi/assets/js/widget.class.js'
+    'widget_kpi/assets/js/widget.class.js',
+    // widget_plan nutzt alle drei Bloecke (siehe sync-widget-shared.mjs) —
+    // der Name VIER ist historisch, es sind sechs.
+    'widget_plan/assets/js/widget.class.js',
+    'widget_wlan/assets/js/widget.class.js'
 ];
 const BLOCKS = [
     { name: 'NtFetchJson',  re: /if \(!window\.NtFetchJson\) \{[\s\S]*?\n\}\n/,
-      files: [...VIER, 'widget_items/assets/js/widget.class.js'] },
+      files: [...VIER, 'widget_items/assets/js/widget.class.js', 'widget_faceplate/assets/js/widget.class.js'] },
+    { name: 'NtTheme',      re: /if \(!window\.NtTheme\) \{[\s\S]*?\n\}\n/,
+      files: [...VIER, 'widget_items/assets/js/widget.class.js', 'widget_faceplate/assets/js/widget.class.js'] },
     { name: 'NtWidgetData', re: /if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/,
       files: VIER },
 ];

@@ -1,0 +1,224 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates/Network devices
+  templates:
+    - uuid: 50316a5c3bd948fe895aa59c2e0a1c0d
+      template: 'NT Spanning-Tree by SNMP'
+      name: 'NT Spanning-Tree by SNMP'
+      description: |
+        Collects the 802.1D Spanning-Tree port state over SNMP for the "Network
+        Topology for Zabbix" frontend module. The module uses it to tell an active
+        link from an STP-BLOCKED redundancy link: it dims/dashes an edge whose
+        local port is blocking, instead of drawing two parallel paths as both
+        active.
+
+        Why it is needed: the map draws the PHYSICAL neighbourhood from LLDP/CDP,
+        not the forwarding state. LLDP runs over a blocking port too, and
+        ifOperStatus still reports it "up", so a blocked redundancy link looks
+        like a normal, active edge. The real per-port state lives in the
+        BRIDGE-MIB (dot1dStpPortState), indexed by BRIDGE-PORT; dot1dBasePortIfIndex
+        maps that to an ifIndex, which is how the module keys the item so it lines
+        up with the LLDP local port.
+
+        Usage:
+          - link it to SNMP switches that run (R)STP and expose the BRIDGE-MIB
+          - keep an eye on MSTP/PVST: those often expose state only per VLAN
+            instance, sometimes only via a VLAN-context community -- the plain
+            dot1dStp table is the first, simplest case (see ROADMAP).
+
+        Standards-based (BRIDGE-MIB, RFC 4188); no external collector needed.
+      groups:
+        - name: Templates/Network devices
+      macros:
+        - macro: '{$NT.STP.INTERVAL}'
+          value: 5m
+          description: 'Polling interval of the STP port-state items. STP state changes on convergence, so a few minutes is plenty.'
+        - macro: '{$NT.BCAST.INTERVAL}'
+          value: 2m
+          description: 'Polling interval of the per-port broadcast rate (loop/storm detection, Stufe 3b). A loop floods broadcast frames, so a shorter interval than STP catches it sooner.'
+      items:
+        - uuid: 3528b7084b1e4537a75b3ad0b4a2a2f9
+          name: 'MAC flapping: moved entries last interval'
+          type: TRAP
+          key: nt.mac.flap
+          value_type: UNSIGNED
+          history: 7d
+          trends: '0'
+          description: |
+            Number of MAC addresses that changed forwarding port since the last
+            sample -- a MAC moving back and forth across ports is the classic
+            symptom of a switching loop (frames circulate and the switch relearns
+            the MAC on alternating ports). Stufe 3c der Loop-Erkennung.
+
+            PUSHED, not polled: MAC flapping is temporal (a MAC moving over time),
+            which neither the stateless frontend module nor SNMP preprocessing can
+            compute. tools/nt-mac-flap-sender.sh reads each switch's FDB item
+            (nt.fdb.dot1d + dot1q) from Zabbix, diffs them against its last snapshot, and
+            pushes the count here with zabbix_sender. Run it as a cron (1-5 min).
+            Needs the FDB items from FDB-SETUP.md on the switches. The module flags
+            a host with more than 2 moved MACs in the interval (NodeBuilder constant).
+        - uuid: 721247e6f4e046a3a3a9c580c47e49ad
+          name: 'STP: topology changes per second'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.17.2.4.0'
+          key: nt.stp.topchanges
+          delay: '{$NT.STP.INTERVAL}'
+          history: 7d
+          trends: '0'
+          value_type: FLOAT
+          preprocessing:
+            - type: CHANGE_PER_SECOND
+          description: |
+            dot1dStpTopChanges (BRIDGE-MIB 1.3.6.1.2.1.17.2.4.0) as a RATE
+            (change per second). A healthy spanning tree is stable, so this sits
+            at ~0. A fast-rising counter -- many topology changes per second --
+            means the tree keeps reconverging: the classic symptom of a loop STP
+            is fighting (a flapping link, a cable looped on a switch without a
+            clean block, an unmanaged device bridging two ports). The module
+            flags a host whose rate stays above ~0.1/s as "STP unstable" (loop
+            early warning). Stufe 3a der Loop-Erkennung.
+        - uuid: f9a6280241b84718ad623320b1b77c80
+          name: 'STP: port-state table (SNMP walk)'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.2.1.17.2.15.1.3,1.3.6.1.2.1.17.1.4.1.2,1.3.6.1.2.1.17.2.15.1.8,1.3.6.1.2.1.17.2.15.1.9,1.3.6.1.2.1.17.1.1]'
+          key: nt.stp.walk
+          delay: '{$NT.STP.INTERVAL}'
+          history: 1h
+          value_type: TEXT
+          description: |
+            One bulk walk over the BRIDGE-MIB columns the module needs, all
+            indexed by dot1dStpPort (= bridge-port number), plus the switch's own
+            bridge address:
+              dot1dStpPortState            1.3.6.1.2.1.17.2.15.1.3  (1 disabled, 2 blocking,
+                                           3 listening, 4 learning, 5 forwarding, 6 broken)
+              dot1dBasePortIfIndex         1.3.6.1.2.1.17.1.4.1.2   (bridge-port -> ifIndex)
+              dot1dStpPortDesignatedBridge 1.3.6.1.2.1.17.2.15.1.8  (bridge-id at the other end)
+              dot1dStpPortDesignatedPort   1.3.6.1.2.1.17.2.15.1.9  (port-id at the other end)
+              dot1dBaseBridgeAddress       1.3.6.1.2.1.17.1.1.0     (own bridge MAC)
+
+            Discovery and the per-port state item hang off this walk as DEPENDENT
+            and parse its text, so there is not a single instance-exact GET -- the
+            same approach as the LLDP template, and it sidesteps switches (e.g.
+            MikroTik RouterOS) where exact GETs on these tables are unreliable.
+
+            The last three columns answer "which port is the OTHER end of a
+            self-loop": RSTP blocks only one port of a cable looped on the switch
+            itself; the designated bridge/port of the blocked port names the
+            forwarding partner (StpLoopResolver decodes it). The module reads this
+            item directly, so it carries a short history (1h) -- unlike the LLDP
+            walk, whose value only feeds dependents.
+        - uuid: bb4420fb32fa46cf8196cc25c7fb44bc
+          name: 'Broadcast: in-packets table (SNMP walk)'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.2.1.31.1.1.1.9]'
+          key: nt.bcast.walk
+          delay: '{$NT.BCAST.INTERVAL}'
+          history: '0'
+          value_type: TEXT
+          description: |
+            One bulk walk over ifHCInBroadcastPkts (IF-MIB 1.3.6.1.2.1.31.1.1.1.9),
+            indexed by ifIndex. Per-port discovery and the rate item hang off this
+            as DEPENDENT and parse the walk text (loop/storm detection, Stufe 3b).
+
+            WHY BROADCAST: a switching loop floods broadcast frames -- they
+            circulate and multiply, and the ports in the loop see a packet rate
+            far above anything normal (ARP/DHCP sit at a few per second). That is
+            the signal of an ACTIVE loop, which the STP/ring view cannot see when
+            the loop forms no LLDP cycle. The rate item below turns the counter
+            into broadcast-packets-per-second; the module flags a host whose
+            busiest port crosses a threshold as a broadcast storm.
+      discovery_rules:
+        - uuid: f1bb0aa410424060a76518c7d56c43a7
+          name: 'STP bridge-port discovery'
+          type: DEPENDENT
+          key: nt.stp.port.discovery
+          delay: '0'
+          master_item:
+            key: nt.stp.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#NT_IFINDEX}'
+                - 1.3.6.1.2.1.17.1.4.1.2
+                - '0'
+              error_handler: DISCARD_VALUE
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  // dot1dBasePortIfIndex gibt je Bridge-Port den ifIndex. {#SNMPINDEX}
+                  // ist der Bridge-Port, {#NT_IFINDEX} der ifIndex. Ports ohne gueltigen
+                  // ifIndex (0 oder leer) fliegen raus -- sie zeigen auf kein Interface,
+                  // und der STP-Zustand liesse sich auf keine Kante abbilden. Der Zustand
+                  // selbst kommt im Item-Prototyp per Regex aus dem Walk
+                  // (dot1dStpPortState.<bridgeport>); hier geht es nur um die Instanzen.
+                  var rows = JSON.parse(value), out = [];
+                  for (var i = 0; i < rows.length; i++) {
+                      var ix = parseInt(rows[i]['{#NT_IFINDEX}'], 10);
+                      if (!ix || ix <= 0) { continue; }
+                      out.push(rows[i]);
+                  }
+                  return JSON.stringify(out);
+          item_prototypes:
+            - uuid: 1ac388577d264545baf72000f7ec3cbd
+              name: 'STP port state [bridge-port {#SNMPINDEX}, ifIndex {#NT_IFINDEX}]'
+              type: DEPENDENT
+              key: 'nt.if.stp[{#NT_IFINDEX}]'
+              value_type: UNSIGNED
+              delay: '0'
+              master_item:
+                key: nt.stp.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.3\.6\.1\.2\.1\.17\.2\.15\.1\.3\.{#SNMPINDEX} = [A-Za-z0-9-]+: (\d+)'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
+              history: 7d
+              trends: '0'
+              description: |
+                dot1dStpPortState for this port: 1 disabled, 2 blocking, 3 listening,
+                4 learning, 5 forwarding, 6 broken. Keyed by ifIndex (not bridge-port)
+                so it matches the LLDP local port. The Network Topology module reads
+                nt.if.stp[<ifIndex>] and dims/dashes an edge whose local port is
+                blocking (state 2), telling an STP-blocked redundancy link from an
+                active one.
+        - uuid: 3fd6ff6ba0fa4735a8da999ce947ff27
+          name: 'Broadcast port discovery'
+          type: DEPENDENT
+          key: nt.bcast.discovery
+          delay: '0'
+          master_item:
+            key: nt.bcast.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#NT_BPKTS}'
+                - 1.3.6.1.2.1.31.1.1.1.9
+                - '0'
+              error_handler: DISCARD_VALUE
+          item_prototypes:
+            - uuid: dab1653b764e4e8f840a006a0a016eaa
+              name: 'Broadcast in-pkts/s [ifIndex {#SNMPINDEX}]'
+              type: DEPENDENT
+              key: 'nt.if.bcast[{#SNMPINDEX}]'
+              value_type: FLOAT
+              delay: '0'
+              master_item:
+                key: nt.bcast.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.3\.6\.1\.2\.1\.31\.1\.1\.1\.9\.{#SNMPINDEX} = [A-Za-z0-9-]+: (\d+)'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
+                - type: CHANGE_PER_SECOND
+              history: 7d
+              trends: '0'
+              description: |
+                ifHCInBroadcastPkts for this port as a RATE (broadcast packets per
+                second). Normal is a handful per second; a switching loop drives the
+                looped ports into the thousands. The module takes each host's busiest
+                port and flags a "broadcast storm" above ~200/s (loop detection,
+                Stufe 3b).

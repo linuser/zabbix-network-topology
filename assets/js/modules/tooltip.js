@@ -115,7 +115,12 @@ export function showTip(evt, d) {
           val: '<b>' + esc(((d._ghostSrc || []).join(', ') || '\u2014').toUpperCase()) + '</b>' },
         { col: '#94a3b8', lbl: t('tip.ghost.seen_by'),
           val: esc((d._ghostSeenBy || []).join(', ') || '\u2014') },
-    ] : [
+    ].concat(d._ghostMgmtIp ? [
+        // Die ausgestrahlte Management-IP (lldpRemManAddr) \u2014 die handfesteste
+        // Angabe ueber einen Geist, daher auch hier im Tooltip.
+        { col: '#94a3b8', lbl: t('tip.ghost.mgmt'),
+          val: '<b style="font-family:monospace">' + esc(d._ghostMgmtIp) + '</b>' },
+    ] : []) : [
         { col: '#3b82f6', lbl: 'CPU',     val: d.cpu    != null ? bar(d.cpu)    + ' <b>' + d.cpu    + '%</b>' : '<span style="color:var(--nt-muted)">\u2014</span>' },
         { col: '#8b5cf6', lbl: 'Memory',  val: d.memory != null ? bar(d.memory) + ' <b>' + d.memory + '%</b>' : '<span style="color:var(--nt-muted)">\u2014</span>' },
         { col: '#22c55e', lbl: 'Traffic', val: '<b>\u2193 ' + fmt(traffic.in) + '</b>  <b>\u2191 ' + fmt(traffic.out) + '</b>' },
@@ -127,6 +132,12 @@ export function showTip(evt, d) {
         const sparkPing = spark ? drawSparkline(spark.ping, '#f59e0b', 72, 22) : '';
         const ipLine = d.ip
             ? '<div style="font-size:10px;color:var(--nt-sub);font-family:monospace;margin-top:2px">&#128279; ' + esc(d.ip) + '</div>'
+            : '';
+        // UniFi-Client: an welchem AP er per WLAN haengt (d.wlan_ap aus tagWlanAp).
+        // Der Tooltip zeigt keine Peer-Liste wie das Detail-Panel -- hier ist es
+        // die einzige Stelle, an der die AP-Zuordnung eines Clients auftaucht.
+        const wifiLine = d.wlan_ap
+            ? '<div style="font-size:10px;color:#06b6d4;margin-top:2px">\u{1F4F6} ' + esc(d.wlan_ap) + '</div>'
             : '';
         // Status-Pillen (Wartung, Acked) wenn relevant
         const pills = [];
@@ -140,7 +151,7 @@ export function showTip(evt, d) {
             ? '<div style="margin-top:3px">' + pills.join('') + '</div>'
             : '';
         return '<div style="font-weight:700;font-size:11px;color:var(--nt-text);margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--nt-line-soft)">'
-            + esc(d.label) + ipLine + pillLine + '</div>'
+            + esc(d.label) + ipLine + wifiLine + pillLine + '</div>'
             + rows.map(function(r, i) {
                 let sparkEl = '';
                 if (spark) {

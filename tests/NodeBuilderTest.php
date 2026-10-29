@@ -67,6 +67,24 @@ $hosts = [
     // h2: kein Tag -> die Heuristik greift ('nas-01' -> storage). Kein Anzeigename
     //     -> als Label muss der technische Name einspringen.
     'h2' => mkHost('nas-01', '', 2, '10.0.0.2'),
+    // h6: UniFi-Client-Template -> Typ 'client' + is_client, obwohl der Name
+    //     sonst im 'server'-Fallback laendete.
+    'h6' => [
+        'host' => 'uuid-client', 'name' => 'iPhone xy',
+        'interfaces' => [['main' => '1', 'type' => '1', 'ip' => '192.0.2.1']],
+        'parentTemplates' => [['name' => 'UniFi Network API - Client']],
+        'inventory' => [], 'maintenance_status' => '0',
+        'proxyid' => '0', 'proxy_groupid' => '0', 'active_available' => '1',
+    ],
+    // h7: Client-Template ABER explizites nt:icon -> bewusste Setzung gewinnt
+    // VOLL: Typ = Override, und is_client bleibt false (nicht ausgeblendet).
+    'h7' => [
+        'host' => 'uuid-client2', 'name' => 'NAS am WLAN',
+        'interfaces' => [['main' => '1', 'type' => '1', 'ip' => '192.0.2.1']],
+        'parentTemplates' => [['name' => 'UniFi Network API - Client']],
+        'inventory' => [], 'maintenance_status' => '0',
+        'proxyid' => '0', 'proxy_groupid' => '0', 'active_available' => '1',
+    ],
 ];
 
 $metrics = [
@@ -76,10 +94,22 @@ $metrics = [
     'iface'   => [],
     'speed'   => ['h1' => 1.0e9],
     'ping'    => ['h1' => 5.3],
+    // WLAN (UniFi-AP): Radios inkl. Funkauslastung + Client-Zahl, seit 5.5.83 am
+    // AP-Host selbst. Hier an h1 gehaengt — die Felder haengen typunabhaengig.
+    'radios'       => ['h1' => ['2.4' => ['channel' => 6, 'cu' => 28]]],
+    'wlan_clients' => ['h1' => 5],
+    'ssids'        => ['h1' => [['ssid' => 'Office WiFi', 'clients' => 3, 'guest' => false]]],
+    'wlan_satisfaction' => ['h1' => 88],
+    'vlan'         => ['h1' => [
+        'vlans'     => [['id' => 10, 'name' => 'office', 'ports' => ['Gi1']],
+                        ['id' => 20, 'name' => '',       'ports' => ['Gi2']]],
+        'byIfIndex' => [101 => [10], 102 => [20]],
+        'access'    => [101 => 10],
+    ]],
 ];
 
 $tags = [
-    'icon_override' => ['h1' => 'firewall'],   // ueberstimmt das geratene 'switch'
+    'icon_override' => ['h1' => 'firewall', 'h7' => 'storage'],  // ueberstimmt Heuristik/Client
     'show_keys'     => [],
     'links'         => [],
 ];
@@ -110,7 +140,7 @@ foreach ($r['nodes'] as $n) {
 }
 
 echo "\nGrundgeruest\n";
-check('beide Hosts werden zu Knoten',        count($r['nodes']),            2);
+check('alle Hosts werden zu Knoten',         count($r['nodes']),            4);
 check('Anzeigename gewinnt als Label',       $byId['h1']['label'] ?? null,  'Core Switch');
 check('ohne Anzeigename: technischer Name',  $byId['h2']['label'] ?? null,  'nas-01');
 
@@ -120,6 +150,22 @@ check('memory',   $byId['h1']['memory'] ?? null, 76);
 check('ping',     $byId['h1']['ping']   ?? null, 5.3);
 check('severity', $byId['h1']['severity'] ?? null, 4);
 check('problems', $byId['h1']['problems'] ?? null, 2);
+check('wlan_clients durchgereicht',    $byId['h1']['wlan_clients'] ?? null, 5);
+check('radios inkl. cu durchgereicht', $byId['h1']['radios']['2.4']['cu'] ?? null, 28);
+check('ssids durchgereicht',           $byId['h1']['ssids'][0]['ssid'] ?? null, 'Office WiFi');
+check('wlan_satisfaction durchgereicht', $byId['h1']['wlan_satisfaction'] ?? null, 88);
+check('VLANs auf {id,name} reduziert',   $byId['h1']['vlans'] ?? null,
+    [['id' => 10, 'name' => 'office'], ['id' => 20, 'name' => '']]);
+check('vlan_by_if durchgereicht',        $byId['h1']['vlan_by_if'][101] ?? null, [10]);
+check('ohne VLAN-Daten: vlans null',
+    array_key_exists('vlans', $byId['h2']) ? $byId['h2']['vlans'] : 'FEHLT', null);
+check('UniFi-Client -> Typ client',    $byId['h6']['type'] ?? null,       'client');
+check('UniFi-Client -> is_client',     $byId['h6']['is_client'] ?? null,  true);
+check('Nicht-Client -> is_client false', $byId['h2']['is_client'] ?? null, false);
+check('Client MIT nt:icon -> Override-Typ', $byId['h7']['type'] ?? null,     'storage');
+check('Client MIT nt:icon -> is_client false', $byId['h7']['is_client'] ?? null, false);
+check('ohne Quelle: wlan_clients null',
+    array_key_exists('wlan_clients', $byId['h2']) ? $byId['h2']['wlan_clients'] : 'MISSING', null);
 
 echo "\nGeraetetyp — die Praezedenz\n";
 check('nt:icon ueberstimmt die Heuristik',   $byId['h1']['type'] ?? null,          'firewall');

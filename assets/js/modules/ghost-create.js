@@ -45,7 +45,11 @@ export function ghostRequestItem(node, uplink) {
         reporter_hostid: String(u.nb || ''),
         port: String(u.port || ''),
         via: (node._ghostSrc && node._ghostSrc.length)
-            ? String(node._ghostSrc[0]) : 'lldp'
+            ? String(node._ghostSrc[0]) : 'lldp',
+        // Management-IP (lldpRemManAddr), falls der Nachbar sie ausstrahlt.
+        // Die Action macht daraus ein SNMP-Interface; die Server-Seite prueft
+        // sie, der Browser-Wert ist nur ein Vorschlag.
+        ip: String(node._ghostMgmtIp || '')
     };
 }
 

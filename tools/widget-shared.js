@@ -64,6 +64,79 @@ if (!window.NtFetchJson) {
     };
 }
 
+// window.NtTheme — geteiltes Theme fuer alle NT-Widgets. Dasselbe Prinzip wie
+// die Hauptkarte (tabs.js: seiteIstDunkel), nur ES5 und ohne Modulimport:
+// isDark() MISST den Hintergrund (relative Luminanz nach WCAG) statt den
+// Theme-Namen zu raten — ein eigenes dunkles Zabbix-Theme ("corporate") oder
+// das neue Dark-Blue in Zabbix 8.0 wuerde ein namensbasierter Test uebersehen,
+// und das Widget stuende hell in einem dunklen Dashboard. palette() liefert die
+// Token fuer hell und dunkel, abgestimmt mit den --nt-*-Farben des Hauptmoduls
+// (assets/css/network-topology.css). Geht in ALLE FUENF Widgets.
+if (!window.NtTheme) {
+    window.NtTheme = {
+        isDark: function (el) {
+            try {
+                var node = el || document.body;
+                while (node && node.nodeType === 1) {
+                    var bg = window.getComputedStyle(node).backgroundColor || '';
+                    var m = bg.replace(/\s/g, '').match(/^rgba?\((\d+),(\d+),(\d+)(?:,([0-9.]+))?\)$/i);
+                    if (m) {
+                        var a = m[4] === undefined ? 1 : parseFloat(m[4]);
+                        if (a > 0.1) {
+                            var lin = function (v) {
+                                v = parseInt(v, 10) / 255;
+                                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+                            };
+                            var L = 0.2126 * lin(m[1]) + 0.7152 * lin(m[2]) + 0.0722 * lin(m[3]);
+                            return L < 0.4;
+                        }
+                    }
+                    node = node.parentNode;
+                }
+            } catch (e) {}
+            return false;
+        },
+        palette: function (dark) {
+            // sev[] ist die Severity-Skala (Normal, Info, Warning, Average,
+            // High, Disaster) fuer Punkte/Balken in Topology- und Table-Widget.
+            // head = Kopfzeilen-/Flaechenton eine Stufe von surface abgesetzt.
+            return dark ? {
+                text:    '#e6edf3',
+                ok:      '#4ade80',
+                warn:    '#fbbf24',
+                bad:     '#fb923c',
+                crit:    '#fca5a5',
+                link:    '#a78bfa',
+                accent:  '#58a6ff',
+                ghost:   '#8b949e',
+                sub:     '#8b949e',
+                subSoft: '#6e7681',
+                border:  '#30363d',
+                track:   '#21262d',
+                surface: '#161b22',
+                head:    '#1c2128',
+                sev:     ['#4ade80', '#22d3ee', '#fbbf24', '#fb923c', '#f87171', '#dc2626']
+            } : {
+                text:    '#1f2c33',
+                ok:      '#166534',
+                warn:    '#92400e',
+                bad:     '#c2410c',
+                crit:    '#9c1a25',
+                link:    '#7c3aed',
+                accent:  '#0275b8',
+                ghost:   '#64748b',
+                sub:     '#64748b',
+                subSoft: '#94a3b8',
+                border:  '#dfe4e7',
+                track:   '#eef2f5',
+                surface: '#f8fafc',
+                head:    '#f1f5f9',
+                sev:     ['#16a34a', '#0891b2', '#ca8a04', '#ea580c', '#dc2626', '#991b1b']
+            };
+        }
+    };
+}
+
 if (!window.NtWidgetData) {
     window.NtWidgetData = (function () {
         var cache = {};

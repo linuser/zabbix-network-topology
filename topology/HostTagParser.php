@@ -17,6 +17,7 @@ namespace Modules\NetworkTopology\Topology;
  *   nt:link=<label>|<url>   eigene Links ins Kontextmenue
  *   nt:parent=<host>  Traeger-Beziehung (VM->Hypervisor) -> hosts-Kante
  *   nt:uplink=<host>:<port>  an welchem PORT welches Geraets dieser Host haengt
+ *   nt:expect=<host>[/<port>]  erwarteter Nachbar — Soll gegen gemessenes Ist
  *   nt:lldp=<name>    unter welchem Namen dieser Host auf dem Draht auftritt
  *
  * Das ist Verarbeitung von Daten, die ein Mensch frei eintippt — inklusive der
@@ -33,7 +34,7 @@ final class HostTagParser {
     /**
      * @param array $hosts  hostid => Host-Datensatz (mit 'tags')
      *
-     * @return array{icon_override: array, show_keys: array, links: array, parent: array, uplink: array, lldp: array}
+     * @return array{icon_override: array, show_keys: array, links: array, parent: array, uplink: array, expect: array, lldp: array}
      */
     public static function parse(array $hosts): array {
         // ── 2b. TAG-SCAN: nt:icon, nt:show ────────────────────────────────
@@ -46,10 +47,11 @@ final class HostTagParser {
         $host_links         = [];   // hid => [{label, url}, ...]
         $host_parent        = [];   // hid => 'ParentHostname' (nt:parent-Tag → hosts-Kante)
         $host_uplink        = [];   // hid => ['host' => 'sw-01', 'port' => 'Gi1/0/8']
+        $host_expect        = [];   // hid => [{host, port}, ...] (nt:expect → Soll/Ist)
         $host_lldp_names    = [];   // hid => ['sw-core-01', 'SW-CORE-01.lan'] (nt:lldp)
         // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
         $allowed_icons = ['firewall', 'router', 'switch', 'wireless',
-                          'server', 'storage', 'camera', 'printer',
+                          'server', 'storage', 'camera', 'printer', 'client',
                           'hypervisor', 'linux', 'windows', 'macos',
                           'webserver', 'container', 'mailserver',
                           'monitoring', 'homeauto', 'ups', 'internet'];
@@ -163,6 +165,24 @@ final class HostTagParser {
                             }
                         }
                     }
+                } elseif ($name === 'nt:expect' && $value !== '') {
+                    // ERWARTETE Verkabelung: "dieser Host sollte an <Nachbar>
+                    // haengen", optional an einem Port (<Nachbar>/<Port>). Anders
+                    // als nt:uplink wird hier NICHTS gezeichnet — es wird gegen
+                    // die gemessene LLDP/CDP-Adjazenz GEPRUEFT (Soll gegen Ist).
+                    // Ein Host darf mehrere Nachbarn erwarten, also eine Liste.
+                    // Getrennt am ERSTEN '/': Hostnamen tragen keins, Portnamen
+                    // (Gi1/0/1) schon — also host vor dem ersten '/', Port danach.
+                    $ev = trim($value);
+                    if ($ev !== '' && strlen($ev) <= 256
+                            && !preg_match('/[\x00-\x1F\x7F]/', $ev)) {
+                        $slash = strpos($ev, '/');
+                        $ziel  = $slash === false ? $ev : trim(substr($ev, 0, $slash));
+                        $port  = $slash === false ? '' : trim(substr($ev, $slash + 1));
+                        if ($ziel !== '' && strlen($ziel) <= 128 && strlen($port) <= 64) {
+                            $host_expect[$hid][] = ['host' => $ziel, 'port' => $port];
+                        }
+                    }
                 } elseif ($name === 'nt:parent' && $value !== '') {
                     // Containment/Hosting: dieser Host laeuft auf $value
                     // (Traeger-Host, z.B. Hypervisor). Erste Angabe gewinnt —
@@ -200,6 +220,7 @@ final class HostTagParser {
             'links'         => $host_links,
             'parent'        => $host_parent,
             'uplink'        => $host_uplink,
+            'expect'        => $host_expect,
             'lldp'          => $host_lldp_names,
         ];
     }

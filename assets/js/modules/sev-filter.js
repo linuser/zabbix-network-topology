@@ -39,6 +39,12 @@ const _sevFilter = loadSevFilter();
 // localStorage — das ist eher ein Ad-hoc-Filter ("zeig mir gerade die
 // Toten") als eine Dauer-Praeferenz.
 let _offlineOnly = false;
+// Modul-State: Toggle "nur SLA-relevante Hosts zeigen". Wie _offlineOnly ein
+// Ad-hoc-Filter auf einer EIGENEN Achse (nicht Severity): gesetzt vom Klick auf
+// die SLA-KPI-Pille. Persistiert NICHT — SLA-Relevanz wechselt mit den
+// Problemen, ein gespeicherter Filter zeigte sonst nach dem naechsten Fetch auf
+// einen anderen Satz Hosts.
+let _slaOnly = false;
 // Setzt die Pills/Ghost-Pille optisch auf den aktuellen _sevFilter-Zustand.
 // Von buildSevFilter belegt (Closure ueber wrap), damit setSevLevels() den
 // Filter von aussen (KPI-Kacheln) aendern kann, ohne dass Pills und Karte
@@ -48,6 +54,19 @@ let _syncUI = null;
 // Filter-Logik einmal als Helper, wird beim Build initial und bei jedem
 // Pillen-Klick erneut angewendet. Empty Set → alle sichtbar via reset-style.
 function applyFilter(cy) {
+    // SLA-Only ueberschreibt Severity genau wie Offline-Only: nur Hosts, deren
+    // Problem an einem Service haengt. Eine Kante bleibt, wenn BEIDE Enden
+    // relevant sind — sonst haengt sie ins Leere.
+    if (_slaOnly) {
+        cy.nodes('[!isGroup]').forEach(function(n) {
+            n.style('display', n.data('sla_relevant') ? 'element' : 'none');
+        });
+        cy.edges().forEach(function(e) {
+            const show = e.source().data('sla_relevant') && e.target().data('sla_relevant');
+            e.style('display', show ? 'element' : 'none');
+        });
+        return;
+    }
     // Offline-Only ueberschreibt Severity: Sev-Pills sind dann irrelevant.
     if (_offlineOnly) {
         cy.nodes('[!isGroup]').forEach(function(n) {
@@ -82,9 +101,30 @@ export function setSevLevels(cy, levels) {
     _sevFilter.clear();
     (levels || []).forEach(function(n) { _sevFilter.add(n); });
     _offlineOnly = false;
+    _slaOnly = false;   // Severity und SLA sind getrennte Achsen — eine schaltet die andere ab
     if (_syncUI) _syncUI();
     applyFilter(cy);
     saveSevFilter(_sevFilter);
+}
+
+// SLA-Only von aussen setzen (Klick auf die SLA-KPI-Pille). Eigene Achse:
+// schaltet Severity-Auswahl und Offline-Only ab, damit applyFilter eindeutig
+// bleibt. `on` true/false; derselbe Klick nochmal → aus (Toggle im Aufrufer).
+export function setSlaOnly(cy, on) {
+    _slaOnly = !!on;
+    if (_slaOnly) {
+        _sevFilter.clear();
+        _offlineOnly = false;
+    }
+    if (_syncUI) _syncUI();
+    applyFilter(cy);
+    saveSevFilter(_sevFilter);
+}
+
+// Ist der SLA-Only-Filter gerade scharf? Fuer die KPI-Pille, um ihre
+// Aktiv-Markierung und das Toggle zu entscheiden.
+export function activeSlaOnly() {
+    return _slaOnly;
 }
 
 // Die aktuell aktiven Stufen als Array — fuer den Aufrufer, um Toggle zu
@@ -210,6 +250,7 @@ export function buildSevFilter(bar, cy) {
     _setOffStyle();
     offBtn.addEventListener('click', function() {
         _offlineOnly = !_offlineOnly;
+        if (_offlineOnly) _slaOnly = false;   // getrennte Achsen, nur eine scharf
         _setOffStyle();
         // Wenn Offline-Only aktiviert wird, dimmen wir die Sev-Pills optisch
         // (sie haben aktuell keinen Effekt) \u2014 beim Deaktivieren wieder normal.
@@ -217,6 +258,7 @@ export function buildSevFilter(bar, cy) {
             b.style.opacity = _offlineOnly ? '0.4' : '';
             b.style.pointerEvents = _offlineOnly ? 'none' : '';
         });
+        if (_syncUI) _syncUI();
         applyFilter(cy);
     });
     wrap.appendChild(offBtn);
@@ -227,13 +269,16 @@ export function buildSevFilter(bar, cy) {
     // unberuehrt. Die Sev-Pills restylen ueber ihr dataset.col; die Ghost-Pille
     // inline, weil ihr gStil()-Closure hier nicht im Scope ist.
     _syncUI = function() {
+        // Severity ist stillgelegt, solange eine andere Achse (Offline ODER
+        // SLA) scharf ist — dann sind die Sev-Pills gedimmt und klicktot.
+        const otherAxis = _offlineOnly || _slaOnly;
         wrap.querySelectorAll('button[data-sev]').forEach(function(b) {
             const a = _sevFilter.has(parseInt(b.dataset.sev, 10));
             const c = b.dataset.col;
             b.style.background    = a ? c + '33' : 'transparent';
             b.style.boxShadow     = a ? '0 0 0 2px ' + c + '44' : 'none';
-            b.style.opacity       = _offlineOnly ? '0.4' : '';
-            b.style.pointerEvents = _offlineOnly ? 'none' : '';
+            b.style.opacity       = otherAxis ? '0.4' : '';
+            b.style.pointerEvents = otherAxis ? 'none' : '';
         });
         const gp = document.getElementById('nt-sev-ghost');
         if (gp) {
@@ -252,6 +297,7 @@ export function buildSevFilter(bar, cy) {
     clr.addEventListener('click', function() {
         _sevFilter.clear();
         _offlineOnly = false;
+        _slaOnly = false;
         _setOffStyle();
         wrap.querySelectorAll('button[data-sev]').forEach(function(b) {
             b.style.background = 'transparent';

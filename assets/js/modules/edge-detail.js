@@ -42,6 +42,7 @@ import { hideDetail } from './detail-panel.js';
 import { meta as qualiMeta, QUALITY } from './quality.js';
 import { t } from './i18n.js';
 import { utilizationColor, utilizationPct } from './traffic.js';
+import { linkQualityScore } from './link-quality.js';
 import { bundleMembers, trunkData, memberDown } from './parallel-links.js';
 
 // Schwellen wie in traffic.js — Errors/Discards sind nach Zabbix-Preprocessing
@@ -77,6 +78,27 @@ function hint(parent, text) {
     parent.appendChild(el('div',
         'font-size:10px;color:var(--nt-warn-text,#92400e);background:rgba(245,158,11,0.10);border-radius:5px;'
         + 'padding:5px 7px;margin-top:5px;line-height:1.45', text));
+}
+
+// STP-Portzustand (dot1dStpPortState). blocking rot -- genau der Fall, der eine
+// aktiv wirkende Kante als per Spanning-Tree geblockte Redundanz entlarvt;
+// forwarding gruen, der Rest dezent. Zeigt nur, wo das STP-Template Daten liefert.
+const STP_STATE = { 1: 'disabled', 2: 'blocking', 3: 'listening', 4: 'learning', 5: 'forwarding', 6: 'broken' };
+function stpRow(parent, state) {
+    if (state === null || state === undefined || state === '') return;
+    const s = Number(state);
+    const col = s === 2 ? '#dc2626' : (s === 5 ? '#16a34a' : '#64748b');
+    row(parent, 'STP', null, pill(STP_STATE[s] || ('state ' + s), col, t('edge.stp.tip')));
+}
+
+// Ring-/Loop-Status dieser Kante (gesetzt von rings.js, wenn der Toggle an ist):
+// 'safe' (Zyklus mit STP-Block), 'open' (Loop-Gefahr), 'unknown' (ohne STP-Daten).
+function ringRow(parent, status) {
+    if (!status) return;
+    const col = (status === 'storm' || status === 'flap' || status === 'open') ? '#dc2626'
+              : (status === 'churn' ? '#d97706'
+              : (status === 'safe' ? '#0891b2' : '#64748b'));
+    row(parent, t('edge.ring.label'), null, pill(t('edge.ring.' + status), col, t('edge.ring.tip')));
 }
 
 /**
@@ -243,6 +265,10 @@ export function showEdgeDetail(panel, ed, asMember) {
     } else {
         if (quellen.indexOf('lldp') >= 0) srcRow.appendChild(pill('LLDP', '#16a34a', ''));
         if (quellen.indexOf('cdp')  >= 0) srcRow.appendChild(pill('CDP',  '#16a34a', ''));
+        // UniFi-Kante aus uplink.id (Controller-API, kein LLDP/CDP): sonst bliebe
+        // die gezeichnete Kante im Panel ohne Herkunfts-Pille und faellt auf das
+        // "—" unten. Eigene Farbe (UniFi-Blau), damit sie sich von LLDP/CDP abhebt.
+        if (quellen.indexOf('unifi') >= 0) srcRow.appendChild(pill('UniFi', '#3b82f6', t('edge.src.unifi.tip')));
     }
     if (!srcRow.childNodes.length) srcRow.appendChild(el('span', 'color:var(--nt-muted,#94a3b8)', '—'));
 
@@ -282,14 +308,20 @@ export function showEdgeDetail(panel, ed, asMember) {
     } else if (pS || pT) {
         row(panel, sLbl, null, el('b', '', pS || '?'));
         portUptimeRow(panel, d.portSrcUptime);
+        stpRow(panel, d.stpSrc);
         portSparkline(panel, s && s.id(), d.portSrcIdx);
         row(panel, tLbl, null, el('b', '', pT || '?'));
         portUptimeRow(panel, d.portTgtUptime);
+        stpRow(panel, d.stpTgt);
         portSparkline(panel, tg && tg.id(), d.portTgtIdx);
     } else {
         panel.appendChild(el('div', 'font-size:11px;color:var(--nt-muted,#94a3b8)',
             (istManuell || istGhost || istStale) ? t('edge.ports.none_kind') : t('edge.ports.none')));
     }
+
+    // Ring-/Loop-Status der Kante (Toggle "◯ Rings"): auf Kantenebene, nicht
+    // pro Port — ein Zyklus betrifft die ganze Verbindung.
+    ringRow(panel, d._ringStatus);
 
     // Wurde der gemeldete Nachbar-Port auf ein echtes Interface aufgeloest?
     // Nur der normalisierte Fall wird benannt — er beruht auf einer Annahme
@@ -365,6 +397,23 @@ export function showEdgeDetail(panel, ed, asMember) {
     const drops = d.ifaceDrop || 0;
     const pErr  = (d.portErr  === null || d.portErr  === undefined) ? null : d.portErr;
     const pDrop = (d.portDrop === null || d.portDrop === undefined) ? null : d.portDrop;
+
+    // Link Quality Score — ein Güte-Wert (0–100) aus Errors/Drops/Auslastung/
+    // Down/Flap. Nur bei gemessenen Daten (null bei Ghost/ohne Metrik).
+    const lq = linkQualityScore(d);
+    if (lq) {
+        section(panel, t('edge.sec.quality'));
+        const qv = el('span');
+        qv.appendChild(el('b', 'color:' + lq.color + ';font-size:14px', String(lq.score)));
+        qv.appendChild(el('span', 'color:var(--nt-muted,#94a3b8)', ' / 100'));
+        row(panel, t('edge.quality'), null, qv);
+        if (lq.parts.length) {
+            const names = lq.parts.slice(0, 3).map(function(p) { return t('edge.quality.' + p.key); });
+            panel.appendChild(el('div',
+                'font-size:10px;color:var(--nt-muted,#94a3b8);line-height:1.4;margin-top:2px',
+                names.join(' · ')));
+        }
+    }
 
     if (pErr !== null || pDrop !== null) {
         section(panel, t('edge.sec.port_health'));

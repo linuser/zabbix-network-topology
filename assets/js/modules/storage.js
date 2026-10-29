@@ -30,6 +30,7 @@ const NT_NOTES_PREFIX   = 'nt_' + PFX + 'notes_';
 const NT_LINKS_KEY      = 'nt_' + PFX + 'manual_links';
 export const NT_LLDP_KEY       = 'nt_' + PFX + 'lldp_visible';
 export const NT_WEATHERMAP_KEY = 'nt_' + PFX + 'weathermap';
+export const NT_LINKQUALITY_KEY = 'nt_' + PFX + 'linkquality';
 export const NT_PORTLABELS_KEY = 'nt_' + PFX + 'portlabels';
 // Parallel links (LAG, several cables): '1' all links (fan when zoomed in),
 // '0' always one line with ×N. See parallel-links.js.
@@ -53,8 +54,72 @@ export function loadGhostMode() {
 export function saveGhostMode(modus) {
     try { localStorage.setItem(NT_GHOSTS_KEY, modus); } catch (e) {}
 }
+
+// Ring-/Loop-Erkennung: an/aus. Default aus — ein Ring ist meist gewollte
+// Redundanz, die Anzeige soll man bewusst einschalten.
+export const NT_RINGS_KEY = 'nt_' + PFX + 'rings';
+export function loadRings() {
+    try { return localStorage.getItem(NT_RINGS_KEY) === '1'; } catch (e) { return false; }
+}
+export function saveRings(on) {
+    try { localStorage.setItem(NT_RINGS_KEY, on ? '1' : '0'); } catch (e) {}
+}
+
+// Soll/Ist-Overlay (nt:expect): erwartete Verkabelung gegen gemessene halten.
+// Default aus — das Feature greift nur, wenn jemand nt:expect-Tags gesetzt hat.
+export const NT_EXPECTED_KEY = 'nt_' + PFX + 'expected';
+export function loadExpected() {
+    try { return localStorage.getItem(NT_EXPECTED_KEY) === '1'; } catch (e) { return false; }
+}
+export function saveExpected(on) {
+    try { localStorage.setItem(NT_EXPECTED_KEY, on ? '1' : '0'); } catch (e) {}
+}
+
+// VLAN-Filter: die gewaehlte VLAN-ID als String, '' = alle (kein Filter).
+// Anders als die Toggles ein Wert statt an/aus — der VLAN-Waehler ist ein
+// Dropdown. Ungueltige/leere Wahl loescht den Eintrag.
+export const NT_VLAN_KEY = 'nt_' + PFX + 'vlan';
+export function loadVlanFilter() {
+    try { return localStorage.getItem(NT_VLAN_KEY) || ''; } catch (e) { return ''; }
+}
+export function saveVlanFilter(id) {
+    try {
+        if (id === '' || id == null) { localStorage.removeItem(NT_VLAN_KEY); }
+        else { localStorage.setItem(NT_VLAN_KEY, String(id)); }
+    } catch (e) {}
+}
+
 export const NT_LEGEND_COLLAPSED_KEY = 'nt_' + PFX + 'legend_collapsed';
 export const NT_PERF_KEY = 'nt_' + PFX + 'perf';
+
+// Punktgroesse der Hosts. Drei Stufen; der Faktor skaliert Knoten UND
+// Beschriftung gemeinsam (render-tech-style). Default 'normal' = Faktor 1,0,
+// also optisch unveraendert fuer alle, die nichts umstellen. Gemerkt pro
+// Browser wie die uebrigen Ansichts-Schalter — es ist eine Lesevorliebe, kein
+// Bestand, der geteilt gehoert.
+export const NT_NODESIZE_KEY = 'nt_' + PFX + 'nodesize';
+const NODESIZE_STEPS  = ['klein', 'normal', 'gross'];
+const NODESIZE_FACTOR = { klein: 0.7, normal: 1.0, gross: 1.35 };
+export function loadNodeSize() {
+    try {
+        const v = localStorage.getItem(NT_NODESIZE_KEY);
+        if (v && NODESIZE_FACTOR[v] != null) return v;
+    } catch (e) {}
+    return 'normal';
+}
+export function saveNodeSize(step) {
+    if (NODESIZE_FACTOR[step] == null) return;
+    try { localStorage.setItem(NT_NODESIZE_KEY, step); } catch (e) {}
+}
+export function nodeSizeFactor(step) {
+    return NODESIZE_FACTOR[step || loadNodeSize()] || 1;
+}
+// Naechste Stufe im Ring (klein -> normal -> gross -> klein) fuer den Toggle.
+export function nextNodeSize(step) {
+    const i = NODESIZE_STEPS.indexOf(step || loadNodeSize());
+    return NODESIZE_STEPS[(i + 1) % NODESIZE_STEPS.length];
+}
+
 export const NT_TAB_KEY        = 'nt_' + PFX + 'active_tab';
 export const NT_GROUP_VIEW_KEY = 'nt_' + PFX + 'group_view';
 export const NT_GROUP_OPEN_KEY = 'nt_' + PFX + 'group_open';
@@ -562,6 +627,133 @@ export function clearPositions() {
         .catch(_reportPosError);
 }
 
+// ── Plan-Positionen (Bild-Underlay) ──────────────────────────────────────────
+//
+// Der Plan-Modus (render-plan.js) platziert Marker in BILD-Pixeln auf einem
+// Hintergrundbild — ein anderes Koordinatensystem als die Technik-Ansicht. Damit
+// beide nicht kollidieren, haengen Plan-Positionen an einem eigenen viewKey mit
+// Suffix "_plan" (analog zu "_grp"). Darunter nutzen sie exakt dieselbe
+// Zwei-Ebenen-Persistenz wie die Technik-Positionen: shared fuer Super-Admins,
+// sonst persoenliche Abweichung, Konflikt/Revision inklusive — kein neuer
+// Endpunkt. Die Gruppen-View-Umschaltung spielt hier keine Rolle (ein Plan ist
+// ein Plan), deshalb KEIN "_grp" im Schluessel.
+function planViewKey() {
+    return selectedGroupIds() + '_plan';
+}
+
+/** Gespeicherte Plan-Positionen der aktuellen Gruppenauswahl (shared + eigene). */
+export function loadPlanPositions() {
+    const view   = planViewKey();
+    const shared = _posShared[view]   || {};
+    const own    = _posPersonal[view] || {};
+    const out    = {};
+    for (const id in shared) {
+        if (Object.prototype.hasOwnProperty.call(shared, id)) out[id] = shared[id];
+    }
+    for (const id in own) {
+        if (Object.prototype.hasOwnProperty.call(own, id)) out[id] = own[id];
+    }
+    return out;
+}
+
+/**
+ * Die VOLLE Plan-Positionskarte schreiben ({id:{x,y}} in Bild-Pixeln). Der
+ * Aufrufer (render-plan.js) haelt die Karte, aktualisiert den gezogenen Knoten
+ * und uebergibt das Ganze — wie savePositions() aus der Cytoscape-Instanz. Die
+ * Ebenen-Logik (_writePositions) ist identisch; nur der viewKey traegt "_plan".
+ */
+export function savePlanPositions(pos) {
+    if (!pos || typeof pos !== 'object') return;
+    const clean = _cleanPositions(pos);
+    if (!clean) return;
+    _writePositions(clean, planViewKey());
+}
+
+// ── Plan-Hintergrundbild (nur die Referenz — die Bytes liegen in Zabbix) ──────
+//
+// Das Bild selbst liegt in Zabbix' eigenem Bild-Store (Administration → General →
+// Images, Typ Background), wie die Karten-Hintergruende. Das Modul merkt sich je
+// Ansicht nur eine Referenz: eine `imageid` ODER eine URL. Diese duennen Wrapper
+// sprechen den Plan-Endpunkt (network.topology.plan) an; die Logik liegt in
+// render-plan.js. GET-Operationen (list/ref/image) sind Lesezugriffe ohne CSRF,
+// set/clear/upload aendern Zustand und tragen das CSRF-Token.
+function _planUrl() { return _cfg().plan_url || 'zabbix.php?action=network.topology.plan'; }
+
+/** Darf der aktuelle Nutzer neue Bilder hochladen? (Super-Admin — Zabbix-Grenze.) */
+export function planCanUpload() { return !!_cfg().plan_can_upload; }
+
+function _planGet(op, extra) {
+    let url = _planUrl() + '&op=' + encodeURIComponent(op);
+    if (extra) {
+        for (const k in extra) {
+            if (Object.prototype.hasOwnProperty.call(extra, k)) {
+                url += '&' + k + '=' + encodeURIComponent(extra[k]);
+            }
+        }
+    }
+    return fetchJson(url, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(function(d) {
+        // Eine Fehlerantwort (Drosselung, ungueltige Eingabe) ist KEINE gueltige
+        // Nutzlast — sonst laese render-plan {error:...} als "kein Bild" und
+        // zeigte faelschlich den Leerzustand. Wie _planPost behandeln.
+        if (d && d.error) {
+            throw new Error(d.error);
+        }
+        return d;
+    });
+}
+
+/** Background-Bilder in Zabbix (image.get imagetype=2): [{imageid, name}]. */
+export function planListImages() {
+    return _planGet('list').then(function(d) { return (d && d.images) || []; });
+}
+
+/** Hintergrund-Referenz der aktuellen Ansicht: {kind:'image'|'url'|'none', ...}. */
+export function planGetRef() {
+    return _planGet('ref', { view: planViewKey() }).then(function(d) { return d || { kind: 'none' }; });
+}
+
+
+function _planPost(fields) {
+    const cfg  = _cfg();
+    const body = new URLSearchParams();
+    body.set('nt_csrf', cfg.plan_csrf || '');
+    for (const k in fields) {
+        if (Object.prototype.hasOwnProperty.call(fields, k)) body.set(k, fields[k]);
+    }
+    return fetchJson(_planUrl(), {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest',
+                   'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+        body: body.toString()
+    }).then(function(d) {
+        if (!d || d.error) throw new Error((d && d.error) || 'unknown');
+        return d;
+    });
+}
+
+/** Referenz setzen: {kind:'image', imageid} oder {kind:'url', url}. */
+export function planSetRef(ref) {
+    const f = { op: 'set', view: planViewKey(), scope: defaultPositionScope(), kind: ref.kind };
+    if (ref.kind === 'image') f.imageid = ref.imageid;
+    else f.url = ref.url || '';
+    return _planPost(f);
+}
+
+/** Referenz der aktuellen Ansicht entfernen. */
+export function planClearRef() {
+    return _planPost({ op: 'clear', view: planViewKey(), scope: defaultPositionScope() });
+}
+
+/** Ein neues Background-Bild hochladen (image.create, nur Super-Admin). */
+export function planUploadImage(name, dataUri) {
+    return _planPost({ op: 'upload', name: name, data: dataUri })
+        .then(function(d) { return d.imageid; });
+}
+
 // Fehlerkanal wie bei den Links — storage.js soll nichts ueber Toasts wissen.
 let _onPosError = null;
 export function setPositionErrorHandler(fn) { _onPosError = fn; }
@@ -803,6 +995,106 @@ export function setLinks(links, scope) {
     else                     _linksPersonal = clean;
 
     _persist(sc, clean).catch(function(e) { _rollback(sc, snap, e); });
+}
+
+// ── Layout-Import: ueberlagern statt ersetzen ──────────────────────────────
+//
+// Der Datei-Import (layout-file.js) darf NIE Bestand loeschen und die geteilte
+// Karte nicht versehentlich ueberschreiben. Deshalb ueberlagert er: Positionen
+// pro Knoten, Links als Vereinigung. Fehlt ein Abschnitt in der Datei, passiert
+// nichts (leeres Overlay/Union) — genau der Defekt, an dem der alte Import
+// scheiterte ({}/[] truthy, Waechter griffen immer). Geschrieben wird in die
+// Default-Ebene des Nutzers wie bei jedem anderen Schreibpfad. Der PRESET-Pfad
+// (setPositions/setLinks = ersetzen) bleibt unberuehrt: ein Preset IST ein
+// vollstaendiger Zustand aus der laufenden Karte, eine Datei ein Teilzustand.
+
+// Obergrenze wie serverseitig ManualLinks::MAX_LINKS — sonst kappt der Server
+// still und beim naechsten Laden fehlten Kanten ohne erkennbaren Grund.
+const MAX_LINKS = 2000;
+
+/** REIN: incoming ueberlagert base pro Knoten; neues Objekt, keine Seiteneffekte. */
+export function overlayPositions(base, incoming) {
+    const out = {};
+    for (const id in base) {
+        if (Object.prototype.hasOwnProperty.call(base, id)) out[id] = base[id];
+    }
+    for (const id in incoming) {
+        if (Object.prototype.hasOwnProperty.call(incoming, id)) out[id] = incoming[id];
+    }
+    return out;
+}
+
+/**
+ * REIN: Vereinigung zweier Link-Listen, dedupliziert pro Paar (ungerichtet,
+ * kleinere ID zuerst — wie loadLinks), gekappt bei cap. existing kommt ZUERST,
+ * ein importiertes Duplikat aendert also weder Reihenfolge noch Ebene einer
+ * schon vorhandenen Kante.
+ */
+export function unionLinks(existing, incoming, cap) {
+    const out    = [];
+    const seen   = {};
+    const grenze = (typeof cap === 'number' && cap > 0) ? cap : MAX_LINKS;
+    const add = function(l) {
+        if (!l || !l.s || !l.t || out.length >= grenze) return;
+        const s = String(l.s), t = String(l.t);
+        if (s === t) return;
+        const key = s < t ? s + '|' + t : t + '|' + s;
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push({ s: s, t: t });
+    };
+    (existing || []).forEach(add);
+    (incoming || []).forEach(add);
+    return out;
+}
+
+/**
+ * Positionen ueberlagernd in die Default-Ebene der (Datei-)View schreiben.
+ * Liest den effektiven Stand (geteilt + eigene Abweichung), legt die
+ * importierten Knoten drueber und uebergibt das an denselben Ebenen-Pfad wie
+ * savePositions (_writePositions: persoenlich speichert die Abweichung, geteilt
+ * die volle View). Eine Teildatei kann so nie die uebrigen Knoten loeschen.
+ */
+export function mergePositions(pos, groupView) {
+    if (!pos || typeof pos !== 'object') return;
+    const clean = _cleanPositions(pos);
+    if (!clean) return;
+    const view = posViewKey(groupView);
+    const base = overlayPositions(_posShared[view] || {}, _posPersonal[view] || {});
+    _writePositions(overlayPositions(base, clean), view);
+}
+
+/**
+ * Links als Vereinigung in die Default-Ebene. Union ⊇ Bestand → nie ein
+ * Verlust. Das scope-Feld der Datei wird bewusst ignoriert: auf einer anderen
+ * Instanz ist es bedeutungslos, und ein Nicht-Super-Admin kann ueber einen
+ * Import ohnehin keine geteilte Kante setzen (defaultLinkScope).
+ */
+export function mergeLinks(links, scope) {
+    const sc  = scope || defaultLinkScope();
+    const cur = sc === SCOPE_SHARED ? _linksShared : _linksPersonal;
+    setLinks(unionLinks(cur, Array.isArray(links) ? links : [], MAX_LINKS), sc);
+}
+
+/** Pins additiv (Vereinigung) in den persoenlichen localStorage-Key. */
+export function mergePinned(ids) {
+    if (!Array.isArray(ids)) return;
+    const set = {};
+    loadPinned().forEach(function(id) { set[id] = true; });
+    ids.forEach(function(id) { if (typeof id === 'string') set[id] = true; });
+    try { localStorage.setItem(pinnedKey(), JSON.stringify(Object.keys(set))); } catch (e) {}
+}
+
+/** Notizen ueberlagernd (pro Knoten) in den persoenlichen localStorage-Key. */
+export function mergeNotes(obj) {
+    if (!obj || typeof obj !== 'object') return;
+    const cur = loadNotes();
+    for (const id in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, id) && typeof obj[id] === 'string') {
+            cur[id] = obj[id];
+        }
+    }
+    try { localStorage.setItem(notesKey(), JSON.stringify(cur)); } catch (e) {}
 }
 
 // Einmalige Uebernahme der alten localStorage-Links in die persoenliche Ebene.

@@ -228,6 +228,21 @@ $_nt_v = (string) max(
 );
 if ($_nt_v === '0' || $_nt_v === '') $_nt_v = (string) time();
 ?>
+<?php
+// WARUM DIE ASSETS HIER PER TAG KOMMEN, NICHT UEBER DAS MANIFEST-'assets'-OBJEKT
+// (Security-Review F13, bewusste Abweichung vom dokumentierten Standardmuster):
+//
+//  - Der Cache-Buster ?v=<mtime> aendert sich bei JEDEM Deploy, weil nur EINE
+//    gebundelte Datei geladen wird; das Manifest-Asset-Laden gibt diese
+//    deploy-genaue Invalidierung nicht ohne Weiteres.
+//  - Cytoscape muss GENAU zwischen nt-assign-guard.on() und .off() geladen
+//    werden (der Object.assign-xor-Patch fuer bestimmte Zabbix-8-Versionen,
+//    siehe nt-assign-guard.js). Diese Verschachtelung um EIN bestimmtes Script
+//    herum laesst eine Manifest-Asset-Liste nicht zu.
+//  - Nur das Hauptmodul geht so vor; die Widgets deklarieren ihre Assets
+//    regulaer im Manifest.
+// Auf 7.0 / 7.4 / 8.0 so in Betrieb. Wer das aendert, prueft den Guard-Pfad mit.
+?>
 <link rel="stylesheet" type="text/css"
       href="modules/network_topology/assets/css/network-topology.css?v=<?= $_nt_v ?>">
 <?php // Zabbix 8 macht Array.prototype.xor nicht beschreibbar (js/common.js:114).
@@ -288,6 +303,7 @@ window.NT_CONFIG = <?= json_encode([
     'hops'               => (int) ($data['hops'] ?? 1),
     'data_url'   => $data_url,
     'can_edit'       => (bool) $data['user']['can_edit'],
+    'can_create_host' => (bool) ($data['user']['can_create_host'] ?? false),
     'host_edit_popup' => (bool) ($data['user']['host_edit_popup'] ?? true),
     'is_super_admin' => (bool) ($data['user']['is_super_admin'] ?? false),
     // CSRF-Token fuer die schreibende Maintenance-Action (action- + session-
@@ -321,10 +337,6 @@ window.NT_CONFIG = <?= json_encode([
     // Eigener Token fuer die schreibende Links-Action.
     'links_csrf' => \CCsrfTokenHelper::get('network.topology.links'),
     'links_url'  => 'zabbix.php?action=network.topology.links',
-    // Dienst-Abhaengigkeiten im Dependencies-Tab verknuepfen/trennen
-    // (API::Service()->update). Eigener Token, nur fuer can_edit-User sichtbar.
-    'service_edit_csrf' => \CCsrfTokenHelper::get('network.topology.service_edit'),
-    'service_edit_url'  => 'zabbix.php?action=network.topology.service_edit',
     // Knotenpositionen, serverseitig seit 5.1. Zwei Ebenen wie bei den Links:
     // shared ist DIE Karte (module.config), personal die eigene Abweichung
     // davon (CProfile). Beim Lesen gewinnt personal pro Knoten.
@@ -355,7 +367,15 @@ window.NT_CONFIG = <?= json_encode([
     // admins can override them for everyone; null = frontend defaults.
     'color_scales'  => $data['color_scales'] ?? null,
     'scales_csrf'   => \CCsrfTokenHelper::get('network.topology.scales'),
-    'scales_url'    => 'zabbix.php?action=network.topology.scales'
+    'scales_url'    => 'zabbix.php?action=network.topology.scales',
+    // Plan-Modus (Bild-Underlay). Hier steht NUR der Zeiger auf den Endpunkt —
+    // das Hintergrundbild selbst (Zabbix' Bild-Store) wird erst beim Oeffnen des
+    // Plan-Tabs lazy geholt, nie in NT_CONFIG eingebettet. plan_can_upload
+    // spiegelt die Super-Admin-Grenze von image.create (Zabbix erzwingt sie noch
+    // einmal selbst).
+    'plan_csrf'       => \CCsrfTokenHelper::get('network.topology.plan'),
+    'plan_url'        => 'zabbix.php?action=network.topology.plan',
+    'plan_can_upload' => (bool) ($data['user']['is_super_admin'] ?? false)
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
 
 // Fallback: groupids/hostid aus URL wenn PHP NT_CONFIG nicht liefert

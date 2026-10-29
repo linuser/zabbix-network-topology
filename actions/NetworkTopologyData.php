@@ -9,13 +9,17 @@ use Modules\NetworkTopology\Topology\HostMetadata;
 use Modules\NetworkTopology\Topology\MetricExtractor;
 use Modules\NetworkTopology\Topology\LldpEdgeBuilder;
 use Modules\NetworkTopology\Topology\HostTagParser;
+use Modules\NetworkTopology\Topology\ExpectedLinks;
 use Modules\NetworkTopology\Topology\HopScope;
 use Modules\NetworkTopology\Topology\ManualLinks;
 use Modules\NetworkTopology\Topology\NodeBuilder;
 use Modules\NetworkTopology\Topology\ProblemLoader;
+use Modules\NetworkTopology\Topology\SlaResolver;
+use Modules\NetworkTopology\Topology\VlanParser;
 use Modules\NetworkTopology\Topology\TopoDiff;
 use CControllerResponseFatal;
 use API;
+use Manager;
 
 class NetworkTopologyData extends NetworkTopologyController {
 
@@ -445,6 +449,15 @@ class NetworkTopologyData extends NetworkTopologyController {
         $host_ack_acked    = $prob['ack_acked'];
         $host_problem_list = $prob['problem_list'];
 
+        // ── 2a. SLA-RELEVANZ ──────────────────────────────────────────────
+        // Welche Hosts haengen mit einem aktiven Problem an einem Zabbix-Service
+        // (und damit an einer SLA-Zusage)? Join ueber die Problem-eventids —
+        // reine Logik in SlaResolver (getestet), hier nur der API-Kontakt.
+        // Ohne Probleme (leere event_hosts) kostet das keinen API-Call; ohne
+        // Services eine leere Antwort → graue "0 SLA-relevant"-Pille.
+        $sla     = SlaResolver::load($prob['event_hosts'] ?? []);
+        $host_sla = $sla['host_sla'];
+
         // ── 2b. TAG-SCAN: nt:icon, nt:show, nt:link, nt:parent, nt:uplink ─
         // Tag-Auswertung ausgelagert nach topology/HostTagParser.php (Review §6).
         // Hosts rein, vier Maps raus — rein, kein API-Call, einzeln testbar.
@@ -591,6 +604,38 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // (sysUpTime). Opportunistisch — nur wo ein Template
                     // sie sammelt, sonst bleibt die Uptime im Panel leer.
                     'ifLastChange', 'sysUpTime',
+                    // STP-Portzustand (NT Spanning-Tree by SNMP Template):
+                    // nt.if.stp[ifIndex] = dot1dStpPortState. Markiert per STP
+                    // geblockte Redundanzlinks gegenueber aktiven Pfaden.
+                    // nt.stp.topchanges = Topology-Change-Rate (Loop-Fruehwarnung).
+                    // nt.if.bcast[ifIndex] = Broadcast-Paketrate je Port (Storm, 3b).
+                    // nt.mac.flap = MACs mit Portwechsel (Trapper, MAC-Flap, 3c).
+                    'nt.if.stp', 'nt.stp.topchanges', 'nt.if.bcast', 'nt.mac.flap',
+                    // VLAN-Tabellen (NT VLAN by SNMP): EIN Walk-Text, den
+                    // MetricExtractor per VlanParser in die VLAN-Mitgliedschaft
+                    // je Host zerlegt (VLAN-Filter: Knoten + Kanten, 3.5b).
+                    'nt.vlan.walk',
+                    // EIGEN-MAC des Hosts (lldpLocChassisId / dot1dBaseBridgeAddress,
+                    // NT LLDP Neighbors by SNMP): nt.self.chassis / nt.self.basemac.
+                    // Loest einen Nachbarn auf, der den Host nur per MAC nennt
+                    // (Cisco CDP device-id = MAC, LLDP-Name leer).
+                    'nt.self.',
+                    // UniFi-Ports (Vorlage „UniFi Network API – Device"): die
+                    // Portliste kommt als eigene port.<feld>[<idx>]-Items statt per
+                    // SNMP. port.state speist die Oper/Admin-Korrelation (Knoten-
+                    // Health), port.speed den Auslastungs-Divisor — beides in
+                    // MetricExtractor §3f. Die Topologie-Kante kommt schon ueber
+                    // uplink.id (in EDGE_NAME_KEYS). Kein Per-Port-Traffic (API
+                    // liefert keins), darum nur state/speed hier. uplink.rx/tx ist
+                    // der geraeteweite Uplink-Durchsatz -> an die uplink.id-Kante.
+                    'port.state', 'port.speed', 'uplink.rx', 'uplink.tx',
+                    // WLAN je UniFi-AP: Kanal/Standard/Breite aus der Integration-
+                    // API (radio.*), Client-Zahl (wlan.clients) und Funkauslastung
+                    // (wlan.cu[<band>]) aus der klassischen Controller-API — beide
+                    // seit 5.5.83 Items am AP-Host selbst (kein IP-Join mehr).
+                    'radio.channel', 'radio.standard', 'radio.channelWidth',
+                    'radios.txRestries',
+                    'wlan.clients', 'wlan.cu', 'wlan.ssids', 'wlan.satisfaction',
                     // Interface-NAMEN. Ohne sie heisst der Port "9" statt
                     // "Gi1/0/9" — und die Normalisierung, die der Gegenseite
                     // Messwerte verschafft, hat nichts zu vergleichen.
@@ -624,11 +669,12 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // cdpCacheDevicePort traf 'cdpCacheDeviceId' ebenfalls nicht —
                     // dieselbe Luecke auf der CDP-Seite.
                     'cdpCacheDevicePort',
-                    // CPU — Agent + SNMP variants
+                    // CPU — Agent + SNMP variants, plus UniFi (cpu.utilization)
                     'system.cpu.util', 'hrProcessorLoad', 'ssCpuUser', 'ssCpuSystem',
-                    'synoSystem.ssCpuIdle',
-                    // Memory — Agent + SNMP HOST-RESOURCES-MIB
+                    'synoSystem.ssCpuIdle', 'cpu.utilization',
+                    // Memory — Agent + SNMP HOST-RESOURCES-MIB, plus UniFi
                     'vm.memory.size', 'hrStorageUsed', 'hrStorageSize', 'hrStorageType',
+                    'memory.utilization',
                     // Ping
                     'icmppingsec',
                 ]],
@@ -728,7 +774,15 @@ class NetworkTopologyData extends NetworkTopologyController {
                               // Zustand je Port: die Kantenfarbe soll den Port
                               // meinen und nicht den Durchschnitt des Gehaeuses.
                               $metrics['port_status'] ?? [],
-                              $metrics['port_uptime'] ?? []);
+                              $metrics['port_uptime'] ?? [],
+                              // STP-Portzustand: geblockte Redundanz von aktiv unterscheiden.
+                              $metrics['port_stp'] ?? [],
+                              // EIGEN-MAC je Host: CDP-only-Nachbar (device-id = MAC,
+                              // kein Name) direkt auf den besitzenden Host aufloesen.
+                              $metrics['host_self_mac'] ?? [],
+                              // UniFi geraeteweiter Uplink-Durchsatz (uplink.rx/tx):
+                              // haengt an die uplink.id-Kante, die keinen Port hat.
+                              $metrics['uplink_rate'] ?? []);
         $edges          = $lldp['edges'];
         // ── 5a0. ERKLAERTE UPLINKS (nt:uplink-Tag) ────────────────────────
         // Geraete ohne Nachbarprotokoll — USV, PDU, Drucker — haengen an einem
@@ -841,10 +895,15 @@ class NetworkTopologyData extends NetworkTopologyController {
                 'items_show'         => $items_show,
                 'show_item_per_host' => $show_item_per_host,
                 'primary_ip_cache'   => $primary_ip_cache,
+                'sla'                => $host_sla,
             ]
         );
         $nodes            = $built['nodes'];
         $lldp_quality_out = $built['lldp_quality'];
+        // WLAN-Client-Zahl liegt seit 5.5.83 als eigenes Item (wlan.clients) am
+        // UniFi-AP-Host selbst (klassische Controller-API) und kommt damit über
+        // den normalen Metrik-Pfad (MetricExtractor → NodeBuilder) an den Knoten.
+        // Der frühere Cross-Host-IP-Join (WlanResolver) entfällt ersatzlos.
         // ── Health-Score (Server-Spiegel der Formel aus render-health.js) ──
         // 100 − offline%·40 − stale%·15 − critical%·25 − unacked%·20 pro
         // Gruppe; avg/min ueber alle Gruppen. Der Sender-Cron pusht beides
@@ -893,6 +952,46 @@ class NetworkTopologyData extends NetworkTopologyController {
 
         $this->markiere('nodes');
 
+        // ── Soll gegen Ist (nt:expect-Tag) ────────────────────────────────
+        // Erwartete Verkabelung gegen die GEMESSENE LLDP/CDP-Adjazenz halten.
+        // Reine Logik in ExpectedLinks (getestet); hier nur Namen aufloesen
+        // (wie parentEdges: technischer Name gewinnt, case-insensitiv), die
+        // Adjazenz aus den gemessenen LLDP-Kanten bauen ($lldp['edges'] — NICHT
+        // nt:parent/uplink, das waeren Deklarationen, keine Messung) und Labels
+        // mitgeben. Nur arbeiten, wenn ueberhaupt ein Host etwas erwartet.
+        $expected_links = ['deviations' => [], 'expected' => 0, 'matched' => 0];
+        $host_expect = $tags['expect'] ?? [];
+        if ($host_expect) {
+            $name_to_id = [];
+            $labels     = [];
+            foreach ($hosts as $h2id => $h2) {
+                $vis = strtolower(trim((string) ($h2['name'] ?? '')));
+                if ($vis !== '' && !isset($name_to_id[$vis])) $name_to_id[$vis] = (string) $h2id;
+                $labels[(string) $h2id] = (string) (($h2['name'] ?? '') !== ''
+                    ? $h2['name'] : ($h2['host'] ?? ''));
+            }
+            foreach ($hosts as $h2id => $h2) {
+                $tech = strtolower(trim((string) ($h2['host'] ?? '')));
+                if ($tech !== '') $name_to_id[$tech] = (string) $h2id;   // technischer Name gewinnt
+            }
+            $expected_links = ExpectedLinks::compare($host_expect, $name_to_id,
+                ExpectedLinks::adjacency($lldp['edges']), $labels);
+        }
+
+        // ── VLAN je Kante (NT VLAN by SNMP, 3.5b) ─────────────────────────
+        // Welche VLANs liegen auf den LOKALEN Ports der Kanten-Endpunkte?
+        // „Mindestens ein Ende": ein VLAN-Trunk soll sichtbar sein, auch wenn
+        // nur eine Seite das nt.vlan.walk-Item liefert. Kreuzt edge.port_idx[hid]
+        // (ifIndex je Seite) gegen node.vlan_by_if[ifIndex] (ifIndex -> VLAN-IDs).
+        // Nur wenn ueberhaupt ein Host VLAN-Daten hat — sonst keine Schleife.
+        $vlan_by_host = [];
+        foreach ($nodes as $vn) {
+            if (!empty($vn['vlan_by_if'])) {
+                $vlan_by_host[(string) $vn['id']] = $vn['vlan_by_if'];
+            }
+        }
+        $edges = VlanParser::annotateEdges($edges, $vlan_by_host);
+
         // ── Topology-Change-Detection ─────────────────────────────────────
         // Aktuellen Edge-Stand gegen die APCu-Baseline diffen und die
         // Baseline weiterrollen. Kein Baseline-Eintrag (Erstaufruf oder
@@ -906,7 +1005,13 @@ class NetworkTopologyData extends NetworkTopologyController {
             'edges'          => $edges,
             'lldp_unmatched' => $lldp_unmatched,
             'lldp_quality'   => $lldp_quality_out,
+            'expected_links'       => $expected_links,
             'health'         => $health,
+            // SLA-relevante Hosts (Problem haengt an einem Zabbix-Service). Nur
+            // die Summe fuer die KPI-Pille; die Zuordnung je Host reist am
+            // Knoten mit (sla_relevant/sla_services). Ganzer Block im Cache,
+            // weil er sich mit den Problemen aendert, nicht unabhaengig davon.
+            'sla'            => ['count' => $sla['count'], 'services' => $sla['services']],
             // Hat die Obergrenze im Kantenbau zugeschlagen? Gehoert IN den
             // Cache-Eintrag, nicht daneben: sonst verschwindet der Hinweis
             // beim ersten Cache-Treffer, waehrend die gekappte Karte bleibt.
@@ -1127,6 +1232,11 @@ class NetworkTopologyData extends NetworkTopologyController {
             ['nodes' => $nodes, 'edges' => $edges,
              'lldp_unmatched' => $core['lldp_unmatched'] ?? [],
              'lldp_quality'   => $core['lldp_quality']   ?? [],
+             'expected_links'       => $core['expected_links'] ?? ['deviations' => [], 'expected' => 0, 'matched' => 0],
+             // SLA-relevante Hosts (Summe + Service-Namen). Die KPI-Pille zaehlt
+             // selbst aus den Knoten (sla_relevant), aber die Summary gehoert in
+             // die Antwort — fuer Diag/Export und damit die Zahl EINE Quelle hat.
+             'sla'            => $core['sla'] ?? ['count' => 0, 'services' => []],
              // Verworfene Kanten. 0 heisst: die Karte ist vollstaendig.
              'edges_truncated' => (int) ($core['edges_truncated'] ?? 0),
              'topo_changes'   => $topo_changes,
@@ -1293,7 +1403,10 @@ class NetworkTopologyData extends NetworkTopologyController {
                         'hostids'      => $chunk_hids,
                         // Dieselben Nachbar-Schluessel wie die Hauptabfrage. Hier
                         // stand eine eigene, kuerzere Liste ohne uplink.id und mndp.
-                        'search'       => ['key_' => self::EDGE_NAME_KEYS],
+                        // Plus nt.self.* (Eigen-MAC): damit ein reiner CDP-only-
+                        // Nachbar (device-id = MAC, kein Name) auch im Hop-Scoping
+                        // auf den Host trifft statt Geist zu bleiben.
+                        'search'       => ['key_' => array_merge(self::EDGE_NAME_KEYS, ['nt.self.'])],
                         'searchByAny'  => true,
                         'monitored'    => true,
                         'preservekeys' => true
@@ -1329,7 +1442,8 @@ class NetworkTopologyData extends NetworkTopologyController {
                         $hosts[$hid_alias]['nt_aliases'] = $namen;
                     }
                 }
-                $lldp = LldpEdgeBuilder::build($hosts, $metrics['lldp_raw']);
+                $lldp = LldpEdgeBuilder::build($hosts, $metrics['lldp_raw'],
+                    host_self_mac: $metrics['host_self_mac'] ?? []);
                 foreach ($lldp['edges'] as $e) {
                     $edges[] = ['from' => (string) $e['from'], 'to' => (string) $e['to']];
                 }
@@ -1452,6 +1566,15 @@ class NetworkTopologyData extends NetworkTopologyController {
         $last_clocks = [];
         $grenze      = time() - self::LASTVALUE_FENSTER;
 
+        // Zabbix 8 kann History ausserhalb von SQL speichern (HistoryProvider /
+        // $HISTORY_PROVIDERS -> ClickHouse, oder seit jeher Elasticsearch). Dann
+        // sind die history*-Tabellen leer und der schnelle Direkt-SQL-Scan unten
+        // liefert fuer jedes Item null -> keine Metriken, keine LLDP-Kanten
+        // (GitHub #26). Darum fragen wir pro value_type den konfigurierten Storage:
+        // bei SQL bleibt der schnelle Fenster-Scan, bei einem externen Provider
+        // holt die Frontend-History-Abstraktion die Werte, genau wie die Zabbix-UI.
+        $hm = Manager::History();
+
         foreach ([
             ITEM_VALUE_TYPE_FLOAT  => 'history',
             ITEM_VALUE_TYPE_UINT64 => 'history_uint',
@@ -1462,6 +1585,25 @@ class NetworkTopologyData extends NetworkTopologyController {
                 return (int)$i['value_type'] === $vtype;
             }));
             if (empty($type_itemids)) continue;
+
+            // Externer History-Provider (ClickHouse/Elasticsearch): der Direkt-SQL-
+            // Weg unten greift nicht, die Werte liegen woanders. Manager::History()
+            // kennt den konfigurierten Storage und liefert den letzten Wert je Item
+            // (limit 1, kein Zeitfenster: auch ein alter Wert zaehlt, die Stale-
+            // Erkennung laeuft ueber den mitgelieferten clock).
+            if ($hm->getDataSourceType($vtype) !== ZBX_HISTORY_SOURCE_SQL) {
+                $wanted = [];
+                foreach ($type_itemids as $iid) {
+                    $wanted[] = ['itemid' => (string) $iid, 'value_type' => $vtype];
+                }
+                foreach ($hm->getLastValues($wanted, 1, null) as $iid => $rows) {
+                    if (isset($rows[0])) {
+                        $last_values[(int) $iid] = $rows[0]['value'];
+                        $last_clocks[(int) $iid] = (int) $rows[0]['clock'];
+                    }
+                }
+                continue;
+            }
 
             // ── Stufe 1: ein Scan ueber das Zeitfenster ───────────────────
             $offen = [];

@@ -1,0 +1,26 @@
+{
+  "name": "indexed-ports-portdesc-wins",
+  "vendor": "HPE / Aruba-style (synthetic, from a real walk shape)",
+  "source": "hand-built",
+  "description": "Indexed lldpRemSysName keys; the local port comes from the SNMP index (reporter end), and the remote port prefers PortDesc over a PortId that is a MAC.",
+  "hosts": {
+    "aruba": {"host": "SW-CORE-01", "name": "SW-CORE-01"},
+    "pve":   {"host": "pve",        "name": "hv-01.example.lan"},
+    "tp":    {"host": "SW-EDGE-01", "name": "SW-EDGE-01"}
+  },
+  "lldp_raw": [
+    {"hostid": "aruba", "key_": "lldpRemSysName[0.8.1]",  "lastvalue": "hv-01.example.lan", "src": "lldp"},
+    {"hostid": "aruba", "key_": "lldpRemSysName[0.20.2]", "lastvalue": "SW-EDGE-01",        "src": "lldp"}
+  ],
+  "lldp_ports": {
+    "aruba": {
+      "0.8.1":  {"id": "3C EC EF 79 2C 88", "desc": "nic0"},
+      "0.20.2": {"id": "gigabitEthernet 1/0/8"}
+    }
+  },
+  "expect": {
+    "edges": [{"a": "aruba", "b": "pve"}, {"a": "aruba", "b": "tp"}],
+    "edge_count": 2,
+    "ports": [{"a": "aruba", "b": "pve", "aPort": "8", "bPort": "nic0"}]
+  }
+}

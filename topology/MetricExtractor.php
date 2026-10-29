@@ -44,7 +44,7 @@ final class MetricExtractor {
      *     port_traffic: array<string, array<string, array{in: float, out: float}>>,
      *     port_speed:   array<string, array<string, float>>,
      *     lldp_ports:   array<string, array<string, array{id?: string, desc?: string}>>,
-     *     lldp_meta:    array<string, array<string, array{desc?: string, caps?: string, chassis?: string}>>
+     *     lldp_meta:    array<string, array<string, array{desc?: string, caps?: string, chassis?: string, chassis_subtype?: string, mgmt_ip?: string}>>
      * }
      */
     public static function extract(array $items_a): array {
@@ -77,6 +77,15 @@ final class MetricExtractor {
         // die Faerbung ist das Aggregat richtig, fuer eine Portansicht nicht.
         $port_errors    = [];   // hid => [ifIndex => errors/s]
         $port_discards  = [];   // hid => [ifIndex => discards/s]
+        $port_stp       = [];   // hid => [ifIndex => dot1dStpPortState (2=blocking,5=forwarding)]
+        $host_stp_churn = [];   // hid => dot1dStpTopChanges-Rate (changes/s) — Loop-Fruehwarnung
+        $host_bcast_max = [];   // hid => max Broadcast-Paketrate ueber alle Ports (pkts/s) — Storm
+        $host_mac_flap  = [];   // hid => Anzahl MACs mit Portwechsel (Trapper nt.mac.flap) — Flap
+        // EIGEN-Identitaet: die MAC(s), die ein Host als seine eigene meldet
+        // (lldpLocChassisId / dot1dBaseBridgeAddress). Damit loest der
+        // LldpEdgeBuilder einen Nachbarn, der diesen Host nur per MAC nennt
+        // (Cisco CDP: device-id = MAC, kein Name), direkt auf ihn auf.
+        $host_self_mac  = [];   // hid => [mac-string, ...]
         // Interface-NAME je ifIndex, sofern das Template ihn liefert.
         //
         // Ohne ihn zeigt die Kante am eigenen Ende eine nackte Zahl ("9") und
@@ -111,10 +120,36 @@ final class MetricExtractor {
         $hr_total = [];
         $hr_type  = [];
 
+        // UniFi geraeteweiter Uplink-Durchsatz (uplink.rx/tx): hid => [in, out].
+        $uplink_rate = [];
+        // WLAN-Funkmodule je UniFi-AP (hid => band => {channel,width,std,cu}).
+        $radios = [];
+        // WLAN-Client-Zahl je UniFi-AP (hid => int), aus wlan.clients.
+        $wlan_clients = [];
+        // Ausgestrahlte SSIDs je UniFi-AP (hid => [{ssid,clients,guest},...]),
+        // aus wlan.ssids (vap_table, nach Name zusammengefasst).
+        $ssids = [];
+        // WLAN-Satisfaction je UniFi-AP (hid => int 0..100), aus wlan.satisfaction
+        // (geraeteweiter UniFi-Erlebnisscore). Niedrig = WLAN degradiert.
+        $wlan_sat = [];
+        // VLAN-Mitgliedschaft je Host (hid => {vlans, byIfIndex, access}), aus
+        // dem nt.vlan.walk-Text (NT VLAN by SNMP). Fuer Knoten + Kanten (3.5b).
+        $host_vlan = [];
+
         foreach ($items_a as $item) {
             $hid = $item['hostid'];
             $key = $item['key_'];
             $val = $item['lastvalue'];
+
+            // VLAN-Tabellen: EIN Walk-Text, vom VlanParser in die VLAN-
+            // Mitgliedschaft je Host zerlegt. Exakter Key, kein Substring —
+            // danach ist fuer dieses Item nichts weiter zu tun.
+            if ($key === 'nt.vlan.walk') {
+                if ((string) $val !== '') {
+                    $host_vlan[$hid] = VlanParser::vlansForHost((string) $val);
+                }
+                continue;
+            }
 
             // §3b Per-Interface-Traffic: ifIndex + Richtung aus SNMP-Octets-Keys
             // (ifHCInOctets.8 / net.if.in[ifHCInOctets.8] / ifInOctets.8). Eigenes
@@ -167,6 +202,157 @@ final class MetricExtractor {
                 } elseif (preg_match('/ifSpeed[.\[](\d+)/', $key, $sm)) {
                     $sp = self::speedBps($val);
                     if ($sp > 0 && !isset($port_speed[$hid][$sm[1]])) $port_speed[$hid][$sm[1]] = $sp;
+                }
+            }
+
+            // §3f UniFi-Ports (Vorlage „UniFi Network API – Device"): die Portliste
+            // kommt NICHT per SNMP, sondern als eigene port.<feld>[<idx>]-Items aus
+            // der Controller-API. Damit Knoten-Health (down-Count) und der
+            // Auslastungs-Divisor OHNE Sonderpfad greifen, wird port.state in
+            // dieselbe Oper/Admin-Korrelation wie SNMP eingespeist (UP->1, DOWN->2,
+            // admin immer up — die API trennt admin-down nicht) und port.speed in
+            // port_speed. KEIN Per-Port-Traffic: die neue UniFi Network Integration
+            // API liefert je Port kein Byte-Feld (gemessen 2026-10-26), nur
+            // geraeteweit (uplink.rx/tx) — darum hier bewusst keine port_traffic-Zeile.
+            // strpos-Vorfilter wie bei Octets/Speed/STP, damit das Regex nicht auf
+            // jedes Item laeuft; <idx> ist schon die Frontportnummer.
+            if (strpos($key, 'port.') === 0) {
+                if (preg_match('/^port\.state\[(\d+)\]$/', $key, $pm) && (string) $val !== '') {
+                    $iface_oper[$hid][$pm[1]]  = strcasecmp((string) $val, 'UP') === 0 ? 1 : 2;
+                    $iface_admin[$hid][$pm[1]] = 1;
+                } elseif (preg_match('/^port\.speed\[(\d+)\]$/', $key, $pm)) {
+                    $sp = (float) $val;
+                    if ($sp > 0) $port_speed[$hid][$pm[1]] = $sp;
+                }
+            }
+
+            // §3g UniFi geraeteweiter Uplink-Durchsatz. uplink.rx/tx sind je Geraet
+            // EIN Wert (der Durchsatz ueber seinen Uplink), laut Item-Unit schon
+            // bit/s — rx = empfangen (Download), tx = gesendet (Upload). Die Kante
+            // aus uplink.id haengt ihn als ihren Durchsatz an (LldpEdgeBuilder),
+            // ehrlich geraeteweit, NICHT per Port: die UniFi-API liefert keinen
+            // Per-Port-Traffic. Ohne Kapazitaet (die API nennt keine) faerbt die
+            // Weathermap diese Kante nicht nach Auslastung, zeigt aber den Durchsatz.
+            if ($key === 'uplink.rx') {
+                if ((string) $val !== '') $uplink_rate[$hid]['in'] = (float) $val;
+            } elseif ($key === 'uplink.tx') {
+                if ((string) $val !== '') $uplink_rate[$hid]['out'] = (float) $val;
+            }
+
+            // §3h WLAN-Funkmodule je UniFi-AP: Kanal/Standard/Breite aus der
+            // Integration-API (radio.channel/standard/channelWidth[<band>],
+            // band = "2.4"/"5"), die Client-ZAHL (wlan.clients) und die
+            // Funkkanal-Auslastung (wlan.cu[<band>], Prozent) aus der KLASSISCHEN
+            // Controller-API (/stat/device: num_sta bzw. radio_table_stats.cu_total,
+            // gemessen 2026-10-26, derselbe API-Key). Seit 5.5.83 liegt die
+            // Client-Zahl damit direkt am AP-Host statt per IP-Join von einem
+            // separaten SNMP-Host — der frühere WlanResolver-Umweg entfällt. Den
+            // 802.11-Standard liefert nur die Integration-API, darum bleibt die
+            // dort; cu nur die klassische. Beide schreiben in dieselbe radios-Map.
+            if (strpos($key, 'radio.') === 0
+                    && preg_match('/^radio\.(channel|standard|channelWidth)\[([0-9.]+)\]$/', $key, $rm)
+                    && (string) $val !== '') {
+                $band = $rm[2];
+                if ($rm[1] === 'channel') {
+                    $radios[$hid][$band]['channel'] = (int) $val;
+                }
+                elseif ($rm[1] === 'standard') {
+                    $radios[$hid][$band]['std'] = (string) $val;
+                }
+                else {   // channelWidth, Hz -> MHz
+                    $radios[$hid][$band]['width'] = (int) round((float) $val / 1e6);
+                }
+            }
+            elseif ($key === 'wlan.clients') {
+                if ((string) $val !== '') $wlan_clients[$hid] = (int) $val;
+            }
+            elseif ($key === 'wlan.satisfaction') {
+                // Negativ = UniFi-Idle-Sentinel (-1, AP ohne Clients) -> KEIN Score.
+                // Defensiv auch im Backend geklammert, falls das Item nicht die
+                // dokumentierte JS-Vorverarbeitung nutzt (sonst „-1 %" rot). 5.5.90.
+                if ((string) $val !== '' && (float) $val >= 0) {
+                    $wlan_sat[$hid] = (int) round((float) $val);
+                }
+            }
+            elseif (strpos($key, 'wlan.cu[') === 0
+                    && preg_match('/^wlan\.cu\[([0-9.]+)\]$/', $key, $cm)
+                    && (string) $val !== '') {
+                // Funkauslastung in Prozent, je Band in die radios-Map gefaltet.
+                $radios[$hid][$cm[1]]['cu'] = (int) round((float) $val);
+            }
+            elseif (strpos($key, 'radios.txRestries[') === 0
+                    && preg_match('/^radios\.txRestries\[([0-9.]+)\]$/', $key, $tm)
+                    && (string) $val !== '') {
+                // Sendewiederholungen in Prozent (Integration-API, Key traegt den
+                // Template-Tippfehler „txRestries"). Degradations-Indikator, je
+                // Band in die radios-Map gefaltet. Eine Nachkommastelle.
+                $radios[$hid][$tm[1]]['retr'] = round((float) $val, 1);
+            }
+            elseif ($key === 'wlan.ssids' && (string) $val !== '') {
+                // Ausgestrahlte SSIDs, von der klassischen API je AP als kompaktes
+                // JSON [{ssid,clients,guest}] vorverdichtet (vap_table nach Name
+                // zusammengefasst, Clients ueber beide Baender summiert). Defensiv
+                // dekodiert; SSID-Namen stammen aus fremder Konfiguration -> Laenge
+                // gekappt (capName), das HTML-Escaping macht das Frontend. Deckel
+                // bei 16 Eintraegen gegen eine ausufernde Payload.
+                $dec = json_decode((string) $val, true);
+                if (is_array($dec)) {
+                    $list = [];
+                    foreach ($dec as $e) {
+                        if (!is_array($e) || !isset($e['ssid']) || (string) $e['ssid'] === '') {
+                            continue;
+                        }
+                        $list[] = [
+                            'ssid'    => self::capName((string) $e['ssid']),
+                            'clients' => isset($e['clients']) ? (int) $e['clients'] : 0,
+                            'guest'   => !empty($e['guest']),
+                        ];
+                        if (count($list) >= 16) {
+                            break;
+                        }
+                    }
+                    if ($list) {
+                        $ssids[$hid] = $list;
+                    }
+                }
+            }
+
+            // §3c STP-Portzustand (dot1dStpPortState, Item nt.if.stp[ifIndex]). Nach
+            // ifIndex gekeyt wie der uebrige Port-Kram -- die Kante liest spaeter den
+            // Zustand ihres lokalen Ports und markiert blocking(2) als per-STP
+            // geblockte Redundanz (NT Spanning-Tree by SNMP Template). strpos-Vorfilter
+            // wie bei Octets/Speed, damit das Regex nicht auf JEDES Item laeuft. Nur
+            // gueltige Zustaende 1..6 merken -- ein noch nicht gepolltes Item hat
+            // leeren lastvalue, und (int)'' = 0 waere ein Phantom-Zustand ("state 0").
+            if (strpos($key, 'nt.if.stp') === 0
+                    && preg_match('/^nt\.if\.stp\[(\d+)\]$/', $key, $stpm)) {
+                $st = (int) $val;
+                if ((string) $val !== '' && $st >= 1 && $st <= 6) {
+                    $port_stp[$hid][$stpm[1]] = $st;
+                }
+            } elseif ($key === 'nt.stp.topchanges') {
+                // §3d STP-Topology-Change-RATE (dot1dStpTopChanges change-per-second).
+                // ~0 bei stabilem Baum; dauerhaft hoch = der Baum konvergiert staendig
+                // neu = Loop-Fruehwarnung (Stufe 3a). Leerer lastvalue -> nicht merken.
+                if ((string) $val !== '') {
+                    $host_stp_churn[$hid] = (float) $val;
+                }
+            } elseif (strpos($key, 'nt.if.bcast') === 0
+                    && preg_match('/^nt\.if\.bcast\[\d+\]$/', $key)) {
+                // §3e Broadcast-Paketrate je Port (ifHCInBroadcastPkts change/s).
+                // Je Host das MAXIMUM ueber alle Ports -- ein Loop flutet die
+                // Schleifen-Ports, der lauteste Port verraet den Storm. Stufe 3b.
+                if ((string) $val !== '') {
+                    $r = (float) $val;
+                    if (!isset($host_bcast_max[$hid]) || $r > $host_bcast_max[$hid]) {
+                        $host_bcast_max[$hid] = $r;
+                    }
+                }
+            } elseif ($key === 'nt.mac.flap') {
+                // §3f MAC-Flapping (Anzahl MACs mit Portwechsel seit letztem Lauf,
+                // vom Cron nt-mac-flap-sender.sh per Trapper gepusht). Stufe 3c.
+                if ((string) $val !== '') {
+                    $host_mac_flap[$hid] = (int) $val;
                 }
             }
 
@@ -330,6 +516,15 @@ final class MetricExtractor {
                     $host_traffic[$hid] = ['in' => 0.0, 'out' => 0.0];
                 }
                 $host_traffic[$hid]['out'] += (float) $val * 8;
+            } elseif ($key === 'nt.self.chassis' || $key === 'nt.self.basemac') {
+                // EIGEN-MAC des Hosts (lldpLocChassisId / dot1dBaseBridgeAddress).
+                // KEIN Nachbar — die eigene Identitaet. LldpEdgeBuilder seedet
+                // damit den Chassis-Index, sodass ein Nachbar, der diesen Host
+                // nur per MAC nennt (CDP device-id), direkt auf ihn trifft.
+                // Rohform behalten; macForm/macUsable normalisiert & prueft dort.
+                if ((string) $val !== '') {
+                    $host_self_mac[$hid][] = (string) $val;
+                }
             } elseif (strpos($key, 'lldpRemPortId') !== false) {
                 // §3 Remote-Port (LLDP). Gleicher SNMPINDEX wie lldpRemSysName →
                 // LldpEdgeBuilder ordnet ihn der Nachbar-Zeile zu. PortId kann laut
@@ -345,8 +540,26 @@ final class MetricExtractor {
                 $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['desc'] = (string) $val;
             } elseif (strpos($key, 'lldpRemSysCapEnabled') !== false) {
                 $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['caps'] = (string) $val;
+            } elseif (strpos($key, 'lldpRemChassisIdSubtype') !== false) {
+                // §4a Chassis-ID-SUBTYPE (lldpRemChassisIdSubtype): WELCHES Format
+                // die Chassis-ID hat — 4=MAC, 5=Netzadresse(IP), 7=lokal/Name. Damit
+                // muss der EdgeBuilder nicht mehr aus der Zeichenform raten, ob die
+                // ID eine MAC ist. MUSS vor der chassis-Branch stehen: der Substring
+                // 'lldpRemChassisId' matcht sonst zuerst. Gemessen 2026-10-28:
+                // MikroTik und HPE liefern ihn beide.
+                $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['chassis_subtype'] = (string) $val;
             } elseif (strpos($key, 'lldpRemChassisId') !== false) {
                 $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['chassis'] = (string) $val;
+            } elseif (strpos($key, 'lldpRemManAddr') !== false) {
+                // §4b Management-Adresse des Nachbarn (lldpRemManAddr). Die IPv4
+                // zieht das Template schon aus dem OID-INDEX der getrennten
+                // lldpRemManAddrTable (dort steckt die Adresse, nicht im Wert)
+                // und liefert sie hier als fertige punktierte IP. Gleicher
+                // SNMPINDEX wie die uebrige Nachbarzeile. Gibt dem EdgeBuilder
+                // einen letzten Treffer-Pfad (resolveByMgmtIp) und bereichert
+                // sonst den Geist um eine echte Adresse. Gemessen 2026-10-28:
+                // HPE strahlt sie aus, MikroTik nicht — fehlend ist kein Fehler.
+                $lldp_meta[$hid][HostMetadata::ifaceParam($key)]['mgmt_ip'] = (string) $val;
             } elseif (strpos($key, 'cdpCacheDevicePort') !== false) {
                 // CDP-Remote-Port: menschenlesbar → als 'desc'. MUSS vor der
                 // Neighbor-Branch stehen, deren Regex "cdp.*device" diesen Port sonst
@@ -508,7 +721,11 @@ final class MetricExtractor {
             // ── CPU ──────────────────────────────────────────────────────
             // Prio: direkter Prozent-Wert > Aggregate.
             // Erst gefundener Wert "gewinnt" (Templates können doppelt liefern).
-            if ($key === 'system.cpu.util' || $key === 'system.cpu.utilization') {
+            if ($key === 'system.cpu.util' || $key === 'system.cpu.utilization'
+                    || $key === 'cpu.utilization') {
+                // cpu.utilization = UniFi-Device-Template (HTTP-Agent, direkter
+                // Prozentwert). Lag bisher nicht im Satz, darum zeigten UniFi-APs/
+                // -Switches „not collected", obwohl das Item sammelt.
                 if (!isset($host_cpu[$hid])) $host_cpu[$hid] = round($val, 1);
             } elseif (preg_match('/^system\.cpu\.util\[/', $key)) {
                 // NUR die idle-Variante (-> 100 - idle) ist hier ein verlaesslicher
@@ -581,7 +798,10 @@ final class MetricExtractor {
             // ── Memory: direkter Prozent-Wert (Top-Prio) ──────────────────
             // vm.memory.size[pused], vm.memory.utilization \u2192 sofort fertig
             } elseif (strpos($key, 'vm.memory.size[pused]') !== false
-                      || $key === 'vm.memory.utilization') {
+                      || $key === 'vm.memory.utilization'
+                      || $key === 'memory.utilization') {
+                // memory.utilization = UniFi-Device-Template (direkter Prozent),
+                // bisher nicht erkannt -> „not collected" trotz vorhandenem Wert.
                 $host_mem_pct[$hid] = round($val, 1);
 
             // ── Memory: available/free statt used ─────────────────────────
@@ -740,8 +960,25 @@ final class MetricExtractor {
             'port_names'    => $port_names,
             'port_status'   => $port_status,
             'port_uptime'   => $port_uptime,
+            'port_stp'      => $port_stp,
+            'stp_churn'     => $host_stp_churn,
+            'bcast_max'     => $host_bcast_max,
+            'mac_flap'      => $host_mac_flap,
             'lldp_ports'   => $lldp_ports,
             'lldp_meta'    => $lldp_meta,
+            'host_self_mac' => $host_self_mac,
+            // UniFi geraeteweiter Uplink-Durchsatz, je Host [in, out] (bit/s).
+            'uplink_rate'  => $uplink_rate,
+            // WLAN-Funkmodule je UniFi-AP (band => {channel,width,std,cu}).
+            'radios'       => $radios,
+            // WLAN-Client-Zahl je UniFi-AP (hid => int), aus wlan.clients.
+            'wlan_clients' => $wlan_clients,
+            // Ausgestrahlte SSIDs je UniFi-AP (hid => [{ssid,clients,guest},...]).
+            'ssids'        => $ssids,
+            // WLAN-Satisfaction je UniFi-AP (hid => int 0..100).
+            'wlan_satisfaction' => $wlan_sat,
+            // VLAN-Mitgliedschaft je Host (hid => {vlans, byIfIndex, access}).
+            'vlan'              => $host_vlan,
         ];
     }
 
@@ -775,6 +1012,18 @@ final class MetricExtractor {
             if ($feld === 'lldp_raw') {
                 // Flache Liste — anhaengen, nicht vereinigen.
                 $acc['lldp_raw'] = array_merge($acc['lldp_raw'] ?? [], $wert);
+                continue;
+            }
+            if ($feld === 'host_self_mac') {
+                // hid => [mac,...]: die Innenlisten sind integer-indiziert, ein
+                // blosses '+' auf der Host-Map (unten) wuerde bei ITEM-Stueckelung
+                // (ein Host ueber zwei Stuecke) eine der MACs verlieren. Pro Host
+                // die Listen anhaengen. Doppelte MACs schaden nicht — der Resolver
+                // normalisiert und dedupliziert ohnehin ueber seine Map.
+                foreach ($wert as $hid => $macs) {
+                    $acc['host_self_mac'][$hid] = array_merge(
+                        $acc['host_self_mac'][$hid] ?? [], (array) $macs);
+                }
                 continue;
             }
             if (!isset($acc[$feld])) {
@@ -814,7 +1063,7 @@ final class MetricExtractor {
      * saehe dort aus wie eine Messung.
      */
     /** Portname kappen — er landet im DOM und kommt aus fremder Hand. */
-    private static function capName(string $v): string {
+    public static function capName(string $v): string {
         $v = preg_replace('/\s+/', ' ', $v);
         return mb_substr($v, 0, 40);
     }
@@ -832,7 +1081,7 @@ final class MetricExtractor {
      * reine Ziffern kommen dort nicht vor. Die Unterscheidung haengt also an
      * der Klammer, nicht am Itemtyp — der steht in der Item-Abfrage gar nicht.
      */
-    private static function snmpIfKey(string $key): ?array {
+    public static function snmpIfKey(string $key): ?array {
         if (strncmp($key, 'net.if.', 7) !== 0) {
             return null;
         }
@@ -884,12 +1133,12 @@ final class MetricExtractor {
      * hoch, nicht zu niedrig. Ohne ifHighSpeed bleibt die Geschwindigkeit
      * lieber unbekannt als erfunden.
      */
-    private static function speedBps($val): float {
+    public static function speedBps($val): float {
         $sp = (float) $val;
         return ($sp >= 4294967295.0) ? 0.0 : $sp;
     }
 
-    private static function highSpeedBps($val): float {
+    public static function highSpeedBps($val): float {
         $sp = (float) $val;
         if ($sp <= 0) return 0.0;
         return $sp < 1.0e7 ? $sp * 1.0e6 : $sp;

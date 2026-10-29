@@ -2,9 +2,9 @@
     "manifest_version": 2.0,
     "id": "network_topology",
     "name": "Network Topology for Zabbix",
-    "version": "5.5.27",
+    "version": "5.6.0",
     "author": "PlaNet Fox | Alexander Fox",
-    "description": "Interactive network topology on its own page: LLDP/CDP links drawn port-to-port with a measured weathermap, severity rings, clustering and host-group view, ghost nodes for unmonitored neighbours, plus table, geo, health and stats views. Not a widget; five optional dashboard widgets ship alongside.",
+    "description": "Interactive network topology on its own page: LLDP/CDP links drawn port-to-port with a measured weathermap, severity rings, clustering and host-group view, ghost nodes for unmonitored neighbours, plus table, geo, health and stats views. Not a widget; eight optional dashboard widgets ship alongside.",
     "namespace": "NetworkTopology",
     "actions": {
         "network.topology.view": {
@@ -42,14 +42,6 @@
         },
         "network.topology.compliance": {
             "class": "NetworkTopologyCompliance",
-            "layout": "layout.json"
-        },
-        "network.topology.services": {
-            "class": "NetworkTopologyServices",
-            "layout": "layout.json"
-        },
-        "network.topology.service_edit": {
-            "class": "NetworkTopologyServiceEdit",
             "layout": "layout.json"
         },
         "network.topology.item_history": {
@@ -98,6 +90,14 @@
         },
         "network.topology.scales": {
             "class": "NetworkTopologyScales",
+            "layout": "layout.json"
+        },
+        "network.topology.faceplate": {
+            "class": "NetworkTopologyFaceplate",
+            "layout": "layout.json"
+        },
+        "network.topology.plan": {
+            "class": "NetworkTopologyPlan",
             "layout": "layout.json"
         }
     }

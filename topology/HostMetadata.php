@@ -275,7 +275,7 @@ final class HostMetadata {
             // Containers
             'container'      => ['docker by zabbix','docker','container','kubernetes'],
             // Monitoring
-            'monitoring'     => ['tactical rmm','rmm.cloudglue'],
+            'monitoring'     => ['tactical rmm','meshcentral','rmm'],
             // Printer
             'printer'        => ['prt-','printer','mfp'],
             // Linux/Windows/macOS generic servers

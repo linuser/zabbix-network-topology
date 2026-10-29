@@ -20,6 +20,37 @@ Installationsverzeichnis **muss** genau so heißen / the install directory
 - **No build tools required**: the prebuilt JS bundle (`assets/js/dist/nt-bundle.js`) ships in the package. You only need Node/esbuild if you want to rebuild from source (see [Build from source](#5-optional-build-from-source-developers)).
 - **For weathermap mode** (edge color by utilization): devices must be monitored via **SNMP** with an interface template that provides `ifSpeed`/`ifHighSpeed`. The Zabbix agent does **not** report link speed (see README → Weathermap).
 
+### Which templates your devices need
+
+The module **reads Zabbix items, it never talks SNMP itself** — so "what do I need
+on a switch" always means "which template makes those items exist". The map draws a
+host as soon as it is monitored at all; the table below is what each **extra** layer
+needs. Link the official vendor/generic template for interfaces, then add the `NT …`
+templates (shipped in `templates/`) for the features you want.
+
+| Device | Interfaces · traffic · health | Topology edges | PoE | STP / loops | MAC finder |
+|---|---|---|---|---|---|
+| **HP / Aruba** (SNMP) | official *HPE Aruba … by SNMP* (or *Generic by SNMP*) | **NT LLDP Neighbors by SNMP** | NT PoE by SNMP | NT Spanning-Tree by SNMP | FDB items |
+| **Cisco** (SNMP) | official *Cisco … by SNMP* | **NT LLDP Neighbors by SNMP** (LLDP, or CDP — on by default) | NT PoE by SNMP | NT Spanning-Tree by SNMP | FDB items |
+| **MikroTik** (SNMP) | official *MikroTik by SNMP* | **NT LLDP Neighbors by SNMP** | — (usually no PoE-MIB) | NT Spanning-Tree by SNMP | FDB items |
+| **Other SNMP switch** | any template with `ifName`/`ifHCOctets`/`ifHighSpeed` | **NT LLDP Neighbors by SNMP** | NT PoE by SNMP (if it serves the POWER-ETHERNET-MIB) | NT Spanning-Tree by SNMP | FDB items |
+| **Ubiquiti UniFi** | *UniFi Network API* + *… – Device* (HTTP, **not** SNMP) | **built in** (`uplink.id`) | **built in** (`port.poe.*`) | not available (not in the UniFi API) | not available |
+
+Notes:
+
+- **Topology edges** are the one thing that is *not* in the official vendor
+  templates: the map needs an item whose value is the neighbour's name, which
+  **NT LLDP Neighbors by SNMP** provides (standards-based LLDP-MIB, vendor-neutral;
+  optional Cisco CDP). Without it you see nodes but no links. Details and
+  troubleshooting: [LLDP-SETUP.md](LLDP-SETUP.md).
+- **PoE** → [POE-SETUP.md](POE-SETUP.md), **STP / loop & ring detection** →
+  [STP-SETUP.md](STP-SETUP.md), **MAC/IP finder** → [FDB-SETUP.md](FDB-SETUP.md),
+  **VLAN view** → [VLAN-SETUP.md](VLAN-SETUP.md).
+- **UniFi is the exception**: it is monitored through the UniFi controller API, so
+  none of the `NT …` SNMP templates apply — the official *UniFi Network API*
+  templates already carry ports, PoE and the uplink topology. STP, loop detection
+  and the MAC finder stay SNMP-only. See [UNIFI-SETUP.md](UNIFI-SETUP.md).
+
 ### 1. Install the main module
 
 > The directory **must** be named `network_topology` (the module id). A repo downloaded directly may be named `zabbix-network-topology-v2-main` or similar → **rename it**.
@@ -144,7 +175,7 @@ sudo systemctl reload php8.2-fpm       # use the name you found!
 
 ### 3. Optional: dashboard widgets
 
-Five separate widget modules (they all consume the main module's data):
+Eight separate widget modules (they all consume the main module's data):
 
 | ZIP | In the dashboard menu | Shows |
 |---|---|---|
@@ -153,17 +184,20 @@ Five separate widget modules (they all consume the main module's data):
 | `network_topology_table_widget.zip` | **NT Table** | Nagios-style host list |
 | `network_topology_kpi_widget.zip` | **NT KPI** | key figures as a ring or tiles |
 | `network_topology_items_widget.zip` | **NT Items** | one item pattern across all hosts |
+| `network_topology_faceplate_widget.zip` | **NT Faceplate** | front panel of one switch |
+| `network_topology_plan_widget.zip` | **NT Plan** | the map on a floor-plan / aerial background |
+| `network_topology_wlan_widget.zip` | **NT WLAN** | UniFi access points with radios and client counts |
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-for w in widget health_widget table_widget kpi_widget items_widget; do
+for w in widget health_widget table_widget kpi_widget items_widget faceplate_widget plan_widget wlan_widget; do
     sudo unzip "/path/network_topology_$w.zip" -d "network_topology_$w"
 done
 sudo chown -R root:root network_topology_*_widget network_topology_widget
 sudo systemctl reload php8.2-fpm      # service name as determined above
 ```
 Then **Scan directory** → set the modules you want to *Enabled* → available in the dashboard editor. The widget ZIPs carry their files **directly**, without a top-level folder — that is why `-d <target>` is required.
-**Prerequisite:** the main module must be installed + enabled. Version-wise the widgets are no longer the exception: re-tested on **7.0.30** on 2026-09-24, all five render there.
+**Prerequisite:** the main module must be installed + enabled. Version-wise the widgets are no longer the exception: re-tested on **7.0.30** on 2026-09-24, all of them render there.
 
 > **Why not standalone?** The data action `network.topology.data` belongs to the main module, and the topology widget loads Cytoscape.js from `modules/network_topology/assets/js/` — the library ships only once on purpose. Without the main module (or with it disabled) the tiles show an error. So **install and enable the main module first, then the widgets.**
 
@@ -189,6 +223,12 @@ For real Zabbix events on topology changes and a health-score trend:
 2. Create a **dedicated monitoring user** (USER role, read access to the host groups). Important: the APCu baseline is user-scoped — a shared user would roll its baseline against your UI sessions.
 3. Put `topo-change-sender.sh` on the Zabbix server as a **cron** (every 2 min), configured via ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). It pushes topology changes **and** the health score via `zabbix_sender`.
 
+> **Loops & rings (optional):** physical loop and ring detection — redundant
+> rings classified from Spanning-Tree, plus STP-churn / broadcast-storm /
+> MAC-flapping symptoms — is a separate opt-in feature with its own template
+> (`nt_stp_snmp.yaml`) and, for MAC-flapping, a cron sender. See
+> **[STP-SETUP.md](STP-SETUP.md)**.
+
 ### 5. Optional: build from source (developers)
 
 Only needed if you change the JS modules:
@@ -203,7 +243,27 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 Replace the `network_topology` directory with the new version, `chown`, reload php-fpm. The map layout and manual links are stored server-side and survive regardless; pins, notes and presets live in the browser `localStorage`.
 
-**"Scan directory" is for new module *directories*, not for new actions.** This page said the opposite for a long time, and it is wrong: `CModuleManager::loadManifest()` reads `manifest.json` from disk on every request, and the `module` table stores only the path, the status and the config. So a version that adds actions to a module Zabbix already knows works the moment the files are in place — measured on 7.4 on 2026-09-02 and read in the 7.0.30 source on 2026-09-25. What *does* need "Scan directory" is a module Zabbix has never seen: the five widgets are separate modules, so installing one for the first time needs it. When in doubt, run it — one click, and it breaks nothing.
+**"Scan directory" is for new module *directories*, not for new actions.** This page said the opposite for a long time, and it is wrong: `CModuleManager::loadManifest()` reads `manifest.json` from disk on every request, and the `module` table stores only the path, the status and the config. So a version that adds actions to a module Zabbix already knows works the moment the files are in place — measured on 7.4 on 2026-09-02 and read in the 7.0.30 source on 2026-09-25. What *does* need "Scan directory" is a module Zabbix has never seen: the eight widgets are separate modules, so installing one for the first time needs it. When in doubt, run it — one click, and it breaks nothing.
+
+> **From 5.5.0 to 5.6.0:** replace the directory, `chown`, reload php-fpm, and
+> reload the topology page once with a cache bypass (the bundle changed). The
+> main module gained many actions across the 5.5.x line (faceplate, plan,
+> create_host, fdb_search, the forecasts, maintenance, …) — these work the
+> moment the files are in place, no "Scan directory" needed. Three things to do
+> **outside** the module directory:
+> - **Two new widgets:** `network_topology_plan_widget` (**NT Plan**) and
+>   `network_topology_wlan_widget` (**NT WLAN**). They are new module
+>   directories, so install them (section 3) and run **Scan directory** once to
+>   register them. The six existing widgets just get their files replaced.
+> - **Re-import `templates/nt_lldp_snmp_template.yaml`** (Data collection →
+>   Templates → Import, *Update existing* ticked for discovery rules and item
+>   prototypes) to pick up the typed chassis-id (`lldpRemChassisIdSubtype`,
+>   5.5.96) and the neighbour management IP (`lldpRemManAddr`, 5.5.97). On a
+>   device that sends neither, nothing changes. The optional VLAN / STP / PoE
+>   features ship their own templates — see the matching SETUP guide.
+> - **Plan background images set via a URL must now be `https://`** (5.6.0,
+>   security hardening); an existing `http://` URL background is rejected and
+>   stops showing. Backgrounds stored in the Zabbix image store are unaffected.
 
 > **From 5.4.1 to 5.5.0:** **no new actions, no template change, and the
 > widget scripts are byte-identical** — so dashboards need nothing at all,
@@ -320,7 +380,7 @@ Two things need a manual follow-up:
 
 - **Dashboard tiles.** The widget IDs are part of the dashboard; Zabbix no longer recognises the old type and hides the tiles. Add and configure them once more — the dashboard itself stays intact.
 
-  To avoid that, the [CHANGELOG](CHANGELOG.md) section "Optional: Dashboards per SQL erhalten" carries an `UPDATE` script that rewrites the identifiers directly in the database. **That path also removes steps 2 and 3**: the modules stay enabled, "Scan directory" is not required, and the tiles stay in place. Rehearsed on two independent installations, one of them on PostgreSQL.
+  To avoid that, the [CHANGELOG](../CHANGELOG.md) section "Optional: Dashboards per SQL erhalten" carries an `UPDATE` script that rewrites the identifiers directly in the database. **That path also removes steps 2 and 3**: the modules stay enabled, "Scan directory" is not required, and the tiles stay in place. Rehearsed on two independent installations, one of them on PostgreSQL.
 - **Bookmarks.** The view now lives at `zabbix.php?action=network.topology.view`.
 
 Everything user-side is preserved. The map layout and manual links live server-side — in `module.config` and the user profile, not tied to the module name. Pins, notes, filter presets and toolbar settings live in `localStorage`, whose keys were never tied to the module name either. Host tags (`nt:parent`) are unaffected anyway.
@@ -409,6 +469,7 @@ DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
 | Module not shown in the list | Directory isn't named exactly `network_topology`, or wrong permissions/owner. On **RHEL/Rocky/Alma** also run `sudo restorecon -Rv …` (SELinux). |
 | Stuck on "Loading topology…" / blank area | Open the browser **console** (F12). Most common cause in hardened setups: a **Content-Security-Policy**. As of v4.30.0 (bundle) `script-src 'self'` is enough; you get real stack traces (file + line). |
 | Weathermap doesn't color edges | No `ifSpeed`/`ifHighSpeed` item on the hosts → SNMP interface monitoring required. |
+| No switch front panel (faceplate) in the detail panel | The faceplate is only drawn for a host the module types as **switch**. If the detail panel shows a different *Type* (e.g. *Server*), the device wasn't recognised — force it with a host tag **`nt:icon` = `switch`** (overrides the auto-detection). Still empty afterwards? The faceplate is built from **per-port interface items** (`ifOperStatus`/`ifType` per ifIndex); a host with only aggregate/traffic items (no ifTable) has no ports to draw — link an SNMP interface template. |
 | "Unknown action …" (maintenance/forecast) | You forgot "Scan directory" after the update. |
 
 ---
@@ -426,6 +487,38 @@ DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
 - Moderner Browser (ES2019 — Chrome/Firefox/Safari/Edge, aktuelle Versionen)
 - **Keine Build-Tools nötig**: das fertige JS-Bundle (`assets/js/dist/nt-bundle.js`) liegt im Paket. Node/esbuild brauchst du nur, wenn du aus dem Quellcode neu bauen willst (siehe [Aus Source bauen](#5-optional-aus-source-bauen-entwickler)).
 - **Für den Weathermap-Modus** (Edge-Farbe nach Auslastung): die Geräte müssen per **SNMP** mit einem Interface-Template überwacht werden, das `ifSpeed`/`ifHighSpeed` liefert. Der Zabbix-Agent liefert **keine** Link-Speed (siehe README → Weathermap).
+
+### Welche Templates deine Geräte brauchen
+
+Das Modul **liest Zabbix-Items, es spricht selbst kein SNMP** — „was brauche ich auf
+einem Switch" heißt also immer „welches Template erzeugt diese Items". Ein Host wird
+gezeichnet, sobald er überhaupt überwacht wird; die Tabelle zeigt, was jede
+**zusätzliche** Ebene braucht. Verlinke das offizielle Vendor-/Generic-Template für
+die Interfaces und ergänze die `NT …`-Templates (liegen in `templates/`) für die
+Funktionen, die du willst.
+
+| Gerät | Interfaces · Traffic · Health | Topologie-Kanten | PoE | STP / Loops | MAC-Finder |
+|---|---|---|---|---|---|
+| **HP / Aruba** (SNMP) | offiziell *HPE Aruba … by SNMP* (oder *Generic by SNMP*) | **NT LLDP Neighbors by SNMP** | NT PoE by SNMP | NT Spanning-Tree by SNMP | FDB-Items |
+| **Cisco** (SNMP) | offiziell *Cisco … by SNMP* | **NT LLDP Neighbors by SNMP** (LLDP, oder CDP — meist an) | NT PoE by SNMP | NT Spanning-Tree by SNMP | FDB-Items |
+| **MikroTik** (SNMP) | offiziell *MikroTik by SNMP* | **NT LLDP Neighbors by SNMP** | — (meist keine PoE-MIB) | NT Spanning-Tree by SNMP | FDB-Items |
+| **Anderer SNMP-Switch** | beliebiges Template mit `ifName`/`ifHCOctets`/`ifHighSpeed` | **NT LLDP Neighbors by SNMP** | NT PoE by SNMP (falls POWER-ETHERNET-MIB) | NT Spanning-Tree by SNMP | FDB-Items |
+| **Ubiquiti UniFi** | *UniFi Network API* + *… – Device* (HTTP, **nicht** SNMP) | **eingebaut** (`uplink.id`) | **eingebaut** (`port.poe.*`) | nicht verfügbar (nicht in der UniFi-API) | nicht verfügbar |
+
+Hinweise:
+
+- **Topologie-Kanten** sind das Einzige, das **nicht** in den offiziellen Vendor-
+  Templates steckt: die Karte braucht ein Item, dessen Wert der Nachbarname ist —
+  das liefert **NT LLDP Neighbors by SNMP** (standardbasiert, LLDP-MIB, herstellerneutral;
+  optional Cisco-CDP). Ohne es siehst du Knoten, aber keine Verbindungen. Details +
+  Fehlersuche: [LLDP-SETUP.md](LLDP-SETUP.md).
+- **PoE** → [POE-SETUP.md](POE-SETUP.md), **STP / Loop- & Ring-Erkennung** →
+  [STP-SETUP.md](STP-SETUP.md), **MAC-/IP-Finder** → [FDB-SETUP.md](FDB-SETUP.md),
+  **VLAN-Ansicht** → [VLAN-SETUP.md](VLAN-SETUP.md).
+- **UniFi ist die Ausnahme**: wird über die UniFi-Controller-API überwacht, deshalb
+  greift **kein** `NT …`-SNMP-Template — die offiziellen *UniFi Network API*-Templates
+  tragen Ports, PoE und die Uplink-Topologie schon. STP, Loop-Erkennung und MAC-Finder
+  bleiben SNMP-only. Siehe [UNIFI-SETUP.md](UNIFI-SETUP.md).
 
 ### 1. Hauptmodul installieren
 
@@ -548,7 +641,7 @@ sudo systemctl reload php8.2-fpm       # gefundenen Namen einsetzen!
 
 ### 3. Optional: Dashboard-Widgets
 
-Fünf separate Widget-Module (alle nutzen die Daten des Hauptmoduls):
+Acht separate Widget-Module (alle nutzen die Daten des Hauptmoduls):
 
 | ZIP | Im Dashboard-Menü | Zeigt |
 |---|---|---|
@@ -557,17 +650,20 @@ Fünf separate Widget-Module (alle nutzen die Daten des Hauptmoduls):
 | `network_topology_table_widget.zip` | **NT Table** | Nagios-Style Hostliste |
 | `network_topology_kpi_widget.zip` | **NT KPI** | Kennzahlen als Ring oder Kacheln |
 | `network_topology_items_widget.zip` | **NT Items** | ein Item-Muster über alle Hosts |
+| `network_topology_faceplate_widget.zip` | **NT Faceplate** | Frontansicht eines Switches |
+| `network_topology_plan_widget.zip` | **NT Plan** | die Karte auf Grundriss/Luftbild |
+| `network_topology_wlan_widget.zip` | **NT WLAN** | UniFi-APs mit Funkbändern und Client-Zahl |
 
 ```bash
 cd /usr/share/zabbix/ui/modules
-for w in widget health_widget table_widget kpi_widget items_widget; do
+for w in widget health_widget table_widget kpi_widget items_widget faceplate_widget plan_widget wlan_widget; do
     sudo unzip "/pfad/network_topology_$w.zip" -d "network_topology_$w"
 done
 sudo chown -R root:root network_topology_*_widget network_topology_widget
 sudo systemctl reload php8.2-fpm      # Dienstname wie oben ermittelt
 ```
 Dann **Scan directory** → die gewünschten Module auf *Enabled* → im Dashboard-Editor verfügbar. Die ZIPs enthalten ihre Dateien **direkt**, ohne Oberordner — deshalb ist `-d <ziel>` zwingend.
-**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein. Bei der Version sind die Widgets keine Ausnahme mehr: am 2026-09-24 auf **7.0.30** nachgeprüft, dort rendern alle fünf.
+**Voraussetzung:** Das Hauptmodul muss installiert + aktiviert sein. Bei der Version sind die Widgets keine Ausnahme mehr: am 2026-09-24 auf **7.0.30** nachgeprüft, dort rendern alle.
 
 > **Warum nicht eigenständig?** Die Daten-Action `network.topology.data` gehört dem Hauptmodul, und das Topologie-Widget lädt Cytoscape.js aus `modules/network_topology/assets/js/` — die Bibliothek liegt bewusst nur einmal im Paket. Ohne (oder mit deaktiviertem) Hauptmodul zeigen die Kacheln eine Fehlermeldung. Deshalb **erst das Hauptmodul installieren und aktivieren, dann die Widgets.**
 
@@ -593,6 +689,12 @@ Für echte Zabbix-Events bei Topologie-Änderungen und einen Health-Score-Verlau
 2. **Dedizierten Monitoring-User** anlegen (USER-Rolle, Lesezugriff auf die Hostgruppen). Wichtig: die APCu-Baseline ist user-scoped — ein geteilter User würde sich die Baseline mit UI-Sessions verrollen.
 3. `topo-change-sender.sh` auf den Zabbix-Server, als **Cron** (alle 2 min), konfiguriert per ENV (`ZBX_URL`, `ZBX_USER`, `ZBX_PASS`, `GROUPIDS`, `SENDER_HOST`). Das Skript pusht Topo-Änderungen **und** den Health-Score per `zabbix_sender`.
 
+> **Loops & Ringe (optional):** die Erkennung physischer Loops und Ringe —
+> redundante Ringe über den Spanning-Tree klassifiziert, dazu die Symptome
+> STP-Churn / Broadcast-Storm / MAC-Flapping — ist ein eigenes Opt-in-Feature mit
+> eigenem Template (`nt_stp_snmp.yaml`) und, für MAC-Flapping, einem Cron-Sender.
+> Siehe **[STP-SETUP.md](STP-SETUP.md)**.
+
 ### 5. Optional: Aus Source bauen (Entwickler)
 
 Nur nötig, wenn du die JS-Module änderst:
@@ -607,7 +709,28 @@ npm run build        # -> assets/js/dist/nt-bundle.js
 
 Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm reload. Kartenanordnung und manuelle Links liegen serverseitig und bleiben ohnehin erhalten; Pins, Notizen und Presets im Browser-`localStorage`.
 
-**„Scan directory" ist für neue Modul-*Verzeichnisse* da, nicht für neue Actions.** Hier stand lange das Gegenteil, und das ist falsch: `CModuleManager::loadManifest()` liest `manifest.json` bei jeder Anfrage von der Platte, und in der Tabelle `module` stehen nur Pfad, Status und Konfiguration. Eine Version, die einem bereits registrierten Modul Actions hinzufügt, funktioniert also, sobald die Dateien liegen — am 2026-09-02 auf 7.4 gemessen und am 2026-09-25 im Quelltext von 7.0.30 nachgelesen. **Nötig** ist „Scan directory" für ein Modul, das Zabbix noch nie gesehen hat: die fünf Widgets sind eigene Module, ihre Erstinstallation braucht es. Im Zweifel einfach ausführen — ein Klick, und es macht nichts kaputt.
+**„Scan directory" ist für neue Modul-*Verzeichnisse* da, nicht für neue Actions.** Hier stand lange das Gegenteil, und das ist falsch: `CModuleManager::loadManifest()` liest `manifest.json` bei jeder Anfrage von der Platte, und in der Tabelle `module` stehen nur Pfad, Status und Konfiguration. Eine Version, die einem bereits registrierten Modul Actions hinzufügt, funktioniert also, sobald die Dateien liegen — am 2026-09-02 auf 7.4 gemessen und am 2026-09-25 im Quelltext von 7.0.30 nachgelesen. **Nötig** ist „Scan directory" für ein Modul, das Zabbix noch nie gesehen hat: die acht Widgets sind eigene Module, ihre Erstinstallation braucht es. Im Zweifel einfach ausführen — ein Klick, und es macht nichts kaputt.
+
+> **Von 5.5.0 auf 5.6.0:** Verzeichnis ersetzen, `chown`, php-fpm neu laden und
+> die Topologie-Seite einmal mit Cache-Bypass neu laden (das Bundle hat sich
+> geändert). Das Hauptmodul hat über die 5.5.x-Linie viele Actions bekommen
+> (faceplate, plan, create_host, fdb_search, die Forecasts, maintenance, …) —
+> die funktionieren, sobald die Dateien liegen, ohne „Scan directory". Drei
+> Dinge **außerhalb** des Modulverzeichnisses:
+> - **Zwei neue Widgets:** `network_topology_plan_widget` (**NT Plan**) und
+>   `network_topology_wlan_widget` (**NT WLAN**). Das sind neue Modul-
+>   Verzeichnisse, also installieren (Abschnitt 3) und einmal **Scan directory**
+>   ausführen, damit Zabbix sie registriert. Die sechs vorhandenen Widgets
+>   bekommen nur ihre Dateien ersetzt.
+> - **`templates/nt_lldp_snmp_template.yaml` neu importieren** (Data collection →
+>   Templates → Import, *Update existing* bei Discovery-Regeln und Item-
+>   Prototypen), für die typisierte Chassis-ID (`lldpRemChassisIdSubtype`,
+>   5.5.96) und die Management-IP der Nachbarn (`lldpRemManAddr`, 5.5.97). Sendet
+>   ein Gerät beides nicht, ändert sich nichts. Die optionalen VLAN-/STP-/PoE-
+>   Features haben eigene Templates — siehe den jeweiligen SETUP-Guide.
+> - **Plan-Hintergrundbilder per URL müssen jetzt `https://` sein** (5.6.0,
+>   Security-Härtung); ein vorhandener `http://`-URL-Hintergrund wird verworfen
+>   und nicht mehr angezeigt. Bilder aus dem Zabbix-Bild-Store sind nicht betroffen.
 
 > **Von 5.4.1 auf 5.5.0:** **Keine neuen Actions, kein Template geaendert,
 > und die Widget-Skripte sind byteweise identisch** — Dashboards brauchen
@@ -655,7 +778,7 @@ Verzeichnis `network_topology` durch die neue Version ersetzen, `chown`, php-fpm
 > **Von 5.3.0 auf 5.3.1:** wieder **keine neuen Actions** — Verzeichnis ersetzen, `chown`, php-fpm neu laden; „Scan directory" ist optional. Einmal mit Cache-Umgehung neu laden, das Bundle hat sich geändert. Zwei Dinge außerhalb des Modulverzeichnisses:
 >
 > - **Ein Template neu importieren: `templates/nt_lldp_snmp_template.yaml`**, mit *Update existing* für Discovery-Regeln und Item-Prototypen. Damit funktioniert die LLDP-Discovery auf Switches, die die TimeMark im Nachbar-Index weglassen (bestätigt: TP-Link JetStream T2600G). An allen anderen Geräten ändert es nichts. Die beiden übrigen Templates sind unverändert.
-> - **UniFi über die offiziellen *UniFi Network API*-Templates:** nur deren *Client*-Template trägt `uplink.id`. Für Kanten zwischen Switches, Access Points und Gateway ein abhängiges Item `uplink.id` auf `details.json` mit JSONPath `$.uplink.deviceId` im Template *UniFi Network API - Device* ergänzen — siehe [LLDP-SETUP.de.md](LLDP-SETUP.de.md).
+> - **UniFi über die offiziellen *UniFi Network API*-Templates:** nur deren *Client*-Template trägt `uplink.id`. Für Kanten zwischen Switches, Access Points und Gateway ein abhängiges Item `uplink.id` auf `details.json` mit JSONPath `$.uplink.deviceId` im Template *UniFi Network API - Device* ergänzen — siehe [LLDP-SETUP.md](LLDP-SETUP.md).
 
 #### Update per git
 
@@ -728,7 +851,7 @@ Zwei Dinge musst du danach von Hand nachziehen:
 
 - **Dashboard-Kacheln.** Die Widget-IDs sind Teil des Dashboards; Zabbix kennt den alten Typ nicht mehr und blendet die Kacheln aus. Einmalig neu hinzufügen und konfigurieren — das Dashboard selbst bleibt intakt.
 
-  Wer das vermeiden will, findet im [CHANGELOG](CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein `UPDATE`-Skript, das die Bezeichner direkt in der Datenbank umschreibt. **Auf diesem Weg entfallen auch Schritt 2 und 3**: die Module bleiben aktiviert, „Scan directory" ist nicht nötig, und die Kacheln bleiben stehen. Nachgefahren auf zwei unabhängigen Installationen, davon eine auf PostgreSQL.
+  Wer das vermeiden will, findet im [CHANGELOG](../CHANGELOG.md) unter „Optional: Dashboards per SQL erhalten" ein `UPDATE`-Skript, das die Bezeichner direkt in der Datenbank umschreibt. **Auf diesem Weg entfallen auch Schritt 2 und 3**: die Module bleiben aktiviert, „Scan directory" ist nicht nötig, und die Kacheln bleiben stehen. Nachgefahren auf zwei unabhängigen Installationen, davon eine auf PostgreSQL.
 - **Lesezeichen.** Die Ansicht liegt jetzt unter `zabbix.php?action=network.topology.view`.
 
 Alles Nutzerseitige bleibt erhalten. Kartenanordnung und manuelle Links liegen serverseitig — an `module.config` und am Benutzerprofil, nicht am Modulnamen. Pins, Notizen, Filter-Presets und Toolbar-Einstellungen liegen im `localStorage`, dessen Schlüssel nie an den Modulnamen gebunden waren. Host-Tags (`nt:parent`) sind ohnehin unberührt.
@@ -819,10 +942,11 @@ DELETE FROM profiles WHERE idx = 'web.network_topology.positions';
 | Modul erscheint nicht in der Liste | Verzeichnis heißt nicht exakt `network_topology`, oder falsche Rechte/Owner. Auf **RHEL/Rocky/Alma** zusätzlich `sudo restorecon -Rv …` (SELinux). |
 | „Loading topology…" bleibt / leerer Bereich | Browser-**Console** öffnen (F12). Häufigste Ursache in gehärteten Setups: eine **Content-Security-Policy**. Ab v4.30.0 (Bundle) reicht `script-src 'self'`; es werden echte Stacktraces (Datei + Zeile) angezeigt. |
 | Weathermap färbt Edges nicht | Kein `ifSpeed`/`ifHighSpeed`-Item auf den Hosts → SNMP-Interface-Monitoring nötig. |
+| Keine Switch-Frontblende (Faceplate) im Detail-Panel | Die Faceplate wird nur für Hosts gezeichnet, die das Modul als **Switch** typisiert. Steht im Detail-Panel ein anderer *Type* (z. B. *Server*), wurde das Gerät nicht erkannt — mit dem Host-Tag **`nt:icon` = `switch`** erzwingen (überstimmt die Auto-Erkennung). Danach noch leer? Die Faceplate entsteht aus **Per-Port-Interface-Items** (`ifOperStatus`/`ifType` je ifIndex); ein Host mit nur Aggregat-/Traffic-Items (keine ifTable) hat keine Ports zum Zeichnen — ein SNMP-Interface-Template verlinken. |
 | „Unknown action …" (Wartung/Forecast) | Nach dem Update „Scan directory" vergessen. |
 
 ---
 
 **Projektseite / project site: [zabfox.de](https://zabfox.de)** · **Repo + Issues: [github.com/linuser/zabbix-network-topology](https://github.com/linuser/zabbix-network-topology)**
 
-*Lizenz / License: **AGPL-3.0-or-later** — © 2026 PlaNet Fox / Alexander Fox. Siehe / see [LICENSE](LICENSE) & [README](README.md).*
+*Lizenz / License: **AGPL-3.0-or-later** — © 2026 PlaNet Fox / Alexander Fox. Siehe / see [LICENSE](../LICENSE) & [README](../README.md).*

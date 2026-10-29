@@ -109,6 +109,72 @@ if (!window.NtWidgetData) {
     })();
 }
 
+// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
+if (!window.NtTheme) {
+    window.NtTheme = {
+        isDark: function (el) {
+            try {
+                var node = el || document.body;
+                while (node && node.nodeType === 1) {
+                    var bg = window.getComputedStyle(node).backgroundColor || '';
+                    var m = bg.replace(/\s/g, '').match(/^rgba?\((\d+),(\d+),(\d+)(?:,([0-9.]+))?\)$/i);
+                    if (m) {
+                        var a = m[4] === undefined ? 1 : parseFloat(m[4]);
+                        if (a > 0.1) {
+                            var lin = function (v) {
+                                v = parseInt(v, 10) / 255;
+                                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+                            };
+                            var L = 0.2126 * lin(m[1]) + 0.7152 * lin(m[2]) + 0.0722 * lin(m[3]);
+                            return L < 0.4;
+                        }
+                    }
+                    node = node.parentNode;
+                }
+            } catch (e) {}
+            return false;
+        },
+        palette: function (dark) {
+            // sev[] ist die Severity-Skala (Normal, Info, Warning, Average,
+            // High, Disaster) fuer Punkte/Balken in Topology- und Table-Widget.
+            // head = Kopfzeilen-/Flaechenton eine Stufe von surface abgesetzt.
+            return dark ? {
+                text:    '#e6edf3',
+                ok:      '#4ade80',
+                warn:    '#fbbf24',
+                bad:     '#fb923c',
+                crit:    '#fca5a5',
+                link:    '#a78bfa',
+                accent:  '#58a6ff',
+                ghost:   '#8b949e',
+                sub:     '#8b949e',
+                subSoft: '#6e7681',
+                border:  '#30363d',
+                track:   '#21262d',
+                surface: '#161b22',
+                head:    '#1c2128',
+                sev:     ['#4ade80', '#22d3ee', '#fbbf24', '#fb923c', '#f87171', '#dc2626']
+            } : {
+                text:    '#1f2c33',
+                ok:      '#166534',
+                warn:    '#92400e',
+                bad:     '#c2410c',
+                crit:    '#9c1a25',
+                link:    '#7c3aed',
+                accent:  '#0275b8',
+                ghost:   '#64748b',
+                sub:     '#64748b',
+                subSoft: '#94a3b8',
+                border:  '#dfe4e7',
+                track:   '#eef2f5',
+                surface: '#f8fafc',
+                head:    '#f1f5f9',
+                sev:     ['#16a34a', '#0891b2', '#ca8a04', '#ea580c', '#dc2626', '#991b1b']
+            };
+        }
+    };
+}
+
 class WidgetNetworkTopologyTable extends CWidget {
 
     onInitialize() {
@@ -234,9 +300,24 @@ class WidgetNetworkTopologyTable extends CWidget {
         return { label: this._SEV_NAME[sev], color: this._SEV_COL[sev] };
     }
 
+    _applyTheme(root) {
+        // Farben + Severity-Skala frisch aus dem geteilten NtTheme (hell/dunkel).
+        var p = window.NtTheme.palette(window.NtTheme.isDark(root));
+        this._SEV_COL     = p.sev;
+        this._COL_TEXT    = p.text;
+        this._COL_SUB     = p.sub;
+        this._COL_SUBSOFT = p.subSoft;
+        this._COL_BORDER  = p.border;
+        this._COL_HEAD    = p.head;
+        this._COL_OFF     = p.ghost;
+        this._COL_STALE   = p.warn;
+        this._COL_CRIT    = p.crit;
+    }
+
     _render(nodes) {
         var root = this._target.querySelector('.nt-table-widget-canvas');
         if (!root) return;
+        this._applyTheme(root);
 
         // Filtern: keine Internet-Wolke, keine Ghost-Knoten; Offline-/Problem-Filter
         var rows = [];
@@ -326,6 +407,7 @@ class WidgetNetworkTopologyTable extends CWidget {
     _renderError(msg) {
         var root = this._target.querySelector('.nt-table-widget-canvas');
         if (!root) return;
+        this._applyTheme(root);
         root.innerHTML = '<div style="padding:14px;color:' + this._COL_CRIT + ';font-size:12px">'
             + 'Table widget: main module not reachable (' + this._esc(msg) + ')</div>';
     }

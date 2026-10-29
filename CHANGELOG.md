@@ -2,6 +2,1311 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.0 — 2026-10-29
+
+### Undo / redo for the layout
+
+- **Node arrangement can now be undone and redone.** Drag a node (or several) and
+  press **Ctrl/Cmd+Z** to put it back, **Ctrl/Cmd+Shift+Z** (or Ctrl+Y) to redo.
+  Two toolbar buttons (↶ / ↷) do the same and grey out when there is nothing to
+  undo or redo.
+- **Applying a layout is undoable too:** picking a different layout records the
+  current hand-made arrangement first, so one undo brings it back.
+- Snapshot-based (the whole position map per step, capped at 60), robust against
+  nodes that appear or vanish between steps. The history survives an in-place
+  refresh and resets only on a real view change (a different set of nodes). In
+  host+hops focus mode undo works on screen but is not persisted, same as every
+  other position save there. New module `layout-history.js`, unit-tested.
+
+### Security review fixes (F08–F13)
+
+The rest of the external review, each verified against the code.
+
+- **Shared config writes fail closed (F08).** `SharedConfig::fresh()` fell back to
+  the possibly stale bootstrap copy when the API read failed, and the write then
+  overwrote another super-admin's concurrent change. A failed fresh read now
+  aborts; a module with no config yet (first write) is still handled.
+- **Permission signature in the cache key (F09).** APCu keys already carried the
+  user id (no cross-user leak); they now also carry role + user type, so a role
+  or type change invalidates immediately. A host-group rights change within the
+  same role still clears only after the TTL (data: 60 s) — a bounded,
+  same-user window, now documented in `NtCache`.
+- **Ghost-host management IP labelled as advertised (F10).** The prefilled SNMP
+  interface IP is the neighbour's advertised LLDP address, shown in the detail
+  panel and treated as a manually chosen value, not verified server-side. Noted
+  in LLDP-SETUP.md; host creation needs the Hosts role right (see F01).
+- **Plan background URLs must be HTTPS (F11).** Plain `http://` backgrounds are
+  rejected, and the external image is loaded with `referrerpolicy="no-referrer"`
+  so the image host does not learn the Zabbix URL.
+- **Manual asset loading documented (F13).** Why the main module injects its CSS,
+  guard and Cytoscape via HTML tags instead of the manifest `assets` object (the
+  deploy-exact cache-buster and the assign-guard ordering around Cytoscape) is now
+  written next to the tags.
+
+F12 (reducing the 77 intentional DOM-sink suppressions) and F16 (splitting the
+large render/controller files) are iterative refactors, not single fixes; F14
+(direct history SQL) and F15 (the Zabbix-8 Object.assign guard) are already
+documented and carry no proven bug per the review.
+
+## v5.5.102 — 2026-10-29
+
+### Security review fixes (F01–F07)
+
+From an external code/security review of 5.5.97. Each verified against the code
+before fixing.
+
+- **Host creation now also checks the UI role right (F01).** `create_host` only
+  checked `getUserType() >= ADMIN`; Zabbix's own host controller additionally
+  requires `CRoleHelper::UI_CONFIGURATION_HOSTS`. A role can lock host
+  configuration while the user stays an Admin, so the module could create hosts
+  the native UI would refuse. `checkPermissions()` now enforces both, and the
+  context-menu "Create host" entry hangs off a new `can_create_host` flag.
+- **Sender TLS is verified by default (F02).** `tools/topo-change-sender.sh` used
+  `curl -sfk` — `-k` disabled certificate verification, exposing credentials and
+  the session cookie to MITM. Verification is now on; `ZBX_CACERT` points at an
+  internal CA, and `ZBX_INSECURE=1` is a loud, opt-in lab-only escape hatch.
+- **Sender password out of the process arguments (F03).** The password was passed
+  as a `curl` argv entry, visible in `/proc`. It now goes through a 0600 temp file
+  read via `--data-urlencode name@file`.
+- **Sender reads the topology response from a file, not argv (F07).** The full
+  graph JSON was passed to `python3` as an argument and hit `Argument list too
+  long` past ~140 KB. It is now written to a 0600 file and read from there.
+- **Deployment is now rollback-safe (F04).** `deploy.sh` did `rm -rf` then `mv`;
+  if the `mv` failed the module (or a half-swapped set of widgets) was gone. The
+  old directories are now renamed to a backup first, the new ones moved in, and
+  on any failure everything is rolled back.
+- **Plan image upload reports real failures (F06).** `API::Image()->create()` can
+  return `false` without throwing; the upload action returned `ok: true` with an
+  empty image id. It now returns an error, like the host-create path.
+
+## v5.5.101 — 2026-10-29
+
+### Shared host+hops layouts were silently discarded
+
+- A super-admin's **shared node positions saved in host+hops focus mode** never
+  survived the permission filter. The view key for that mode is host-scoped —
+  `host<hostid>_h<hops>` (e.g. `host10084_h2`) — but `SharedLayerFilter::positions`
+  split every key on `_` and required each part to be a visible **group** id.
+  `host10084` and `h2` are not groups, so the whole saved layout was dropped on
+  load, while group and plan views were kept.
+- The filter now recognises the host+hops key and checks it against the visible
+  **host** ids instead: a user who may see the host gets the shared layout, one
+  who may not still does not. Group and plan keys are unchanged.
+- Found by an external code/security review (reproduced); regression tests added.
+
+## v5.5.100 — 2026-10-29
+
+### PoE budget: an alert and a trend on the faceplate
+
+- **Threshold alert.** The switch PoE budget on the faceplate footer used to read
+  `PoE: 78 / 95 W` in the same muted colour at any load — 82 % looked like 5 %.
+  It now shows the percentage and turns **amber at ≥ 80 %** and **red with a ⚠ at
+  ≥ 95 %**, so a switch near its power limit is visible at a glance. Colours follow
+  the theme's `--nt-warn`/`--nt-crit` tokens (light and dark).
+- **Usage trend.** When the switch delivers a budget, the faceplate now draws a
+  small sparkline of the PoE consumption (`nt.poe.used`) over the last six hours
+  next to the figure — "is the load climbing?" before "is it at the limit?". The
+  history is read through `API::History()` (the ClickHouse/Elasticsearch-safe
+  path, like the spark action), down-sampled to at most 48 points. No history
+  (a fresh host, or a switch without `pethMainPse*`) simply draws no line.
+
+## v5.5.99 — 2026-10-28
+
+### CDP: opaque hex device-ids no longer invent edges
+
+- A CDP `cdpCacheDeviceId` can be an opaque, space-delimited hex sequence that is
+  **not** a six-byte MAC — e.g. five bytes `01 02 03 04 05`. `macForm()` only
+  accepts six-byte forms, so such a value fell through to `cleanNeighbor()`, which
+  truncated it at the first space to `01` and then matched an unrelated host named
+  `01` — a **false edge that looks like a measurement**. Worse, several such ids
+  collapsed into a single phantom ghost `01` with edges to unrelated switches, the
+  same failure the six-byte-MAC guard already warned about.
+- `LldpEdgeBuilder` now recognises a non-MAC, space-delimited hex sequence, keeps
+  the full observation and skips the name fallbacks for it. An exact match on the
+  complete raw value is still possible; six-byte MACs and normal names are
+  unchanged.
+- Found and diagnosed in the Liberamente fork by Mauro Majeroni (mmajer, PR #7);
+  verified present in this code and fixed here with our own regression tests.
+
+## v5.5.98 — 2026-10-28
+
+### Review fixes for the management-IP path (5.5.97)
+
+- **Missing label:** an edge resolved via the new `mgmt_ip` match path showed the
+  raw key `edge.match.mgmt_ip` in the confidence tooltip — the key was never added
+  to `i18n/en.js` / `de.js`. `ci:i18n` cannot catch a key built at runtime
+  (`t('edge.match.' + matchKind)`), the gotcha the project's own notes warn about.
+  Added in both languages.
+- **Ambiguous management IP now flagged:** when the same advertised management IP
+  belongs to more than one monitored host (NAT, a shared management VLAN),
+  `resolveByMgmtIp` already drew no edge — but it now records the collision as
+  *ambiguous* for the LLDP-Q tab instead of silently passing the neighbour through
+  as a ghost, matching the name- and IP-resolution paths.
+
+## v5.5.97 — 2026-10-28
+
+### LLDP: use the neighbour's advertised management IP
+
+- **The LLDP template now collects `lldpRemManAddr` (OID table …4.2), the
+  management address the neighbour advertises.** The catch: in that table the
+  address is not a value — it is encoded in the OID *index*
+  (`TimeMark.LocalPort.RemIndex.AddrSubtype.AddrLen.<octets>`). The new item
+  prototype parses the IPv4 straight out of the index (AddrSubtype 1, AddrLen 4);
+  IPv6 entries are skipped on purpose, because the module matches against
+  monitored hosts' IPv4 interfaces.
+- **A new last-resort match path** (`LldpEdgeBuilder::resolveByMgmtIp`): a
+  neighbour whose name and chassis-MAC did not resolve, but whose advertised
+  management IP belongs to exactly one monitored host, now draws an edge to that
+  host (match kind `mgmt_ip`, confidence 50 — as strong as a name that *is* an
+  IP). Ambiguous or self addresses are ignored, the same rule as everywhere: a
+  wrong edge is worse than a missing one.
+- **Ghosts carry a real address now.** An unmonitored neighbour that advertises a
+  management IP shows it in the detail panel, tooltip and context menu — and
+  "create host" prefills an SNMP interface on that IP (community left as the
+  `{$SNMP_COMMUNITY}` macro, not a guessed value). The address is not invented;
+  the device names it itself.
+- **Re-import the `NT LLDP Neighbors by SNMP` template** to pick up the new walk
+  column and item prototype — see docs/LLDP-SETUP.md.
+- Optional TLV: measured 2026-10-28, HPE Instant On advertises it richly,
+  MikroTik RouterOS not at all — absent is no error. (Second half of the
+  LLDP-quality follow-up; the chassis-id subtype was 5.5.96.)
+
+## v5.5.96 — 2026-10-28
+
+### LLDP: type the chassis-id instead of guessing it
+
+- **The LLDP template now collects `lldpRemChassisIdSubtype` (OID …4.1.1.4).**
+  It says what *kind* of identifier the neighbour's chassis-id is — 4 = MAC
+  address, 5 = network address (an IP), 7 = locally assigned (a name). Until now
+  the module had to guess from the value's shape whether the chassis-id was a MAC
+  it could match against a monitored host.
+- **With the subtype, that guess becomes an answer:** a chassis-id whose subtype
+  is not a MAC is no longer bent into a made-up MAC and mis-matched. `rowChassis`
+  in `LldpEdgeBuilder` only resolves a chassis-id as a MAC when the subtype is 4
+  (or absent — then it falls back to the old shape heuristic, so a device or an
+  older template that does not send the column behaves exactly as before). This
+  only ever *adds* reliability to the existing chassis resolution path.
+- The subtype gets no separate confidence-score point — it makes the chassis
+  match correct, it is not a new kind of evidence.
+- **Re-import the `NT LLDP Neighbors by SNMP` template** to pick up the new walk
+  column and item prototype — see docs/LLDP-SETUP.md.
+- Measured 2026-10-28 on the lab: MikroTik RouterOS and HPE Instant On both fill
+  the subtype. (First half of the LLDP-quality follow-up; the management-address
+  path, lldpRemManAddr, is the next step.)
+
+## v5.5.95 — 2026-10-28
+
+### Large maps: wide hierarchy tiers wrap instead of vanishing
+
+- **The hop and hierarchy layouts now wrap wide tiers into multiple rows.** On a
+  large network the access tier holds most of the hosts — measured on a 2000-host
+  load test, one tier had 768 nodes. Laid out in a single row it was ~115,000 px
+  wide against ~1,700 px tall; `fit()` then clamped against `minZoom` and showed
+  an empty slice, so the map looked blank although every node was there (no hang,
+  no error, the main thread stayed responsive). Tiers now wrap to keep the layout
+  roughly square (`placeTiersWrapped`, rows of about √N). Small tiers are
+  unchanged, so ordinary maps look exactly as before.
+- **`minZoom` relaxes for large graphs** (0.02 above 800 nodes, 0.1 otherwise) so
+  `fit()` can zoom out far enough to frame the whole map.
+- This is **not** a performance change: the backend (~0.1 s warm at 2000 hosts)
+  and drawing 2000 elements were already fast. It was a layout-visibility bug at
+  scale. Accepted live on the 2000-host load test: the map renders as a visible
+  hierarchy pyramid in ~0.6 s where it used to come up blank.
+- `ci:frontend` now asserts a wide tier wraps and the tier layout's aspect ratio
+  stays bounded.
+
+## v5.5.94 — 2026-10-28
+
+### VLAN view: review fixes
+
+- **The VLAN picker now works in the grouped ("Fold groups") view.** An
+  aggregate node inherits the union of its members' VLANs, so the picker lists
+  them and the filter dims a group only when none of its members carry the VLAN.
+- `collectVlans` prefers a non-empty VLAN name: a VLAN named on one switch and
+  unnamed on another now shows the name regardless of iteration order.
+- Dropped the unused `vlan_access` node field from the wire and the Cytoscape
+  payload (reported in review).
+
+## v5.5.93 — 2026-10-28
+
+### VLAN view: pick a VLAN, see where it runs
+
+The map can now filter by 802.1Q VLAN. A VLAN picker appears in the Technical
+toolbar when switches report VLAN data; choosing a VLAN dims everything not on
+it, leaving the devices and links that carry it. The strongest extension on the
+roadmap, and the one that needed real hardware to prove first.
+
+- **New template `NT VLAN by SNMP`** collects the Q-BRIDGE tables in one bulk
+  walk (`nt.vlan.walk`): VLAN names, static + current egress bitmasks, PVID,
+  `dot1dBasePortIfIndex`, `ifName`. Add it to 802.1Q switches — a fresh import,
+  not a re-import. Validated against an HPE Instant On 1830; a MikroTik CRS310
+  (RouterOS) does not fill the dot1q group, so run `tools/nt-vlan-probe.sh` on a
+  switch first to check.
+- **`VlanParser`** decodes the egress PortList bitmask (port 1 = MSB of byte 0)
+  and resolves bridge-ports to ifIndexes through `dot1dBasePortIfIndex` — the
+  step a wrong read would turn into fake cabling, so it is a pure, tested class,
+  validated end-to-end against the live HPE walk.
+- **Backend** attaches VLAN membership to the graph: each node carries its VLANs
+  (id + name), each edge the VLANs on the local port of at least one end (a
+  trunk stays visible when only one side reports). `MetricExtractor` routes the
+  walk, `NodeBuilder` sets the node fields, `VlanParser::annotateEdges` the edges.
+- **Frontend** VLAN picker (toolbar dropdown) + filter; the choice persists per
+  view and re-applies across refreshes. The picker stays hidden on instances
+  without VLAN data.
+
+VLAN names are shown to the operator on their own instance and never leave the
+Zabbix server.
+
+## v5.5.92 — 2026-10-28
+
+### UniFi: a client's AP, named — and Wi-Fi links drawn as Wi-Fi
+
+- **A UniFi client now names the access point it is on.** The tooltip shows
+  `📶 <AP>` and the detail panel marks the uplink peer with the Wi-Fi glyph, so
+  "which AP is this phone on?" is answered where you already clicked. Derived
+  from the client's `uplink.id` edge (`tagWlanAp` in `build-elements.js`) — no
+  new item, no template re-import.
+- **Wi-Fi associations are drawn as Wi-Fi.** A UniFi `uplink.id` edge whose end
+  is a client (client↔AP), or that joins two APs (AP↔AP mesh), now renders cyan
+  and dotted instead of the wired weathermap colour; an AP→switch uplink stays a
+  wired link. `_unifiWireless` is set in `build-elements.js` and honoured both in
+  the static stylesheet and in the weathermap (`traffic.js`), which otherwise
+  recolours every edge by utilisation. The device-wide uplink throughput stays
+  on the edge label.
+- Frontend only; `ci:frontend` gains a scenario (client→AP is Wi-Fi and carries
+  `wlan_ap`, an AP→switch uplink stays wired, a non-UniFi edge is never Wi-Fi).
+
+## v5.5.91 — 2026-10-27
+
+### UniFi switches: per-port traffic in the faceplate
+
+- **The faceplate now shows per-port throughput on UniFi switches.** The classic
+  controller API carries a per-port rate (`rx_bytes-r`/`tx_bytes-r`) that the
+  integration API lacked, so UniFi port rows used to have empty traffic. Read as
+  `port.rx[N]`/`port.tx[N]` items and mapped into the faceplate's `in`/`out` (bytes/s
+  → bit/s, the same ×8 convention as the SNMP octet path). Open a UniFi switch on the
+  map and its ports show real rx/tx, like the SNMP switches.
+- `FaceplateBuilder::collectUniFi` and the faceplate action fetch gained the two keys;
+  no change for switches without the items (ports just show no traffic, as before).
+
+## v5.5.90 — 2026-10-27
+
+### Review fixes for the UniFi client/WLAN work
+
+- **A UniFi client host with an explicit `nt:icon` tag is no longer hidden on the
+  map.** It used to keep `is_client` (so client-focus hid it) even though the
+  override won the type — contradicting "an explicit choice wins". Now the override
+  wins fully: such a host keeps its icon *and* stays visible.
+- **Backend clamps a negative `wlan.satisfaction`.** An idle AP's `-1` sentinel is
+  dropped in the extractor too, so a plain-JSONPath item (not the documented JS)
+  can't surface a red "-1 %".
+- The node detail panel's WLAN section now also renders when satisfaction is the
+  only WLAN datum present.
+- Noted the satisfaction colour thresholds as a hand-kept duplicate between the
+  panel and the widget (not `ci:parity`-guarded); removed a dead exported function
+  in `client-focus.js`.
+
+## v5.5.89 — 2026-10-27
+
+### Docs: correct the satisfaction item setup
+
+- `docs/UNIFI-SETUP.md` described `wlan.satisfaction` as a plain JSONPath on
+  `$.satisfaction`. That fails on an idle AP: with no clients UniFi reports
+  `satisfaction: -1`, which an unsigned item rejects ("not supported"), measured on
+  the live site. The doc now specifies a JavaScript step that maps a missing or
+  negative value to 100 (idle = nothing to complain about) and returns the score
+  otherwise. No code change — the module already reads the resulting value.
+
+## v5.5.88 — 2026-10-27
+
+### WLAN satisfaction (the degradation signal)
+
+- **UniFi AP satisfaction** (the controller's 0–100 experience score) is now read
+  from `wlan.satisfaction` and shown in the node detail panel and as a coloured
+  `Sat` column in the NT WLAN widget (green ≥ 70, orange ≥ 40, red below). This is
+  the "is the Wi-Fi actually good?" number — low means degraded even while the AP
+  is up.
+- The module only *shows* it; the red/orange alert on the map comes from a Zabbix
+  **trigger** on the item (the setup script ships two tiers, warning and high). See
+  `docs/UNIFI-SETUP.md`.
+
+## v5.5.87 — 2026-10-27
+
+### Read UniFi CPU/memory (they were collecting but not shown)
+
+- **UniFi devices show CPU and memory again.** Their HTTP-agent template exposes
+  the plain keys `cpu.utilization` / `memory.utilization` (direct percent), which
+  the metric reader did not recognise — so UniFi APs and switches read
+  "not collected" in the panel and showed `—` for CPU/Mem in the NT WLAN widget,
+  even though the items were updating fine (measured: AP CPU 6 %, mem 34 %). Both
+  keys are now fetched and mapped like the agent/SNMP variants.
+
+## v5.5.86 — 2026-10-26
+
+### Map: client endpoints are hidden until you click their AP
+
+- **UniFi client endpoints are hidden on the Technical map by default** — dozens
+  of phones, IoT gadgets and laptops hanging off the controller/APs were burying
+  the actual topology. Their edges hide with them, so the map shows the
+  infrastructure cleanly.
+- **Click an AP (or switch/gateway) to reveal the clients that hang off it** — only
+  that host's clients appear, arranged in a ring around it; clicking elsewhere or
+  the background hides them again. The association is real data: each client carries
+  `uplink.id` = its AP's UUID, which the module already draws as an edge. No toolbar
+  toggle — a plain click, as requested.
+- Built on the existing graph (no re-layout): clients stay in the map, only their
+  visibility is toggled (`client-focus.js`, driven by the `is_client` flag from
+  5.5.85). Enabling "Collapse leaves" still bundles them as before.
+
+## v5.5.85 — 2026-10-26
+
+### UniFi clients are their own device class (no longer "servers"), plus Wi-Fi retries
+
+- **UniFi client endpoints (phones, IoT, …) are now typed `client`**, not `server`.
+  They hang off the "UniFi Network API - Client" template; the module detects that
+  and gives them a dedicated class, icon and label. This fixes the mis-categorisation
+  where ~30 client stubs showed up under "Servers" in the Management and Table views
+  — they now sit in the "Devices" category / `Client` type. An explicit `nt:icon`
+  tag still wins.
+- **New: Wi-Fi retransmission rate per band.** The AP's existing
+  `radios.txRestries[<band>]` item (integration API, in %) is now read and shown as
+  `Retr` per band in the node detail panel — a ready degradation signal, no new item
+  needed. (The template's key carries the upstream typo "txRestries"; we match it.)
+- Node payload carries an `is_client` flag; the map click-to-focus for clients builds
+  on it next.
+
+## v5.5.84 — 2026-10-26
+
+### WLAN: the SSIDs an AP broadcasts
+
+- **A UniFi AP node now lists the SSIDs it broadcasts**, folded by name with the
+  client count summed across bands (guest SSIDs marked). Read from the classic
+  controller API's `vap_table` as a `wlan.ssids` item on the AP host (same API
+  key, dependent on the `unifi.classic.device` master), pre-condensed to a compact
+  JSON list so the module just displays it.
+- Shown in the **node detail panel** (one row per SSID with its client count) and
+  as a new **`SSIDs`** column in the **NT WLAN** widget. SSID names come from the
+  network, so they go through `textContent`/escaping, and the list is capped.
+- The 802.11 standard still comes from the Integration API; APs without the new
+  item simply show no SSID list. See `docs/UNIFI-SETUP.md` for the item.
+
+## v5.5.83 — 2026-10-26
+
+### WLAN: client count and air utilization straight from the AP host
+
+- **The AP client count now comes from the UniFi AP host itself**, read from the
+  **classic controller API** (`/stat/device` → `num_sta`) as a `wlan.clients` item,
+  using the same API key as the Integration template. This **replaces** the earlier
+  cross-host IP-join against a second, SNMP-monitored host: the whole `WlanResolver`
+  class and its controller-side lookups (`ipItemsForJoin`, `wlanClientsByIp`) are
+  gone. One data path, one host, no "… WLAN SNMP" companion host required.
+- **New: air (channel) utilization per band.** The classic API's
+  `radio_table_stats[].cu_total` feeds a `wlan.cu[<band>]` item, folded into the
+  radios map. It shows in the node detail panel (`Util` per band) and as a new
+  **`Air`** column in the NT WLAN widget.
+- The 802.11 standard still comes from the Integration API (`radio.*`) — the classic
+  radio stats do not carry it; channel, clients and utilization come from the classic
+  API. See `docs/UNIFI-SETUP.md` for the exact items (one master + three dependent).
+- No change for sites that do not add the new items: APs still show their radios,
+  just without the client badge and utilization.
+
+## v5.5.82 — 2026-10-26
+
+### New: NT WLAN dashboard widget
+
+- **An eighth dashboard widget, "NT WLAN"** — a WLAN overview of the access points
+  in the selected host groups: one row per AP with its client count, radios
+  (channel · standard · width per band), CPU, memory and status. It reads the same
+  nodes as the map (`network.topology.data`) and filters the wireless ones, so the
+  client count and radios come from the enrichment added in 5.5.81 — no extra
+  endpoint. Requires the main module.
+- Wired into the build and packaging like the other widgets (shared ES5 blocks via
+  `sync-widget-shared`, guarded by `ci:parity`; `deploy.sh`, eslint, the install/
+  uninstall scripts).
+
+## v5.5.81 — 2026-10-26
+
+### Access points show their WLAN on the map
+
+- **UniFi AP nodes now carry a client-count badge** (blue, bottom-right) and a
+  **WLAN section** in the node detail panel: the radios per band (channel, width,
+  standard, e.g. `5 GHz → Ch 36 · 40 MHz · 802.11ac`), read from the UniFi API
+  (`radio.*`).
+- **Client count is joined from a second host by IP.** UniFi's device data has no
+  client count — it lives on a separate SNMP-monitored host per AP (`wlan.clients`).
+  The module matches the two by IP (the UniFi AP's `ip` item == the SNMP host's
+  interface IP) via the new `WlanResolver` (pure, tested, drops colliding IPs). The
+  count is fetched **by AP IP, group-independently**, so the SNMP host need not be in
+  the loaded group and never shows up as a duplicate node. No SNMP AP host → radios
+  still show, no client count. See `docs/UNIFI-SETUP.md`.
+- Internally: `MetricExtractor` emits per-host `radios`; `NodeBuilder` puts `radios`
+  on the node; the controller does the IP join after building nodes — a small
+  exact-filter fetch of the `ip` item for AP nodes, then `hostinterface.get` +
+  `item.get` for `wlan.clients` by those IPs.
+
+## v5.5.80 — 2026-10-26
+
+### UniFi uplink throughput on the edge
+
+- **The UniFi uplink edge now shows its throughput.** The topology edge built from
+  `uplink.id` carries no port (the controller API names only the parent device), so
+  it had no traffic. It now shows the device's own uplink throughput
+  (`uplink.rx`/`uplink.tx`, already bit/s) as the edge's traffic — honestly
+  device-level, not per-port. There is no uplink capacity in the API, so the
+  weathermap does not colour this edge by utilisation; it shows the rate only.
+- Internally: `MetricExtractor` emits a per-host `uplink_rate`, and
+  `LldpEdgeBuilder` attaches it to the `unifi` edge when the port path found no
+  per-port metric (a real port metric still wins). No change for SNMP edges.
+
+## v5.5.79 — 2026-10-26
+
+### New: UniFi devices show their ports
+
+- **UniFi switches, APs and the gateway now draw with their ports.** UniFi gear
+  is monitored through the UniFi controller API (HTTP), not SNMP, so its data
+  arrives under a different set of item keys (`port.state[N]`, `port.speed[N]`,
+  `port.poe.*[N]`, `uplink.id`). The module now reads those: the faceplate (inline
+  and the NT Faceplate widget) shows each port's state, speed, connector and PoE,
+  and down ports count toward device health — the same picture the SNMP switches
+  already got. Detection is by item presence, so no configuration is needed.
+- **The uplink topology was already drawn** from `uplink.id`; it now carries a
+  **UniFi** badge in the edge panel so it is no longer an anonymous link.
+- **No per-port traffic, by measurement.** The UniFi Network Integration API
+  exposes per-port state/speed/PoE but **no per-port byte counter** — only
+  device-level throughput. UniFi port rows therefore show no traffic bars; that is
+  honest, not a gap in the module. See `docs/UNIFI-SETUP.md`.
+- STP, FDB and exact LLDP remote-port features remain SNMP-only (not in the UniFi
+  API) and are unaffected for the rest of your switches.
+
+## v5.5.78 — 2026-10-26
+
+### Internal: Link quality score tidy-up (no behaviour change)
+
+- Refactor only — the score, colours, labels and every user-visible string are
+  unchanged. The four penalty terms in `link-quality.js` (errors, drops,
+  utilisation, flap) now share one `ramp(weight, frac)` helper instead of each
+  spelling out `Math.min(weight, frac * weight)`, so the bands stay uniform.
+- De-nested two triple-ternaries into if/else chains (per the house style): the
+  per-band edge width in `traffic.js` and the legend title selection in
+  `legend.js`. Same thresholds, same keys, same outcome.
+
+## v5.5.77 — 2026-10-25
+
+### Security: Plan background reference endpoint
+
+- **`op=ref` and `op=positions` now filter by group visibility.** Both endpoints
+  served the shared plan reference (image id / URL) and the shared node positions
+  for any `view` key a signed-in user could guess, regardless of whether they may
+  see the groups it names. A user could therefore enumerate view keys and learn
+  the background image id or URL a super-admin set for another group's plan — an
+  information leak. Both now require every group (or the single host) named by the
+  view to be visible through the permission-checked API, mirroring
+  `SharedLayerFilter` on the main page.
+- **Hardened the plan background URL filter.** `PlanBackground::sanitize()` now
+  rejects URLs containing control characters, whitespace or characters dangerous
+  in markup/CSS (`" ' < > ( ) \` \\`), on top of the existing http(s)/length
+  check — the same shape as the `nt:link` tag parser. Legitimate URLs encode such
+  characters anyway; this closes a path a future HTML/CSS-interpolating renderer
+  could otherwise make injectable.
+
+## v5.5.76 — 2026-10-24
+
+### New: Link quality score
+
+- **A 0–100 quality score per cable**, from errors, drops, utilisation, down-state
+  and recent flaps — so you see which link *runs badly*, not just which is *full*.
+  Coloured on the same bands as the host health score (green/amber/orange/red).
+- **Toggle "Link quality"** in the toolbar colours the edges by score instead of
+  utilisation (mutually exclusive with the weathermap; its own colour guide). The
+  edge detail panel shows the score and the biggest contributors (e.g. "errors ·
+  high utilization · recent flap").
+- **Flaps use a proxy, honestly labelled:** the link's uptime (seconds since the
+  last state change) — a recently-bounced link has low uptime and loses points.
+  No new data collection; a real per-interface flap counter stays a follow-up.
+- Four of the five inputs were already measured per-link (errors, drops, speed,
+  utilisation); the score lives in one place (`link-quality.js`) — no widget copy
+  yet, so `ci:parity` is not extended (a future widget copy must).
+
+## v5.5.75 — 2026-10-24
+
+### Plan view: markers stay on the image
+
+- **Device markers can no longer land off the background image.** Placing,
+  dragging past an edge, and loading older positions from a differently-sized
+  image are all clamped to the image bounds — a dragged marker snaps back inside,
+  and stale off-image positions are corrected and written back once on load. This
+  also removes the stray connection line that ran off into the margin.
+
+## v5.5.74 — 2026-10-24
+
+### Plan view: connection lines are now a toggle
+
+- **The LLDP/CDP connection lines on the Plan view can be switched off.** A new
+  *Links* toggle in the Plan toolbar shows or hides the green dashed links between
+  placed devices; the choice is remembered per browser. It defaults to **off** —
+  a floor plan usually wants just the devices and their status, and you turn the
+  links on when you want to see which device uplinks where. (Geo is unchanged.)
+
+## v5.5.73 — 2026-10-24
+
+### Plan view: smaller markers, tighter fit
+
+- **Markers on the Plan view are smaller.** On a floor plan the geo-style markers
+  — which grow with the open-problem count up to ~50px — crowded the rooms; they
+  now render at 60% scale in Plan mode (the Geo map is unchanged). A busy device
+  stays legible (its count still shows) without covering a whole room.
+- **The plan image fills the pane.** The Plan map now fits the background with a
+  fractional zoom instead of snapping to a coarse power-of-two level, so the floor
+  plan uses the available space instead of sitting small with a wide margin.
+
+## v5.5.72 — 2026-10-24
+
+### NT Plan widget — review fixes (incl. a permission fix)
+
+- **The plan positions endpoint now filters by host permission.** `op=positions`
+  returned the shared plan's full host→pixel map to any logged-in user; it now
+  returns only placements for hosts the requesting user may see (ghost
+  neighbours excepted, as on the main map), closing an information disclosure of
+  host ids/coordinates.
+- **The NT Plan tile no longer flashes on every refresh.** The background image
+  is rebuilt only when its source actually changes; otherwise just the markers
+  are re-placed, so the plan stays steady through Zabbix's refresh cycle.
+- **Markers land correctly even if the tile lays out at zero width** (the scale
+  is recomputed once the image box has a real size), and the empty-state message
+  now follows the dashboard's light/dark theme.
+
+## v5.5.71 — 2026-10-23
+
+### New dashboard widget: NT Plan
+
+- **A new "NT Plan" dashboard widget** renders the Plan view as a read-only tile:
+  the background image (floor plan / aerial) with every placed device at its real
+  spot, coloured by severity/status, labels optional. Configure it with the same
+  **host groups** you used to set up the plan in the module's Plan tab — the
+  widget shows that selection's shared background and placement. Hover a marker
+  for host, status and open-problem count.
+- **Lightweight by design:** no Leaflet in the tile. The background is an
+  `<img>` served by Zabbix's `imgstore.php`; markers are positioned from the
+  shared plan coordinates and scaled to the tile, re-laid-out on resize. Node
+  severity comes through the shared `NtWidgetData` path (so several NT widgets on
+  one dashboard still issue a single data request).
+- **Backend:** the plan action gains a read-only `op=positions` that returns the
+  shared marker positions for a view, so a dashboard tile (which has no
+  `NT_CONFIG`) can obtain them. The widget is a separate module
+  (`network_topology_plan_widget` 1.0.0) and requires the main module.
+
+## v5.5.70 — 2026-10-23
+
+### Fix: Plan background image now loads
+
+- The Plan view now serves a chosen Zabbix background image through Zabbix's own
+  image server (`imgstore.php?iconid=…`) — the same path the built-in network
+  maps use — instead of round-tripping the bytes as a base64 data URI. The old
+  path could leave the map showing *"The background image could not be loaded"*;
+  serving it natively fixes that and drops the data-URI/MIME-sniffing code and the
+  extra endpoint op. URL-referenced backgrounds are unchanged.
+
+## v5.5.69 — 2026-10-23
+
+### New "Plan" view — place devices on an aerial or floor plan
+
+- **A background image behind the map, with devices dragged onto their real
+  spot.** A new **Plan** tab (next to Geo) draws a static image — an aerial
+  photo, a site plan, a floor plan — and lets you place markers on it in image
+  pixels, carrying the live Zabbix status. The Wi-Fi-planning view (UniFi/Ekahau
+  style), and unlike Geo it works indoors. Unplaced devices wait in a side list;
+  click to drop one onto the image, then drag it into place. Edges are drawn
+  between placed markers.
+- **The image lives in Zabbix's own image store.** Pick an existing *Background*
+  image (*Administration → General → Images*), upload a new one straight from the
+  tab (Super admins only — Zabbix's own limit, format and 1 MB cap enforced by
+  Zabbix, the browser downscales first), or reference an image **URL**. The module
+  stores only a tiny reference (an image id or URL) per view, fetched lazily when
+  the tab opens — never the image bytes, never in the page bootstrap. No Google
+  Earth/Maps tiles (license-locked); bring your own licensed image.
+- **Positions persist the familiar two-level way.** A Super admin writes the
+  shared plan everyone sees; everyone else saves their own placement on top, per
+  host-group selection — the same model as the graph layout, under its own key so
+  the two never collide. See [docs/PLAN-SETUP.md](docs/PLAN-SETUP.md). The marker,
+  popup and edge drawing are now shared with the Geo view (one source).
+
+## v5.5.68 — 2026-10-23
+
+### Internal cleanup (no behaviour change)
+
+- The faceplate builder now reads all PoE data — per-port delivering state and
+  class, and the switch budget — in a single pass over the item list instead of
+  four, with one shared choice of PSE group. Output is byte-for-byte the same
+  (the existing faceplate tests pin it).
+- Dropped a dead sub-condition in the PoE budget footer check (the budget is
+  always either absent or fully populated), in both the faceplate module and the
+  NT Faceplate widget.
+
+## v5.5.67 — 2026-10-23
+
+### Two faceplate/geo robustness fixes
+
+- **PoE class and delivering-state always come from the same stack member.** On
+  a stacked switch where the class column and the detection column cover
+  different PSE groups, the per-port tooltip could pair a class from one member
+  with a power state from another. Both now read one chosen group (the smallest
+  with any PoE data); if that group lacks the detection column, the port shows
+  just its class with no power claim, rather than borrowing one from another
+  member.
+- **Switching to a shallower basemap no longer leaves blank tiles.** Changing the
+  geo provider now clamps the map zoom to the new provider's maximum, so going
+  from a deep-zoom layer (Esri/OSM, z19) to a shallower one (USGS Imagery, z16)
+  while zoomed in pulls the view back to a level that still has tiles, instead of
+  showing a blank grey map.
+
+## v5.5.66 — 2026-10-22
+
+### Fixes and a worldwide aerial basemap
+
+- **A worldwide satellite basemap for the geo map.** The Geomap view gains an
+  **"Esri World Imagery"** provider — the aerial layer USGS Imagery does not give
+  outside the United States. Put it behind your nodes to see sites on real
+  terrain; access points and other hosts with coordinates sit on the image. It
+  works without an API key (attribution is carried automatically); heavy or
+  commercial use should move to an ArcGIS token endpoint. (Groundwork for placing
+  devices on an aerial — see the roadmap's *"Aerial background and placing APs on
+  the image"*.)
+- **PoE tooltip no longer claims "not delivering" for an unknown port.** A port
+  that reports a PoE class but has no detection item now shows just
+  *"PoE: Class N"* — not *"… , not delivering"*. The old text asserted a power
+  state that was never measured, against the project's rule to never label what
+  is not known. (faceplate and NT Faceplate widget.)
+- **PoE class and budget survive on large switches.** The per-port class and the
+  switch budget items are now re-fetched the way STP items already were, so on a
+  core switch with thousands of items they no longer silently drop out of the
+  capped item query and vanish from the faceplate.
+
+## v5.5.65 — 2026-10-22
+
+### PoE class per port and switch power budget on the faceplate
+
+- **The switch faceplate now shows the PoE class of each port.** Hovering a port
+  that negotiated Power-over-Ethernet adds a line to its tooltip —
+  *"PoE: Class 4, delivering power"* (or *"… , not delivering"* for a port that
+  agreed a class but draws nothing). The delivering lightning bolt is unchanged;
+  this adds the class next to it. Watts-per-port stay out — those are vendor MIBs,
+  not the standard.
+- **A switch's total PoE budget appears in the faceplate footer** —
+  *"PoE: 37 / 195 W"* (used / nominal), when the device fills the standard
+  `pethMainPse*` counters. Not every switch does; when they are empty the module
+  simply draws no budget line.
+- **One template drives it: "NT PoE by SNMP"** (`templates/nt_poe_snmp.yaml`,
+  import and link to your managed PoE switches). All items are standard SNMP over
+  the POWER-ETHERNET-MIB (RFC 3621) — no external collector. A bulk walk feeds a
+  discovery that creates the per-port class/detection items automatically; two
+  scalar items read the switch budget. Opt-in and additive: without the template
+  the faceplate still shows whatever PoE detection it already had. See
+  [docs/POE-SETUP.md](docs/POE-SETUP.md). Verified end-to-end on a live Zabbix 8.0
+  instance against an HPE 1830 (per-port class; that model leaves the budget empty).
+
+## v5.5.64 — 2026-10-22
+
+### Layout import is back — and it merges instead of replacing
+
+- **The ⬆ import button returns next to ⬇ export** (Tools menu). A layout file —
+  positions, pins, notes, manual links — can again be carried from one browser,
+  device, or Zabbix install to another. The import was pulled earlier because the
+  old apply path was written for complete states from the live map, while a file
+  is an arbitrary partial state: a missing section deleted the existing data, and
+  a super-admin importing a file without links wiped **every** user's manual links.
+- **It now merges, never replaces.** Positions overlay per node, links union
+  (deduplicated), pins union, notes overlay — a partial file can no longer delete
+  anything. The import writes the user's own layer (a super-admin publishes to the
+  shared map after a confirmation naming the scope; everyone else stays personal).
+  The file is validated before anything is written. In cluster mode (two or more
+  host groups) the adaptive layout still owns positions; the import is stored and
+  shows once cluster mode is off, as the existing notice explains.
+
+## v5.5.63 — 2026-10-22
+
+### SLA relevance on the map
+
+- **A new KPI chip answers "does this problem cost anything", not "how bad".** A
+  host is *SLA-relevant* when one of its active problems feeds a Zabbix **Service**
+  (and thus an SLA commitment). The magenta `SLA-relevant` chip sits next to the
+  problem chips with a count; a muted `0 · all services met` stays visible as its
+  own statement. Clicking it filters the map to the SLA-relevant hosts (its own
+  axis, like offline-only). The host detail panel gains a badge naming the affected
+  service and its SLO. No new signal on the node itself — colour is already
+  overloaded there.
+- **How it is computed — a join, not a rebuild.** `service.get` with
+  `selectProblemEvents` gives the events each service is in problem over; the map
+  already knows which host each event belongs to, so the whole thing is an
+  event-id join (`topology/SlaResolver.php`, pure and tested). `sla.get` adds the
+  SLO target via the SLA's service tags. Nothing to configure: with no Services
+  the chip simply reads `0`. Verified end-to-end on a live Zabbix 8.0 instance.
+
+## v5.5.62 — 2026-10-21
+
+### Faster first paint
+
+- **The post-layout step no longer waits 800 ms.** A built-in timer delayed the
+  traffic heatmap, port labels and ring highlights by 800 ms after the layout had
+  already settled; it is now 250 ms, so the finished map appears ~550 ms sooner.
+  Measured with the render instrumentation (5.5.60): the whole technical render is
+  ~1.4 s for ~18 nodes, and the backend data build stays well under a second — the
+  "slow load" some installs report is Zabbix' own page bootstrap, not this module.
+
+## v5.5.61 — 2026-10-21
+
+### Management tab reads as a plain overview
+
+- **The Management tab is now aimed at non-technical viewers — "what devices do we
+  have, and are they up".** Every card carries the device-type icon (the same
+  glyphs as the map), the status is plain language — **Running / Warning /
+  Critical / Off** instead of the Zabbix severities (OK/Info/Warning/Average/High/
+  Disaster) — and the categories fold to five readable groups: **Network**
+  (firewall, router, switch, wireless together), **Servers**, **Storage**, **Smart
+  home & sensors**, **Devices**. The header is a short "N devices · X running · Y
+  warning · Z critical" line; the technical KPI row (edges, ghosts, expected,
+  STP-blocked) is hidden here and returns on the Technical tab. Technical and Table
+  keep the full severity vocabulary and the colour guide for admins — two
+  audiences, two vocabularies.
+
+## v5.5.60 — 2026-10-21
+
+### Render timing instrumentation (debug)
+
+- **Opt-in render timing** for chasing "the map is slow" reports: enable with
+  `localStorage.setItem('nt_perf','1')` (or `?ntperf=1`), reload, and the console
+  prints an `[NT-PERF]` timeline across the render phases (elements, Cytoscape
+  init, layout, overlays). Silent by default — no console output in normal use.
+
+## v5.5.59 — 2026-10-21
+
+### Self-loop drawn as a loop
+
+- **Both ends of a self-loop are now shown as one loop on the faceplate.** The
+  blocked end carries a filled badge with a slash, the forwarding end a ring, and
+  a dashed arc with a ⚠ connects the two — so it reads at a glance as *one cable
+  looped on this switch*. The colour is **amber**: a self-loop caught by STP is
+  contained but wants action (pull the cable), not an outage — so it is not red.
+  Red stays reserved for an *active* loop (broadcast storm, MAC flap, STP churn).
+  A plain STP-blocked redundancy link to **another** switch keeps its neutral cyan
+  badge — that is healthy design, not something to fix.
+- Review fixes from the same work: the blocked badge now keys off the resolved
+  loop (not the per-port item, which can lag behind the walk), and the STP items
+  are fetched so they cannot fall out of a large switch's item limit.
+
+## v5.5.58 — 2026-10-21
+
+### Down ports are not STP-blocked loops
+
+- **A down port is no longer marked as STP-blocked.** RouterOS (and others) report
+  `dot1dStpPortState = discarding(2)` for a port that is simply down; the faceplate
+  and the map `STP blocked` count now treat a port as blocked only when its link is
+  actually up. Previously every dead socket on such a switch wore the badge.
+
+## v5.5.57 — 2026-10-21
+
+### Self-loop: which port is the other end
+
+- **The faceplate now finds the forwarding partner of a blocked self-loop.** RSTP
+  blocks only one port of a cable looped on the switch itself; the other end keeps
+  forwarding and looked like any healthy up-port. The blocked port's designated
+  bridge/port (BRIDGE-MIB) names the partner when the designated bridge is the
+  switch's own — decoded by `topology/StpLoopResolver.php` (pure, unit-tested
+  against a real HPE 1830: loop 21↔23, port 23 blocked → partner 21). **The
+  "NT Spanning-Tree by SNMP" template gained three OIDs in its walk** (designated
+  bridge/port + the base bridge address) and a short history; **re-import the
+  template to pick them up** — see docs/STP-SETUP.md.
+
+## v5.5.56 — 2026-10-21
+
+### Clearer STP marker
+
+- The STP-blocked port marker became a filled disc (it was a thin outline that
+  washed out on a green port).
+
+## v5.5.55 — 2026-10-21
+
+### Fixes
+
+- **The Expected (soll/ist) deviation pill stayed empty even when there were
+  deviations.** The backend sent `expected_links`, but the frontend rebuilt its
+  per-tab data cache without that field, so the KPI pill read nothing. Fixed.
+- The STP-blocked marker moved from red to cyan (STP blocking is the healthy case,
+  not an alarm) — later refined to amber for a self-loop (5.5.59). `nt-stp-probe.sh`
+  now also walks the designated-bridge/port OIDs, to confirm a switch can resolve
+  the loop partner before the feature relies on it.
+
+## v5.5.54 — 2026-10-21
+
+### Faceplate marks the STP-blocked port
+
+- **The front panel (and the NT Faceplate widget) now marks a Spanning-Tree-
+  blocked port with a red ⊘.** Hover shows "STP: blocking (loop broken here)".
+  This is where a self-loop finally becomes visible on a per-port level: a cable
+  from a switch back into itself gets one of its ports blocked by RSTP — you now
+  see exactly which port. The faceplate reads the per-port STP state
+  (`nt.if.stp[...]`, from the "NT Spanning-Tree by SNMP" template); without it
+  the marker simply never appears.
+
+## v5.5.53 — 2026-10-21
+
+### STP-blocked port is now visible
+
+- **A host with an STP-blocked port now shows it** — a cyan `STP blocked` KPI
+  pill (count of such hosts) and an `STP blocking` badge in the host detail
+  panel. The per-port STP state was already read (it classifies rings as safe);
+  this surfaces it on its own. It makes the one case that was invisible
+  show up: a self-loop (a cable from a switch back into itself) that RSTP
+  blocks — it forms no edge and no host-ring, so nothing drew it before, even
+  though the switch had quietly blocked a port. Neutral colour: a blocked port
+  is usually healthy redundancy, sometimes a caught loop.
+
+## v5.5.52 — 2026-10-21
+
+### Expected vs measured cabling (soll/ist)
+
+- **A new `nt:expect` host tag declares the expected neighbour and the map holds
+  it against the measured LLDP/CDP topology.** `nt:expect=<host>` (optionally
+  `nt:expect=<host>/<port>`, several allowed) says "this host should hang off
+  that neighbour". Unlike `nt:uplink`, it draws nothing by itself — it verifies.
+  The new **◇ Expected** toolbar toggle draws every expected link that LLDP/CDP
+  does **not** confirm as a red dashed edge: *misconnected* (the host is measured
+  on something else) or *not seen* (it reports no neighbour at all). Matches stay
+  quiet; the deviation count also shows as a KPI pill. For catching re-plugged
+  cables, accidentally disconnected links and third-party work.
+- Deliberately conservative and host-level: the port from the tag is shown but
+  not used for matching (the common fault is "plugged into the wrong switch").
+  The comparison is pure and unit-tested (`topology/ExpectedLinks.php`).
+
+## v5.5.51 — 2026-10-20
+
+### LLDP-Q tab — health summary line
+
+- **The LLDP/CDP Quality tab now opens with a one-line health summary**: total
+  neighbours, how many are confirmed (reported by both ends) versus one-sided,
+  how many are in conflict (ambiguous), and what share of the switches/routers
+  report LLDP at all (`87% of switches report LLDP`). All of it is computed from
+  data already on the page — `confirmed` on each edge, `ambiguous` from the
+  per-host quality, coverage from node type and the reporter set — so it is pure
+  presentation, no new query.
+
+## v5.5.50 — 2026-10-20
+
+### Compliance — firmware/model drift
+
+- **The Compliance tab now flags a device whose firmware differs from the
+  majority of the same model** ("7× Aruba 2930F, one on a different firmware") —
+  an eighth check next to the existing seven. It is not a rule anyone maintains
+  but a deviation from the majority: hosts are grouped by inventory `model`, the
+  most common `software_full` (or `software`) is taken as expected, and the
+  minority is flagged; hovering the cell shows what it runs versus the majority.
+  Deliberately conservative — a model with fewer than three devices, or no clear
+  majority (a tie), yields no finding, and versions are compared for equality,
+  not "newer than". Needs the `model` and `software`/`software_full` inventory
+  fields, which the official network-device templates fill. Admin-only, like the
+  rest of the tab.
+
+## v5.5.49 — 2026-10-20
+
+### Topology widget — nicer nodes
+
+- **The Topology dashboard widget now draws a coloured, type-specific icon per
+  device** (switch, router, server, firewall, access point, storage, camera)
+  instead of one generic grey glyph for everything — the same shape vocabulary
+  the main map already uses, ported to the widget's ES5 drawing code. The
+  severity ring around each node is unchanged (ring colour still means status).
+  Unknown or finer types fall back to the server icon, as on the main map.
+  (Widget `network_topology_widget` 3.3.0.)
+
+## v5.5.48 — 2026-10-20
+
+### Removed
+
+- **The Dependencies tab (service-dependency map) has been removed.** The
+  read-only tab that drew Zabbix Services as a directed dependency tree (with
+  SLA% and web response time), and the in-progress editing action behind it, are
+  gone — along with their backend (`ServiceTree`, the `network.topology.services`
+  and `network.topology.service_edit` actions), the `render-services.js` module
+  and all their strings. The physical topology, all other tabs and the
+  `nt:parent` host hierarchy are unaffected. After updating, run *Administration
+  → General → Modules → Scan directory* so Zabbix drops the two removed actions.
+
+## v5.5.47 — 2026-10-20
+
+### Security
+
+- **The MAC-flap sender now writes its state snapshots privately.** The per-host
+  snapshots under `STATE_DIR` hold the switch FDB — i.e. device MAC addresses —
+  and were created with the login's default umask, which on a shared box (a proxy
+  often also carries `ansible`/`zabbix` accounts) can leave them group- or
+  world-readable. The sender now sets `umask 077` before writing and forces the
+  state directory to `700`, so the MAC data stays readable only by the user
+  running the cron.
+
+## v5.5.46 — 2026-10-20
+
+### Fixes
+
+- **MAC-flap count no longer double-counts on switches that populate both FDB
+  tables.** The sender keyed its move detection on the full OID, but a switch
+  usually carries the same MAC in *both* `dot1d` and `dot1q` (and per-VLAN in
+  `dot1q`), so a single MAC changing port was counted twice (or more). That made
+  the reported `nt.mac.flap` count roughly double the real number of moved MACs
+  and effectively halved the `>2` threshold — a false-positive risk on normal
+  roaming. The sender now keys on the **MAC** (the last six OID octets), which
+  collapses the `dot1d`/`dot1q`/VLAN duplicates so one move counts once.
+
+## v5.5.45 — 2026-10-19
+
+### Fixes
+
+- **The MAC-flap sender now works behind a Zabbix proxy.** It used to always push
+  with `zabbix_sender -c /etc/zabbix/zabbix_agentd.conf`, but a proxy host has no
+  such agent config — so every push failed silently (swallowed by the per-host
+  `|| true`) and `nt.mac.flap` stayed empty forever. And `-c` with the *proxy's*
+  config would be wrong anyway: it points at the main server, which rejects a
+  trapper value for a proxy-monitored host. New env vars `ZBX_SENDER_HOST` /
+  `ZBX_SENDER_PORT` (default port 10051) send straight to a trapper endpoint with
+  `-z/-p` — behind a proxy set `ZBX_SENDER_HOST=127.0.0.1` to push to the local
+  proxy. The send target is now validated once up front: a missing target aborts
+  loudly instead of being swallowed per host.
+
+## v5.5.44 — 2026-10-19
+
+### Fixes
+
+- **The MAC-flap sender (`tools/nt-mac-flap-sender.sh`) now accepts host-group
+  *names* in `GROUPIDS`, not just numeric IDs.** `item.get` requires numeric group
+  ids, so a plain group name (e.g. `GROUPIDS=FOX`) produced a cryptic *"Database
+  error occurred"*. The sender now resolves any non-numeric entry to its id via
+  `hostgroup.get` after login (numeric ids still pass straight through, and the two
+  may be mixed). An unknown name aborts with a clear *"Hostgruppe(n) nicht
+  gefunden"* message instead of the database error.
+
+## v5.5.43 — 2026-10-19
+
+### Fixes
+
+- **The *NT Spanning-Tree by SNMP* template imports again.** The new `nt.mac.flap`
+  trapper item (added in 5.5.42) used the YAML item type `TRAPPER`, which Zabbix
+  rejects on import — the correct export constant is `TRAP`. Re-import the template.
+
+## v5.5.42 — 2026-10-19
+
+### MAC-flapping detection (loop symptom)
+
+- **The same MAC moving back and forth across ports is caught.** That is the
+  classic symptom of a switching loop — but it is *temporal* (a MAC moving over
+  time), which neither the stateless frontend nor SNMP preprocessing can compute.
+  A new cron sender, `tools/nt-mac-flap-sender.sh`, reads each switch's FDB item
+  (`nt.fdb.dot1d`, which Zabbix already collects — works behind a proxy), diffs
+  it against its last snapshot, counts the MACs that changed port, and pushes the
+  number to a new trapper item `nt.mac.flap` with `zabbix_sender`. Run it as a
+  cron (1–5 min).
+- Shown as a **"MAC flapping" KPI pill**, a red badge with the count in the host
+  detail panel, and a ring whose host is flapping turns red (**"flap"**). The ring
+  severity order is now storm > flap > open > churn > safe > unknown.
+- Needs the opt-in FDB items (see FDB-SETUP.md) on the switches, the updated
+  *NT Spanning-Tree by SNMP* template (the new trapper item), and the cron sender.
+  Completes the loop-symptom set (3a topology-churn, 3b broadcast storm, 3c MAC
+  flapping).
+
+## v5.5.41 — 2026-10-19
+
+### Broadcast-storm detection (active loop)
+
+- **A switching loop that is actively flooding is caught.** A loop circulates
+  and multiplies broadcast frames, driving the looped ports to a packet rate far
+  above anything normal (ARP/DHCP sit at a few per second). The Spanning-Tree
+  template now collects `ifHCInBroadcastPkts` per port as a rate; the module takes
+  each host's busiest port and flags a **broadcast storm** above ~200 packets/s.
+- Shown as a **"Broadcast storm" KPI pill**, a red badge with the rate in the host
+  detail panel, and — with Rings on — a ring whose host is storming turns the
+  strongest red (**"storm"**, ranked above every other ring state, because the
+  loop is live now). This catches the case neither the ring view nor the STP-churn
+  warning can see: a loop with no LLDP cycle and no flapping STP (e.g. STP off).
+- Needs the updated *NT Spanning-Tree by SNMP* template (a new walk + discovery);
+  re-import it.
+
+## v5.5.40 — 2026-10-19
+
+### STP instability as a loop early warning
+
+- **A spanning tree that keeps reconverging is flagged.** The Spanning-Tree
+  template now collects `dot1dStpTopChanges` as a rate (changes per second); a
+  host whose rate stays above ~0.1/s is marked **STP unstable** — the classic
+  symptom of a loop STP is fighting (a flapping link, a cable looped on a switch,
+  an unmanaged device bridging two ports). This catches the dangerous case the
+  ring view cannot: a loop that forms no LLDP cycle of monitored hosts.
+- Shown as a **"STP unstable" KPI pill** (independent of the Rings toggle), a
+  badge with the rate in the host detail panel, and — with Rings on — a ring
+  whose host is flapping turns **amber** ("churn"), ranked above safe but below a
+  no-block loop risk. Needs the updated *NT Spanning-Tree by SNMP* template
+  (one new item); re-import it.
+
+### Fixes
+
+- **The "safe" ring halo now actually shows.** A classified-safe ring (STP blocks
+  somewhere) was tagged with a CSS class that had no style, so its cyan halo —
+  and the ring row in the edge panel — never rendered. Red loop-risk and grey
+  unknown were unaffected.
+
+## v5.5.39 — 2026-10-18
+
+### Ring / loop detection
+
+- **Redundant rings are highlighted, and a real loop is told apart from safe
+  redundancy.** A new toggle "◯ Rings" marks cycles in the LLDP/CDP cable graph
+  (circuit rank for the count, bridge-finding for the edges; parallel cables /
+  LAG are collapsed to one logical link and do not count as a ring). A ring is
+  usually *intended* redundancy, so it is drawn with a neutral underlay halo, not
+  as an alarm.
+- **Safe vs. dangerous comes from STP.** Using the per-port state collected since
+  5.5.36, a ring is marked **safe** (cyan) when STP blocks somewhere in it, a
+  **loop risk** (red) when STP data is present but nothing blocks, and neutral
+  grey when there is no STP data. The "safe" test looks at whether any *host* in
+  the ring blocks any port at all — not just the visible edges — because STP
+  often blocks a redundant link that carries no LLDP neighbour and is therefore
+  not drawn as an edge (found on real hardware, a MikroTik CRS310). KPI pills show
+  "Rings" and, only when warranted, "Loop risk".
+- Frontend graph work plus one backend field (`stp_block` per host); needs no
+  template change beyond the existing LLDP + Spanning-Tree templates.
+
+## v5.5.38 — 2026-10-18
+
+### CDP-only neighbours resolve to the host, not a ghost
+
+- **A neighbour named only by its MAC now resolves to the owning host.** Cisco
+  CDP reports a peer by `cdpCacheDeviceId` — a MAC, not a sys-name — and on Cisco
+  the LLDP local sys-name is often empty. Until now such a peer, when no other
+  switch had reported that MAC together with a name, was drawn as a ghost. Each
+  host now collects its own identity MAC (`nt.self.chassis` = lldpLocChassisId,
+  `nt.self.basemac` = dot1dBaseBridgeAddress) and `LldpEdgeBuilder` seeds the
+  chassis resolver with it, so the MAC maps straight to the host. Shared MACs
+  (stacks / HA pairs) stay unresolved rather than guessed.
+- **Works on the main map and in the Host + N hops graph** (both edge-build
+  paths). Verified live on two Cisco SB switches: the previously unresolved
+  CDP-only ghost became a confirmed edge.
+- Requires the updated *NT LLDP Neighbors by SNMP* template (two new items);
+  re-import it to pick up `nt.self.chassis` / `nt.self.basemac`.
+
+## v5.5.37 — 2026-10-16
+
+### Code-review follow-ups (Spanning-Tree)
+
+- **STP state is read at the FAR end of an edge too.** When only the neighbour
+  reported the blocking port, the edge carried no STP state and was drawn as
+  active; LldpEdgeBuilder now fills port_metrics[neighbour].stp as well.
+- **A collapsed LAG trunk picks up a blocked member.** trunkData aggregates
+  _isStpBlocked across members, so a blocked redundancy in a folded bundle is no
+  longer hidden until it is expanded.
+- **A not-yet-polled STP item no longer reads as "state 0".** An empty lastvalue
+  is skipped (only states 1-6 stored) instead of (int)'' = 0 showing a bogus pill.
+- **MetricExtractor's STP branch gets a strpos pre-filter** like the other
+  hot-loop item branches, so the regex no longer runs on every item.
+- **The map edge labels are localised** ("⊘ STP blocked" and the pre-existing
+  "⚠ No Connection"), de/en.
+
+Tests added for the far-end state and the empty-value guard.
+
+## v5.5.36 — 2026-10-16
+
+### Spanning-Tree awareness -- the map now marks the blocked link
+
+The render half of 5.5.35: an edge whose local port is STP-blocking is drawn as a
+dimmed, dashed slate line labelled "⊘ STP blocked" instead of a normal active
+link -- so a redundancy link parked by Spanning-Tree is told apart from the active
+path at a glance. The edge detail panel shows the STP state per end (forwarding
+green, blocking red). Only where the "NT Spanning-Tree by SNMP" template feeds
+nt.if.stp; a real port failure (red) still outranks a blocked link in the colour.
+
+## v5.5.35 — 2026-10-16
+
+### Spanning-Tree awareness -- data collection + backend (render to follow)
+
+Groundwork for telling an STP-BLOCKED redundancy link from an active one on the
+map. A new template **"NT Spanning-Tree by SNMP"** collects `dot1dStpPortState`
+(BRIDGE-MIB) per port, keyed by ifIndex via `dot1dBasePortIfIndex`, as
+`nt.if.stp[<ifIndex>]`. The data action now reads those items and attaches the
+per-port STP state to each edge's local end (`edge.port_metrics[host].stp`), so a
+blocking(2) port is known right where the edge is built. The map does not dim the
+blocked edge yet -- that is the next step; this is the pipeline it hangs off.
+Covered by tests in MetricExtractor and LldpEdgeBuilder.
+
+Measured first on three lab switches (see ROADMAP): MikroTik CRS310 reports
+forwarding+blocking live, HPE 1830 forwarding, TP-Link all "other". Link the
+template to STP switches that expose the BRIDGE-MIB; no change for anyone else.
+
+## v5.5.34 — 2026-10-16
+
+### NT Faceplate in the host detail panel
+
+Selecting a switch on the technical map now shows its front panel inline in the
+detail panel -- the same layout as the dashboard widget (RJ45 blocks + SFP cages,
+coloured by link state, PoE bolt, severity outline for a port with an open
+problem), fetched on demand from the `network.topology.faceplate` action. Hover a
+port for its name/status/speed, click it to open the item graph. Only for
+switch-type hosts; nothing changes for other devices. A new ES-module renderer
+`faceplate-svg.js` ports the widget's drawing into the map bundle, because the
+map page loads only the main bundle, not the ES5 widget files.
+
+## v5.5.33 — 2026-10-16
+
+### Code-review follow-ups (NT Faceplate + SNMP probe scripts)
+
+- **Faceplate: keep real management/stacking ports.** The 5.5.32 fix that ignores
+  a VLAN interface mislabelled as `ethernetCsmacd(6)` was too broad — it ran the
+  full virtual-name filter on *every* interface, so a genuine OOB/management or
+  stacking RJ45 port (ethernet ifType, name like `mgmt0` / `Stack1`) would have
+  been hidden. The always-on check now matches only unambiguously virtual names
+  (VLAN / loopback / LAG / tunnel / …); `mgmt` / `oob` / `stack` are kept when the
+  switch reports a physical ifType. Covered by a regression test.
+- **`tools/nt-stp-probe.sh`:** `dot1dStpProtocolSpecification` was decoded with the
+  wrong enum (`1=none, 2=unknown`); corrected to the BRIDGE-MIB values
+  (`1=unknown, 2=decLb100, 3=ieee8021d`). The port-state table is now walked once
+  (a single snapshot, less load), and the verdict no longer claims "all forwarding"
+  when every port is in another state.
+- **`tools/nt-poe-probe.sh`:** each OID is walked once instead of twice.
+
+(Diagnostic scripts live in `tools/`, outside the shipped module.)
+
+## v5.5.32 — 2026-10-16
+
+### Fixed: NT Faceplate drew phantom SFP cages on switches that mislabel their VLAN interface
+
+On a switch that reports its VLAN/management interface as `ethernetCsmacd(6)`
+instead of a virtual ifType — seen on TP-Link JetStream (e.g. TL-SG2008P, which
+reports `Vlan-interface1` as type 6) — the faceplate counted that interface as a
+front port. Its trailing name digit collided with a real port's, so numbering
+fell back to position, the port count went one too high, and an 8-port switch
+was drawn as "8+2" with two empty SFP cages — every port shifted by one.
+
+The front-port filter now applies the virtual-name check to **every** interface,
+not only to those without an ifType, so a mislabelled `Vlan-interface…` is dropped
+regardless of its reported type. The TL-SG2008P now renders as a clean 8-port
+front with no SFP. Covered by a regression test built from the device's real
+SNMP walk (`tests/FaceplateBuilderTest.php`).
+
+## v5.5.31 — 2026-10-16
+
+### New widget: NT Faceplate
+
+The front panel of one switch as a dashboard tile. Every port is drawn as a
+socket: RJ45 in blocks of six with the odd ports on top, SFP cages set apart
+on the right. Ports are coloured by link state (up / down / no data) or by
+link speed (10M … 10G+). Admin-down ports have a dashed outline, and a port
+with an open problem is outlined in that problem's severity colour. A bolt marks PoE
+ports that are delivering power (POWER-ETHERNET-MIB). Hovering a port shows
+its name, alias, speed, traffic, errors and LLDP neighbour. Clicking it opens
+the graph of its status item.
+
+- **Generic, not vendor artwork.** The layouts are 8+2, 16+2, 24+2, 24+4,
+  48+4 and 48+6. "Automatic" picks the smallest layout that fits the
+  discovered front ports. Exactly 8/16/24/48 ports get no empty SFP cages.
+  The first N ports by ifIndex are copper and the rest are SFP. A fixed
+  layout can be chosen for devices that number their ports differently.
+- **Real port numbers, not list positions.** The number on the front comes
+  from the trailing digits of the port name when they are unique, else from
+  the ifIndex relative to the lowest one, and only as a last resort from the
+  position. A port the template's discovery filters out, or one whose items
+  have no value yet, leaves an empty socket instead of shifting every later
+  port and the copper/SFP boundary. A front that ends inside the copper part
+  of the next layout (20 ports) is drawn as a plain copper front instead of
+  24+2 with invented sockets.
+- **Correct values on the edge cases.** `net.if.speed[N]` (Cisco/pfSense
+  template family) is already bit/s and is no longer capped at the 32-bit
+  ifSpeed limit, so 10G ports keep their speed. When both 64-bit and 32-bit
+  octet counters exist, the 64-bit one is used and traffic is not counted
+  twice. An LLDP neighbour on a LAG or VLAN interface no longer lands on the
+  front port with the same number. PoE in a stack uses the lowest PSE group
+  instead of letting member 2 overwrite member 1.
+- **Front ports only.** VLAN, loopback, LAG and tunnel interfaces are dropped
+  by ifType, or by name when the template has no ifType item.
+- **Both key styles** of the common SNMP templates are read
+  (`net.if.status[ifOperStatus.N]`, `ifOperStatus[N]`, and the bare
+  `net.if.status[N]`). Name and alias come from the resolved item name when
+  the template has no ifName/ifAlias item.
+- New action `network.topology.faceplate` (one host, one item request, one
+  trigger request) and a pure `Topology\FaceplateBuilder`, which shares the
+  key and speed rules of `MetricExtractor` (its helpers are now public), with
+  `tests/FaceplateBuilderTest.php`. The widget is wired into deploy, install
+  and uninstall, ESLint and the shared-code parity check.
+
+### Dashboard widgets follow the Zabbix theme (light / dark)
+
+All five NT dashboard widgets — Topology, KPI, Health, Table, Items — now read the
+active dashboard background and switch between a light and a dark palette instead of
+a single hard-coded light set. On a dark theme the headline numbers, host names and
+table text were barely legible before; they read clearly now, and severity colours
+use brighter variants on dark. The colours live in one shared `NtTheme` helper
+(light/dark chosen by measured background luminance, WCAG) that every widget —
+including the new Faceplate — inherits, so a widget can no longer drift to its own
+palette. No configuration change; the default light look is unchanged.
+
+
+## v5.5.30 — 2026-10-14
+
+### Adjustable node size on the technical map
+
+A new **node-size control** in the technical-map toolbar (next to the Performance
+toggle) cycles the host points through three steps — normal → large → small. It
+scales the nodes **and their labels together**, which declutters a dense map where
+the label boxes overlap, not just the circles. The setting is remembered per
+browser; the default (normal) is unchanged, so existing views look exactly as
+before. Switching is a live restyle — no re-layout, so positions, pins and focus
+stay put. Ghost, endpoint-bundle and performance-mode nodes scale with it.
+
+## v5.5.29 — 2026-10-14
+
+### Fixed: LLDP items recreated on every neighbour relearn (unstable lldpRemIndex)
+
+On switches where `lldpRemIndex` changes after an LLDP aging/relearn — e.g. a
+Cisco SG200 — the same neighbour on the same local port keeps getting a new table
+index. The bundled "NT LLDP Neighbors by SNMP" template used that index
+(`0.LocalPort.RemIndex`) as the LLD identity, so each relearn looked like a new
+resource: the old dependent items were lost/disabled and a fresh set created, and
+the topology edge flickered or dropped while discovery churned.
+
+The LLD identity is now built from the **stable** neighbour attributes — the local
+port plus a 32-bit hash of the remote chassis ID and port ID — kept as a numeric
+`0.LocalPort.<hash>` index, so the module still reads the local port from it and
+correlates the six columns by it. The volatile RemIndex is kept only as a lookup
+macro the item prototypes use to read the value from the current walk; when it
+changes, discovery re-syncs that macro while the item (its key) stays put. A
+neighbour that advertises neither chassis nor port ID falls back to the old
+RemIndex-based identity. Covered by a regression test built from the reporter's
+own before/after walks (`tools/check-template-logic.mjs`). Reported on GitHub (#25).
+
+### Updating from 5.5.28 — re-import the template
+
+This changes the "NT LLDP Neighbors by SNMP" **template**, not the module code.
+Re-import it (Data collection → Templates → Import). Existing LLDP dependent items
+are recreated once with the new stable key format — their short history is lost in
+that one step, after which they stop churning on relearns. The module directory
+itself is unchanged.
+
+## v5.5.28 — 2026-10-14
+
+### Fixed: empty map (no links, no metrics) when history is stored in ClickHouse / Elasticsearch
+
+On Zabbix 8 with `HistoryProvider=clickhouse` (and with Elasticsearch on any
+version), the map showed every host but no LLDP links and no node metrics.
+`NetworkTopologyData::fetchLastValues()` read the `history*` tables straight from
+SQL — a deliberate fast window-scan — which assumes SQL-backed history. With a
+non-SQL provider those tables are empty, so every item reached `MetricExtractor`
+with `lastvalue = null` and `LldpEdgeBuilder` had no neighbours to match.
+
+Last values now go through the frontend's own history abstraction —
+`Manager::History()->getLastValues()`, the same path the Zabbix UI uses — which
+reads whatever storage each value type is configured for. The fast SQL
+window-scan is kept for value types stored in SQL, so SQL installations are
+unchanged; only a non-SQL provider takes the new path. Reported on GitHub (#26);
+reproduced and fixed on a Zabbix 8.0rc1 instance with ClickHouse history.
+
+### Updating from 5.5.27 — replace the directory
+
+Backend only (bundle unchanged). No new action, no template change, nothing
+stored is touched. Replace the module directory, `chown`, reload php-fpm.
+
 ## v5.5.27 — 2026-10-13
 
 ### Anonymised example data in the finder tests and docstrings
@@ -1404,7 +2709,7 @@ the official *UniFi Network API* templates. Their *Client* template carries
 switches, while switches, access points and the gateway float unconnected. Add
 a dependent item `uplink.id` on the master item `details.json`, with JSONPath
 `$.uplink.deviceId` — nested for devices, unlike the flat field on clients. See
-the UniFi row in [LLDP-SETUP.md](LLDP-SETUP.md). Until this release, UniFi
+the UniFi row in [LLDP-SETUP.md](docs/LLDP-SETUP.md). Until this release, UniFi
 edges could not appear at all; see the second entry under *Fixed*.
 
 ### Thanks
@@ -1650,7 +2955,7 @@ walks the LLDP remote-systems table. They come from the ordinary interface
 monitoring on the same host, i.e. Zabbix's own *Network interfaces by SNMP*
 discovery or a vendor template. A host that carries only the NT LLDP template
 still produces edges; they simply have no port names and no per-port numbers.
-See [LLDP-SETUP.md](LLDP-SETUP.md), "Optional, but worth having: real port
+See [LLDP-SETUP.md](docs/LLDP-SETUP.md), "Optional, but worth having: real port
 names".
 
 ### Thanks

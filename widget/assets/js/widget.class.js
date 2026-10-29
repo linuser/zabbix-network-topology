@@ -113,6 +113,72 @@ if (!window.NtWidgetData) {
     })();
 }
 
+// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
+if (!window.NtTheme) {
+    window.NtTheme = {
+        isDark: function (el) {
+            try {
+                var node = el || document.body;
+                while (node && node.nodeType === 1) {
+                    var bg = window.getComputedStyle(node).backgroundColor || '';
+                    var m = bg.replace(/\s/g, '').match(/^rgba?\((\d+),(\d+),(\d+)(?:,([0-9.]+))?\)$/i);
+                    if (m) {
+                        var a = m[4] === undefined ? 1 : parseFloat(m[4]);
+                        if (a > 0.1) {
+                            var lin = function (v) {
+                                v = parseInt(v, 10) / 255;
+                                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+                            };
+                            var L = 0.2126 * lin(m[1]) + 0.7152 * lin(m[2]) + 0.0722 * lin(m[3]);
+                            return L < 0.4;
+                        }
+                    }
+                    node = node.parentNode;
+                }
+            } catch (e) {}
+            return false;
+        },
+        palette: function (dark) {
+            // sev[] ist die Severity-Skala (Normal, Info, Warning, Average,
+            // High, Disaster) fuer Punkte/Balken in Topology- und Table-Widget.
+            // head = Kopfzeilen-/Flaechenton eine Stufe von surface abgesetzt.
+            return dark ? {
+                text:    '#e6edf3',
+                ok:      '#4ade80',
+                warn:    '#fbbf24',
+                bad:     '#fb923c',
+                crit:    '#fca5a5',
+                link:    '#a78bfa',
+                accent:  '#58a6ff',
+                ghost:   '#8b949e',
+                sub:     '#8b949e',
+                subSoft: '#6e7681',
+                border:  '#30363d',
+                track:   '#21262d',
+                surface: '#161b22',
+                head:    '#1c2128',
+                sev:     ['#4ade80', '#22d3ee', '#fbbf24', '#fb923c', '#f87171', '#dc2626']
+            } : {
+                text:    '#1f2c33',
+                ok:      '#166534',
+                warn:    '#92400e',
+                bad:     '#c2410c',
+                crit:    '#9c1a25',
+                link:    '#7c3aed',
+                accent:  '#0275b8',
+                ghost:   '#64748b',
+                sub:     '#64748b',
+                subSoft: '#94a3b8',
+                border:  '#dfe4e7',
+                track:   '#eef2f5',
+                surface: '#f8fafc',
+                head:    '#f1f5f9',
+                sev:     ['#16a34a', '#0891b2', '#ca8a04', '#ea580c', '#dc2626', '#991b1b']
+            };
+        }
+    };
+}
+
 class WidgetNetworkTopology extends CWidget {
 
     onInitialize() {
@@ -318,7 +384,27 @@ class WidgetNetworkTopology extends CWidget {
             .catch(function (err) { self._showMsg('Error: ' + err.message, true); });
     }
 
+    _applyTheme() {
+        // Farben + Severity-Skala frisch aus dem geteilten NtTheme: am
+        // Canvas-Hintergrund gemessen (hell/dunkel), damit der Mini-Graph dem
+        // Dashboard-Theme folgt statt fest hell zu zeichnen.
+        var p = window.NtTheme.palette(window.NtTheme.isDark(this._getCanvas() || this._target));
+        this._COL = {
+            head:     p.head,
+            border:   p.border,
+            text:     p.text,
+            sub:      p.sub,
+            subSoft:  p.subSoft,
+            accent:   p.accent,
+            critical: p.crit,
+            warning:  p.warn,
+            offline:  p.ghost
+        };
+        this._SEV_COL = p.sev;
+    }
+
     _render() {
+        this._applyTheme();
         // Optional Offline-Hosts ausblenden (per Widget-Setting).
         var visible = this._hideOffline
             ? this._nodes.filter(function (n) { return !n.unavailable; })
@@ -332,6 +418,7 @@ class WidgetNetworkTopology extends CWidget {
     }
 
     _showMsg(msg, error) {
+        this._applyTheme();
         var el = this._target.querySelector('.nt-widget-loading');
         if (el) {
             el.style.display = 'flex';
@@ -392,10 +479,68 @@ class WidgetNetworkTopology extends CWidget {
         };
     }
 
-    // Vereinfachter Pie-Chart-Generator fuer kleine Widget-Tiles. Echte
-    // CPU/Memory/Traffic/Ping-Pies wuerden bei 44px Cytoscape-Nodes nichts
-    // mehr zeigen — wir nehmen nur den Severity-Ring + Server-Icon, plus
-    // bei Offline ein rotes X overlay damit man tote Hosts sofort erkennt.
+    // Farbiges, typ-spezifisches Geraete-Icon (gefuellt), zentriert auf (0,0) —
+    // dasselbe Formvokabular wie TYPE_ICON in icons.js des Hauptmoduls, aber als
+    // ES5-Kopie, weil der Widget-jsLoader keine ES-Module importieren kann (wie
+    // bei der Health-Formel; das Duplikat ist bewusst). Feinere/unbekannte Typen
+    // (webserver, mailserver, hypervisor, ups, homeauto ...) fallen wie im
+    // Hauptmodul auf 'server' zurueck. Der Severity-Ring kommt drumherum.
+    _typeIcon(type) {
+        switch (type) {
+        case 'switch':
+            return '<rect x="-13" y="-3" width="26" height="11" rx="2" fill="#2f6fb3"/>'
+                + '<g fill="#fff"><rect x="-10" y="0" width="3" height="5" rx="1"/>'
+                + '<rect x="-5" y="0" width="3" height="5" rx="1"/>'
+                + '<rect x="0" y="0" width="3" height="5" rx="1"/>'
+                + '<rect x="5" y="0" width="3" height="5" rx="1"/>'
+                + '<rect x="10" y="0" width="2" height="5" rx="1"/></g>';
+        case 'router':
+            return '<circle r="12" fill="#0f8a6a"/>'
+                + '<g stroke="#fff" stroke-width="2.2" stroke-linecap="round">'
+                + '<line x1="0" y1="-7" x2="0" y2="7"/><line x1="-7" y1="0" x2="7" y2="0"/></g>'
+                + '<g fill="#fff"><polygon points="0,-10 -3,-6 3,-6"/>'
+                + '<polygon points="0,10 -3,6 3,6"/><polygon points="-10,0 -6,-3 -6,3"/>'
+                + '<polygon points="10,0 6,-3 6,3"/></g>';
+        case 'firewall':
+            return '<path d="M0,-13 L12,-8 L12,2 C12,10 6,15 0,17 C-6,15 -12,10 -12,2 L-12,-8 Z" fill="#c0392b"/>'
+                + '<g stroke="#fff" stroke-width="1.6"><line x1="-8" y1="-1" x2="8" y2="-1"/>'
+                + '<line x1="-8" y1="5" x2="8" y2="5"/><line x1="0" y1="-7" x2="0" y2="-1"/>'
+                + '<line x1="-5" y1="-1" x2="-5" y2="5"/><line x1="5" y1="-1" x2="5" y2="5"/></g>';
+        case 'wireless':
+            return '<g fill="none" stroke="#b5730f" stroke-width="2.4" stroke-linecap="round">'
+                + '<path d="M-7,2 a9,9 0 0,1 14,0"/><path d="M-11,-2.5 a14.5,14.5 0 0,1 22,0"/></g>'
+                + '<rect x="-5" y="6" width="10" height="7" rx="1.5" fill="#b5730f"/>'
+                + '<circle cx="0" cy="9.5" r="1.4" fill="#fff"/>';
+        case 'client':
+            return '<rect x="-11" y="-9" width="22" height="13" rx="2" fill="#0ea5e9"/>'
+                + '<rect x="-8" y="-6" width="16" height="8" rx="1" fill="#fff"/>'
+                + '<rect x="-2" y="4" width="4" height="3" fill="#0ea5e9"/>'
+                + '<rect x="-7" y="7" width="14" height="2" rx="1" fill="#0ea5e9"/>';
+        case 'storage':
+            return '<g fill="#6d28d9"><rect x="-12" y="-10" width="24" height="6" rx="3"/>'
+                + '<rect x="-12" y="-2" width="24" height="6" rx="3"/>'
+                + '<rect x="-12" y="6" width="24" height="6" rx="3"/></g>'
+                + '<g fill="#fff"><circle cx="7" cy="-7" r="1.4"/><circle cx="7" cy="1" r="1.4"/>'
+                + '<circle cx="7" cy="9" r="1.4"/></g>';
+        case 'camera':
+            return '<rect x="-12" y="-6" width="18" height="13" rx="2" fill="#0891b2"/>'
+                + '<polygon points="6,-3 12,-6 12,7 6,4" fill="#0891b2"/>'
+                + '<circle cx="-3" cy="0.5" r="4" fill="#fff"/>'
+                + '<circle cx="-3" cy="0.5" r="2" fill="#0891b2"/>';
+        default:
+            return '<g fill="#475569"><rect x="-12" y="-11" width="24" height="5.5" rx="1.5"/>'
+                + '<rect x="-12" y="-3" width="24" height="5.5" rx="1.5"/>'
+                + '<rect x="-12" y="5" width="24" height="5.5" rx="1.5"/></g>'
+                + '<g fill="#fff"><circle cx="-8" cy="-8.25" r="1.4"/>'
+                + '<circle cx="-8" cy="-0.25" r="1.4"/><circle cx="-8" cy="7.75" r="1.4"/></g>';
+        }
+    }
+
+    // Knoten-Bild fuer eine kleine Widget-Tile: weisse Scheibe + Severity-Ring
+    // (unveraendert, Ringfarbe = Status) und in der Mitte das typ-spezifische,
+    // farbige Geraete-Icon statt eines generischen Blobs (_typeIcon). Bei Offline
+    // ein rotes X overlay, damit man tote Hosts sofort erkennt. Volle CPU/Memory/
+    // Traffic/Ping-Pies wuerden bei 44px Cytoscape-Nodes nichts mehr zeigen.
     _makeSvgNode(n) {
         var st = this._hostState(n);
         var ring = st.col;
@@ -408,10 +553,8 @@ class WidgetNetworkTopology extends CWidget {
         var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48">'
             + '<circle cx="24" cy="24" r="20" fill="white" stroke="' + ring
             +     '" stroke-width="3"' + ringDash + '/>'
-            + '<g opacity="' + iconOpacity + '">'
-            + '<rect x="12" y="17" width="24" height="4" rx="1" fill="#64748b"/>'
-            + '<rect x="12" y="23" width="24" height="4" rx="1" fill="#64748b"/>'
-            + '<rect x="12" y="29" width="24" height="4" rx="1" fill="#64748b"/>'
+            + '<g transform="translate(24,24)" opacity="' + iconOpacity + '">'
+            + this._typeIcon(n.type)
             + '</g>';
         // Rotes X bei Offline druebergelegt
         if (st.state === 'offline') {

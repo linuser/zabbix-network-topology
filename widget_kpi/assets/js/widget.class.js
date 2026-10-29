@@ -126,23 +126,84 @@ if (!window.NtWidgetData) {
     })();
 }
 
+// ERZEUGT aus tools/widget-shared.js — dort bearbeiten, nicht hier.
+if (!window.NtTheme) {
+    window.NtTheme = {
+        isDark: function (el) {
+            try {
+                var node = el || document.body;
+                while (node && node.nodeType === 1) {
+                    var bg = window.getComputedStyle(node).backgroundColor || '';
+                    var m = bg.replace(/\s/g, '').match(/^rgba?\((\d+),(\d+),(\d+)(?:,([0-9.]+))?\)$/i);
+                    if (m) {
+                        var a = m[4] === undefined ? 1 : parseFloat(m[4]);
+                        if (a > 0.1) {
+                            var lin = function (v) {
+                                v = parseInt(v, 10) / 255;
+                                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+                            };
+                            var L = 0.2126 * lin(m[1]) + 0.7152 * lin(m[2]) + 0.0722 * lin(m[3]);
+                            return L < 0.4;
+                        }
+                    }
+                    node = node.parentNode;
+                }
+            } catch (e) {}
+            return false;
+        },
+        palette: function (dark) {
+            // sev[] ist die Severity-Skala (Normal, Info, Warning, Average,
+            // High, Disaster) fuer Punkte/Balken in Topology- und Table-Widget.
+            // head = Kopfzeilen-/Flaechenton eine Stufe von surface abgesetzt.
+            return dark ? {
+                text:    '#e6edf3',
+                ok:      '#4ade80',
+                warn:    '#fbbf24',
+                bad:     '#fb923c',
+                crit:    '#fca5a5',
+                link:    '#a78bfa',
+                accent:  '#58a6ff',
+                ghost:   '#8b949e',
+                sub:     '#8b949e',
+                subSoft: '#6e7681',
+                border:  '#30363d',
+                track:   '#21262d',
+                surface: '#161b22',
+                head:    '#1c2128',
+                sev:     ['#4ade80', '#22d3ee', '#fbbf24', '#fb923c', '#f87171', '#dc2626']
+            } : {
+                text:    '#1f2c33',
+                ok:      '#166534',
+                warn:    '#92400e',
+                bad:     '#c2410c',
+                crit:    '#9c1a25',
+                link:    '#7c3aed',
+                accent:  '#0275b8',
+                ghost:   '#64748b',
+                sub:     '#64748b',
+                subSoft: '#94a3b8',
+                border:  '#dfe4e7',
+                track:   '#eef2f5',
+                surface: '#f8fafc',
+                head:    '#f1f5f9',
+                sev:     ['#16a34a', '#0891b2', '#ca8a04', '#ea580c', '#dc2626', '#991b1b']
+            };
+        }
+    };
+}
+
 class WidgetNetworkTopologyKpi extends CWidget {
 
     onInitialize() {
         this._groupids = [];
         this._display  = 0;   // 0 = Ring, 1 = Kacheln
 
-        this._COL = {
-            neutral: '#1f2c33',
-            ok:      '#16a34a',
-            warn:    '#d97706',
-            crit:    '#dc2626',
-            link:    '#7c3aed',
-            ghost:   '#64748b',
-            sub:     '#768d99',
-            border:  '#dfe4e7',
-            track:   '#eef2f7'
-        };
+        // Farben kommen aus dem geteilten NtTheme (hell/dunkel). Hier nur ein
+        // heller Startwert; _canvas() misst vor jedem Render das Dashboard-Theme
+        // und setzt die passende Palette — so folgt die Kachel einem Theme-
+        // Wechsel, ohne dass der Nutzer das Widget neu anlegen muss.
+        this._dark = false;
+        this._COL  = window.NtTheme.palette(false);
     }
 
     onStart() {
@@ -271,6 +332,11 @@ class WidgetNetworkTopologyKpi extends CWidget {
     _canvas() {
         var root = this._target.querySelector('.nt-kpi-widget-canvas');
         if (!root) return null;
+        // Theme am tatsaechlichen Hintergrund messen (nicht am Namen raten) und
+        // die Palette frisch setzen — einmal je Render, bevor etwas gezeichnet
+        // wird. root ist der Messpunkt: sein Hintergrund ist der der Kachel.
+        this._dark = window.NtTheme.isDark(root);
+        this._COL  = window.NtTheme.palette(this._dark);
         root.textContent = '';
         return root;
     }
@@ -362,7 +428,7 @@ class WidgetNetworkTopologyKpi extends CWidget {
         t1.setAttribute('x', '21'); t1.setAttribute('y', '20.5');
         t1.setAttribute('text-anchor', 'middle');
         t1.setAttribute('font-size', '10'); t1.setAttribute('font-weight', '700');
-        t1.setAttribute('fill', this._COL.neutral);
+        t1.setAttribute('fill', this._COL.text);
         t1.textContent = String(g.hosts);
         svg.appendChild(t1);
 
@@ -413,11 +479,11 @@ class WidgetNetworkTopologyKpi extends CWidget {
         if (!root) return;
 
         var grid = document.createElement('div');
-        grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));'
-            + 'gap:8px;padding:10px 12px;';
+        grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));'
+            + 'gap:9px;padding:11px 12px;';
 
         var tiles = [
-            [g.hosts,  'Hosts',       this._COL.neutral],
+            [g.hosts,  'Hosts',       this._COL.text],
             [g.ok,     'OK',          this._COL.ok],
             [g.warn,   'Warn',        this._COL.warn],
             [g.crit,   'Critical',    this._COL.crit],
@@ -427,9 +493,15 @@ class WidgetNetworkTopologyKpi extends CWidget {
 
         for (var i = 0; i < tiles.length; i++) {
             var t = document.createElement('div');
-            t.style.cssText = 'border:1px solid ' + this._COL.border
-                + ';border-radius:4px;padding:8px 10px;';
-            t.appendChild(this._num(tiles[i][0], tiles[i][2], 20));
+            // Flaeche + farbige Kante links: die Kachel liest sich als Einheit,
+            // und der Akzent in der Metrik-Farbe sagt ohne Legende, was sie
+            // meint (gruen OK, rot kritisch). Alles aus der Palette, also
+            // hell wie dunkel stimmig.
+            t.style.cssText = 'background:' + this._COL.surface
+                + ';border:1px solid ' + this._COL.border
+                + ';border-left:3px solid ' + tiles[i][2]
+                + ';border-radius:6px;padding:9px 11px 8px;';
+            t.appendChild(this._num(tiles[i][0], tiles[i][2], 21));
             var lbl = document.createElement('div');
             lbl.style.cssText = 'font-size:9.5px;margin-top:4px;text-transform:uppercase;'
                 + 'letter-spacing:0.04em;color:' + this._COL.sub;

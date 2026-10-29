@@ -3,7 +3,7 @@
 How the module turns LLDP/CDP data into **edges**, and what you have to configure
 on switches, on clients and in Zabbix.
 
-**🇬🇧 English · 🇩🇪 [Deutsch](LLDP-SETUP.de.md)**
+*[← Documentation index](README.md)*
 
 > **Seeing nodes but no edges?** The answer is almost always in here — usually
 > missing LLDP, missing SNMP, or a name mismatch. The **LLDP-Q tab** in the module
@@ -55,6 +55,29 @@ It then tries to put a name to the address, from data already on hand:
 Both refuse to guess. Two open rows on one port, or two hosts claiming one MAC,
 and no edge is drawn. What remains unresolved stays a ghost node, now labelled
 with the full address instead of two digits.
+
+> **Since 5.5.96 the chassis-id is typed, not guessed.** The template also walks
+> `lldpRemChassisIdSubtype`, which states whether the chassis-id is a MAC (4), an
+> IP (5) or a name (7). A chassis-id that is not a MAC is no longer treated as one,
+> so it cannot mis-resolve a neighbour. If you set the template up before 5.5.96,
+> **re-import `NT LLDP Neighbors by SNMP`** (Data collection → Templates → Import,
+> *Update existing*) to pick up the new walk column and item prototype — nothing
+> else changes.
+
+> **Since 5.5.97 the module uses the neighbour's management IP.** The template
+> also walks `lldpRemManAddr` (OID table …4.2). A neighbour whose name and
+> chassis-MAC do not resolve, but whose advertised management IP matches a
+> monitored host, is now linked to that host anyway. For unmonitored neighbours
+> the IP shows up in the detail panel and tooltip, and "create host" prefills an
+> SNMP interface on it (community `{$SNMP_COMMUNITY}`). It is an optional LLDP TLV
+> — present on some devices (HPE), absent on others (MikroTik); absent simply
+> means no extra match. **Re-import `NT LLDP Neighbors by SNMP`** to pick it up.
+>
+> The prefilled interface IP is the address the neighbour **advertises** over
+> LLDP — it is shown to you in the detail panel before you create the host, and
+> treated as a manually chosen value, not verified server-side against discovery.
+> Review it (and the community) before saving. Host creation itself needs the
+> Zabbix *Hosts* configuration role right, same as the native host form.
 
 ---
 

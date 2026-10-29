@@ -9,7 +9,7 @@
 #
 # WARUM DIESES SKRIPT
 # -------------------
-# Der nackte Walk steht in LLDP-SETUP.md und ist eine Zeile lang. Das Problem
+# Der nackte Walk steht in docs/LLDP-SETUP.md und ist eine Zeile lang. Das Problem
 # ist nicht der Aufruf, sondern die leere Antwort: sie kann DREI voellig
 # verschiedene Dinge heissen, und die Verwechslung kostet Nachmittage.
 #
@@ -47,6 +47,13 @@ readonly OID_SYSDESCR='1.3.6.1.2.1.1.1.0'
 readonly OID_LLDP_LOC='1.0.8802.1.1.2.1.3.3.0'        # lldpLocSysName
 readonly OID_LLDP_REM='1.0.8802.1.1.2.1.4.1.1.9'      # lldpRemSysName
 readonly OID_CDP_REM='1.3.6.1.4.1.9.9.23.1.2.1.1.6'   # cdpCacheDeviceId
+# Zwei Spalten, die das Modul HEUTE NICHT holt (lldpRemChassisIdSubtype und
+# lldpRemManAddr fehlen in allen Templates, s. LldpEdgeBuilder.php). Lohnt sich
+# das Erheben? Der Subtype (.4) sagt, ob die Chassis-ID eine MAC/IP/ein Name ist;
+# die Management-Adresse (eigene Tabelle) wuerde Geister per IP aufloesen. Beides
+# ist aber OPTIONAL im Standard — deshalb hier erst MESSEN, ob Geraete es fuellen.
+readonly OID_LLDP_CHSUB='1.0.8802.1.1.2.1.4.1.1.4'    # lldpRemChassisIdSubtype
+readonly OID_LLDP_MANADDR='1.0.8802.1.1.2.1.4.2.1.3'  # lldpRemManAddrIfSubtype (eine Zeile je Mgmt-Adresse)
 
 if [[ -t 1 ]]; then C_OK=$'\e[32m'; C_ERR=$'\e[31m'; C_WARN=$'\e[33m'; C_DIM=$'\e[2m'; C_RST=$'\e[0m'
 else C_OK=""; C_ERR=""; C_WARN=""; C_DIM=""; C_RST=""; fi
@@ -111,6 +118,10 @@ REM="$(walk "$OID_LLDP_REM")"
 CDP="$(walk "$OID_CDP_REM")"
 n_rem="$(count "$REM")"
 n_cdp="$(count "$CDP")"
+# Nur ZAEHLEN, nie den Wert ausgeben: die Chassis-ID und die Management-Adresse
+# gehoeren fremden Geraeten und haben im teilbaren Block nichts zu suchen.
+n_chsub="$(count "$(walk "$OID_LLDP_CHSUB")")"
+n_man="$(count "$(walk "$OID_LLDP_MANADDR")")"
 
 # ── Befund ───────────────────────────────────────────────────────────────
 if [[ "$n_rem" -gt 0 ]]; then
@@ -130,6 +141,15 @@ else
     hint="The device answers sysDescr but does not hand out the LLDP MIB -- typically a restricted SNMP view. On Huawei VRP: 'snmp-agent mib-view include iso-view iso' and 'snmp-agent community read <community> mib-view iso-view'. Other vendors: widen the view accordingly."
 fi
 [[ "$n_cdp" -gt 0 ]] && echo "  ${C_DIM}i${C_RST} plus $n_cdp CDP neighbour(s) (Cisco proprietary)."
+# Die zwei noch-nicht-erhobenen Spalten: nur fuer die Baubarkeits-Frage.
+if [[ "$n_rem" -gt 0 ]]; then
+    [[ "$n_chsub" -gt 0 ]] \
+        && echo "  ${C_DIM}i${C_RST} chassis-id subtype present ($n_chsub) -- typing the id would be reliable." \
+        || echo "  ${C_DIM}i${C_RST} chassis-id subtype absent -- id stays untyped."
+    [[ "$n_man" -gt 0 ]] \
+        && echo "  ${C_OK}v${C_RST} neighbours advertise ${C_OK}$n_man mgmt address(es)${C_RST} (lldpRemManAddr) -- ghost-by-IP resolution is feasible here." \
+        || echo "  ${C_WARN}!${C_RST} no lldpRemManAddr advertised -- ghost-by-IP would get nothing from this device."
+fi
 
 echo
 echo "${C_DIM}--- copy from here ------------------------------------------${C_RST}"
@@ -143,6 +163,8 @@ cat <<REPORT
 | LLDP MIB visible | $([[ -n "$LOC" || "$n_rem" -gt 0 ]] && echo yes || echo "**no -- SNMP view**") |
 | Neighbours in \`lldpRemSysName\` | $n_rem |
 | CDP neighbours | $n_cdp |
+| Chassis-id subtype rows (.4) | $n_chsub |
+| Mgmt addresses advertised (lldpRemManAddr) | $n_man |
 | Verdict | **$verdict** ($snmp_col) |
 
 sysDescr (straight from the device -- please read it before posting):

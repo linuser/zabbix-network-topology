@@ -56,6 +56,9 @@ readonly TMP_HEALTH="$LOCAL_TMP/network_topology_health_widget.zip"
 readonly TMP_TABLE="$LOCAL_TMP/network_topology_table_widget.zip"
 readonly TMP_KPI="$LOCAL_TMP/network_topology_kpi_widget.zip"
 readonly TMP_ITEMS="$LOCAL_TMP/network_topology_items_widget.zip"
+readonly TMP_FACE="$LOCAL_TMP/network_topology_faceplate_widget.zip"
+readonly TMP_PLAN="$LOCAL_TMP/network_topology_plan_widget.zip"
+readonly TMP_WLAN="$LOCAL_TMP/network_topology_wlan_widget.zip"
 # Remote-Pfade stehen erst fest, wenn die SSH-Verbindung steht (s.u.).
 REMOTE_DIR=""
 
@@ -130,6 +133,9 @@ readonly REMOTE_HEALTH="$REMOTE_DIR/network_topology_health_widget.zip"
 readonly REMOTE_TABLE="$REMOTE_DIR/network_topology_table_widget.zip"
 readonly REMOTE_KPI="$REMOTE_DIR/network_topology_kpi_widget.zip"
 readonly REMOTE_ITEMS="$REMOTE_DIR/network_topology_items_widget.zip"
+readonly REMOTE_FACE="$REMOTE_DIR/network_topology_faceplate_widget.zip"
+readonly REMOTE_PLAN="$REMOTE_DIR/network_topology_plan_widget.zip"
+readonly REMOTE_WLAN="$REMOTE_DIR/network_topology_wlan_widget.zip"
 
 # ── Remote-Umgebung autodetecten ───────────────────────────────────────────
 echo "→ Autodetect PHP-FPM-Service + Zabbix-UI-Pfad auf $SERVER"
@@ -237,13 +243,14 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     # 'tools' und 'templates' bleiben absichtlich draussen. Das Zielverzeichnis
     # liegt unter dem Web-Root und ist oeffentlich abrufbar — siehe die
     # Source-Map-Notiz oben. Sender-Skript und Template-YAMLs werden zur
-    # Laufzeit nicht gebraucht, also gehoeren sie da nicht hin. INSTALL.md
+    # Laufzeit nicht gebraucht, also gehoeren sie da nicht hin. docs/INSTALL.md
     # Schritt 4 verweist dafuer auf das Repository; wer hier einen Ausschluss
     # loest, muss dort nachziehen.
     rsync -a \
         --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
         --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
-        --exclude 'widget_kpi' --exclude 'widget_items' \
+        --exclude 'widget_kpi' --exclude 'widget_items' --exclude 'widget_faceplate' \
+        --exclude 'widget_plan' --exclude 'widget_wlan' \
         --exclude '.github' --exclude 'screenshots' --exclude 'dashboards' \
         --exclude 'tools' --exclude 'templates' \
         --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
@@ -259,17 +266,23 @@ if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
     echo "  → $TMP_MAIN ($(du -h "$TMP_MAIN" | cut -f1))"
 fi
 if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
-    rm -f "$TMP_WIDGET" "$TMP_HEALTH" "$TMP_TABLE" "$TMP_KPI" "$TMP_ITEMS"
+    rm -f "$TMP_WIDGET" "$TMP_HEALTH" "$TMP_TABLE" "$TMP_KPI" "$TMP_ITEMS" "$TMP_FACE" "$TMP_PLAN" "$TMP_WLAN"
     (cd "$SCRIPT_DIR/widget"        && zip -rq "$TMP_WIDGET" .)
     (cd "$SCRIPT_DIR/widget_health" && zip -rq "$TMP_HEALTH" .)
     (cd "$SCRIPT_DIR/widget_table"  && zip -rq "$TMP_TABLE" .)
     (cd "$SCRIPT_DIR/widget_kpi"    && zip -rq "$TMP_KPI" .)
     (cd "$SCRIPT_DIR/widget_items"  && zip -rq "$TMP_ITEMS" .)
+    (cd "$SCRIPT_DIR/widget_faceplate" && zip -rq "$TMP_FACE" .)
+    (cd "$SCRIPT_DIR/widget_plan"   && zip -rq "$TMP_PLAN" .)
+    (cd "$SCRIPT_DIR/widget_wlan"   && zip -rq "$TMP_WLAN" .)
     echo "  → $TMP_WIDGET ($(du -h "$TMP_WIDGET" | cut -f1))"
     echo "  → $TMP_HEALTH ($(du -h "$TMP_HEALTH" | cut -f1))"
     echo "  → $TMP_TABLE ($(du -h "$TMP_TABLE" | cut -f1))"
     echo "  → $TMP_KPI ($(du -h "$TMP_KPI" | cut -f1))"
     echo "  → $TMP_ITEMS ($(du -h "$TMP_ITEMS" | cut -f1))"
+    echo "  → $TMP_FACE ($(du -h "$TMP_FACE" | cut -f1))"
+    echo "  → $TMP_PLAN ($(du -h "$TMP_PLAN" | cut -f1))"
+    echo "  → $TMP_WLAN ($(du -h "$TMP_WLAN" | cut -f1))"
 fi
 
 # ── SCP zum Server ─────────────────────────────────────────────────────────
@@ -281,6 +294,9 @@ if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
     scp -q "${SSH_OPTS[@]}" -- "$TMP_TABLE"  "$SERVER:$REMOTE_TABLE"
     scp -q "${SSH_OPTS[@]}" -- "$TMP_KPI"    "$SERVER:$REMOTE_KPI"
     scp -q "${SSH_OPTS[@]}" -- "$TMP_ITEMS"  "$SERVER:$REMOTE_ITEMS"
+    scp -q "${SSH_OPTS[@]}" -- "$TMP_FACE"   "$SERVER:$REMOTE_FACE"
+    scp -q "${SSH_OPTS[@]}" -- "$TMP_PLAN"   "$SERVER:$REMOTE_PLAN"
+    scp -q "${SSH_OPTS[@]}" -- "$TMP_WLAN"   "$SERVER:$REMOTE_WLAN"
 fi
 
 # ── Installieren auf dem Server ────────────────────────────────────────────
@@ -301,6 +317,9 @@ R_HEALTH="$REMOTE_HEALTH"
 R_TABLE="$REMOTE_TABLE"
 R_KPI="$REMOTE_KPI"
 R_ITEMS="$REMOTE_ITEMS"
+R_FACE="$REMOTE_FACE"
+R_PLAN="$REMOTE_PLAN"
+R_WLAN="$REMOTE_WLAN"
 cd "$REMOTE_MODULES"
 
 # SELinux-Kontext wiederherstellen (RHEL/Rocky/Alma, Fedora).
@@ -330,8 +349,24 @@ nt_restorecon() {
 $([[ "$MODE" == "main" || "$MODE" == "all" ]] && cat <<'MAIN'
 STAGE=$(mktemp -d /tmp/nt_stage.XXXXXX)
 sudo unzip -q "$R_MAIN" -d "$STAGE"
-sudo rm -rf network_topology
-sudo mv "$STAGE/network_topology" network_topology
+# Tausch MIT Rollback: das alte Modul erst beiseitelegen (mv, kein rm), dann das
+# neue einsetzen. Scheitert das Einsetzen, kommt das alte zurueck — nie steht der
+# Web-Root ohne Modul da (Security-Review). mv im selben Verzeichnis ist ein
+# Rename, praktisch unteilbar. Kein "x && y" als Statement: set -e wuerde bei
+# falscher Bedingung das Skript beenden.
+BACKUP="network_topology.bak.$$"
+if [ -e network_topology ]; then
+    sudo rm -rf "$BACKUP"
+    sudo mv network_topology "$BACKUP"
+fi
+if sudo mv "$STAGE/network_topology" network_topology; then
+    if [ -e "$BACKUP" ]; then sudo rm -rf "$BACKUP"; fi
+else
+    echo "  ! network_topology: Einspielen fehlgeschlagen — Rollback auf die vorige Version" >&2
+    if [ -e "$BACKUP" ]; then sudo rm -rf network_topology; sudo mv "$BACKUP" network_topology; fi
+    sudo rm -rf "$STAGE"
+    exit 1
+fi
 sudo rm -rf "$STAGE"
 sudo chown -R root:root network_topology
 nt_restorecon network_topology
@@ -351,15 +386,37 @@ sudo unzip -q "$R_HEALTH" -d "$STAGE_W/network_topology_health_widget"
 sudo unzip -q "$R_TABLE"  -d "$STAGE_W/network_topology_table_widget"
 sudo unzip -q "$R_KPI"    -d "$STAGE_W/network_topology_kpi_widget"
 sudo unzip -q "$R_ITEMS"  -d "$STAGE_W/network_topology_items_widget"
-sudo rm -rf network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget network_topology_items_widget
-sudo mv "$STAGE_W/network_topology_widget" network_topology_widget
-sudo mv "$STAGE_W/network_topology_health_widget" network_topology_health_widget
-sudo mv "$STAGE_W/network_topology_table_widget" network_topology_table_widget
-sudo mv "$STAGE_W/network_topology_kpi_widget" network_topology_kpi_widget
-sudo mv "$STAGE_W/network_topology_items_widget" network_topology_items_widget
+sudo unzip -q "$R_FACE"   -d "$STAGE_W/network_topology_faceplate_widget"
+sudo unzip -q "$R_PLAN"   -d "$STAGE_W/network_topology_plan_widget"
+sudo unzip -q "$R_WLAN"   -d "$STAGE_W/network_topology_wlan_widget"
+NT_WIDGETS=(network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget network_topology_items_widget network_topology_faceplate_widget network_topology_plan_widget network_topology_wlan_widget)
+# Alte Widgets beiseitelegen (mv, kein rm), dann die neuen einsetzen. Scheitert
+# ein mv, werden ALLE auf die vorige Version zurueckgerollt — nie bleibt eine
+# halb getauschte Widget-Reihe stehen (Security-Review).
+for w in "${NT_WIDGETS[@]}"; do
+    if [ -e "$w" ]; then sudo rm -rf "$w.bak.$$"; sudo mv "$w" "$w.bak.$$"; fi
+done
+w_ok=1
+for w in "${NT_WIDGETS[@]}"; do
+    if ! sudo mv "$STAGE_W/$w" "$w"; then
+        echo "  ! $w: Einspielen fehlgeschlagen" >&2
+        w_ok=0
+        break
+    fi
+done
+if [ "$w_ok" = "1" ]; then
+    for w in "${NT_WIDGETS[@]}"; do if [ -e "$w.bak.$$" ]; then sudo rm -rf "$w.bak.$$"; fi; done
+else
+    echo "  ! Rollback der Widgets auf die vorige Version" >&2
+    for w in "${NT_WIDGETS[@]}"; do
+        if [ -e "$w.bak.$$" ]; then sudo rm -rf "$w"; sudo mv "$w.bak.$$" "$w"; fi
+    done
+    sudo rm -rf "$STAGE_W"
+    exit 1
+fi
 sudo rm -rf "$STAGE_W"
-sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget network_topology_items_widget
-nt_restorecon network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget network_topology_items_widget
+sudo chown -R root:root network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget network_topology_items_widget network_topology_faceplate_widget network_topology_plan_widget network_topology_wlan_widget
+nt_restorecon network_topology_widget network_topology_health_widget network_topology_table_widget network_topology_kpi_widget network_topology_items_widget network_topology_faceplate_widget network_topology_plan_widget network_topology_wlan_widget
 # Migration 4.x -> 5.0: siehe oben, gilt genauso fuer die drei Widgets.
 for legacy in network_topology_v6_widget network_topology_v6_health_widget network_topology_v6_table_widget; do
     if [ -d "$legacy" ]; then
@@ -387,6 +444,9 @@ Naechste Schritte in der Zabbix-UI:
        Network Topology for Zabbix — Table Widget      NT Table
        Network Topology for Zabbix — KPI Widget        NT KPI
        Network Topology for Zabbix — Items Widget      NT Items
+       Network Topology for Zabbix — Faceplate Widget  NT Faceplate
+       Network Topology for Zabbix — Plan Widget        NT Plan
+       Network Topology for Zabbix — WLAN Widget        NT WLAN
   3. Aufruf via Monitoring → Network Topology for Zabbix
 
 Kam der Server von 4.x, hat dieses Skript die alten network_topology_v6*-

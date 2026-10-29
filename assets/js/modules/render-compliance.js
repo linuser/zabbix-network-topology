@@ -15,6 +15,7 @@
 //   no_template      schlecht  — Host hat keinen Parent-Template
 //   stale_problem    schlecht  — krit. Problem (sev>=4) > 7 Tage offen
 //   mtnc_no_comment  info      — Maintenance aktiv aber description leer
+//   fw_drift         schlecht  — Firmware weicht von der Modell-Mehrheit ab
 //
 // "schlecht" zaehlt fuer den UI-Filter "nur Issues", "info" und "neutral"
 // nicht. Aggregat-Counter sind unabhaengig — zaehlen wie viele Hosts
@@ -36,6 +37,7 @@ export const COMPLIANCE_CHECKS = [
     { key: 'no_template',     lbl: t('compliance.check.no_template'),    short: 'no Tpl',  level: 'bad'  },
     { key: 'stale_problem',   lbl: t('compliance.check.stale_problem'), short: 'stale', level: 'bad'  },
     { key: 'mtnc_no_comment', lbl: t('compliance.check.mtnc_no_comment'), short: 'mtnc?', level: 'info' },
+    { key: 'fw_drift',        lbl: t('compliance.check.fw_drift'),     short: 'fw≠',   level: 'bad'  },
 ];
 const CHECKS = COMPLIANCE_CHECKS;
 
@@ -125,7 +127,15 @@ function _hostTable(hosts, theme) {
         html += '<tr style="border-bottom:1px solid ' + theme.borderSoft + '">'
             + '<td style="padding:5px 12px"><b>' + esc(h.label || h.host || '') + '</b></td>';
         CHECKS.forEach(function(c) {
-            html += '<td style="padding:5px 8px;text-align:center;font-size:14px">'
+            // Firmware-Abweichung traegt ein Detail ("laeuft X, N× Modell auf Y").
+            // Geraetedaten -> ueber esc in das title-Attribut.
+            var title = '';
+            if (c.key === 'fw_drift' && h.checks && h.checks.fw_drift && h.fw) {
+                title = ' title="' + esc(t('compliance.fw.detail', {
+                    fw: h.fw.fw, n: h.fw.n, model: h.fw.model, exp: h.fw.expected
+                })) + '"';
+            }
+            html += '<td' + title + ' style="padding:5px 8px;text-align:center;font-size:14px">'
                 + _checkSymbol(c, !!h.checks[c.key]) + '</td>';
         });
         html += '</tr>';

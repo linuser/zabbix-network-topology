@@ -29,6 +29,13 @@ const VIER = [
     'widget_health/assets/js/widget.class.js',
     'widget_table/assets/js/widget.class.js',
     'widget_kpi/assets/js/widget.class.js',
+    // widget_plan nutzt alle drei geteilten Bloecke (NtWidgetData fuer die
+    // Knoten-Severity, NtFetchJson fuer den Plan-Endpunkt, NtTheme fuer spaetere
+    // Dark-Mode-Feinheiten). Der Name VIER ist damit historisch — fuenf Ziele.
+    'widget_plan/assets/js/widget.class.js',
+    // widget_wlan liest die Knoten ueber NtWidgetData und braucht NtTheme fuers
+    // Dashboard-Theme — ebenfalls alle drei Bloecke.
+    'widget_wlan/assets/js/widget.class.js',
 ];
 // Zwei Bloecke, verschiedene Ziele: NtFetchJson braucht auch widget_items
 // (eigene Action, derselbe 504), NtWidgetData ist auf network.topology.data
@@ -38,7 +45,9 @@ const VIER = [
 // waeren zwei Stellen, an denen sich die Blockgrenze verschieben kann.
 const BLOCKS = [
     { name: 'NtFetchJson',  re: /if \(!window\.NtFetchJson\) \{[\s\S]*?\n\}\n/,
-      ziele: [...VIER, 'widget_items/assets/js/widget.class.js'] },
+      ziele: [...VIER, 'widget_items/assets/js/widget.class.js', 'widget_faceplate/assets/js/widget.class.js'] },
+    { name: 'NtTheme',      re: /if \(!window\.NtTheme\) \{[\s\S]*?\n\}\n/,
+      ziele: [...VIER, 'widget_items/assets/js/widget.class.js', 'widget_faceplate/assets/js/widget.class.js'] },
     { name: 'NtWidgetData', re: /if \(!window\.NtWidgetData\) \{[\s\S]*?\n\}\n/,
       ziele: VIER },
 ];
@@ -62,8 +71,25 @@ for (const { name, re, ziele } of BLOCKS) {
         const alt = readFileSync(pfad, 'utf8');
         const treffer = alt.match(re);
         if (!treffer) {
-            console.error(`✗ ${rel}: ${name}-Block nicht gefunden`);
-            process.exit(1);
+            // Ein neuer geteilter Block existiert anfangs in keiner Widget-Datei.
+            // Einmalig VOR der Widget-Klasse einfuegen (mit Marke); danach
+            // ersetzt der Lauf ihn wie die uebrigen. In --pruefen nicht
+            // einfuegen, sondern als Abweichung melden.
+            if (pruefen) {
+                abweichend++;
+                console.error(`✗ ${rel}: ${name}-Block fehlt`);
+                continue;
+            }
+            const stelle = alt.search(/\nclass [A-Za-z]/);
+            if (stelle === -1) {
+                console.error(`✗ ${rel}: kein Platz zum Einfuegen von ${name} (keine Widget-Klasse gefunden)`);
+                process.exit(1);
+            }
+            const eingefuegt = alt.slice(0, stelle + 1) + MARKE + block + '\n' + alt.slice(stelle + 1);
+            writeFileSync(pfad, eingefuegt);
+            geschrieben++;
+            console.log(`  → ${rel} (${name}, neu eingefuegt)`);
+            continue;
         }
         // Marke direkt ueber dem Block, aber AUSSERHALB davon: sie darf den
         // Vergleich nicht veraendern. Pro Block pruefen, nicht pro Datei —

@@ -1,0 +1,19 @@
+{
+  "name": "port-normalization-short-long",
+  "vendor": "Cisco-style short/long port names (synthetic)",
+  "source": "hand-built",
+  "description": "The neighbour reports its port as the long form (GigabitEthernet1/0/1); the host knows it as the short form (Gi1/0/1). Normalisation still matches, with match type 'normalized'.",
+  "hosts": {
+    "sw": {"host": "sw-p", "name": "Switch P"},
+    "nb": {"host": "nb-p", "name": "Neighbour P"}
+  },
+  "lldp_raw": [
+    {"hostid": "sw", "key_": "lldpRemSysName[3]", "lastvalue": "nb-p", "src": "lldp"}
+  ],
+  "lldp_ports": { "sw": { "3": {"desc": "GigabitEthernet1/0/1"} } },
+  "port_names": { "nb": {"7": "Gi1/0/1"}, "sw": {"3": "Gi1/0/3"} },
+  "expect": {
+    "edges": [{"a": "sw", "b": "nb"}],
+    "ports": [{"a": "sw", "b": "nb", "match": "normalized"}]
+  }
+}

@@ -29,10 +29,13 @@
 // querySelectorAll('button[data-act]') wieder eingesammelt — ein Umweg, den
 // es nur gab, weil die Knöpfe zwischendurch Text waren.
 
-import { el, fmt, fmtItemValue, hostEditUrl } from './utils.js';
+import { el, fmt, fmtItemValue, hostEditUrl, isDark } from './utils.js';
+import { fetchJson } from './http.js';
+import { buildFaceplateSvg } from './faceplate-svg.js';
 import { SEV_COL, SEV_LBL, statusLabel, statusColor } from './severity.js';
 import { meta as qualiMeta, QUALITY } from './quality.js';
 import { herstellerVon } from './oui.js';
+import { businessplanGlyph } from './icons.js';
 import { t } from './i18n.js';
 
 // Mapping von Backend-Type-String zu deutschem Label + Emoji-Icon.
@@ -48,6 +51,7 @@ const TYPE_INFO = {
     hypervisor: { lbl: 'Hypervisor',   icon: '\u{1F9F1}', col: '#7c2d12' },  // 🧱
     camera:     { lbl: t('detail.type.camera'),  icon: '\u{1F4F7}', col: '#71717a' },  // 📷
     printer:    { lbl: t('detail.type.printer'), icon: '\u{1F5A8}',  col: '#52525b' },  // 🖨
+    client:     { lbl: t('detail.type.client'),  icon: '\u{1F4BB}', col: '#0ea5e9' },  // 💻
     ups:        { lbl: t('detail.type.ups'),     icon: '\u{1F50B}', col: '#16a34a' },  // 🔋
     homeauto:   { lbl: 'Smart Home',   icon: '\u{1F3E0}', col: '#ea580c' },  // 🏠
     mailserver: { lbl: 'Mail-Server',  icon: '\u{2709}\u{FE0F}',  col: '#7c3aed' },  // ✉️
@@ -219,6 +223,53 @@ export function showDetail(panel, d, cy) {
         badges.push(chip('background:rgba(245,158,11,0.13);color:var(--nt-warn-text);',
             '\u{1F527} ' + t('detail.badge.maintenance')));
     }
+    // STP instabil: Spanning-Tree konvergiert staendig neu (Loop-Fruehwarnung).
+    if (d._stpChurn) {
+        badges.push(chip('background:rgba(217,119,6,0.14);color:var(--nt-warn-text);',
+            '⚠ ' + t('detail.badge.stpchurn')
+            + (d._stpChurnRate != null ? ' (' + d._stpChurnRate + '/s)' : '')));
+    }
+    // Broadcast-Storm: aktiver Loop JETZT (lautester Port flutet).
+    if (d._bcastStorm) {
+        badges.push(chip('background:rgba(220,38,38,0.14);color:var(--nt-crit-text);',
+            '⚠ ' + t('detail.badge.bcaststorm')
+            + (d._bcastRate != null ? ' (' + d._bcastRate + ' pkt/s)' : '')));
+    }
+    // MAC-Flapping: MACs wechseln den Port (Loop).
+    if (d._macFlap) {
+        badges.push(chip('background:rgba(220,38,38,0.14);color:var(--nt-crit-text);',
+            '⚠ ' + t('detail.badge.macflap')
+            + (d._macFlapN != null ? ' (' + d._macFlapN + ')' : '')));
+    }
+    // STP blockt: ein Port ist per Spanning-Tree geblockt. Meist normale
+    // Redundanz (RSTP sperrt einen Ring-Zweig) — aber der einzige Hinweis auf
+    // einen per STP gefangenen Selbst-Loop (Kabel auf denselben Switch), der
+    // KEINE Kante bildet und sich sonst nirgends zeigt. Neutral cyan: STP wirkt.
+    if (d._stpBlock) {
+        badges.push(chip('background:rgba(8,145,178,0.15);color:var(--nt-text-2,#0e7490);',
+            '⊘ ' + t('detail.badge.stpblock')));
+    }
+    // SLA-relevant: ein aktives Problem dieses Hosts haengt an einem
+    // Zabbix-Service (zahlt auf eine SLA-Zusage ein). Eigene Farbe (Magenta) und
+    // der businessplan-Glyph — dieselbe Aussage wie die KPI-Pille, hier mit dem
+    // betroffenen Service-Namen, der oben keinen Platz hat.
+    if (d.sla_relevant && Array.isArray(d.sla_services) && d.sla_services.length) {
+        const slaCol = isDark() ? '#f472b6' : '#be185d';
+        const svcs = d.sla_services;
+        const first = (svcs[0] && svcs[0].service) ? String(svcs[0].service) : '';
+        const slo = (svcs[0] && svcs[0].slo != null) ? svcs[0].slo : null;
+        // Text: Service-Name (+ ggf. "+N" fuer weitere) und das SLA-Ziel, wenn
+        // bekannt. Namen koennen von ueberall kommen → textContent, kein Markup.
+        let txt = first + (svcs.length > 1 ? ' (+' + (svcs.length - 1) + ')' : '');
+        if (slo != null) txt += ' · ' + slo + '%';
+        const b = el('span', 'background:rgba(190,24,93,0.12);color:' + slaCol + ';'
+            + 'font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px;'
+            + 'display:inline-flex;align-items:center;gap:4px');
+        b.appendChild(businessplanGlyph(slaCol, 12));
+        b.appendChild(document.createTextNode(t('detail.badge.sla') + ': ' + txt));
+        b.setAttribute('title', t('detail.badge.sla.tip'));
+        badges.push(b);
+    }
     if (d.acknowledged) {
         badges.push(chip('background:rgba(34,197,94,0.13);color:var(--nt-ok-text);',
             '✔ Acked'));
@@ -257,6 +308,12 @@ export function showDetail(panel, d, cy) {
             (d._ghostSrc || []).join(', ').toUpperCase() || '—'));
         identitaet.push(idRow(t('detail.ghost.seen_by'),
             (d._ghostSeenBy || []).join(', ') || '—'));
+        // Die Management-IP, die der Nachbar selbst ausstrahlt (lldpRemManAddr).
+        // Bei einem Geist die handfesteste Angabe — damit laesst er sich
+        // anpingen oder zum Host machen. Steht deshalb weit oben.
+        if (d._ghostMgmtIp) {
+            identitaet.push(idRow(t('detail.ghost.mgmt'), d._ghostMgmtIp));
+        }
         if (d._ghostChassis) {
             identitaet.push(idRow('MAC', d._ghostChassis));
             // HERSTELLER AUS DER MAC — ohne eine einzige neue Abfrage: die
@@ -397,7 +454,11 @@ export function showDetail(panel, d, cy) {
             const eigener = edge.data('source') === d.id ? edge.data('portSrc') : edge.data('portTgt');
             const drueben = edge.data('source') === d.id ? edge.data('portTgt') : edge.data('portSrc');
             const zeile = el('span');
-            zeile.appendChild(tx('↔ ' + other.data('label')));
+            // UniFi-Funkverbindung mit dem WLAN-Glyph markieren -- so liest sich
+            // in der Verbindungsliste eines Clients sofort, dass er per WLAN am
+            // AP haengt (statt dem ↔ einer Kabelverbindung).
+            const istWlan = edge.data('_unifiWireless');
+            zeile.appendChild(tx((istWlan ? '📶 ' : '↔ ') + other.data('label')));
             if (eigener || drueben) {
                 zeile.appendChild(el('span', 'color:var(--nt-muted);font-size:10px',
                     (eigener ? ' ' + eigener : '') + (drueben ? ' → ' + drueben : '')));
@@ -578,6 +639,85 @@ export function showDetail(panel, d, cy) {
         fuege(panel, section(t('detail.sec.metrics')), ringBlock);
         metriken.forEach(function(r) { panel.appendChild(r); });
         fuege(panel, extraBlock);
+    }
+
+    // Faceplate: bei einem Switch die Frontblende inline. Lazy per Fetch der
+    // network.topology.faceplate-Action (ein Host, guenstig) -- nur echter
+    // Switch-Typ, kein Geist. Der Fetch haengt an einem lokalen Container; wird
+    // waehrenddessen ein anderer Host gewaehlt, leert showDetail das Panel (538)
+    // und das Ergebnis landet auf einem detachten Element -- ohne Schaden.
+    if (!istGeist && d.type === 'switch' && d.id) {
+        panel.appendChild(section(t('detail.sec.faceplate')));
+        const fpBody = el('div', 'margin-bottom:2px');
+        fpBody.appendChild(el('div', 'font-size:11px;color:var(--nt-muted);padding:4px 0',
+            t('detail.faceplate.loading')));
+        panel.appendChild(fpBody);
+        const fpMsg = function(text) {
+            fpBody.textContent = '';
+            fpBody.appendChild(el('div', 'font-size:11px;color:var(--nt-muted);padding:4px 0', text));
+        };
+        fetchJson(zbxOrigin + 'zabbix.php?action=network.topology.faceplate&hostid=' + hostId)
+            .then(function(data) {
+                if (data && !data.error && data.ports && data.ports.length) {
+                    fpBody.textContent = '';
+                    fpBody.appendChild(buildFaceplateSvg(data, isDark(), zbxBase));
+                }
+                else {
+                    fpMsg((data && data.error) ? String(data.error) : t('detail.faceplate.empty'));
+                }
+            })
+            .catch(function(e) { fpMsg((e && e.message) || t('detail.faceplate.empty')); });
+    }
+
+    // WLAN: bei einem UniFi-AP (type wireless) die Funkmodule je Band und die
+    // Client-Zahl. Kanal/Standard/Breite aus der UniFi-Integration-API (radio.*),
+    // Client-Zahl (wlan.clients) und Funkauslastung (wlan.cu[band], Prozent) aus
+    // der klassischen Controller-API — seit 5.5.83 alles am AP-Host selbst.
+    if (!istGeist && d.type === 'wireless'
+            && (d.radios || typeof d.wlan_clients === 'number' || (d.ssids && d.ssids.length)
+                || typeof d.wlan_satisfaction === 'number')) {
+        panel.appendChild(section(t('detail.sec.wlan')));
+        if (typeof d.wlan_clients === 'number') {
+            panel.appendChild(idRow(t('detail.wlan.clients'),
+                el('b', '', String(d.wlan_clients))));
+        }
+        // Satisfaction (UniFi-Erlebnisscore 0..100), nach Schwelle gefaerbt. Der
+        // eigentliche Alarm kommt aus einem Zabbix-Trigger darauf (faerbt den
+        // Knoten); hier steht nur der Wert.
+        if (typeof d.wlan_satisfaction === 'number') {
+            var sv = d.wlan_satisfaction;
+            // Schwellen/Farben mit widget_wlan (_render, Sat-Zelle) SYNCHRON halten
+            // — kein ci:parity darauf, bei Aenderung beide Seiten anfassen.
+            var svc = sv >= 70 ? '#22c55e' : (sv >= 40 ? '#f97316' : '#ef4444');
+            panel.appendChild(idRow(t('detail.wlan.sat'), el('b', 'color:' + svc, sv + '%')));
+        }
+        // Ausgestrahlte SSIDs (wlan.ssids), nach Name zusammengefasst, Clients
+        // ueber beide Baender summiert. SSID-Name aus fremder Hand -> idRow setzt
+        // ihn per textContent (XSS-sicher). Gast-SSIDs gekennzeichnet.
+        if (d.ssids && d.ssids.length) {
+            d.ssids.forEach(function(s) {
+                var name = (s && s.ssid != null) ? String(s.ssid) : '';
+                if (!name) return;
+                if (s && s.guest) name += ' · ' + t('detail.wlan.guest');
+                panel.appendChild(idRow(name,
+                    el('b', '', String((s && typeof s.clients === 'number') ? s.clients : 0))));
+            });
+        }
+        if (d.radios) {
+            // Baender aufsteigend: "2.4" vor "5". Je Band "Ch X · Y MHz · STD".
+            Object.keys(d.radios).sort(function(a, b) { return parseFloat(a) - parseFloat(b); })
+                .forEach(function(band) {
+                    const r = d.radios[band] || {};
+                    const teile = [];
+                    if (r.channel != null) teile.push(t('detail.wlan.ch') + ' ' + r.channel);
+                    if (r.width)           teile.push(r.width + ' MHz');
+                    if (r.std)             teile.push(r.std);
+                    if (r.cu != null)      teile.push(t('detail.wlan.cu') + ' ' + r.cu + '%');
+                    if (r.retr != null)    teile.push(t('detail.wlan.retr') + ' ' + r.retr + '%');
+                    panel.appendChild(idRow(band + ' GHz',
+                        el('span', 'color:var(--nt-text-2)', teile.join(' · ') || '—')));
+                });
+        }
     }
 
     if (peers.length) {

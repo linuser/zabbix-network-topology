@@ -38,7 +38,7 @@ final class LldpEdgeBuilder {
      * @param array $lldp_ports    §3: hostid => [snmpindex => ['id'?, 'desc'?]] (Remote-Port)
      * @param array $port_traffic  §3b: hostid => [ifIndex => ['in'=>bps,'out'=>bps]]
      * @param array $port_speed    §3b: hostid => [ifIndex => bps] (Auslastungs-Divisor)
-     * @param array $lldp_meta     §5: hostid => [snmpindex => ['desc','caps','chassis']]
+     * @param array $lldp_meta     §5: hostid => [snmpindex => ['desc','caps','chassis','chassis_subtype','mgmt_ip']]
      *                             Zusatzangaben ueber den Nachbarn — nur bei NICHT
      *                             ueberwachten von Belang, dort ist sonst nur der
      *                             Name bekannt.
@@ -119,7 +119,8 @@ final class LldpEdgeBuilder {
             array $lldp_ports = [], array $port_traffic = [], array $port_speed = [],
             array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
             array $port_names = [], array $rtt = [], array $port_status = [],
-            array $port_uptime = []): array {
+            array $port_uptime = [], array $port_stp = [],
+            array $host_self_mac = [], array $uplink_rate = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         self::$truncated = 0;
 
@@ -334,8 +335,22 @@ final class LldpEdgeBuilder {
                 // Kanten zu Switches, die nichts miteinander zu tun haben.
                 $mac = $rhid ? null : self::macForm($neighbor_full);
 
+                // OPAKE HEX-ID, DIE KEINE MAC IST. Eine CDP Device-ID kann eine
+                // leerzeichengetrennte Hex-Folge sein, die NICHT sechs Byte lang
+                // ist (z.B. fuenf: "01 02 03 04 05"). macForm() oben nimmt nur
+                // 6-Byte-Formen, also faellt so eine Folge sonst in cleanNeighbor()
+                // und wird am ersten Leerzeichen auf "01" gekuerzt — und trifft
+                // unten als Kurzname einen fremden Host namens "01". Schlimmer:
+                // mehrere solche IDs fielen zu EINEM Geist "01" zusammen, demselben
+                // Phantom-Verteiler wie beim MAC-Erstbyte oben. Darum die
+                // vollstaendige Beobachtung behalten und die Namens-Fallbacks
+                // ueberspringen; ein exakter Treffer auf den vollen Rohwert (Stufe 0
+                // oben) bleibt moeglich. Gefunden im Liberamente-Fork (mmajer, PR #7).
+                $opaque_hex = $mac === null
+                    && preg_match('/^(?:[0-9a-f]{2}\s+)+[0-9a-f]{2}$/iD', $neighbor_full) === 1;
+
                 $neighbor_raw = $rhid ? $neighbor_full
-                    : ($mac !== null ? $mac : $cleanNeighbor($neighbor_full));
+                    : (($mac !== null || $opaque_hex) ? ($mac ?? $neighbor_full) : $cleanNeighbor($neighbor_full));
                 if ($neighbor_raw === '') continue;
                 $lldp_val = strtolower($neighbor_raw);
 
@@ -356,7 +371,7 @@ final class LldpEdgeBuilder {
                         $alias_mehrdeutig = array_values($mac_kandidaten);
                     }
                 }
-                if ($mac === null) {
+                if ($mac === null && !$opaque_hex) {
                     // 1. Exakter Match gegen cleaned host/visiblename/lowercase
                     if (!$rhid) {
                         $rhid = $name_map[$lldp_val] ?? null;
@@ -455,7 +470,8 @@ final class LldpEdgeBuilder {
             }
         }
 
-        self::resolveByChassis($rows, $lldp_meta);
+        self::resolveByChassis($rows, $lldp_meta, $host_self_mac);
+        self::resolveByMgmtIp($rows, $lldp_meta, $ip_map);
         self::resolveByPort($rows, $port_names);
 
         // ── Durchgang 2: Kanten, Qualitaet, Geister ───────────────────────────
@@ -510,6 +526,15 @@ final class LldpEdgeBuilder {
                         }
                         if (($m['chassis'] ?? '') !== '') {
                             $entry['chassis'] = mb_substr(trim($m['chassis']), 0, 64);
+                        }
+                        // Management-IP, die der Nachbar per LLDP ausstrahlt.
+                        // Bei einem GEIST die wertvollste Angabe: ohne Host
+                        // kennt das Modul sonst keine Adresse. Die Karte zeigt
+                        // sie im Detail-Panel, und "Host anlegen" fuellt damit
+                        // ein SNMP-Interface vor — aus dem toten Namen wird ein
+                        // abfragbares Geraet. 45 = Platz fuer eine IPv6.
+                        if (($m['mgmt_ip'] ?? '') !== '') {
+                            $entry['mgmt_ip'] = mb_substr(trim($m['mgmt_ip']), 0, 45);
                         }
                         $caps = self::decodeCaps($m['caps'] ?? '');
                         if ($caps) {
@@ -603,6 +628,32 @@ final class LldpEdgeBuilder {
                     $my_metrics ??= [];
                     $my_metrics['uptime'] = (int) $port_uptime[$rid][$pidx];
                 }
+                // STP-Zustand DIESES Ports (dot1dStpPortState, Item nt.if.stp[ifIndex]).
+                // blocking(2) heisst: der Link traegt zwar LLDP und meldet ifOperStatus
+                // "up", LEITET aber nicht weiter -- eine per Spanning-Tree geblockte
+                // Redundanz. Nur so laesst sich ein geblockter Pfad von einem aktiven
+                // unterscheiden; das Frontend dimmt/strichelt die Kante danach.
+                if (isset($port_stp[$rid][$pidx])) {
+                    $my_metrics ??= [];
+                    $my_metrics['stp'] = (int) $port_stp[$rid][$pidx];
+                }
+            }
+
+            // UniFi-Kante (uplink.id): sie traegt KEINEN lokalen Port — die
+            // Controller-API nennt nur das Eltern-GERAET —, also fand der
+            // ifIndex-Pfad oben keine Metrik. Stattdessen den geraeteweiten
+            // Uplink-Durchsatz des Melders anhaengen (uplink.rx/tx, schon bit/s):
+            // rx = empfangen = in, tx = gesendet = out. Ehrlich der Durchsatz des
+            // Kindes ueber seinen Uplink, NICHT ein Per-Port-Wert (den gibt die
+            // API nicht her). Kein speed/cap -> die Weathermap faerbt diese Kante
+            // nicht nach Auslastung, zeigt aber den Durchsatz. Nur, wenn der
+            // ifIndex-Pfad nichts fand (sonst gewinnt die echte Port-Metrik).
+            if ($src === 'unifi' && isset($uplink_rate[$rid])
+                    && !isset($my_metrics['in']) && !isset($my_metrics['out'])) {
+                $ur = $uplink_rate[$rid];
+                $my_metrics ??= [];
+                $my_metrics['in']  = round((float) ($ur['in'] ?? 0));
+                $my_metrics['out'] = round((float) ($ur['out'] ?? 0));
             }
 
             // Den gemeldeten Nachbar-Port auf ein Interface DES NACHBARN
@@ -639,6 +690,13 @@ final class LldpEdgeBuilder {
                     if (isset($port_uptime[$rhid][$fidx])) {
                         $far_metrics ??= [];
                         $far_metrics['uptime'] = (int) $port_uptime[$rhid][$fidx];
+                    }
+                    // STP auch am FERNEN Ende: meldet nur der Nachbar den
+                    // blocking-Port (asymmetrische Discovery), stuende die Kante
+                    // sonst trotzdem als aktiv da -- _isStpBlocked prueft beide Enden.
+                    if (isset($port_stp[$rhid][$fidx])) {
+                        $far_metrics ??= [];
+                        $far_metrics['stp'] = (int) $port_stp[$rhid][$fidx];
                     }
                     // Der Name, den der Nachbar SELBST fuer diesen Port fuehrt,
                     // schlaegt den angekuendigten Text: "Gi1/0/9" ist brauchbarer
@@ -838,7 +896,18 @@ final class LldpEdgeBuilder {
         if ($cidx === '') {
             return null;
         }
-        $raw = (string) ($lldp_meta[$row['rid']][$cidx]['chassis'] ?? '');
+        $meta = $lldp_meta[$row['rid']][$cidx] ?? [];
+        // lldpRemChassisIdSubtype, falls erhoben: 4 = MAC-Adresse. Ist der Subtype
+        // da und eine ANDERE Zahl (5=Netzadresse/IP, 7=lokal/Name), ist die ID
+        // keine MAC — dann NICHT als MAC aufloesen, sonst wird eine IP oder ein
+        // Name zu einer erfundenen MAC verbogen. Fehlt der Subtype (altes Template
+        // oder ein Vendor ohne die Spalte), bleibt es bei der macForm-Heuristik
+        // unten — der Weg ADDIERT also nur Sicherheit, nimmt keine weg.
+        $subtype = (string) ($meta['chassis_subtype'] ?? '');
+        if ($subtype !== '' && preg_match('/\d+/', $subtype, $mm) && (int) $mm[0] !== 4) {
+            return null;
+        }
+        $raw = (string) ($meta['chassis'] ?? '');
         $mac = $raw === '' ? null : self::macForm($raw);
         return self::macUsable($mac) ? $mac : null;
     }
@@ -847,10 +916,13 @@ final class LldpEdgeBuilder {
      * Nicht zugeordnete Zeilen ueber die Chassis-ID aufloesen.
      *
      * Die Chassis-ID ist die einzige STABILE Kennung, die LLDP ueber einen
-     * Nachbarn liefert. Welche davon zu welchem Host gehoert, lernen wir von
-     * den Zeilen, die ueber den NAMEN sicher getroffen haben und die
-     * Chassis-ID mitbringen. Meldet ein anderer Switch dasselbe Geraet nur per
-     * MAC — oder unter einem alten Namen —, ist es damit trotzdem erkannt.
+     * Nachbarn liefert. Welche davon zu welchem Host gehoert, wissen wir aus
+     * zwei Quellen: der EIGEN-Identitaet jedes ueberwachten Hosts
+     * ($host_self_mac aus lldpLocChassisId / dot1dBaseBridgeAddress), und den
+     * Zeilen, die ueber den NAMEN sicher getroffen haben und die Chassis-ID
+     * mitbringen. Meldet ein anderer Switch dasselbe Geraet nur per MAC — oder
+     * unter einem alten Namen —, ist es damit trotzdem erkannt. Der CDP-Fall
+     * (device-id = MAC, LLDP-Name leer) haengt an der Eigen-Identitaet.
      *
      * Nur sichere Namenstreffer lehren eine Chassis-ID. Ein Kurznamen-Treffer
      * kann danebenliegen, und ein Fehler hier vervielfaeltigt sich: jede
@@ -859,9 +931,31 @@ final class LldpEdgeBuilder {
      * Beanspruchen zwei Hosts dieselbe MAC (Stacks, HA-Paare mit geteilter
      * Adresse), wird sie gar nicht verwendet.
      */
-    private static function resolveByChassis(array &$rows, array $lldp_meta): void {
+    private static function resolveByChassis(array &$rows, array $lldp_meta,
+            array $host_self_mac = []): void {
         $sicher = ['exact' => true, 'exact_clean' => true, 'ip' => true];
         $map = [];   // MAC => hostid, oder null bei Widerspruch
+        // EIGEN-Identitaet zuerst: jeder ueberwachte Host kennt seine eigene
+        // MAC (lldpLocChassisId / dot1dBaseBridgeAddress). Ein Nachbar, der ihn
+        // nur per MAC nennt — Cisco CDP liefert die device-id als MAC, nicht als
+        // Name, und auf Cisco ist der LLDP-SysName oft leer — trifft damit
+        // direkt, auch wenn kein ANDERER Switch die MAC je mit Namen meldete.
+        // Das war die Luecke: ohne Namenssichtung wurde daraus ein Geist.
+        // Beanspruchen zwei Hosts dieselbe MAC (Stack/HA), wird sie — wie beim
+        // Lernen aus Nachbarzeilen — gar nicht verwendet.
+        foreach ($host_self_mac as $hid => $macs) {
+            foreach ((array) $macs as $raw) {
+                $mac = self::macForm((string) $raw);
+                if (!self::macUsable($mac)) {
+                    continue;
+                }
+                if (!array_key_exists($mac, $map)) {
+                    $map[$mac] = (string) $hid;
+                } elseif ($map[$mac] !== null && (string) $map[$mac] !== (string) $hid) {
+                    $map[$mac] = null;
+                }
+            }
+        }
         foreach ($rows as $r) {
             if (!$r['rhid'] || !isset($sicher[$r['match']])) {
                 continue;
@@ -894,6 +988,64 @@ final class LldpEdgeBuilder {
                     break;
                 }
             }
+        }
+        unset($r);
+    }
+
+    /**
+     * Noch nicht zugeordnete Nachbarn ueber ihre MANAGEMENT-IP aufloesen.
+     *
+     * Ein Nachbar strahlt per LLDP seine Management-Adresse aus (lldpRemManAddr,
+     * seit 5.5.97 erhoben). Gehoert diese IP zu GENAU EINEM ueberwachten Host —
+     * dieselbe $ip_map, die der Namensabgleich oben fuer "Name ist eine IP"
+     * nutzt —, dann IST der Nachbar dieser Host, auch wenn weder sein SysName
+     * noch seine Chassis-MAC getroffen haben. Das schliesst die Luecke bei
+     * Geraeten, deren LLDP-Name nicht zum Hostnamen passt (ein Alias, eine
+     * Seriennummer), die aber unter einer bekannten IP ueberwacht werden.
+     *
+     * LETZTER PFAD, mit Absicht. Laeuft erst NACH Name und Chassis, und nur fuer
+     * Zeilen ohne Treffer. Name und Chassis sind die staerkeren Aussagen; die
+     * Mgmt-IP faengt den Rest.
+     *
+     * MEHRDEUTIG HEISST KEINE KANTE — dieselbe Regel wie ueberall: nennen zwei
+     * Hosts dieselbe IP (NAT, geteiltes Management-VLAN, Fehlkonfiguration),
+     * wird sie nicht verwendet. Eine falsche Kante sieht aus wie eine Messung.
+     */
+    private static function resolveByMgmtIp(array &$rows, array $lldp_meta, array $ip_map): void {
+        if (!$ip_map) {
+            return;
+        }
+        foreach ($rows as &$r) {
+            if ($r['rhid'] || $r['ambiguous'] !== null) {
+                continue;
+            }
+            $midx = HostMetadata::ifaceParam($r['item']['key_']);
+            if ($midx === '') {
+                continue;
+            }
+            $ip = (string) ($lldp_meta[$r['rid']][$midx]['mgmt_ip'] ?? '');
+            if ($ip === '') {
+                continue;
+            }
+            $kandidaten = $ip_map[$ip] ?? [];
+            if (count($kandidaten) > 1) {
+                // Mehrdeutig: dieselbe Mgmt-IP bei mehreren Hosts (NAT, geteiltes
+                // Management-VLAN). Kein Treffer — aber als mehrdeutig VERMERKEN,
+                // damit der LLDP-Q-Tab "mehrdeutig, N Kandidaten" zeigt, statt den
+                // Nachbarn stumm als Geist durchzureichen. Gleiche Linie wie die
+                // Namens- und IP-Aufloesung oben (Review-Fund).
+                $r['ambiguous'] = array_values($kandidaten);
+                continue;
+            }
+            if (count($kandidaten) !== 1) {
+                continue;   // unbekannt -> kein Treffer
+            }
+            $hid = (string) reset($kandidaten);
+            if ($hid === (string) $r['rid']) {
+                continue;   // der Melder selbst, keine Kante
+            }
+            $r['rhid']  = $hid;
+            $r['match'] = 'mgmt_ip';
         }
         unset($r);
     }
@@ -1267,6 +1419,9 @@ final class LldpEdgeBuilder {
             case 'exact':       return 9;
             case 'alias':       return 8;
             case 'ip':          return 7;
+            // Die ausgestrahlte Management-IP, die zu genau einem Host gehoert,
+            // ist so verlaesslich wie ein Name, der eine IP IST — gleiche Stufe.
+            case 'mgmt_ip':     return 7;
             case 'chassis':     return 6;
             case 'exact_clean': return 5;
             case 'tag':         return 4;
@@ -1296,11 +1451,16 @@ final class LldpEdgeBuilder {
      * WARUM DIESE SKALA UND NICHT DIE VORGESCHLAGENE
      * ----------------------------------------------
      * Der urspruengliche Vorschlag stuetzt sich auf Chassis-ID und Management-
-     * Adresse. Beide werden NICHT erhoben (lldpRemChassisIdSubtype und
-     * lldpRemManAddr fehlen in allen Templates) — eine Skala, die sich auf
-     * nicht vorhandene Daten beruft, waere eine erfundene Zahl. Bewertet wird
-     * deshalb, was wirklich vorliegt: WIE der Name getroffen hat, ob BEIDE
-     * Seiten es melden, und wie viel Beiwerk (Protokolle, Ports) dazukommt.
+     * Adresse. Beide werden inzwischen erhoben, aber unterschiedlich verwertet.
+     * Der lldpRemChassisIdSubtype (seit 5.5.96) bekommt KEINEN eigenen Punkt: er
+     * macht nur die bestehende chassis-Aufloesung verlaesslicher (eine ID als MAC
+     * behandeln, statt es aus der Zeichenform zu raten, siehe rowChassis). Die
+     * Management-IP (lldpRemManAddr, seit 5.5.97) dagegen ist ein eigener
+     * TREFFER-Pfad (resolveByMgmtIp) und bekommt deshalb eine eigene Stufe —
+     * genau wie ein Name, der eine IP IST. Bewertet wird, was wirklich eine
+     * Aussage ueber die Zuordnung traegt: WIE der Name/die Adresse getroffen hat,
+     * ob BEIDE Seiten es melden, und wie viel Beiwerk (Protokolle, Ports)
+     * dazukommt.
      *
      * Die Grundpunkte spiegeln die Reihenfolge des Abgleichs oben:
      *
@@ -1308,6 +1468,7 @@ final class LldpEdgeBuilder {
      *   ip           50  der Nachbar nannte eine IP, die zu einem Host gehoert
      *   exact_clean  50  exakt, aber erst nach Abschneiden eines Zusatzes
      *   chassis      50  die gemeldete MAC gehoert zu einem sicher getroffenen Host
+     *   mgmt_ip      50  die ausgestrahlte Management-IP gehoert zu einem Host
      *   port         40  eine MAC, aufgeloest ueber denselben Port an beiden Kabelenden
      *   ip_derived   35  IP aus einem Namensmuster ("ip-10-0-0-5") GERATEN
      *   short        30  nur der Kurzname, in DIESER Auswahl eindeutig
@@ -1325,6 +1486,9 @@ final class LldpEdgeBuilder {
             'ip'          => 50,
             'exact_clean' => 50,
             'chassis'     => 50,
+            // Der Nachbar nannte eine Management-IP, die zu einem Host gehoert.
+            // So gut wie ein IP-Name-Treffer: eine Adresse, kein geratenes Muster.
+            'mgmt_ip'     => 50,
             // Von Hand erklaert (nt:uplink). Kein Geraet hat sie bestaetigt,
             // aber auch nichts daran ist geraten — jemand weiss, wo das Kabel
             // steckt. Zwischen "IP getroffen" und "nur der Kurzname".

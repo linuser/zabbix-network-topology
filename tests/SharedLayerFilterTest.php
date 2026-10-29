@@ -103,6 +103,9 @@ $pos = [
     '2_7'    => ['10084' => ['x' => 4, 'y' => 4]],
     '7'      => ['99999' => ['x' => 5, 'y' => 5]],
     '2_grp'  => ['10084' => ['x' => 6, 'y' => 6], 'ghost_sw01' => ['x' => 7, 'y' => 7]],
+    // Host+Hops-Ansicht: Schluessel ist host-skaliert, nicht gruppen-skaliert.
+    'host10084_h2' => ['10084' => ['x' => 8, 'y' => 8], '10085' => ['x' => 9, 'y' => 9]],
+    'host99999_h3' => ['10084' => ['x' => 1, 'y' => 1]],
 ];
 $got = SharedLayerFilter::positions($pos, $hosts, $groups);
 
@@ -118,6 +121,12 @@ check('reine Fremd-View faellt weg',                   isset($got['7']), false);
 
 check('Group-View (_grp) wird erkannt',   isset($got['2_grp']), true);
 check('Ghost in erlaubter View bleibt',   isset($got['2_grp']['ghost_sw01']), true);
+
+// Host+Hops-Ansicht (host<id>_h<hops>): ueber die SICHTBAREN HOSTS geprueft,
+// nicht ueber Gruppen. Vorher fiel sie immer durch (Security-Review-Fund).
+check('Host/Hops-View des sichtbaren Hosts bleibt', isset($got['host10084_h2']), true);
+check('Host/Hops-View: sichtbarer Knoten bleibt',   isset($got['host10084_h2']['10084']), true);
+check('Host/Hops-View des FREMDEN Hosts faellt weg', isset($got['host99999_h3']), false);
 
 // Eine View, aus der alles herausfaellt, wird gar nicht erst mitgeschickt —
 // sonst sagte der leere Schluessel weiterhin aus, dass es die Auswahl gibt.

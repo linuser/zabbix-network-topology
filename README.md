@@ -7,13 +7,13 @@ Zabbix 7.0 LTS / 7.4 / 8.0 frontend module for interactive network topology visu
 ![Version](https://img.shields.io/github/v/release/linuser/zabbix-network-topology?label=version&color=blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 
-**[🌐 zabfox.de](https://zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](INSTALL.md)** · **[🤝 Contributing](CONTRIBUTING.md)**
+**[🌐 zabfox.de](https://zabfox.de)** · **[💾 Repository](https://github.com/linuser/zabbix-network-topology)** · **[📋 Changelog](CHANGELOG.md)** · **[📦 Installation](docs/INSTALL.md)** · **[📚 Docs](docs/README.md)** · **[🤝 Contributing](CONTRIBUTING.md)**
 
 **🇬🇧 [English](#-english) · 🇩🇪 [Deutsch](#-deutsch)**
 
 > Technical module id: `network_topology` — the installation directory **must** carry exactly this name. *Das Installationsverzeichnis muss genau so heißen.*
 >
-> **Upgrading from 4.x:** the `_v6` suffix is gone in 5.0 — remove the old `network_topology_v6` directory and re-add the dashboard tiles once; see [CHANGELOG](CHANGELOG.md) and [INSTALL.md](INSTALL.md). *Umstieg von 4.x: der `_v6`-Suffix ist entfallen, das alte Verzeichnis muss weg, die Kacheln sind einmalig neu einzufügen.*
+> **Upgrading from 4.x:** the `_v6` suffix is gone in 5.0 — remove the old `network_topology_v6` directory and re-add the dashboard tiles once; see [CHANGELOG](CHANGELOG.md) and [INSTALL.md](docs/INSTALL.md). *Umstieg von 4.x: der `_v6`-Suffix ist entfallen, das alte Verzeichnis muss weg, die Kacheln sind einmalig neu einzufügen.*
 
 ---
 
@@ -69,7 +69,7 @@ Zabbix 7.0 LTS / 7.4 / 8.0 frontend module for interactive network topology visu
 </tr>
 <tr>
 <td width="50%"><img src="screenshots/diagnose.jpg" alt="Diag"><br><sub><b>Diag</b> — backend telemetry (super admin only): cache hit rate, latencies, counts.<br><i>Backend-Telemetrie (nur Super-Admin): Cache-Trefferquote, Latenzen, Zählwerte.</i></sub></td>
-<td width="50%"><img src="screenshots/widget.jpg" alt="Dashboard widgets / Dashboard-Widgets"><br><sub><b>Dashboard widgets</b> — all five tiles on one Zabbix dashboard.<br><i>Alle fünf Kacheln auf einem Zabbix-Dashboard.</i></sub></td>
+<td width="50%"><img src="screenshots/widget.jpg" alt="Dashboard widgets / Dashboard-Widgets"><br><sub><b>Dashboard widgets</b> — the widget tiles on one Zabbix dashboard.<br><i>Die Widget-Kacheln auf einem Zabbix-Dashboard.</i></sub></td>
 </tr>
 </table>
 
@@ -89,19 +89,19 @@ Zabbix 7.0 LTS / 7.4 / 8.0 frontend module for interactive network topology visu
 > | What | Needed? | Requires |
 > |---|---|---|
 > | **Main module** — the topology page | **required**, this is the product | Zabbix 7.0 LTS, 7.4 or 8.0 |
-> | **Five dashboard widgets** — tiles for existing dashboards | optional extras | Zabbix **7.0 LTS, 7.4 or 8.0**, and the main module installed *and* enabled |
+> | **Eight dashboard widgets** — tiles for existing dashboards | optional extras | Zabbix **7.0 LTS, 7.4 or 8.0**, and the main module installed *and* enabled |
 >
 > The widgets read the main module's data action and load Cytoscape from its
 > assets; without it they show an error. Install the main module first.
 
-Highlights: live graph with severity rings · **port-to-port weathermap** (measured link utilisation) · **key-figure row** above the map · **ghost nodes** for devices reported via LLDP that have no host in Zabbix · what-if failure simulation & root cause · capacity forecast · maintenance straight from the map · health score per host group · geo map · **five dashboard widgets** · wallboard mode · German/English UI.
+Highlights: live graph with severity rings · **port-to-port weathermap** (measured link utilisation) · **key-figure row** above the map · **ghost nodes** for devices reported via LLDP that have no host in Zabbix · what-if failure simulation & root cause · capacity forecast · maintenance straight from the map · health score per host group · geo map · **eight dashboard widgets** · wallboard mode · German/English UI.
 
 ### Features
 
 **Four visualisation modes**
 
 - **Technical** — force-directed graph (Cytoscape.js). Nodes show CPU/memory/ping/traffic as pie charts, severity as ring colour.
-- **Management** — hosts grouped by device type (firewall/switch/server/…) as wallboard tiles.
+- **Management** — a plain, non-technical overview ("what devices do we have, and are they up"): host cards in five readable categories (Network / Servers / Storage / Smart home & sensors / Devices), each with its device-type icon and a plain status — *Running / Warning / Critical* instead of Zabbix severities.
 - **Table** — Nagios/Icinga-style host list in two modes: **Hosts** (status, type, IP, CPU, memory, ping, traffic, problems) and **Items** (pivot: hosts × items, e.g. every disk in the group).
 - **Geo** — Leaflet map using GPS coordinates from the host inventory.
 
@@ -129,8 +129,10 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - **History mode** with slider — trigger state at the selected time (1 h/24 h/7 d)
 - **Item pivot** — any item key pattern as columns
 - **Manual links** between hosts and the **map layout** — stored server-side in two layers: a Super admin curates the map everyone sees, anyone else deviates personally. Notes and pins still live in `localStorage`. Both layers store the *complete* state, so a save that would overwrite someone else's concurrent change is **rejected instead of applied** — you get a notice and reload rather than silently losing the other person's work
-- **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](LLDP-SETUP.md))
+- **Port-to-port edges** — on LLDP/SNMP switches each edge carries both the local **and** the remote port; the weathermap colours by *measured* per-interface utilisation instead of a node-level estimate ([LLDP-SETUP.md](docs/LLDP-SETUP.md))
+- **Link quality score** — a 0–100 score per cable from errors, drops, utilisation, down-state and recent flaps (link uptime), coloured like the host health score. Toggle it on to colour edges by quality instead of utilisation; the edge panel shows the score and what pulled it down
 - **Parallel links (LAG, bonding, several cables)** — one edge per cable, each with its own ports, counters and state. Zoomed in they fan out, in the overview they collapse into one line marked `×N` with the totals and an amber glow while a member is down. A failed member is a reported change of its own: *cable core Gi1/0/1 ↔ acc Te1/1/1 gone — 3 of 4 still up*
+- **Loop & ring detection** — redundant cycles in the cable graph are found and classified from the switches' Spanning-Tree state: a ring that STP blocks somewhere is drawn **safe** (cyan), one that nothing blocks is a **loop risk** (red), and three active symptoms — STP topology churn, broadcast storm and MAC flapping — escalate it further. A ring a switch reports no STP for stays grey (*unknown*) — never a false alarm. Opt-in via one template ([STP-SETUP.md](docs/STP-SETUP.md)). A **self-loop** — a cable from a switch back into itself — forms no ring, so the **front panel** draws it instead: both ends as a loop (the STP-blocked port and its forwarding partner, amber arc + ⚠)
 - **"Connected to" — which port a device hangs on** — the hosts table carries the far-end device and port, sorts and filters by them (`port:Gi1/0/8`) and exports as CSV: a patch list you can print and hold against the documentation. It survives the device going away, because edges age instead of vanishing — so for a dead access point it names the port it hung on last
 - **Configurable colour scales** — Super admins set the thresholds and colours for both link scales (absolute traffic with weathermap off, utilisation % with it on) under *View → Color scales*; changes preview live, are stored in the module config and apply to all users. The colour guide shows the scale of the active mode and marks a customised one
 
@@ -154,6 +156,12 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
   switch, labelled with the count; a click opens it. Infrastructure neighbours
   (Bridge/Router/WLAN AP) are never bundled — the opposite of the "network
   gear only" filter: nothing is thrown away, only folded. Toggle in the toolbar.
+- **Adjustable node size** — on a dense map the host points and their labels
+  crowd each other. A toolbar control cycles the nodes through three sizes
+  (small / normal / large) and scales the icons **and their labels together**,
+  so it is the labels that stop overlapping, not just the circles. It restyles
+  live without re-laying-out the map (positions, pins and focus stay put) and
+  the choice is remembered per browser.
 - **Device type from the protocol** — the icon comes from the host name and
   templates first, matching **model series, not vendor names**: a plain "UniFi"
   or "Omada" covers gateways, switches, cameras and access points alike and
@@ -173,6 +181,7 @@ Highlights: live graph with severity rings · **port-to-port weathermap** (measu
 - `nt:show=<key>` — extra item value in the tooltip
 - `nt:parent=<hostname>` — declare a carrier host (VM→hypervisor, container→node). Draws a directed **hosts** edge, and the what-if simulation treats it as a **hard dependency**: if the parent dies, the child dies — regardless of the network path.
 - `nt:uplink=<hostname>:<port>` — say which **port** of which device this host hangs off. For everything that cannot report a neighbour: UPS, PDU, printer, older cameras. Draws the edge *and* pulls the counters of that port onto it — traffic, errors, discards, link speed — because the module keeps them per ifIndex anyway. The port may be the ifIndex (`8`) or its name (`Gi1/0/8`).
+- `nt:expect=<hostname>` (optionally `nt:expect=<hostname>/<port>`, several allowed) — declare the **expected** neighbour and hold it against the **measured** LLDP/CDP topology (*soll vs ist*). Unlike `nt:uplink` this draws nothing by itself — it **verifies**. Turn on the **◇ Expected** toolbar toggle: an expected link that LLDP/CDP does not confirm is drawn as a red dashed edge — *misconnected* (the host hangs off something else) or *not seen* (it reports no neighbour at all). Matches stay quiet. The deviation count also shows as a KPI pill. For catching re-plugged cables and third-party work.
 - `nt:lldp=<name>` — the name this host uses **on the wire**, when that differs from its name in Zabbix. Renamed hosts, an inventory name here against a config name there, a device that does not know its own hostname: the neighbours then report something Zabbix has never heard of, and the map draws a ghost next to the very host it means. Repeatable, up to four names.
 
 **More UI**
@@ -186,7 +195,7 @@ theme CSS works without an update here.
 
 ### Installation
 
-📦 **Full bilingual guide: [INSTALL.md](INSTALL.md)** — requirements, RHEL/SELinux, widgets, building from source, troubleshooting.
+📦 **Full bilingual guide: [INSTALL.md](docs/INSTALL.md)** — requirements, RHEL/SELinux, widgets, building from source, troubleshooting.
 
 Short version (the directory **must** be named `network_topology`):
 
@@ -205,11 +214,11 @@ Then in the Zabbix UI: **Administration → General → Modules → Scan directo
 
 There is a guided path too: [`nt-install.sh`](nt-install.sh) detects the module path and php-fpm service itself, checks the environment first (`check`), and restores the SELinux context on RHEL/Rocky/Alma — without it the module simply does not show up there. [`nt-uninstall.sh`](nt-uninstall.sh) removes it again and names what stays behind on the server.
 
-> **Don't install via `git clone`.** It places the entire repository under your web root, and Zabbix' nginx config only blocks `/\.ht` there, not `.git` — see [INSTALL.md](INSTALL.md).
+> **Don't install via `git clone`.** It places the entire repository under your web root, and Zabbix' nginx config only blocks `/\.ht` there, not `.git` — see [INSTALL.md](docs/INSTALL.md).
 
 ### Edges / topology (LLDP)
 
-**Edges** come from the LLDP/CDP neighbour tables of your devices, delivered to Zabbix via SNMP. **Nodes but no edges?** → 📡 **[LLDP-SETUP.md](LLDP-SETUP.md)**: what to configure on switches/clients/Zabbix, a **vendor matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / Huawei / MikroTik) and a test command to verify.
+**Edges** come from the LLDP/CDP neighbour tables of your devices, delivered to Zabbix via SNMP. **Nodes but no edges?** → 📡 **[LLDP-SETUP.md](docs/LLDP-SETUP.md)**: what to configure on switches/clients/Zabbix, a **vendor matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / Huawei / MikroTik) and a test command to verify.
 
 > **The module does not speak SNMP — it reads Zabbix items.** Enabling LLDP on
 > the device is only half the chain:
@@ -232,6 +241,7 @@ Five separate widget modules render the main module's data as dashboard tiles. T
 | [`widget_table/`](widget_table/) | **NT Table** | table (status/CPU/mem/ping/traffic/problems) |
 | [`widget_kpi/`](widget_kpi/) | **NT KPI** | key figures as a ring (severity distribution with the host count in the middle) or as a grid |
 | [`widget_items/`](widget_items/) | **NT Items** | one item pattern pivoted across all hosts of the selected groups |
+| [`widget_faceplate/`](widget_faceplate/) | **NT Faceplate** | front panel of one switch (8+2 … 48+6 ports): link state or speed per port, PoE, LLDP neighbour on hover, and an STP-blocked port / self-loop marked on the panel |
 
 All consume the same `network.topology.data` action (no second backend) and share its response: with several tiles on one dashboard the action is fetched **once**, not per tile. **Prerequisite:** the main module installed and enabled.
 
@@ -260,7 +270,10 @@ Current Chrome, Firefox, Safari, Edge. ES6 modules (no IE11), `fetch`, CSS `inse
 - Item pivot shows numeric items only (FLOAT/UINT64)
 - History range capped at 7 days
 - Geo tab needs hosts with `inventory.location_lat` + `location_lon`
-- LLDP edges need neighbour items via SNMP → [LLDP-SETUP.md](LLDP-SETUP.md)
+- LLDP edges need neighbour items via SNMP → [LLDP-SETUP.md](docs/LLDP-SETUP.md)
+- PoE class per port + switch power budget on the faceplate → [POE-SETUP.md](docs/POE-SETUP.md) (standard POWER-ETHERNET-MIB; the switch budget is empty on devices that don't fill `pethMainPse*`)
+- **VLAN** view — pick an 802.1Q VLAN and dim everything not on it → [VLAN-SETUP.md](docs/VLAN-SETUP.md) (standard Q-BRIDGE-MIB; measure a switch with `nt-vlan-probe.sh` first — MikroTik/TP-Link keep VLANs in a private MIB)
+- **Plan** view — put an aerial or floor plan behind the map and drag devices onto their real spot → [PLAN-SETUP.md](docs/PLAN-SETUP.md) (the image lives in Zabbix's own image store; positions are saved per view)
 - Zabbix 7.0+ for proxy group info (empty on 6.x)
 - Everything runs on **7.0 LTS, 7.4 and 8.0** — widgets included; 7.x re-tested on 7.0.30, 8.0 verified on 8.0.0rc1
 
@@ -296,19 +309,19 @@ found had been in the module since the code was written.
 > | Was | Nötig? | Braucht |
 > |---|---|---|
 > | **Hauptmodul** — die Topologie-Seite | **erforderlich**, das ist das Produkt | Zabbix 7.0 LTS oder 7.4 |
-> | **Fünf Dashboard-Widgets** — Kacheln für bestehende Dashboards | optionale Zugabe | Zabbix **7.0 LTS oder 7.4**, dazu das installierte *und* aktivierte Hauptmodul |
+> | **Acht Dashboard-Widgets** — Kacheln für bestehende Dashboards | optionale Zugabe | Zabbix **7.0 LTS, 7.4 oder 8.0**, dazu das installierte *und* aktivierte Hauptmodul |
 >
 > Die Widgets nutzen die Daten-Action des Hauptmoduls und laden Cytoscape aus
 > dessen Assets; ohne es zeigen sie eine Fehlermeldung. Erst das Hauptmodul.
 
-Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · **Kennzahlen-Zeile** über der Karte · **Ghost-Knoten** für per LLDP gemeldete Geräte ohne Host in Zabbix, **unüberwachte Endgeräte je Switch gebündelt** · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · **fünf Dashboard-Widgets** · Wallboard-Modus · DE/EN.
+Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemessene Link-Auslastung) · **Kennzahlen-Zeile** über der Karte · **Ghost-Knoten** für per LLDP gemeldete Geräte ohne Host in Zabbix, **unüberwachte Endgeräte je Switch gebündelt** · What-if-Ausfallsimulation & Root-Cause · Kapazitäts-Forecast · Wartung direkt aus der Karte · Health-Score pro Hostgruppe · Geo-Karte · **acht Dashboard-Widgets** · Wallboard-Modus · DE/EN.
 
 ### Features
 
 **Vier Visualisierungs-Modi**
 
 - **Technisch** — Force-Directed Graph mit Cytoscape.js. Knoten zeigen CPU/Memory/Ping/Traffic als Pie-Charts, Severity als Ring-Farbe.
-- **Management** — Hosts gruppiert nach Device-Type (Firewall/Switch/Server/etc.) als Wallboard-Kacheln.
+- **Management** — eine schlichte Laiensicht („welche Geräte haben wir, und laufen sie"): Host-Karten in fünf verständlichen Kategorien (Netzwerk / Server / Speicher / Smart Home & Sensoren / Geräte), jede mit Gerätetyp-Icon und Klartext-Status — *Läuft / Warnung / Kritisch* statt Zabbix-Severities.
 - **Tabelle** — Nagios/Icinga-Style Hostliste mit zwei Modi: **Hosts** (Status, Type, IP, CPU, Memory, Ping, Traffic, Probleme) und **Items** (Pivot: Hosts × Items, z. B. alle Disks der Hostgruppe).
 - **Geo** — Leaflet-Karte mit GPS-Koordinaten aus dem Host-Inventory.
 
@@ -336,8 +349,10 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - **History-Mode** mit Slider — Trigger-Status zur ausgewählten Zeit (1 h/24 h/7 d)
 - **Item-Pivot** — beliebiges Item-Key-Pattern als Spalten
 - **Manuelle Links** zwischen Hosts und **Kartenanordnung** — serverseitig, in zwei Ebenen: ein Super-Admin pflegt die für alle sichtbare Karte, jeder andere weicht persönlich davon ab. Notizen und Pins liegen weiterhin im `localStorage`. Beide Ebenen speichern den *vollständigen* Zustand; ein Speichern, das die gleichzeitige Änderung eines anderen überschreiben würde, wird deshalb **abgelehnt statt ausgeführt** — mit Hinweis und Neuladen, statt die Arbeit des anderen stillschweigend zu verlieren
-- **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](LLDP-SETUP.md#port-to-port--per-link-weathermap))
+- **Port-zu-Port-Kanten** — auf LLDP/SNMP-Switches trägt jede Kante lokalen **und** Remote-Port; die Weathermap färbt nach *gemessener* Per-Interface-Auslastung statt Node-Schätzung ([LLDP-SETUP.md](docs/LLDP-SETUP.md#port-to-port--per-link-weathermap))
+- **Link-Quality-Score** — ein 0–100-Güte-Wert je Kabel aus Errors, Drops, Auslastung, Down-Zustand und kürzlichen Flaps (Link-Uptime), gefärbt wie der Host-Health-Score. Als Toggle färbt er die Kanten nach Güte statt Auslastung; das Kanten-Panel zeigt den Score und was ihn drückt
 - **Parallele Links (LAG, Bonding, mehrere Kabel)** — eine Kante je Kabel, jede mit eigenen Ports, Zählern und Zustand. Hineingezoomt fächern sie auf, in der Übersicht klappen sie zu einer Linie mit `×N` zusammen, mit den Summen und bernsteinfarbener Glut, solange ein Member ausgefallen ist. Ein ausgefallenes Kabel ist eine eigene Meldung: *cable core Gi1/0/1 ↔ acc Te1/1/1 gone — 3 of 4 still up*
+- **Loop- & Ring-Erkennung** — redundante Zyklen im Kabelgraphen werden gefunden und über den Spanning-Tree-Zustand der Switches klassifiziert: ein Ring, den STP irgendwo blockt, erscheint **sicher** (cyan), ein ungeblockter als **Loop-Gefahr** (rot), und drei aktive Symptome — STP-Topology-Churn, Broadcast-Storm und MAC-Flapping — eskalieren ihn weiter. Ein Ring ohne STP-Daten bleibt grau (*unknown*) — nie ein Fehlalarm. Opt-in über ein Template ([STP-SETUP.md](docs/STP-SETUP.md)). Ein **Selbst-Loop** — ein Kabel vom Switch auf sich selbst — bildet keinen Ring, also zeichnet ihn die **Frontblende**: beide Enden als Loop (der STP-geblockte Port und sein weiterleitender Partner, amberner Bogen + ⚠)
 - **„Connected to" — an welchem Port ein Gerät hängt** — die Hosts-Tabelle trägt Gerät und Port der Gegenseite, sortiert und filtert danach (`port:Gi1/0/8`) und exportiert als CSV: eine Patchliste zum Ausdrucken und gegen die Dokumentation halten. Sie überlebt das Verschwinden des Geräts, weil Kanten altern statt zu verschwinden — bei einem toten Access Point steht dort der Port, an dem er zuletzt hing
 - **Konfigurierbare Farbskalen** — Super-Admins setzen Schwellen und Farben beider Kantenskalen (absoluter Traffic bei Weathermap aus, Auslastung in % bei an) unter *View → Farbskalen…*; Änderungen sind sofort als Vorschau sichtbar, liegen in der Modul-Config und gelten für alle. Der Farbcode zeigt die Skala des aktiven Modus und kennzeichnet eine angepasste
 
@@ -362,6 +377,12 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
   Klick öffnet ihn. Infrastruktur-Nachbarn (Bridge/Router/WLAN AP) werden nie
   gebündelt — das Gegenteil des „nur Netzgeräte"-Filters: nichts wird
   weggeworfen, nur eingeklappt. Umschalter in der Toolbar.
+- **Einstellbare Knotengröße** — auf einer dichten Karte drängen sich
+  Host-Punkte und ihre Beschriftungen. Ein Toolbar-Schalter zieht die Knoten
+  durch drei Größen (klein / normal / groß) und skaliert dabei Symbole **und
+  Labels gemeinsam**, damit sich nicht nur die Kreise, sondern auch die
+  Beschriftungen entzerren. Wird live umgestylt, ohne die Karte neu zu layouten
+  (Positionen, Pins und Fokus bleiben), und pro Browser gemerkt.
 - **Gerätetyp aus dem Protokoll** — welches Symbol ein Knoten bekommt, leitet
   sich zuerst aus Name und Template ab, und zwar über **Modellreihen, nicht über
   Herstellernamen**: ein bloßes „UniFi" oder „Omada" umfasst Gateways, Switches,
@@ -382,6 +403,7 @@ Highlights: Live-Graph mit Severity-Ringen · **Port-zu-Port-Weathermap** (gemes
 - `nt:show=<key>` — zusätzlicher Item-Wert im Tooltip
 - `nt:parent=<hostname>` — Träger-Host deklarieren (VM→Hypervisor, Container→Node). Zeichnet eine gerichtete **hosts**-Kante und gilt der What-if-Simulation als **harte Abhängigkeit**: fällt der Parent aus, fällt der Child — unabhängig vom Netzpfad.
 - `nt:uplink=<hostname>:<port>` — an welchem **Port** welches Geräts dieser Host hängt. Für alles, was keinen Nachbarn melden kann: USV, PDU, Drucker, ältere Kameras. Zeichnet die Kante *und* hängt die Zähler dieses Ports daran — Verkehr, Fehler, Discards, Geschwindigkeit —, weil das Modul sie ohnehin je ifIndex vorhält. Der Port darf der ifIndex sein (`8`) oder sein Name (`Gi1/0/8`).
+- `nt:expect=<hostname>` (optional `nt:expect=<hostname>/<port>`, mehrfach erlaubt) — den **erwarteten** Nachbarn deklarieren und gegen die **gemessene** LLDP/CDP-Topologie halten (*Soll gegen Ist*). Anders als `nt:uplink` zeichnet es nichts von sich aus — es **prüft**. Toolbar-Toggle **◇ Soll/Ist** anschalten: eine erwartete Verbindung, die LLDP/CDP nicht bestätigt, erscheint als rot gestrichelte Kante — *falsch gesteckt* (hängt woanders) oder *nicht gesehen* (meldet gar keinen Nachbarn). Treffer bleiben unauffällig. Die Zahl der Abweichungen steht auch als KPI-Pille. Fängt umgesteckte Kabel und Fremdfirmen-Arbeiten.
 - `nt:lldp=<name>` — der Name, unter dem dieser Host **auf dem Draht** auftritt, wenn er vom Namen in Zabbix abweicht. Umbenannte Hosts, ein Inventarname hier gegen einen Konfigurationsnamen dort, ein Gerät, das seinen Hostnamen nicht kennt: Die Nachbarn melden dann etwas, das es in Zabbix nicht gibt, und die Karte zeichnet einen Geist neben genau dem Host, den sie meinen. Mehrfach erlaubt, bis zu vier Namen.
 
 **Weitere UI**
@@ -395,7 +417,7 @@ Theme-CSS funktioniert damit ohne Anpassung hier.
 
 ### Installation
 
-📦 **Ausführliche, zweisprachige Anleitung: [INSTALL.md](INSTALL.md)** — Voraussetzungen, RHEL/SELinux, Widgets, Aus-Source-Bauen, Troubleshooting.
+📦 **Ausführliche, zweisprachige Anleitung: [INSTALL.md](docs/INSTALL.md)** — Voraussetzungen, RHEL/SELinux, Widgets, Aus-Source-Bauen, Troubleshooting.
 
 Kurzfassung (das Verzeichnis **muss** `network_topology` heißen):
 
@@ -414,11 +436,11 @@ Dann in der Zabbix-UI: **Administration → General → Modules → Scan directo
 
 Es geht auch geführt: [`nt-install.sh`](nt-install.sh) erkennt Modulpfad und php-fpm-Dienst selbst, prüft die Umgebung vorher (`check`) und setzt auf RHEL/Rocky/Alma den SELinux-Kontext — ohne den erscheint das Modul dort schlicht nicht. [`nt-uninstall.sh`](nt-uninstall.sh) räumt wieder ab und nennt dabei, was serverseitig zurückbleibt.
 
-> **Nicht per `git clone` installieren.** Der Weg legt das gesamte Repository unter den Web-Root, und Zabbix' nginx-Konfiguration sperrt dort nur `/\.ht`, nicht `.git` — siehe [INSTALL.md](INSTALL.md).
+> **Nicht per `git clone` installieren.** Der Weg legt das gesamte Repository unter den Web-Root, und Zabbix' nginx-Konfiguration sperrt dort nur `/\.ht`, nicht `.git` — siehe [INSTALL.md](docs/INSTALL.md).
 
 ### Kanten / Topologie (LLDP)
 
-Die **Verbindungen (Kanten)** entstehen aus den LLDP/CDP-Nachbar-Tabellen der Geräte, die per SNMP an Zabbix geliefert werden. **Knoten da, aber keine Kanten?** → 📡 **[LLDP-SETUP.de.md](LLDP-SETUP.de.md)** (englisch: [LLDP-SETUP.md](LLDP-SETUP.md)): was auf Switches/Clients/Zabbix zu tun ist, eine **Vendor-Matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / Huawei / MikroTik) und ein Test-Kommando zum Gegenchecken.
+Die **Verbindungen (Kanten)** entstehen aus den LLDP/CDP-Nachbar-Tabellen der Geräte, die per SNMP an Zabbix geliefert werden. **Knoten da, aber keine Kanten?** → 📡 **[LLDP-SETUP.md](docs/LLDP-SETUP.md)** (englisch): was auf Switches/Clients/Zabbix zu tun ist, eine **Vendor-Matrix** (TP-Link / Ubiquiti / HP-Aruba / Cisco / Huawei / MikroTik) und ein Test-Kommando zum Gegenchecken.
 
 > **Das Modul spricht kein SNMP — es liest Zabbix-Items.** LLDP am Gerät
 > einzuschalten ist nur die halbe Kette:
@@ -441,6 +463,7 @@ Fünf separate Widget-Module rendern die Daten des Hauptmoduls in Dashboard-Kach
 | [`widget_table/`](widget_table/) | **NT Table** | Tabelle (Status/CPU/Mem/Ping/Traffic/Probleme) |
 | [`widget_kpi/`](widget_kpi/) | **NT KPI** | Kennzahlen als Ring (Severity-Verteilung mit Host-Zahl in der Mitte) oder als Raster |
 | [`widget_items/`](widget_items/) | **NT Items** | ein Item-Muster über alle Hosts der gewählten Gruppen gepivotet |
+| [`widget_faceplate/`](widget_faceplate/) | **NT Faceplate** | Frontansicht eines Switches (8+2 … 48+6 Ports): Link-Status oder -Speed je Port, PoE, LLDP-Nachbar im Tooltip, und ein STP-geblockter Port / Selbst-Loop auf der Blende markiert |
 
 Alle nutzen dieselbe `network.topology.data`-Action (kein zweites Backend) und teilen sich deren Antwort: liegen mehrere Kacheln auf einem Dashboard, wird die Action **einmal** abgefragt, nicht je Kachel. **Voraussetzung:** Hauptmodul installiert + aktiviert.
 
@@ -469,9 +492,11 @@ Aktuelle Chrome, Firefox, Safari, Edge. ES6-Module (kein IE11), `fetch`, CSS `in
 - Items-Pivot zeigt nur numerische Items (FLOAT/UINT64)
 - Max. 7 Tage History-Range
 - Geo-Tab braucht Hosts mit `inventory.location_lat` + `location_lon`
-- LLDP-Kanten brauchen Nachbar-Items per SNMP → [LLDP-SETUP.md](LLDP-SETUP.md)
+- LLDP-Kanten brauchen Nachbar-Items per SNMP → [LLDP-SETUP.md](docs/LLDP-SETUP.md)
+- **Plan**-Tab — Luftbild oder Grundriss hinter die Karte legen und Geräte per Drag platzieren → [PLAN-SETUP.md](docs/PLAN-SETUP.md) (das Bild liegt in Zabbix' eigenem Bild-Store; Positionen je Ansicht gespeichert)
+- **VLAN**-Ansicht — ein 802.1Q-VLAN wählen und alles dimmen, was nicht darauf liegt → [VLAN-SETUP.md](docs/VLAN-SETUP.md) (Standard-Q-BRIDGE-MIB; Switch vorher mit `nt-vlan-probe.sh` proben — MikroTik/TP-Link halten VLANs in einer privaten MIB)
 - Zabbix 7.0+ für Proxy-Group-Info (in 6.x leer)
-- Alles läuft auf **7.0 LTS und 7.4** — die Widgets eingeschlossen, auf 7.0.30 nachgeprüft
+- Alles läuft auf **7.0 LTS, 7.4 und 8.0** — die Widgets eingeschlossen; 7.x auf 7.0.30 nachgeprüft, 8.0 auf 8.0.0rc1 verifiziert
 
 ### Feedback & Mitmachen
 

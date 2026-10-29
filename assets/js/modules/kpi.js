@@ -32,8 +32,10 @@
 
 import { t } from './i18n.js';
 import { injectGhostNodes } from './build-elements.js';
-import { loadGhostMode } from './storage.js';
-import { setSevLevels, activeSevLevels } from './sev-filter.js';
+import { loadGhostMode, loadRings } from './storage.js';
+import { analyseRings } from './rings.js';
+import { setSevLevels, activeSevLevels, setSlaOnly, activeSlaOnly } from './sev-filter.js';
+import { businessplanGlyph } from './icons.js';
 
 // Welche Severity-Stufen hinter einer klickbaren Kachel stehen — dieselben
 // Toepfe wie in collect() (OK=0, Warn=1-3, Crit=4-5). "Hosts" = [] = Filter aus.
@@ -54,7 +56,16 @@ const COL = {
     warn:    { light: '#d97706', dark: '#f59e0b' },
     crit:    { light: '#dc2626', dark: '#ef4444' },
     link:    { light: '#7c3aed', dark: '#a78bfa' },
-    ghost:   { light: '#64748b', dark: '#94a3b8' }
+    ghost:   { light: '#64748b', dark: '#94a3b8' },
+    ring:    { light: '#0891b2', dark: '#22d3ee' },
+    loop:    { light: '#dc2626', dark: '#f87171' },
+    churn:   { light: '#d97706', dark: '#f59e0b' },
+    // SLA: bewusst eine EIGENE Achse, keine Severity-Farbe (gruen/amber/rot) und
+    // nicht das Violett der Kanten-Pille (col.link) — sonst staenden zwei
+    // violette Chips nebeneinander. Magenta liest sich als eigene Dimension
+    // ("kostet es etwas", nicht "wie schlimm").
+    sla:     { light: '#be185d', dark: '#f472b6' },
+    muted:   { light: '#94a3b8', dark: '#64748b' }
 };
 
 function isWallboard() {
@@ -153,6 +164,60 @@ function chip(value, label, colour, sub, filter) {
         s.textContent = sub;
         el.appendChild(s);
     }
+
+    return el;
+}
+
+/**
+ * Die SLA-Pille: wie ein chip(), aber mit businessplan-Glyph statt Punkt und
+ * auf einer EIGENEN Filter-Achse (nur SLA-relevante Hosts), nicht Severity.
+ *
+ *   count > 0  magenta, 2px-Rahmen (einziger hervorgehobene Chip), klickbar →
+ *              toggelt setSlaOnly(); Sub nennt die Zahl im Verhaeltnis.
+ *   count = 0  grau, "alles erfuellt", NICHT klickbar (ein Filter auf nichts).
+ *
+ * Die graue 0 bleibt bewusst stehen (statt die Pille zu verstecken): die
+ * Aussage "SLA wird ueberwacht und ist gruen" ist selbst eine Information.
+ */
+function slaChip(count, problemHosts, cy) {
+    const active = count > 0;
+    const colour = active ? col('sla') : col('muted');
+
+    const el = document.createElement('div');
+    el.className = 'nt-kpi__chip';
+    if (active) {
+        // Einziger Chip mit 2px-Rahmen in seiner Farbe — faellt auf, ohne ein
+        // weiteres Signal an den Knoten zu haengen.
+        el.style.border = '2px solid ' + colour;
+        el.style.cursor = 'pointer';
+        el.title = t('kpi.sla.tip');
+        if (cy && activeSlaOnly()) {
+            el.style.boxShadow = 'inset 0 0 0 1.5px ' + colour;
+            el.style.borderRadius = '9px';
+        }
+        el.addEventListener('click', function() {
+            setSlaOnly(cy, !activeSlaOnly());
+            refreshKpi();   // Aktiv-Markierung umspringen lassen
+        });
+    }
+
+    el.appendChild(businessplanGlyph(colour, 15));
+
+    const n = document.createElement('span');
+    n.className = 'nt-kpi__n';
+    n.style.color = colour;
+    n.textContent = String(count);
+    el.appendChild(n);
+
+    const k = document.createElement('span');
+    k.className = 'nt-kpi__k';
+    k.textContent = t('kpi.sla');
+    el.appendChild(k);
+
+    const s = document.createElement('span');
+    s.className = 'nt-kpi__sub';
+    s.textContent = active ? t('kpi.sla.sub', { total: problemHosts }) : t('kpi.sla.allmet');
+    el.appendChild(s);
 
     return el;
 }
@@ -279,7 +344,12 @@ export function collect(nodes, cy) {
         hosts: base.length, ok: ok, warn: warn, crit: crit,
         edges: edges, manual: manual, ghosts: ghosts,
         lldp: Math.max(0, edges - manual),
-        ghostsHidden: ghostsHidden
+        ghostsHidden: ghostsHidden,
+        // SLA-relevante Hosts aus derselben Quelle wie ok/warn/crit (base), damit
+        // Zahl und Filterziel (Knoten mit sla_relevant) exakt uebereinstimmen.
+        sla: base.filter(function(n) { return n.sla_relevant; }).length,
+        // "von N Stoerungen" = Hosts mit mindestens einem Problem (warn + crit).
+        problemHosts: warn + crit
     };
 }
 
@@ -300,6 +370,9 @@ export function refreshKpi() {
 export function updateKpi(nodes, cy) {
     const row = ensureKpiRow();
     if (!row) return;
+    // Der Management-Tab blendet diese technische Zeile aus (Edges/Ghosts/STP
+    // sind dort fehl am Platz). Beim Zurueckwechseln auf Technical wieder zeigen.
+    row.style.display = '';
 
     const g = collect(nodes || [], cy || window._ntCy || null);
 
@@ -337,7 +410,63 @@ export function updateKpi(nodes, cy) {
     row.appendChild(chip(g.ok,    t('kpi.ok'),    col('ok'),   '', flt('ok')));
     row.appendChild(chip(g.warn,  t('kpi.warn'),  col('warn'), '', flt('warn')));
     row.appendChild(chip(g.crit,  t('kpi.crit'),  col('crit'), '', flt('crit')));
+    // SLA-Relevanz direkt bei den Problem-Chips (beantwortet "kostet es etwas",
+    // nicht "wie schlimm"). Immer sichtbar — die graue 0 ist selbst Aussage.
+    row.appendChild(slaChip(g.sla, g.problemHosts, fcy));
     row.appendChild(chip(g.edges, t('kpi.edges'), col('link'),
         g.manual ? t('kpi.edges.manual', { n: g.manual }) : ''));
     row.appendChild(chip(g.ghosts, t('kpi.ghosts'), col('ghost'), ghostSub));
+
+    // Ringe nur zeigen, wenn der Toggle an ist (sonst stuende hier eine Zahl zu
+    // einer Hervorhebung, die auf der Karte gar nicht liegt). Die Loop-Gefahr-
+    // Pille erscheint nur, wenn STP-Daten einen ungeblockten Zyklus belegen.
+    if (loadRings() && fcy) {
+        const r = analyseRings(
+            fcy.edges().map(function (e) { return e.data(); }),
+            fcy.nodes().map(function (n) { return n.data(); }));
+        if (r.totalRings > 0) {
+            row.appendChild(chip(r.totalRings, t('kpi.rings'), col('ring'), ''));
+            if (r.loopRisk > 0) {
+                row.appendChild(chip(r.loopRisk, t('kpi.loop'), col('loop'), t('kpi.loop.sub')));
+            }
+        }
+    }
+
+    // STP-Instabilitaet: Hosts, deren Spanning-Tree staendig neu konvergiert
+    // (dot1dStpTopChanges-Rate ueber der Schwelle) = Loop-Fruehwarnung. Unabhaengig
+    // vom Rings-Toggle, weil es ein allgemeines Gesundheitssignal ist.
+    if (fcy) {
+        const churn = fcy.nodes().filter(function (n) { return n.data('_stpChurn') === true; }).length;
+        if (churn > 0) {
+            row.appendChild(chip(churn, t('kpi.stpchurn'), col('churn'), t('kpi.stpchurn.sub')));
+        }
+        // Broadcast-Storm: aktiver Loop JETZT. Eigene Pille, rot, unabhaengig vom Toggle.
+        const storm = fcy.nodes().filter(function (n) { return n.data('_bcastStorm') === true; }).length;
+        if (storm > 0) {
+            row.appendChild(chip(storm, t('kpi.bcaststorm'), col('loop'), t('kpi.bcaststorm.sub')));
+        }
+        // MAC-Flapping: MACs wandern zwischen Ports (Loop). Eigene Pille, rot.
+        const flap = fcy.nodes().filter(function (n) { return n.data('_macFlap') === true; }).length;
+        if (flap > 0) {
+            row.appendChild(chip(flap, t('kpi.macflap'), col('loop'), t('kpi.macflap.sub')));
+        }
+        // Soll/Ist: erwartete Verkabelung (nt:expect), die nicht gemessen wird.
+        // Unabhaengig vom Overlay-Toggle — eine Abweichung (umgestecktes Kabel)
+        // ist ein Befund, den man nicht uebersehen soll. Zahl aus der Payload,
+        // nicht aus dem Graphen (die fehlenden Kanten sind nur Overlay).
+        const si  = (window._ntLastData && window._ntLastData.expected_links) || null;
+        const dev = (si && Array.isArray(si.deviations)) ? si.deviations.length : 0;
+        if (dev > 0) {
+            row.appendChild(chip(dev, t('kpi.expected'), col('loop'), t('kpi.expected.sub')));
+        }
+        // STP blocking: ein Host hat einen per Spanning-Tree geblockten Port.
+        // Oft normale Redundanz (RSTP sperrt einen Ring-Zweig), aber auch der
+        // EINZIGE sichtbare Hinweis auf einen per STP gefangenen (Selbst-)Loop,
+        // der keine Kante bildet und sonst nirgends auftaucht. Neutrale cyan-
+        // Farbe (STP tut seinen Job), ungated.
+        const blocked = fcy.nodes().filter(function (n) { return n.data('_stpBlock') === true; }).length;
+        if (blocked > 0) {
+            row.appendChild(chip(blocked, t('kpi.stpblock'), col('ring'), t('kpi.stpblock.sub')));
+        }
+    }
 }

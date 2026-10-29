@@ -208,9 +208,17 @@ final class NodePositions {
         foreach ($raw as $view => $nodes) {
             $view = (string) $view;
 
-            // Die Group-View haengt "_grp" an; fuer die Pruefung abtrennen,
-            // damit das Muster nur die Group-IDs sehen muss.
-            $base = substr($view, -4) === '_grp' ? substr($view, 0, -4) : $view;
+            // Die Group-View haengt "_grp" an, der Plan-Modus "_plan"; fuer die
+            // Pruefung abtrennen, damit das Muster nur die Group-IDs sehen muss.
+            // Ohne "_plan" hier verwerfe sanitize() jede Plan-Ansicht still —
+            // dieselbe Falle, die "_grp" frueher hatte (siehe VIEW_PATTERN-Notiz).
+            $base = $view;
+            foreach (['_grp', '_plan'] as $suffix) {
+                if (substr($base, -strlen($suffix)) === $suffix) {
+                    $base = substr($base, 0, -strlen($suffix));
+                    break;
+                }
+            }
             if (!preg_match(self::VIEW_PATTERN, $base)) {
                 continue;
             }

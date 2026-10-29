@@ -1,0 +1,83 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates/Network devices
+  templates:
+    - uuid: 6442438f966d43cd84e01ba6346bc181
+      template: 'NT VLAN by SNMP'
+      name: 'NT VLAN by SNMP'
+      description: |
+        Collects the 802.1Q VLAN tables over SNMP for the "Network Topology for
+        Zabbix" frontend module. The module uses it for the VLAN view: pick a
+        VLAN and see only the devices and links it runs on.
+
+        Why it is needed: nothing else in the module carries VLAN membership.
+        LLDP does not, and lldpXdot1LocVlanName is an optional extension many
+        devices skip. The reliable source is the Q-BRIDGE-MIB, where a VLAN's
+        member ports come as a BITMASK (dot1qVlanStaticEgressPorts, an 802.1Q
+        PortList octet field) that must be resolved against the bridge-port ->
+        ifIndex table. The module's VlanParser decodes that mask (port 1 = MSB
+        of byte 0) and maps it through dot1dBasePortIfIndex to real interfaces.
+
+        What it collects (one bulk walk; the module reads the walk text and
+        parses it, the same approach as the STP template's nt.stp.walk, which
+        sidesteps switches whose exact GETs on these tables are unreliable):
+          dot1qVlanStaticName          1.3.6.1.2.1.17.7.1.4.3.1.1  VLAN-ID -> name
+          dot1qVlanStaticEgressPorts   1.3.6.1.2.1.17.7.1.4.3.1.2  members, static (bitmask)
+          dot1qVlanCurrentEgressPorts  1.3.6.1.2.1.17.7.1.4.2.1.4  members, operational (bitmask)
+          dot1qPvid                    1.3.6.1.2.1.17.7.1.4.5.1.1  bridge-port -> access VLAN
+          dot1dBasePortIfIndex         1.3.6.1.2.1.17.1.4.1.2      bridge-port -> ifIndex
+          ifName                       1.3.6.1.2.1.31.1.1.1.1      ifIndex -> port name
+
+        Usage:
+          - link it to SNMP switches that run 802.1Q and expose the Q-BRIDGE-MIB
+          - measured 2026-10-28: an HPE Instant On 1830 (and Aruba CX / HP 2930,
+            standard Q-BRIDGE) fills these tables; a MikroTik CRS310 (RouterOS)
+            does NOT implement the dot1q group at all -- there VLAN over standard
+            SNMP is not visible, and it would need the MIKROTIK-private MIB. Run
+            tools/nt-vlan-probe.sh against a switch first to check (see ROADMAP).
+
+        VLAN names (dot1qVlanStaticName) are collected so the module can label
+        VLANs for the operator on their own instance. They often carry site or
+        customer names ("VLAN_ACME_VOICE"); they stay on the Zabbix server and
+        are never sent anywhere by the module.
+
+        Standards-based (Q-BRIDGE-MIB, RFC 4363; BRIDGE-MIB, RFC 4188); no
+        external collector needed.
+      groups:
+        - name: Templates/Network devices
+      macros:
+        - macro: '{$NT.VLAN.INTERVAL}'
+          value: 10m
+          description: 'Polling interval of the VLAN table walk. VLAN membership changes rarely (a config change, not traffic), so a slow interval is plenty and keeps the per-switch load low.'
+      items:
+        - uuid: 4a79286464054208b45e3bf1691739b8
+          name: 'VLAN: Q-BRIDGE table (SNMP walk)'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.2.1.17.7.1.4.3.1.1,1.3.6.1.2.1.17.7.1.4.3.1.2,1.3.6.1.2.1.17.7.1.4.2.1.4,1.3.6.1.2.1.17.7.1.4.5.1.1,1.3.6.1.2.1.17.1.4.1.2,1.3.6.1.2.1.31.1.1.1.1]'
+          key: nt.vlan.walk
+          delay: '{$NT.VLAN.INTERVAL}'
+          history: 1h
+          value_type: TEXT
+          description: |
+            One bulk walk over the 802.1Q tables the VLAN view needs, indexed as
+            the Q-BRIDGE-MIB defines them:
+              dot1qVlanStaticName          1.3.6.1.2.1.17.7.1.4.3.1.1  (by VLAN index)
+              dot1qVlanStaticEgressPorts   1.3.6.1.2.1.17.7.1.4.3.1.2  (by VLAN index, bitmask)
+              dot1qVlanCurrentEgressPorts  1.3.6.1.2.1.17.7.1.4.2.1.4  (by time-mark+VLAN, bitmask)
+              dot1qPvid                    1.3.6.1.2.1.17.7.1.4.5.1.1  (by bridge-port)
+              dot1dBasePortIfIndex         1.3.6.1.2.1.17.1.4.1.2      (bridge-port -> ifIndex)
+              ifName                       1.3.6.1.2.1.31.1.1.1.1      (by ifIndex)
+
+            The egress columns are an 802.1Q PortList: a bit field where port 1 is
+            the most significant bit of byte 0. The members are BRIDGE-PORTS, not
+            ifIndexes -- dot1dBasePortIfIndex is the second step that turns a set
+            bit into a real interface (VlanParser::membership). dot1qPvid is the
+            access VLAN per bridge-port (VlanParser::accessVlans), often more
+            telling than the egress mask for an access port.
+
+            The module reads this item directly and parses the walk text, so it
+            carries a short history (1h). An empty value means the switch does not
+            fill the Q-BRIDGE table (some do only via a private MIB) or has no
+            802.1Q VLANs configured -- nt-vlan-probe.sh tells the two apart.

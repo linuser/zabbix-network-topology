@@ -1,0 +1,143 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates/Network devices
+  templates:
+    - uuid: 5a71a4d07d864636828eddad4eb77adc
+      template: 'NT PoE by SNMP'
+      name: 'NT PoE by SNMP'
+      description: |
+        Collects Power-over-Ethernet data over the standard POWER-ETHERNET-MIB
+        (RFC 3621) for the "Network Topology for Zabbix" frontend module: the
+        PoE class of each port and the switch's power budget.
+
+        What the module shows:
+          - per-port PoE CLASS on the faceplate port tooltip (e.g. "PoE: Class 4"),
+            next to the existing lightning bolt that marks a port delivering power
+          - the switch's power BUDGET in the faceplate footer ("PoE: used / nominal W")
+
+        What it needs from the switch:
+          - pethPsePortDetectionStatus / pethPsePortPowerClassifications are the
+            standard per-port columns; most managed PoE switches serve them.
+          - pethMainPsePower / pethMainPseConsumptionPower (the budget) are standard
+            too, but NOT every switch fills them -- some expose the total only via a
+            vendor MIB. When they are empty the module simply draws no budget line.
+          - the actual WATTS per port are vendor-specific (not RFC 3621) and are not
+            collected here.
+
+        Standards-based (POWER-ETHERNET-MIB, RFC 3621); no external collector needed.
+      groups:
+        - name: Templates/Network devices
+      macros:
+        - macro: '{$NT.POE.INTERVAL}'
+          value: 5m
+          description: 'Polling interval of the PoE items. PoE class/budget changes rarely (a device is plugged or unplugged), so a few minutes is plenty.'
+      items:
+        - uuid: 9faadb91bf9d43da884849fe526c5519
+          name: 'PoE: port table (SNMP walk)'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.3.6.1.2.1.105.1.1.1.6,1.3.6.1.2.1.105.1.1.1.7]'
+          key: nt.poe.walk
+          delay: '{$NT.POE.INTERVAL}'
+          history: 1h
+          value_type: TEXT
+          description: |
+            One bulk walk over the two POWER-ETHERNET-MIB per-port columns, both
+            indexed by pethPsePortGroupIndex.pethPsePortIndex (group.port):
+              pethPsePortDetectionStatus       1.3.6.1.2.1.105.1.1.1.6  (3 = deliveringPower)
+              pethPsePortPowerClassifications  1.3.6.1.2.1.105.1.1.1.7  (1=class0 ... 5=class4)
+
+            Discovery and the per-port items hang off this walk as DEPENDENT and
+            parse its text -- the same approach as the STP and LLDP templates, so
+            there is not a single instance-exact GET. The item carries a short
+            history (1h) because the module reads the per-port values from the
+            dependent items, not from this walk directly.
+        - uuid: 23bbdca816524bc1b188a50cc24c270d
+          name: 'PoE: switch budget nominal (W)'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.105.1.3.1.2.1'
+          key: nt.poe.nominal
+          delay: '{$NT.POE.INTERVAL}'
+          history: 7d
+          trends: '0'
+          value_type: UNSIGNED
+          units: W
+          description: |
+            pethMainPsePower for the first PSE group (POWER-ETHERNET-MIB
+            1.3.6.1.2.1.105.1.3.1.2.1): the total power the switch can deliver,
+            in watts. The module shows it next to the consumed power as the switch
+            budget. NOT every switch fills pethMainPse* -- on those this item stays
+            unsupported/empty and the module draws no budget line.
+        - uuid: e416bf79c1a74ef1afbc6703006e39e4
+          name: 'PoE: switch budget used (W)'
+          type: SNMP_AGENT
+          snmp_oid: '1.3.6.1.2.1.105.1.3.1.4.1'
+          key: nt.poe.used
+          delay: '{$NT.POE.INTERVAL}'
+          history: 7d
+          trends: '0'
+          value_type: UNSIGNED
+          units: W
+          description: |
+            pethMainPseConsumptionPower for the first PSE group (POWER-ETHERNET-MIB
+            1.3.6.1.2.1.105.1.3.1.4.1): the power currently drawn by powered devices,
+            in watts. Shown against the nominal budget. Empty on switches that do not
+            fill pethMainPse* (see the nominal item).
+      discovery_rules:
+        - uuid: 22c98deee0ca47b8add29e5dc12ae2d2
+          name: 'PoE port discovery'
+          type: DEPENDENT
+          key: nt.poe.port.discovery
+          delay: '0'
+          master_item:
+            key: nt.poe.walk
+          preprocessing:
+            - type: SNMP_WALK_TO_JSON
+              parameters:
+                - '{#NT_POE_DET}'
+                - 1.3.6.1.2.1.105.1.1.1.6
+                - '0'
+              error_handler: DISCARD_VALUE
+          item_prototypes:
+            - uuid: 1d043195f03044fbbf5dcc20b079c922
+              name: 'PoE detection [port {#SNMPINDEX}]'
+              type: DEPENDENT
+              key: 'pethPsePortDetectionStatus[{#SNMPINDEX}]'
+              value_type: UNSIGNED
+              delay: '0'
+              master_item:
+                key: nt.poe.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.3\.6\.1\.2\.1\.105\.1\.1\.1\.6\.{#SNMPINDEX} = [A-Za-z0-9-]+: (\d+)'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
+              history: 7d
+              trends: '0'
+              description: |
+                pethPsePortDetectionStatus for this PoE port (group.port =
+                {#SNMPINDEX}): 3 = deliveringPower. The module marks a delivering
+                port with a lightning bolt on the faceplate. Key uses the OID name
+                so it matches the module's existing detection reader.
+            - uuid: a47cb06a250048abbecbb96671e23d61
+              name: 'PoE class [port {#SNMPINDEX}]'
+              type: DEPENDENT
+              key: 'pethPsePortPowerClassifications[{#SNMPINDEX}]'
+              value_type: UNSIGNED
+              delay: '0'
+              master_item:
+                key: nt.poe.walk
+              preprocessing:
+                - type: REGEX
+                  parameters:
+                    - '(?m)^\.?1\.3\.6\.1\.2\.1\.105\.1\.1\.1\.7\.{#SNMPINDEX} = [A-Za-z0-9-]+: (\d+)'
+                    - '\1'
+                  error_handler: DISCARD_VALUE
+              history: 7d
+              trends: '0'
+              description: |
+                pethPsePortPowerClassifications for this PoE port (group.port =
+                {#SNMPINDEX}): 1=class0, 2=class1, 3=class2, 4=class3, 5=class4.
+                The module shows it on the faceplate port tooltip as "PoE: Class N".

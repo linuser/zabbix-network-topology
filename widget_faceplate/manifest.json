@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "network_topology_faceplate_widget",
+    "type": "widget",
+    "name": "Network Topology for Zabbix — Faceplate Widget",
+    "namespace": "NetworkTopologyFaceplateWidget",
+    "version": "1.3.2",
+    "author": "PlaNet Fox | Alexander Fox",
+    "description": "Dashboard widget: the front panel of one switch — every port as a socket, coloured by link state or speed, with alias, traffic, PoE and LLDP neighbour on hover. Layouts 8+2 to 48+6, picked automatically from the discovered ports. Requires the main module (network_topology) — uses its network.topology.faceplate action.",
+    "actions": {
+        "widget.network.topology.faceplate.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetNetworkTopologyFaceplate"
+    },
+    "assets": {
+        "js": [
+            "widget.class.js"
+        ],
+        "css": []
+    }
+}

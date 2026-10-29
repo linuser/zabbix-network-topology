@@ -183,6 +183,11 @@ export function annotateBundles(elements) {
         lead.bundleDown     = down;
         lead.bundleErr      = bErr;
         lead.bundleDrop     = bDrop;
+        // Blockt IRGENDEIN Member per STP, gilt der (eingeklappte) Trunk als
+        // geblockt -- sonst waere eine geblockte Redundanz im Buendel unsichtbar.
+        lead.bundleStpBlocked = members.some(function(m) {
+            return m.data && m.data._isStpBlocked === true;
+        });
         const shown = anyMeasured ? 1 : 0.5;   // same /2 as the edge labels
         lead.tLabel = bundleLabel(n, down, (bIn || bOut) ? ('↓' + fmt(bIn * shown) + '\n↑' + fmt(bOut * shown)) : '');
         if (down > 0) members[0].classes += ' nt-par-degraded';
@@ -272,5 +277,6 @@ export function trunkData(edge, force) {
         portDown: (d.bundleDown || 0) >= d.bundleSize ? true
             : ((d.bundleDown || 0) > 0 ? false : d.portDown),
         ifaceErr: d.bundleErr || 0, ifaceDrop: d.bundleDrop || 0,
+        _isStpBlocked: !!d.bundleStpBlocked,
     });
 }

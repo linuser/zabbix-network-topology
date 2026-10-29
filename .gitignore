@@ -21,5 +21,6 @@ tools/devnet/modul/
 # das hier erzeugt "node tools/devnet/erzeuge-geraete.mjs" in Sekunden neu.
 tools/devnet/geraete-generiert/
 
-# Claude Code project instructions — local only, not published
-CLAUDE.md
+# Python bytecode (devnet tools)
+__pycache__/
+*.pyc

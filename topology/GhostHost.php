@@ -122,15 +122,33 @@ final class GhostHost {
     }
 
     /**
+     * Taugt dieser Wert als IP-Adresse (v4 oder v6)?
+     *
+     * Die Mgmt-IP kommt ueber LLDP von einem fremden Geraet und wird vom
+     * Template aus einem OID-Index zusammengesetzt — also geprueft, bevor sie
+     * in ein Interface geht. filter_var deckt v4 und v6 ab.
+     */
+    public static function ipOk(string $ip): bool {
+        $v = trim($ip);
+        return $v !== '' && filter_var($v, FILTER_VALIDATE_IP) !== false;
+    }
+
+    /**
      * Die Nutzlast fuer API::Host()->create().
      *
-     * @param array $in  name, groupid, reporter_host, port, via
+     * @param array $in  name, groupid, reporter_host, port, via, ip
      * @return array{ok: bool, error?: string, payload?: array}
      *
-     * OHNE INTERFACE. Ueber ein unueberwachtes Geraet ist keine Adresse
-     * bekannt — eine zu erfinden waere schlimmer als keine. Zabbix laesst
-     * Hosts ohne Interface zu; wer das Geraet abfragen will, traegt es im
-     * Formular nach.
+     * INTERFACE NUR, WENN DER NACHBAR EINE ADRESSE AUSSTRAHLT. Lange gab es
+     * hier keins: ueber ein unueberwachtes Geraet war keine Adresse bekannt,
+     * und eine zu erfinden waere schlimmer als keine. Seit 5.5.97 liefert
+     * lldpRemManAddr die Management-IP — die ist NICHT erfunden, das Geraet
+     * nennt sie selbst. Liegt eine gueltige IP vor, bekommt der neue Host ein
+     * SNMP-Interface darauf; sonst bleibt es beim interfacelosen Host wie
+     * bisher. Die Community steht als Makro {$SNMP_COMMUNITY} drin, nicht als
+     * geratener Wert: Zabbix loest sie aus dem globalen Makro auf, und wo es
+     * fehlt, traegt der Mensch sie im Formular nach — der Host ist angelegt und
+     * sitzt an der richtigen Stelle, bevor er das erste Mal antwortet.
      */
     public static function payload(array $in): array {
         $name = trim((string) ($in['name'] ?? ''));
@@ -154,6 +172,24 @@ final class GhostHost {
         $uplink = self::uplinkValue($melder, $port);
         if ($uplink !== '') {
             $payload['tags'] = [['tag' => 'nt:uplink', 'value' => $uplink]];
+        }
+
+        // Management-IP aus lldpRemManAddr -> SNMP-Interface vorbefuellen.
+        $ip = trim((string) ($in['ip'] ?? ''));
+        if ($ip !== '' && self::ipOk($ip)) {
+            $payload['interfaces'] = [[
+                'type'    => 2,          // INTERFACE_TYPE_SNMP
+                'main'    => 1,
+                'useip'   => 1,
+                'ip'      => $ip,
+                'dns'     => '',
+                'port'    => '161',
+                'details' => [
+                    'version'   => 2,    // SNMPv2c — der haeufigste Fall
+                    'community' => '{$SNMP_COMMUNITY}',
+                    'bulk'      => 1,
+                ],
+            ]];
         }
 
         return ['ok' => true, 'payload' => $payload];

@@ -69,7 +69,20 @@ final class SharedConfig {
         $module->setConfig($config);
     }
 
-    /** Config FRISCH aus der DB; faellt auf die Bootstrap-Kopie zurueck. */
+    /**
+     * Config FRISCH aus der DB — fail closed.
+     *
+     * FRUEHER fiel das bei einem API-Lesefehler auf die Bootstrap-Kopie
+     * ($module->getConfig()) zurueck. write() haette dann die GESAMTE, womoeglich
+     * veraltete Config zurueckgeschrieben und fremde, zwischenzeitlich
+     * gespeicherte Aenderungen eines anderen Super-Admins ueberschrieben
+     * (Security-Review F08). Lieber abbrechen: ein fehlgeschlagener Fresh-Read
+     * darf nicht in einen Schreibvorgang mit alten Daten muenden.
+     *
+     * Ein Modul OHNE Config (erster Schreibvorgang) ist KEIN Fehler — die
+     * API-Zeile ist dann da, nur 'config' leer: dann ein leeres Array, und der
+     * erste Schluessel wird sauber gesetzt.
+     */
     private static function fresh($module): array {
         $id  = $module->getModuleId();
         $res = API::Module()->get([
@@ -77,10 +90,12 @@ final class SharedConfig {
             'moduleids'    => [$id],
             'preservekeys' => true,
         ]);
-        if (is_array($res) && isset($res[$id]['config']) && is_array($res[$id]['config'])) {
-            return $res[$id]['config'];
+        if ($res === false || !isset($res[$id])) {
+            throw new \APIException(ZBX_API_ERROR_PARAMETERS,
+                implode('; ', array_column(get_and_clear_messages(), 'message'))
+                    ?: _('Could not read the current shared configuration.'));
         }
-        $boot = $module->getConfig();
-        return is_array($boot) ? $boot : [];
+        $config = $res[$id]['config'] ?? [];
+        return is_array($config) ? $config : [];
     }
 }

@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "network_topology_wlan_widget",
+    "type": "widget",
+    "name": "Network Topology for Zabbix — WLAN Widget",
+    "namespace": "NetworkTopologyWlanWidget",
+    "version": "1.0.0",
+    "author": "PlaNet Fox | Alexander Fox",
+    "description": "Dashboard widget: a WLAN overview of the access points in the selected host groups — client count, radios (channel/standard per band), CPU/memory and status, one row per AP. Reads the same data as the map; client count needs the APs monitored over SNMP (wlan.clients). Requires the main module (network_topology).",
+    "actions": {
+        "widget.network.topology.wlan.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetNetworkTopologyWlan"
+    },
+    "assets": {
+        "js": [
+            "widget.class.js"
+        ],
+        "css": []
+    }
+}

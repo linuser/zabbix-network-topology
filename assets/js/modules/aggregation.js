@@ -145,8 +145,22 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
         let anyProblems = false;
         let allMaintenance = true; // alle Hosts in Wartung?
         const topProblems = [];
+        // VLANs der Mitglieder vereinigen -> der Aggregat-Knoten traegt die
+        // Summe, sonst fehlt der VLAN-Waehler im gruppierten View und der
+        // Filter dimmte die Gruppe, obwohl Mitglieder auf dem VLAN liegen.
+        // Nicht-leerer Name gewinnt (ein Switch benennt das VLAN, ein anderer
+        // nicht).
+        const vlanSeen = {};
 
         children.forEach(function(c) {
+            if (c.vlans && c.vlans.length) {
+                c.vlans.forEach(function(v) {
+                    if (v && v.id != null
+                            && (!(v.id in vlanSeen) || (!vlanSeen[v.id] && v.name))) {
+                        vlanSeen[v.id] = v.name || vlanSeen[v.id] || '';
+                    }
+                });
+            }
             const s = c.severity || 0;
             if (s > maxSev) maxSev = s;
             sumProblems += (c.problems || 0);
@@ -194,7 +208,15 @@ export function aggregateByGroup(nodes, edges, ausgeklappt) {
             // Woran die Oberflaeche erkennt, dass hier noch etwas drin ist.
             _gruppenPfad: gname,
             _childCount: children.length,
-            _topProblems: topProblems.slice(0, 3)
+            _topProblems: topProblems.slice(0, 3),
+            // Vereinigte VLANs der Mitglieder ([{id,name}], nach ID sortiert) —
+            // damit der VLAN-Waehler auch im gruppierten View greift.
+            vlans: (function() {
+                const ids = Object.keys(vlanSeen);
+                if (!ids.length) return null;
+                return ids.map(function(k) { return { id: parseInt(k, 10), name: vlanSeen[k] }; })
+                    .sort(function(a, b) { return a.id - b.id; });
+            })()
         });
     });
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # nt-arp-add-item.sh — legt die walk[]-Items fuer die IP-Suche (ARP + ND) auf
-# einem Router/L3-Switch an (siehe FDB-SETUP.md, Abschnitt „search by IP"):
+# einem Router/L3-Switch an (siehe docs/FDB-SETUP.md, Abschnitt „search by IP"):
 # nt.arp (IPv4) und nt.nd (IPv6). EIN Befehl statt Klicken in der UI.
 # Geschwister von nt-fdb-add-items.sh.
 #

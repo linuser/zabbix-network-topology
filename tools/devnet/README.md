@@ -52,6 +52,28 @@ That imports the module's LLDP template, links it to every `lab-*` host and
 shortens the polling intervals, because nobody wants to wait an hour for the
 next discovery run while debugging.
 
+### A service + SLA, so the SLA chip has something to show
+
+The map's **SLA-relevant** chip (and the detail-panel badge) answers "does this
+problem cost anything" — a host is SLA-relevant when one of its active problems
+feeds a Zabbix **Service**. Services hang off *problem tags*, not SNMP, so they
+can't come from a `.snmprec`. This script builds the whole chain in a running
+devnet:
+
+```bash
+python3 tools/devnet/erzeuge-sla.py --token-datei ~/.devnetz-token
+```
+
+It puts a trapper item + a High trigger (tagged `Service=checkout`) on
+`lab-access-endpoints`, pushes a value so the trigger fires, then creates a
+service **Checkout** (problem tag `Service=checkout`, service tag `Tier=gold`)
+and an SLA **Gold** (`slo 99.9`, service tag `Tier=gold`). After the next poll
+that switch carries the magenta SLA badge and the KPI reads *1 SLA-relevant*.
+
+All names are invented, like everything else here. It is idempotent — rerun it
+if the trapper push times out on the first config-cache reload (it waits up to
+two minutes, then tells you to rerun; the service and SLA are already in place).
+
 ## Many devices at once — the load test
 
 The files above are **evidence**: one per real report, and their value is that

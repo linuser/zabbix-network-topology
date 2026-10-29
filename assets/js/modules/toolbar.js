@@ -15,19 +15,26 @@
 //     Lösung: setRenderCallback() injiziert die render-Funktion vom Hauptmodul.
 
 import { loadGroupOpen, saveGroupOpen } from './storage.js';
-import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
+import { NT_LLDP_KEY, NT_WEATHERMAP_KEY, NT_LINKQUALITY_KEY, NT_GROUP_VIEW_KEY, NT_GROUP_CLUSTER_KEY, NT_PERF_KEY,
     isGroupViewEffective,
          loadGhostMode, saveGhostMode,
          loadBundleMode, saveBundleMode,
          clearPositions, savePositions, savePinned, clearLinks, defaultLinkScope,
          loadLayout, saveLayout,
+         loadNodeSize, saveNodeSize, nextNodeSize, nodeSizeFactor,
+         loadRings, saveRings, loadExpected, saveExpected,
+         loadVlanFilter, saveVlanFilter,
          loadTapholdMs, saveTapholdMs } from './storage.js';
+import { buildCytoscapeStyle } from './render-tech-style.js';
 import { refreshKpi } from './kpi.js';
+import { applyRings, clearRings } from './rings.js';
+import { applyExpected, clearExpected } from './expected-links.js';
+import { collectVlans, applyVlanFilter, clearVlanFilter } from './vlan-filter.js';
 import { resetHighlight } from './highlight.js';
 import { isPathActive, getPathStart, clearPathState } from './path-highlight.js';
 import { isSimActive, clearSimulation } from './whatif.js';
 import { isFocusActive, clearFocus } from './focus-mode.js';
-import { setWeathermapMode, applyTrafficHeatmap } from './traffic.js';
+import { setWeathermapMode, setLinkQualityMode, applyTrafficHeatmap } from './traffic.js';
 import { refreshBottomLegend } from './legend.js';
 import { refreshLabel } from './utils.js';
 import { openColorScalesPanel } from './color-scales-ui.js';
@@ -47,6 +54,8 @@ import { LAYOUT_OPTIONS, buildLayoutConfig } from './layouts.js';
 import { setupPresetsUI } from './presets-ui.js';
 import { buildSevFilter } from './sev-filter.js';
 import { runGroupClusterLayout } from './group-cluster-layout.js';
+import { configureLayoutHistory, recordBefore, undoLayout, redoLayout,
+         canUndo, canRedo } from './layout-history.js';
 
 // Cross-Module-Glue: render() wird aus dem Hauptmodul/render-tech.js injiziert,
 // damit der Group-View-Button einen Re-Render triggern kann.
@@ -57,6 +66,7 @@ export function setRenderCallback(fn) { _renderFn = fn; }
 // Handle auf den document-Listener des Layout-Menues, damit der naechste
 // Aufbau den vorigen abmelden kann (siehe unten).
 let _layoutDocClose = null;
+let _vlanDocClose = null;
 
 export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
     const bar = document.querySelector('.nt-topbar__actions');
@@ -257,6 +267,13 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
             });
             row.addEventListener('click', function() {
                 menu.style.display = 'none';
+                // Vor dem Layout-WECHSEL die aktuelle (Hand-)Anordnung als
+                // Undo-Schritt sichern: ein Klick auf ein anderes Layout laesst
+                // sich damit ruecknehmen, zurueck zu dem, was der User gezogen
+                // hatte. NUR bei einem echten Wechsel — ein Klick auf das bereits
+                // aktive Layout aendert nichts und soll keinen Leer-Schritt
+                // erzeugen (Review-Fund).
+                if (!isActive && window._ntCy) recordBefore(window._ntCy);
                 saveLayout(opt.id);
                 // Re-Layout mit forceFresh=true: der User hat aktiv gewählt,
                 // also nicht den Preset wiederverwenden.
@@ -340,6 +357,96 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         wrap.appendChild(btn);
         wrap.appendChild(menu);
         if (bar && isFirstRun) bar.appendChild(wrap);
+    })();
+
+    // VLAN-Waehler — NUR wenn der Graph VLAN-Daten traegt (NT VLAN by SNMP).
+    // Dropdown wie das Layout-Menue: „alle" + je VLAN eine Zeile; die Auswahl
+    // dimmt alles, was nicht auf dem VLAN liegt (vlan-filter.js). Auf Instanzen
+    // ohne das Template bleibt die Toolbar unveraendert (collectVlans leer).
+    (function buildVlanDropdown() {
+        const existing = document.getElementById('nt-vlan-wrap');
+        if (existing) existing.remove();
+
+        const vlans = collectVlans(cy);
+        if (!vlans.length) {
+            // Kein nt.vlan.walk -> kein Waehler; einen evtl. alten Filter loesen.
+            if (loadVlanFilter()) { saveVlanFilter(''); clearVlanFilter(cy); }
+            return;
+        }
+
+        const OPTIONS = [{ id: '', label: t('toolbar.vlan.all') }].concat(
+            vlans.map(function(v) {
+                return { id: String(v.id), label: v.name ? (v.id + ' · ' + v.name) : String(v.id) };
+            }));
+
+        let _cur = loadVlanFilter();
+        // Gewaehltes VLAN gibt es nicht mehr (Topologie geaendert) -> auf alle.
+        if (_cur !== '' && !vlans.some(function(v) { return String(v.id) === _cur; })) {
+            _cur = ''; saveVlanFilter('');
+        }
+        const _labelOf = function(id) {
+            const o = OPTIONS.find(function(x) { return x.id === id; }) || OPTIONS[0];
+            return o.label;
+        };
+
+        const vwrap = document.createElement('div');
+        vwrap.id = 'nt-vlan-wrap';
+        vwrap.style.cssText = 'position:relative;display:inline-block;margin-left:4px';
+
+        const vbtn = document.createElement('button');
+        vbtn.className = 'btn-alt btn-small';
+        vbtn.style.margin = '0';
+        vbtn.textContent = t('toolbar.vlan', { name: _labelOf(_cur) });
+        vbtn.title = t('toolbar.vlan.tip');
+        vbtn.style.opacity = (_cur === '') ? '0.5' : '1';
+
+        const vmenu = document.createElement('div');
+        vmenu.style.cssText = 'display:none;position:absolute;top:100%;left:0;z-index:9999;'
+            + 'background:var(--nt-surface);border:1px solid var(--nt-line);border-radius:6px;'
+            + 'box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:160px;max-height:320px;'
+            + 'overflow:auto;margin-top:2px';
+
+        OPTIONS.forEach(function(opt) {
+            const row = document.createElement('div');
+            const isActive = opt.id === _cur;
+            row.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;'
+                + 'color:' + (isActive ? 'var(--nt-active-text)' : 'var(--nt-text-2)') + ';'
+                + 'background:' + (isActive ? 'var(--nt-active-bg)' : 'transparent') + ';'
+                + 'white-space:nowrap;font-weight:' + (isActive ? '600' : '400');
+            row.textContent = opt.label;
+            row.addEventListener('mouseover', function() {
+                if (opt.id !== loadVlanFilter()) this.style.background = 'var(--nt-surface-2)';
+            });
+            row.addEventListener('mouseout', function() {
+                if (opt.id !== loadVlanFilter()) this.style.background = 'transparent';
+            });
+            row.addEventListener('click', function() {
+                vmenu.style.display = 'none';
+                saveVlanFilter(opt.id);
+                if (opt.id === '') { clearVlanFilter(cy); } else { applyVlanFilter(cy, opt.id); }
+                vbtn.textContent = t('toolbar.vlan', { name: opt.label });
+                vbtn.style.opacity = (opt.id === '') ? '0.5' : '1';
+                Array.from(vmenu.children).forEach(function(child, i) {
+                    const a = OPTIONS[i].id === opt.id;
+                    child.style.color      = a ? 'var(--nt-active-text)' : 'var(--nt-text-2)';
+                    child.style.background = a ? 'var(--nt-active-bg)' : 'transparent';
+                    child.style.fontWeight = a ? '600' : '400';
+                });
+            });
+            vmenu.appendChild(row);
+        });
+
+        vbtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            vmenu.style.display = vmenu.style.display === 'none' ? 'block' : 'none';
+        });
+        if (_vlanDocClose) { document.removeEventListener('click', _vlanDocClose); }
+        _vlanDocClose = function() { vmenu.style.display = 'none'; };
+        document.addEventListener('click', _vlanDocClose);
+
+        vwrap.appendChild(vbtn);
+        vwrap.appendChild(vmenu);
+        if (bar && isFirstRun) bar.appendChild(vwrap);
     })();
 
     // Touch-Long-Press-Dauer (nur auf Touch-Geräten in der Toolbar sichtbar).
@@ -642,26 +749,92 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         bLldp.style.opacity = _lldpVisible ? '1' : '0.5';
     });
 
-    // Weathermap-Modus: Edge-Farbe nach Auslastungs-% (Traffic / Link-
-    // Kapazitaet aus ifSpeed) statt absolutem Traffic. Der Klassiker.
-    let _wmOn = false;
-    try { _wmOn = localStorage.getItem(NT_WEATHERMAP_KEY) === '1'; } catch (e) {}
+    // Weathermap- und Link-Quality-Modus faerben beide die Kanten — nach
+    // Auslastungs-% bzw. nach Güte-Score (Errors/Drops/Auslastung/Down/Flap). Sie
+    // schliessen sich GEGENSEITIG aus: eine Kante kann nur eine Aussage farblich
+    // tragen. Darum ein gemeinsamer Zustand + ein gemeinsamer Label-Refresh.
+    let _wmOn = false, _lqOn = false;
+    try { _wmOn = localStorage.getItem(NT_WEATHERMAP_KEY)   === '1'; } catch (e) {}
+    try { _lqOn = localStorage.getItem(NT_LINKQUALITY_KEY) === '1'; } catch (e) {}
+    if (_wmOn && _lqOn) {   // Altzustand mit beiden an: Weathermap gewinnt.
+        _lqOn = false;
+        try { localStorage.setItem(NT_LINKQUALITY_KEY, '0'); } catch (e) {}
+    }
     setWeathermapMode(_wmOn);
+    setLinkQualityMode(_lqOn);
+
     const bWm = mkbtn('nt-btn-weathermap', '', null);
-    const _setWmLabel = function() {
+    const bLq = mkbtn('nt-btn-linkquality', '', null);
+
+    function _refreshModeLabels() {
         bWm.textContent = t('toolbar.weathermap', { state: _wmOn ? t('toolbar.on') : t('toolbar.off') });
         bWm.style.opacity = _wmOn ? '1' : '0.5';
         bWm.title = t('toolbar.weathermap.tip');
-    };
-    _setWmLabel();
-    bWm.addEventListener('click', function() {
-        _wmOn = !_wmOn;
-        try { localStorage.setItem(NT_WEATHERMAP_KEY, _wmOn ? '1' : '0'); } catch (e) {}
+        bLq.textContent = t('toolbar.linkquality', { state: _lqOn ? t('toolbar.on') : t('toolbar.off') });
+        bLq.style.opacity = _lqOn ? '1' : '0.5';
+        bLq.title = t('toolbar.linkquality.tip');
+    }
+    function _persistModes() {
+        try { localStorage.setItem(NT_WEATHERMAP_KEY,   _wmOn ? '1' : '0'); } catch (e) {}
+        try { localStorage.setItem(NT_LINKQUALITY_KEY, _lqOn ? '1' : '0'); } catch (e) {}
+    }
+    function _applyModes() {
         setWeathermapMode(_wmOn);
-        _setWmLabel();
+        setLinkQualityMode(_lqOn);
+        _persistModes();
+        _refreshModeLabels();
         applyTrafficHeatmap(window._ntCy);
         // The color guide shows the scale of the active mode — keep it in sync.
         refreshBottomLegend();
+    }
+
+    _refreshModeLabels();
+    bWm.addEventListener('click', function() {
+        _wmOn = !_wmOn;
+        if (_wmOn) _lqOn = false;   // gegenseitig ausschliessend
+        _applyModes();
+    });
+    bLq.addEventListener('click', function() {
+        _lqOn = !_lqOn;
+        if (_lqOn) _wmOn = false;
+        _applyModes();
+    });
+
+    // Ring-/Loop-Erkennung: redundante Ringe (Zyklen) im Nachbargraphen als
+    // underlay-Halo markieren, per STP sicher/gefaehrlich getrennt. Kein
+    // Re-Render — nur Styling vorhandener Kanten + die KPI-Zeile (Ring-/Loop-
+    // Pille erscheint/verschwindet).
+    const bRings = mkbtn('nt-btn-rings', '', null);
+    const _setRingsLabel = function() {
+        const on = loadRings();
+        bRings.textContent = t('toolbar.rings', { state: t('toolbar.rings.' + (on ? 'on' : 'off')) });
+        bRings.style.opacity = on ? '1' : '0.5';
+        bRings.title = t('toolbar.rings.tip');
+    };
+    _setRingsLabel();
+    bRings.addEventListener('click', function() {
+        const on = !loadRings();
+        saveRings(on);
+        _setRingsLabel();
+        if (on) applyRings(window._ntCy); else clearRings(window._ntCy);
+        refreshKpi();
+    });
+
+    // Soll/Ist-Toggle (nt:expect): erwartete gegen gemessene Verkabelung.
+    const bExpected = mkbtn('nt-btn-expected', '', null);
+    const _setExpectedLabel = function() {
+        const on = loadExpected();
+        bExpected.textContent = t('toolbar.expected', { state: t('toolbar.expected.' + (on ? 'on' : 'off')) });
+        bExpected.style.opacity = on ? '1' : '0.5';
+        bExpected.title = t('toolbar.expected.tip');
+    };
+    _setExpectedLabel();
+    bExpected.addEventListener('click', function() {
+        const on = !loadExpected();
+        saveExpected(on);
+        _setExpectedLabel();
+        if (on) applyExpected(window._ntCy); else clearExpected(window._ntCy);
+        refreshKpi();
     });
 
     // Color-scales editor: thresholds + colors of both scales, stored in
@@ -687,6 +860,29 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         try { localStorage.setItem(NT_PERF_KEY, nowOn ? '1' : '0'); } catch (e) {}
         const d = window._ntLastData || {};
         if (d.nodes && d.nodes.length) _renderFn(wrap, d.nodes.slice(), (d.edges || []).slice(), d.url || '');
+    });
+
+    // Punktgroesse: Hosts + Beschriftung kleiner/normal/groesser. Ringt durch
+    // die drei Stufen. Kein Re-Render wie beim Perf-Toggle noetig — nur das
+    // Stylesheet wird getauscht (cy.style ersetzt nur die Regeln; Klassen wie
+    // .nt-perf und inline gesetzte Labels/Heatmap-Farben bleiben erhalten),
+    // das haelt Positionen, Pins und Fokus unberuehrt.
+    const bSize = mkbtn('nt-btn-nodesize', '', null);
+    const _setSizeLabel = function() {
+        const step = loadNodeSize();
+        bSize.textContent = t('toolbar.nodesize', { size: t('toolbar.nodesize.' + step) });
+        bSize.style.opacity = step === 'normal' ? '0.5' : '1';
+        bSize.title = t('toolbar.nodesize.tip');
+    };
+    _setSizeLabel();
+    bSize.addEventListener('click', function() {
+        const step = nextNodeSize();
+        saveNodeSize(step);
+        _setSizeLabel();
+        const c = window._ntCy;
+        if (c && !c.destroyed()) {
+            c.style(buildCytoscapeStyle(isDark, nodes.length, nodeSizeFactor(step)));
+        }
     });
 
     // Port-Labels: LLDP-Port des Reporters an den Edge-Enden (Best-Effort)
@@ -807,6 +1003,54 @@ export function setupToolbar(cy, wrap, nodes, groupNames, isDark, useLayout) {
         // die Kennzahl daneben waere es erst nach dem naechsten Refresh.
         refreshKpi();
     };
+
+    // ── Undo/Redo der Anordnung ─────────────────────────────────────────────
+    function _cyLive() {
+        const c = window._ntCy;
+        return (c && !(c.destroyed && c.destroyed())) ? c : null;
+    }
+    const bUndo = mkbtn('nt-btn-undo', '↶', function() {
+        const c = _cyLive(); if (c) undoLayout(c);
+    });
+    bUndo.title = t('toolbar.undo.tip');
+    const bRedo = mkbtn('nt-btn-redo', '↷', function() {
+        const c = _cyLive(); if (c) redoLayout(c);
+    });
+    bRedo.title = t('toolbar.redo.tip');
+    // Button-Zustand zentral: layout-history meldet (canUndo, canRedo). Per ID
+    // aktualisiert, weil mkbtn die Buttons bei jedem Setup ersetzt.
+    function _updUndoRedo(cu, cr) {
+        const u = document.getElementById('nt-btn-undo');
+        const r = document.getElementById('nt-btn-redo');
+        if (u) { u.disabled = !cu; u.style.opacity = cu ? '' : '0.4'; }
+        if (r) { r.disabled = !cr; r.style.opacity = cr ? '' : '0.4'; }
+    }
+    configureLayoutHistory({ onChange: _updUndoRedo });
+    _updUndoRedo(canUndo(), canRedo());
+    // Tastatur: Strg/Cmd+Z = Undo, Strg/Cmd+Shift+Z oder Strg+Y = Redo. Einmal
+    // pro Page-Load (wie der ESC-Listener), und nicht, waehrend in einem
+    // Eingabefeld getippt wird.
+    if (!window._ntUndoKeysInstalled) {
+        window._ntUndoKeysInstalled = true;
+        document.addEventListener('keydown', function(e) {
+            if (!(e.ctrlKey || e.metaKey)) return;
+            const tag = (e.target && e.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA'
+                    || (e.target && e.target.isContentEditable)) return;
+            const c = _cyLive();
+            if (!c) return;
+            // preventDefault NUR, wenn wir den Druck auch nutzen — sonst wuerde
+            // das native Strg+Z der Seite dauerhaft geschluckt, auch bei leerem
+            // Stapel (der Listener haengt einmalig fuer die Seitenlebensdauer).
+            const k = (e.key || '').toLowerCase();
+            if (k === 'z' && !e.shiftKey) {
+                if (canUndo()) { e.preventDefault(); undoLayout(c); }
+            }
+            else if ((k === 'z' && e.shiftKey) || k === 'y') {
+                if (canRedo()) { e.preventDefault(); redoLayout(c); }
+            }
+        });
+    }
 
     // History-Button (Toggle für History-Slider)
     addHistoryButton(bar, isFirstRun);

@@ -161,6 +161,13 @@ class NetworkTopologyView extends CController {
             'user'              => [
                 'type'           => $this->getUserType(),
                 'can_edit'       => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN,
+                // Host anlegen braucht ZUSAETZLICH das UI-Konfigurationsrecht
+                // fuer Hosts (Rolle kann es sperren, Benutzertyp bleibt Admin).
+                // Deckt sich mit checkPermissions in NetworkTopologyCreateHost;
+                // der Button im Kontextmenue haengt daran statt an can_edit,
+                // damit er nicht erscheint, wo die Action ohnehin ablehnt (F01).
+                'can_create_host' => $this->getUserType() >= USER_TYPE_ZABBIX_ADMIN
+                    && $this->checkAccess(\CRoleHelper::UI_CONFIGURATION_HOSTS),
                 // Welche Form das Host-Formular hat. Siehe hostEditUrl() in
                 // utils.js: auf 7.0 ist action=host.edit eine Seite und der
                 // Popup-Weg ein Fatal, ab 7.2 ist es umgekehrt. Die Version

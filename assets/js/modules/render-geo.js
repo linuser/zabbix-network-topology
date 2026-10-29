@@ -17,132 +17,20 @@
 //
 // Leaflet ist als globales L verfügbar (vor diesem Modul per <script> geladen).
 
-import { esc, fmt, clearWrap } from './utils.js';
-import { SEV_COL, SEV_LBL } from './severity.js';
+import { esc, clearWrap } from './utils.js';
 import { loadGeoProvider, saveGeoProvider } from './storage.js';
 import { GEO_PROVIDERS, getProvider } from './geo-providers.js';
 import { t } from './i18n.js';
 import { fetchJson } from './http.js';
+import { buildMarkerIcon, buildPopup, drawEdges, ensureLeaflet } from './geo-markers.js';
 
 let _map         = null;   // Leaflet-Map-Instance
 let _markerLayer = null;   // LayerGroup für Host-Marker
 let _edgeLayer   = null;   // LayerGroup für LLDP-Polylines
 let _tileLayer   = null;   // aktueller Tile-Layer (für Provider-Wechsel)
 
-// Erzeugt einen kreisförmigen DivIcon-Marker mit Severity-Farbe.
-// Größe wächst sanft mit Anzahl der Probleme (12px → 24px).
-function buildMarkerIcon(node) {
-    const sev = node.severity || 0;
-    const isOff = !!node.unavailable;
-    // Offline ueberschreibt die Severity-Farbe — der Marker wird grau und
-    // bekommt ein rotes "X" damit man auf der Karte sofort tote Hosts sieht.
-    const col = isOff
-        ? '#9ca3af'
-        : (SEV_COL[Math.min(sev, SEV_COL.length - 1)] || SEV_COL[0]);
-    const probs = node.problems || 0;
-    const r = Math.min(12 + probs, 24);
-    const opacity = isOff ? 0.6 : (node.maintenance ? 0.55 : 1);
-    const ackRing = node.acknowledged
-        ? '<circle cx="' + (r + 2) + '" cy="' + (r + 2) + '" r="' + (r - 1)
-            + '" fill="none" stroke="#22c55e" stroke-width="2.5" opacity="0.9"/>'
-        : '';
-    // Bei Offline: rotes X im Marker statt Problem-Counter
-    const offX = isOff
-        ? '<g transform="translate(' + (r + 2) + ',' + (r + 2) + ')"'
-            + ' stroke="#e53742" stroke-width="3" stroke-linecap="round">'
-            + '<line x1="-' + (r * 0.5) + '" y1="-' + (r * 0.5) + '" x2="' + (r * 0.5) + '" y2="' + (r * 0.5) + '"/>'
-            + '<line x1="' + (r * 0.5) + '" y1="-' + (r * 0.5) + '" x2="-' + (r * 0.5) + '" y2="' + (r * 0.5) + '"/>'
-            + '</g>'
-        : '';
-    const html =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="' + ((r + 2) * 2) + '" height="' + ((r + 2) * 2) + '"'
-        + ' style="opacity:' + opacity + '">'
-        + '<circle cx="' + (r + 2) + '" cy="' + (r + 2) + '" r="' + r
-        + '" fill="' + col + '" stroke="white" stroke-width="2"/>'
-        + ackRing
-        + offX
-        + (probs > 0 && !isOff
-            ? '<text x="' + (r + 2) + '" y="' + (r + 2) + '" text-anchor="middle" dominant-baseline="central"'
-              + ' font-family="sans-serif" font-size="' + (probs > 9 ? 9 : 11) + '" font-weight="700"'
-              + ' fill="white">' + (probs > 99 ? '99+' : probs) + '</text>'
-            : '')
-        + '</svg>';
-    return L.divIcon({
-        html: html,
-        className: 'nt-geo-marker',
-        iconSize: [(r + 2) * 2, (r + 2) * 2],
-        iconAnchor: [r + 2, r + 2]
-    });
-}
-
-// Popup-HTML für einen Host
-function buildPopup(node) {
-    const sev = node.severity || 0;
-    const col = SEV_COL[Math.min(sev, SEV_COL.length - 1)] || SEV_COL[0];
-    const lbl = SEV_LBL[sev] || 'Normal';
-    const tr = node.traffic || { in: 0, out: 0 };
-
-    function mk(tag, css, text) {
-        const e = document.createElement(tag);
-        if (css) e.style.cssText = css;
-        if (text !== undefined) e.textContent = text;
-        return e;
-    }
-
-    const root = mk('div', 'font-family:sans-serif;min-width:200px');
-    root.appendChild(mk('div', 'font-weight:700;color:var(--nt-text,#0f172a);margin-bottom:4px',
-        node.label || ''));
-    if (node.ip) {
-        root.appendChild(mk('div', 'font-size:10px;color:var(--nt-sub,#64748b);font-family:monospace',
-            node.ip));
-    }
-    if (node.location) {
-        root.appendChild(mk('div', 'font-size:10px;color:var(--nt-sub,#64748b);margin-top:2px',
-            '\u{1F4CD} ' + node.location));
-    }
-    if (node.maintenance || node.acknowledged) {
-        const row = mk('div', 'margin-top:4px');
-        if (node.maintenance) {
-            row.appendChild(mk('span',
-                'background:var(--nt-warn-bg,#fef3c7);color:var(--nt-warn-text,#92400e);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
-                t('geo.maintenance')));
-        }
-        if (node.acknowledged) {
-            row.appendChild(mk('span',
-                'background:var(--nt-ok-bg,#dcfce7);color:var(--nt-ok-text,#166534);padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;margin-right:4px',
-                '\u2714 Acked'));
-        }
-        root.appendChild(row);
-    }
-
-    const stats = mk('div',
-        'margin-top:6px;padding-top:6px;border-top:1px solid var(--nt-line-soft,#f1f5f9);font-size:11px;color:var(--nt-text-2,#334155)');
-    const sevLine = mk('div');
-    sevLine.appendChild(mk('span', 'color:' + col + ';font-weight:600', '\u25CF ' + lbl));
-    if (node.problems > 0) {
-        sevLine.appendChild(document.createTextNode('   '));
-        sevLine.appendChild(mk('b', 'color:#ef4444', String(node.problems)));
-        sevLine.appendChild(document.createTextNode(' Probleme'));
-    }
-    stats.appendChild(sevLine);
-    function metric(label, val) {
-        const r = mk('div'); r.textContent = label + ': ';
-        r.appendChild(mk('b', '', String(val))); stats.appendChild(r);
-    }
-    if (node.cpu    != null) metric('CPU', node.cpu + '%');
-    if (node.memory != null) metric('RAM', node.memory + '%');
-    if (node.ping > 0)       metric('Ping', node.ping + ' ms');
-    if (tr.in || tr.out) {
-        const r = mk('div'); r.textContent = 'Traffic: ';
-        r.appendChild(mk('span', 'color:#22c55e', '\u2193 ' + fmt(tr.in)));
-        r.appendChild(document.createTextNode(' '));
-        r.appendChild(mk('span', 'color:#06b6d4', '\u2191 ' + fmt(tr.out)));
-        stats.appendChild(r);
-    }
-    root.appendChild(stats);
-    return root;
-}
-
+// buildMarkerIcon / buildPopup / drawEdges / ensureLeaflet liegen seit 5.5.69 in
+// geo-markers.js, damit der Plan-Modus denselben Code nutzt (eine Quelle).
 // Kurzlebiger Toast unten am Bildschirmrand für Provider-Warnungen.
 // Verschwindet nach 6 Sekunden oder bei Klick.
 function showToast(message) {
@@ -176,6 +64,12 @@ function switchProvider(providerId) {
     const opts = { maxZoom: p.maxZoom || 19, attribution: p.attribution };
     if (p.subdomains) opts.subdomains = p.subdomains;
     _tileLayer = L.tileLayer(p.url, opts).addTo(_map);
+    // Karten-Zoom auf das Maximum des neuen Providers kappen. Sonst bleibt die
+    // Karte nach einem Wechsel von einem hoch-zoombaren Provider (Esri/OSM z19)
+    // auf einen flacheren (USGS z16) auf dem alten Level stehen und zeigt leere
+    // Tiles ohne Erklaerung. setMaxZoom() zieht den aktuellen Zoom bei Bedarf mit
+    // herunter — und hebt die Decke beim Wechsel nach oben wieder an.
+    _map.setMaxZoom(opts.maxZoom);
     if (p.warningKey) showToast(t(p.warningKey));
 }
 
@@ -200,15 +94,7 @@ function rebuildMarkersAndEdges(geoNodes, edges) {
         marker.addTo(_markerLayer);
     });
 
-    edges.forEach(function(e) {
-        const src = String(e.source || e.from || '');
-        const tgt = String(e.target || e.to || '');
-        const a = nodePos[src], b = nodePos[tgt];
-        if (!a || !b) return;
-        L.polyline([a, b], {
-            color: '#22c55e', weight: 2, opacity: 0.6, dashArray: '6,5'
-        }).addTo(_edgeLayer);
-    });
+    drawEdges(_edgeLayer, edges, nodePos);
 }
 
 // Cleanup beim Tab-Wechsel weg von Geo. Räumt Leaflet-Map und alle
@@ -226,31 +112,6 @@ export function cleanupGeo() {
     _markerLayer = null;
     _edgeLayer   = null;
     _tileLayer   = null;
-}
-
-// Leaflet lazy laden: ~144 KB (JS+CSS) werden nur geholt, wenn der Geo-Tab
-// wirklich geoeffnet wird — nicht mehr auf jeder Seite via Script-Tag.
-// Idempotent + memoized; bei Fehler wird der Cache zurueckgesetzt (Retry).
-let _leafletPromise = null;
-function ensureLeaflet() {
-    if (window.L) return Promise.resolve();
-    if (_leafletPromise) return _leafletPromise;
-    const BASE = 'modules/network_topology/assets/js/leaflet/';
-    _leafletPromise = new Promise(function(resolve, reject) {
-        if (!document.getElementById('nt-leaflet-css')) {
-            const link = document.createElement('link');
-            link.id = 'nt-leaflet-css';
-            link.rel = 'stylesheet';
-            link.href = BASE + 'leaflet.css';
-            document.head.appendChild(link);
-        }
-        const s = document.createElement('script');
-        s.src = BASE + 'leaflet.js';
-        s.onload = function() { resolve(); };
-        s.onerror = function() { _leafletPromise = null; reject(new Error(t('geo.leaflet_failed'))); };
-        document.head.appendChild(s);
-    });
-    return _leafletPromise;
 }
 
 export function renderGeo(wrap, nodes, edges, dataUrl) {

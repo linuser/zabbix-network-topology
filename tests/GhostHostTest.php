@@ -118,15 +118,40 @@ check('technischer Name',       $p['payload']['host'], 'sw-edge-03');
 check('Gruppe gesetzt',         $p['payload']['groups'], [['groupid' => '22']]);
 check('Uplink-Tag gesetzt',     $p['payload']['tags'],
     [['tag' => 'nt:uplink', 'value' => 'lab-sw-01:Gi1/0/8']]);
-// OHNE INTERFACE: ueber ein unueberwachtes Geraet ist keine Adresse bekannt,
-// und eine zu erfinden waere schlimmer als keine.
-check('kein Interface erfunden', isset($p['payload']['interfaces']), false);
+// OHNE MGMT-IP KEIN INTERFACE: strahlt der Nachbar keine Adresse aus, wird
+// keine erfunden (hier ohne 'ip' gebaut).
+check('ohne Mgmt-IP kein Interface', isset($p['payload']['interfaces']), false);
 
 $ohnePort = GhostHost::payload([
     'name' => 'drucker-og', 'groupid' => '22', 'reporter_host' => 'lab-sw-01', 'port' => '',
 ]);
 check('ohne Port: Host ja, Tag nein', isset($ohnePort['payload']['tags']), false);
 check('ohne Port: trotzdem gebaut',   $ohnePort['ok'], true);
+
+// ── Mgmt-IP (lldpRemManAddr) -> SNMP-Interface (5.5.97) ────────────────────
+echo "\n  payload: Interface aus der Management-IP\n\n";
+check('ipOk: IPv4',            GhostHost::ipOk('192.0.2.9'), true);
+check('ipOk: IPv6',            GhostHost::ipOk('2001:db8::1'), true);
+check('ipOk: leer faellt durch', GhostHost::ipOk(''), false);
+check('ipOk: Muell faellt durch', GhostHost::ipOk('not-an-ip'), false);
+check('ipOk: Hostname faellt durch', GhostHost::ipOk('switch.local'), false);
+
+$pIp = GhostHost::payload([
+    'name' => 'fw-edge', 'groupid' => '22', 'reporter_host' => 'lab-sw-01',
+    'port' => 'Gi1/0/8', 'via' => 'lldp', 'ip' => '192.0.2.9',
+]);
+check('mit Mgmt-IP: Interface da',   isset($pIp['payload']['interfaces']), true);
+check('Interface: SNMP (type 2)',    $pIp['payload']['interfaces'][0]['type'] ?? null, 2);
+check('Interface: IP gesetzt',       $pIp['payload']['interfaces'][0]['ip'] ?? null, '192.0.2.9');
+check('Interface: useip',            $pIp['payload']['interfaces'][0]['useip'] ?? null, 1);
+check('Interface: Community als Makro', $pIp['payload']['interfaces'][0]['details']['community'] ?? null, '{$SNMP_COMMUNITY}');
+
+// Ungueltige IP (vom fremden Geraet, nie blind uebernommen) -> kein Interface.
+$pBad = GhostHost::payload([
+    'name' => 'fw-edge2', 'groupid' => '22', 'ip' => '192.0.2.9; rm -rf',
+]);
+check('ungueltige Mgmt-IP: kein Interface', isset($pBad['payload']['interfaces']), false);
+check('ungueltige Mgmt-IP: Host trotzdem gebaut', $pBad['ok'], true);
 
 check('schlechter Name wird abgelehnt',
     GhostHost::payload(['name' => 'sw:01', 'groupid' => '22'])['error'], 'name');

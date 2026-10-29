@@ -42,7 +42,7 @@
   },
   "assets/js/modules/render-mgmt.js": {
     "no-unsanitized/property": {
-      "count": 4
+      "count": 3
     }
   },
   "assets/js/modules/render-stats.js": {

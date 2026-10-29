@@ -328,6 +328,22 @@ const hopLayout = szenario('hops', { lang: 'en_US' }, `
     const pos = (id) => cfg.positions({ id: () => id });
     const gross = Array.from({ length: 160 }, (_, i) => ({ id: 'n' + i, type: 'switch' }));
     const grossK = gross.slice(1).map((n) => ({ source: 'n0', target: n.id }));
+
+    // Breiter Tier: ein Kern, 800 Blaetter direkt daran. Ohne Umbruch waere der
+    // Tier 800 Knoten breit und 2 hoch -> fit() schrumpft auf Sub-Pixel, die
+    // Karte schien leer (2000-Host-Lasttest, 2026-10-28). Mit Umbruch bleibt das
+    // Bild grob quadratisch. Hier das Seitenverhaeltnis und die groesste Zeile
+    // messen.
+    const wideN = [{ id: 'c', type: 'switch' }];
+    const wideE = [];
+    for (let i = 0; i < 800; i++) { wideN.push({ id: 'leaf' + i, type: 'server' }); wideE.push({ source: 'c', target: 'leaf' + i }); }
+    const wideCfg = L.buildLayoutConfig('hops', wideN, wideE, true);
+    const wp = wideN.map((n) => wideCfg.positions({ id: () => n.id })).filter(Boolean);
+    let x1 = Infinity, x2 = -Infinity, y1 = Infinity, y2 = -Infinity;
+    const perRow = {};
+    wp.forEach((p) => { x1 = Math.min(x1, p.x); x2 = Math.max(x2, p.x); y1 = Math.min(y1, p.y); y2 = Math.max(y2, p.y); perRow[p.y] = (perRow[p.y] || 0) + 1; });
+    const w = x2 - x1, h = y2 - y1;
+
     console.log(JSON.stringify({
         name: cfg.name,
         core: pos('core').y,
@@ -337,6 +353,9 @@ const hopLayout = szenario('hops', { lang: 'en_US' }, `
         distGleich: pos('dist1').y === pos('dist3').y,
         insel: pos('insel').y,
         autoGross: L.buildLayoutConfig('auto', gross, grossK, true).name,
+        wideAll: wp.length,
+        wideAspect: Math.round((w / Math.max(h, 1)) * 100) / 100,
+        wideMaxRow: Math.max.apply(null, Object.keys(perRow).map((k) => perRow[k])),
     }));
 `);
 if (hopLayout) {
@@ -347,6 +366,12 @@ if (hopLayout) {
     pruefe('Buendel aendert den Abstand nicht', hopLayout.dist, 190);
     pruefe('Insel ganz unten, nicht auf 0',   hopLayout.insel > hopLayout.acc, true);
     pruefe('auto waehlt es bei 160 Knoten',   hopLayout.autoGross, 'preset');
+    // Breiter Tier: alle Knoten platziert, Zeile umgebrochen (~sqrt(N)), und das
+    // Seitenverhaeltnis bleibt beschraenkt — sonst klemmt fit() und die Karte
+    // ist leer (2000-Host-Lasttest, 2026-10-28).
+    pruefe('breiter Tier: alle 801 Knoten platziert', hopLayout.wideAll, 801);
+    pruefe('breiter Tier: Zeile umgebrochen (<= 40)',  hopLayout.wideMaxRow <= 40, true);
+    pruefe('breiter Tier: Seitenverhaeltnis <= 4',     hopLayout.wideAspect <= 4, true);
 }
 
 // Ein LAG-Member kann auf zwei Arten tot sein: nicht mehr gemeldet (stale)
@@ -509,6 +534,103 @@ if (epb) {
     pruefe('... und die Buendel-Kante auch',          epb.bundleEdgeEl, true);
 }
 
+console.log('\n  UniFi: Client haengt per WLAN am AP\n');
+const wlan = szenario('unifi-wlan', { lang: 'en_US' }, `
+    const B = await import(${JSON.stringify(MODULE('build-elements.js'))});
+    const nodes = [
+        { id: 'c1',  type: 'client',   is_client: true, label: 'iPhone' },
+        { id: 'ap1', type: 'wireless', label: 'AP 5' },
+        { id: 'sw1', type: 'switch',   label: 'SW01' },
+    ];
+    const edges = [
+        { id: 'e1', source: 'c1',  target: 'ap1', src: ['unifi'] },  // Client -> AP: WLAN
+        { id: 'e2', source: 'ap1', target: 'sw1', src: ['unifi'] },  // AP -> Switch: Kabel
+        { id: 'e3', source: 'sw1', target: 'c1',  src: ['lldp']  },  // kein UniFi -> nie WLAN
+    ];
+    B.tagWlanAp(nodes, edges);
+    const ne = B.buildNodeElements(nodes, false);
+    const ee = B.buildEdgeElements(edges, nodes);
+    const node = (id) => (ne.find((x) => x.data && x.data.id === id) || { data: {} }).data;
+    // buildEdgeElements vergibt data.id = 'e'+Index, nicht die Roh-e.id -> die
+    // Kante ueber ihre Endpunkte suchen.
+    const edgeBy = (s, t) => (ee.find((x) => x.data
+        && ((x.data.source === s && x.data.target === t)
+         || (x.data.source === t && x.data.target === s))) || { data: {} }).data;
+    console.log(JSON.stringify({
+        clientWlanAp:    node('c1').wlan_ap,
+        apHatKeinWlanAp: node('ap1').wlan_ap === null,
+        e1Wireless: !!edgeBy('c1', 'ap1')._unifiWireless,
+        e2Wireless: !!edgeBy('ap1', 'sw1')._unifiWireless,
+        e3Wireless: !!edgeBy('sw1', 'c1')._unifiWireless,
+    }));
+`);
+if (wlan) {
+    pruefe('Client kennt seinen AP (wlan_ap)',  wlan.clientWlanAp, 'AP 5');
+    pruefe('AP selbst bekommt kein wlan_ap',    wlan.apHatKeinWlanAp, true);
+    pruefe('Client<->AP-Kante ist WLAN',        wlan.e1Wireless, true);
+    pruefe('AP->Switch-Uplink bleibt Kabel',    wlan.e2Wireless, false);
+    pruefe('Nicht-UniFi-Kante ist nie WLAN',    wlan.e3Wireless, false);
+}
+
+console.log('\n  VLAN-Filter: nur das gewaehlte VLAN hell\n');
+const vf = szenario('vlan-filter', { lang: 'en_US' }, `
+    const V = await import(${JSON.stringify(MODULE('vlan-filter.js'))});
+    const el = (data) => ({ _cls: {}, data: (k) => data[k],
+        addClass(c) { this._cls[c] = 1; }, removeClass(c) { delete this._cls[c]; } });
+    const nA = el({ vlans: [{ id: 10, name: 'office' }, { id: 20, name: '' }] });
+    const nB = el({ vlans: [{ id: 20, name: 'voice' }] });  // VLAN 20 hier benannt, in nA leer
+    const nC = el({ vlans: null });
+    const eAB = el({ vlans: [10] });
+    const eBC = el({ vlans: [20] });
+    const eX  = el({ vlans: null });
+    const nodes = [nA, nB, nC], edges = [eAB, eBC, eX];
+    const cy = {
+        nodes: () => ({ forEach: (f) => nodes.forEach(f) }),
+        edges: () => ({ forEach: (f) => edges.forEach(f) }),
+        elements: () => ({ removeClass: (c) => nodes.concat(edges).forEach((x) => delete x._cls[c]) }),
+        batch: (f) => f(),
+    };
+    const vlans = V.collectVlans(cy);
+    V.applyVlanFilter(cy, 10);
+    const off = (x) => !!x._cls['nt-vlan-off'];
+    const after10 = { nA: off(nA), nB: off(nB), nC: off(nC), eAB: off(eAB), eBC: off(eBC), eX: off(eX) };
+    V.clearVlanFilter(cy);
+    const cleared = nodes.concat(edges).some((x) => off(x));
+    console.log(JSON.stringify({ collected: vlans.map((v) => v.id), names: vlans.map((v) => v.name), after10, cleared }));
+`);
+if (vf) {
+    pruefe('VLANs eingesammelt + sortiert',   vf.collected, [10, 20]);
+    pruefe('... nicht-leerer Name gewinnt',   vf.names, ['office', 'voice']);
+    pruefe('VLAN-10-Knoten bleibt hell',      vf.after10.nA, false);
+    pruefe('Nur-VLAN-20-Knoten gedimmt',      vf.after10.nB, true);
+    pruefe('Knoten ohne VLAN-Daten gedimmt',  vf.after10.nC, true);
+    pruefe('VLAN-10-Kante bleibt hell',       vf.after10.eAB, false);
+    pruefe('VLAN-20-Kante gedimmt',           vf.after10.eBC, true);
+    pruefe('Kante ohne VLAN-Daten gedimmt',   vf.after10.eX, true);
+    pruefe('clear hebt den Filter auf',       vf.cleared, false);
+}
+
+console.log('\n  VLAN im gruppierten View: Aggregat erbt Mitglieder-VLANs\n');
+const avg = szenario('vlan-aggregate', { lang: 'en_US' }, `
+    const A = await import(${JSON.stringify(MODULE('aggregation.js'))});
+    const nodes = [
+        { id: 's1', _primaryGroup: 'Fox', vlans: [{ id: 10, name: '' }, { id: 55, name: 'uplink' }] },
+        { id: 's2', _primaryGroup: 'Fox', vlans: [{ id: 10, name: 'office' }] },
+    ];
+    const zu = A.aggregateByGroup(nodes, [], {});
+    const agg = zu.nodes.find((n) => n._isAggregate);
+    console.log(JSON.stringify({
+        hatAgg: !!agg,
+        vlanIds: agg && agg.vlans ? agg.vlans.map((v) => v.id) : null,
+        v10name: agg && agg.vlans ? (agg.vlans.find((v) => v.id === 10) || {}).name : null,
+    }));
+`);
+if (avg) {
+    pruefe('Gruppe wird aggregiert',           avg.hatAgg, true);
+    pruefe('Aggregat erbt alle VLAN-IDs',      avg.vlanIds, [10, 55]);
+    pruefe('nicht-leerer VLAN-Name gewinnt',   avg.v10name, 'office');
+}
+
 console.log('\n  Gaeste (VMs/Pods) je Traeger buendeln\n');
 const ghb = szenario('guests', { lang: 'en_US' }, `
     const A = await import(${JSON.stringify(MODULE('aggregation.js'))});
@@ -664,8 +786,12 @@ const gcreate = szenario('ghost-create', { lang: 'en_US' }, `
         _ghostSrc: src ? [src] : [] });
     const einzeln = G.ghostRequestItem(geist('sw-edge-03', 'lldp'),
         { nb: '10839', port: 'Gi1/0/8' });
+    // Mit Management-IP (lldpRemManAddr): die IP muss an die Action durchlaufen.
+    const mitIpNode = geist('fw-edge', 'lldp'); mitIpNode._ghostMgmtIp = '192.0.2.9';
+    const mitIp = G.ghostRequestItem(mitIpNode, { nb: '10839', port: 'Gi1/0/8' });
     console.log(JSON.stringify({
         item: einzeln,
+        mitIp: mitIp && mitIp.ip,
         // Ein echter Host ist kein Geist und darf hier nicht durchrutschen.
         keinGeist: G.ghostRequestItem({ host: 'lab-sw-01' }, { nb: '1', port: 'p' }),
         ohneName:  G.ghostRequestItem(geist(''), { nb: '1', port: 'p' }),
@@ -689,7 +815,8 @@ const gcreate = szenario('ghost-create', { lang: 'en_US' }, `
 `);
 if (gcreate) {
     pruefe('Name, Melder-ID, Port, Quelle',  gcreate.item,
-        { name: 'sw-edge-03', reporter_hostid: '10839', port: 'Gi1/0/8', via: 'lldp' });
+        { name: 'sw-edge-03', reporter_hostid: '10839', port: 'Gi1/0/8', via: 'lldp', ip: '' });
+    pruefe('Mgmt-IP laeuft an die Action durch', gcreate.mitIp, '192.0.2.9');
     pruefe('ein echter Host faellt durch',   gcreate.keinGeist, null);
     pruefe('ohne Namen kein Host',           gcreate.ohneName,  null);
     pruefe('ohne Uplink: Name ja, Port leer',
@@ -758,11 +885,12 @@ if (gzip) {
     pruefe('eigene Schwelle wird beachtet',       gzip.eigene,      1);
 }
 
-// Der Management-Tab sortiert Hosts in Ebenen (Firewall, Router, Switch,
-// Wireless, Server, Storage, Hausautomation, Geraete). Welche Ebene ein Host
-// bekommt, entscheidet sein Typ — und ein UNBEKANNTER Typ landet absichtlich
-// bei "Server", nicht in einer eigenen Resteklasse.
-console.log('\n  Management-Tab: welche Ebene ein Host bekommt\n');
+// Der Management-Tab (Laiensicht) sortiert Hosts in 5 verstaendliche Kategorien:
+// Netzwerk (Firewall/Router/Switch/Wireless ZUSAMMEN), Server, Speicher, Smart
+// Home & Sensoren, Geraete. Welche Kategorie ein Host bekommt, entscheidet sein
+// Typ — und ein UNBEKANNTER Typ landet absichtlich bei "Server", nicht in einer
+// eigenen Resteklasse.
+console.log('\n  Management-Tab: welche Kategorie ein Host bekommt\n');
 const mgmt = szenario('mgmt', { lang: 'en_US' }, `
     const dom = miniDom();
     globalThis.document = dom.document;
@@ -780,11 +908,16 @@ const mgmt = szenario('mgmt', { lang: 'en_US' }, `
     const txt = sicht(wrap);
     console.log(JSON.stringify({
         laenge:    txt.length > 50,
-        firewall:  txt.indexOf('Firewall / Gateway') >= 0,
-        router:    txt.indexOf('Router') >= 0,
-        switchE:   txt.indexOf('Switch') >= 0,
-        geraete:   txt.indexOf('ups-01') >= 0,
-        // Unbekannter Typ: KEINE eigene Ebene, sondern zu den Servern.
+        // Firewall, Router, Switch fallen gemeinsam unter "Network".
+        network:   txt.indexOf('Network') >= 0,
+        server:    txt.indexOf('Servers') >= 0,
+        devices:   txt.indexOf('Devices') >= 0,
+        ups:       txt.indexOf('ups-01') >= 0,
+        // Klartext-Status statt Zabbix-Jargon.
+        running:   txt.indexOf('Running') >= 0,
+        critical:  txt.indexOf('Critical') >= 0,
+        keinJargon: txt.indexOf('Avg') < 0 && txt.indexOf('Disaster') < 0,
+        // Unbekannter Typ: KEINE eigene Kategorie, sondern zu den Servern.
         unbekannt: txt.indexOf('ding-01') >= 0,
         keineRestklasse: txt.indexOf('nichtsdergleichen') < 0,
         alleHosts: ['fw-01','rt-01','sw-01','srv-01','ding-01','ups-01']
@@ -793,10 +926,12 @@ const mgmt = szenario('mgmt', { lang: 'en_US' }, `
 `);
 if (mgmt) {
     pruefe('der Tab gibt ueberhaupt etwas aus',   mgmt.laenge,    true);
-    pruefe('Firewall bekommt ihre Ebene',         mgmt.firewall,  true);
-    pruefe('Router auch',                         mgmt.router,    true);
-    pruefe('Switch auch',                         mgmt.switchE,   true);
-    pruefe('UPS landet bei den Geraeten',         mgmt.geraete,   true);
+    pruefe('Netzwerk-Geraete unter einer Kategorie "Network"', mgmt.network, true);
+    pruefe('Server-Kategorie existiert',          mgmt.server,    true);
+    pruefe('UPS landet bei den Geraeten (Devices)', mgmt.devices && mgmt.ups, true);
+    pruefe('Klartext-Status "Running" statt "OK"', mgmt.running,  true);
+    pruefe('"Critical" fuer High/Disaster',       mgmt.critical,  true);
+    pruefe('kein Zabbix-Jargon (Avg/Disaster) mehr', mgmt.keinJargon, true);
     pruefe('unbekannter Typ faellt nicht weg',    mgmt.unbekannt, true);
     pruefe('... und erzeugt keine Resteklasse',   mgmt.keineRestklasse, true);
     pruefe('kein Host geht unterwegs verloren',   mgmt.alleHosts, true);
@@ -1899,6 +2034,352 @@ if (hist) {
     pruefe('History: gleichnamiger Trigger ueberlebt fremde Recovery', hist.kollision, { h1: 5 });
     pruefe('History: Open-at-start aktiv vor Recovery',                hist.preVor,    { h2: 4 });
     pruefe('History: Open-at-start zu nach Recovery',                  hist.preNach,   {});
+}
+
+console.log('\n  Ring-/Loop-Erkennung\n');
+const rings = szenario('rings', { lang: 'en_US' }, `
+    const { analyseRings } = await import(${JSON.stringify(MODULE('rings.js'))});
+    // Kabel = isLLDP:true. stp: 'fwd' (forwarding, STP-Daten da, nicht geblockt),
+    // 'blk' (geblockt), oder weglassen (keine STP-Daten).
+    const E = (id, s, t, stp) => ({ id, source: s, target: t, isLLDP: true,
+        stpSrc: stp === 'blk' ? 2 : (stp === 'fwd' ? 5 : null), stpTgt: null,
+        _isStpBlocked: stp === 'blk' });
+    const tri  = analyseRings([E('a','A','B'), E('b','B','C'), E('c','C','A')]);
+    const safe = analyseRings([E('a','A','B','blk'), E('b','B','C','fwd'), E('c','C','A','fwd')]);
+    const loop = analyseRings([E('a','A','B','fwd'), E('b','B','C','fwd'), E('c','C','A','fwd')]);
+    const tree = analyseRings([E('a','A','B'), E('b','B','C'), E('c','C','D')]);
+    const two  = analyseRings([E('a','A','B'), E('b','B','C'), E('c','C','A'),
+        E('d','D','E'), E('e','E','F'), E('f','F','D')]);
+    const lag  = analyseRings([E('a','A','B'), E('b','A','B')]);   // LAG, kein Ring
+    const eight = analyseRings([                                    // Achter, geteilter Knoten X
+        E('a','X','B','blk'), E('b','B','C'), E('c','C','X'),
+        E('d','X','E','fwd'), E('e','E','F','fwd'), E('f','F','X','fwd')]);
+    const noncable = analyseRings([
+        { id:'h', source:'A', target:'B', isLLDP:false },
+        { id:'g', source:'B', target:'A', _isGhostEdge:true } ]);
+    // Ring aus lauter forwarding-KANTEN, aber ein HOST blockt woanders (Port
+    // ohne LLDP-Nachbar) -> sicher, kein Loop (MikroTik-Fall an echter HW).
+    const hostBlk = analyseRings(
+        [E('a','A','B','fwd'), E('b','B','C','fwd'), E('c','C','A','fwd')],
+        [{id:'A',_stpBlock:true},{id:'B'},{id:'C'}]);
+    // Dasselbe, aber NIEMAND blockt irgendwo -> echte Loop-Gefahr bleibt.
+    const loopNodes = analyseRings(
+        [E('a','A','B','fwd'), E('b','B','C','fwd'), E('c','C','A','fwd')],
+        [{id:'A'},{id:'B'},{id:'C'}]);
+    // Stufe 3a: ein Ring-Host hat instabiles STP (_stpChurn) -> "churn" (amber),
+    // auch wenn er blockt (sicher). Keine Loop-Gefahr-Zaehlung.
+    const churnRing = analyseRings(
+        [E('a','A','B','fwd'), E('b','B','C','fwd'), E('c','C','A','fwd')],
+        [{id:'A',_stpBlock:true,_stpChurn:true},{id:'B'},{id:'C'}]);
+    // Churn in einem OFFENEN Ring (niemand blockt): open bleibt (Loop ist schlimmer).
+    const churnOpen = analyseRings(
+        [E('a','A','B','fwd'), E('b','B','C','fwd'), E('c','C','A','fwd')],
+        [{id:'A',_stpChurn:true},{id:'B'},{id:'C'}]);
+    // Stufe 3b: Broadcast-Storm an einem Ring-Host -> 'storm' (rot), ueberschreibt
+    // ALLES (hier sogar einen sicher blockenden Ring -- der Loop laeuft trotzdem).
+    const stormRing = analyseRings(
+        [E('a','A','B','blk'), E('b','B','C','fwd'), E('c','C','A','fwd')],
+        [{id:'A',_stpBlock:true,_bcastStorm:true},{id:'B'},{id:'C'}]);
+    // Stufe 3c: MAC-Flap an einem Ring-Host -> 'flap' (rot), ueber open/churn/safe.
+    const flapRing = analyseRings(
+        [E('a','A','B','fwd'), E('b','B','C','fwd'), E('c','C','A','fwd')],
+        [{id:'A',_macFlap:true},{id:'B'},{id:'C'}]);
+    // Storm schlaegt Flap (aktive Flut ist akuter).
+    const stormBeatsFlap = analyseRings(
+        [E('a','A','B','fwd'), E('b','B','C','fwd'), E('c','C','A','fwd')],
+        [{id:'A',_macFlap:true,_bcastStorm:true},{id:'B'},{id:'C'}]);
+    console.log(JSON.stringify({
+        triRings: tri.totalRings, triRisk: tri.loopRisk, triStatus: tri.edgeStatus.a,
+        safeStatus: safe.edgeStatus.a, safeRisk: safe.loopRisk,
+        loopRisk: loop.loopRisk, loopStatus: loop.edgeStatus.a,
+        treeRings: tree.totalRings,
+        twoRings: two.totalRings, twoComps: two.components.length,
+        lagRings: lag.totalRings,
+        eightRings: eight.totalRings, eightComps: eight.components.length, eightRisk: eight.loopRisk,
+        noncable: noncable.totalRings,
+        hostBlkStatus: hostBlk.edgeStatus.a, hostBlkRisk: hostBlk.loopRisk,
+        loopNodesRisk: loopNodes.loopRisk,
+        churnStatus: churnRing.edgeStatus.a, churnRisk: churnRing.loopRisk,
+        churnOpenStatus: churnOpen.edgeStatus.a,
+        stormStatus: stormRing.edgeStatus.a,
+        flapStatus: flapRing.edgeStatus.a,
+        stormBeatsFlap: stormBeatsFlap.edgeStatus.a
+    }));
+`);
+if (rings) {
+    pruefe('Ring: Dreieck = 1 redundanter Ring',          rings.triRings, 1);
+    pruefe('Ring: ohne STP-Daten kein Alarm',             rings.triRisk, 0);
+    pruefe('Ring: ohne STP-Daten Status unknown',         rings.triStatus, 'unknown');
+    pruefe('Ring: ein geblockter Zweig = sicher',         rings.safeStatus, 'safe');
+    pruefe('Ring: sicher ist keine Loop-Gefahr',          rings.safeRisk, 0);
+    pruefe('Ring: alles forwarding = Loop-Gefahr',        rings.loopRisk, 1);
+    pruefe('Ring: Loop-Status open',                      rings.loopStatus, 'open');
+    pruefe('Ring: Baum hat 0 Ringe',                      rings.treeRings, 0);
+    pruefe('Ring: zwei getrennte Dreiecke = 2 Ringe',     rings.twoRings, 2);
+    pruefe('Ring: zwei getrennte Cluster',                rings.twoComps, 2);
+    pruefe('Ring: LAG (parallel) ist KEIN Ring',          rings.lagRings, 0);
+    pruefe('Ring: Achter = 2 Ringe',                      rings.eightRings, 2);
+    pruefe('Ring: Achter = 1 Cluster',                    rings.eightComps, 1);
+    pruefe('Ring: Achter mit Block = sicher (unterwarnt)', rings.eightRisk, 0);
+    pruefe('Ring: Nicht-Kabel ignoriert',                 rings.noncable, 0);
+    pruefe('Ring: Host blockt woanders -> sicher',        rings.hostBlkStatus, 'safe');
+    pruefe('Ring: Host blockt woanders -> keine Loop-Gefahr', rings.hostBlkRisk, 0);
+    pruefe('Ring: niemand blockt -> echte Loop-Gefahr',   rings.loopNodesRisk, 1);
+    pruefe('Ring: Host-STP flappt -> churn',              rings.churnStatus, 'churn');
+    pruefe('Ring: churn ist keine Loop-Gefahr',           rings.churnRisk, 0);
+    pruefe('Ring: churn im offenen Ring bleibt open',     rings.churnOpenStatus, 'open');
+    pruefe('Ring: Broadcast-Storm ueberschreibt alles',   rings.stormStatus, 'storm');
+    pruefe('Ring: MAC-Flap -> flap (ueber open)',         rings.flapStatus, 'flap');
+    pruefe('Ring: Storm schlaegt Flap',                   rings.stormBeatsFlap, 'storm');
+}
+
+// ── Layout-Import: ueberlagern statt ersetzen ──────────────────────────────
+// Die reinen Merge-Helfer und die Datei-Pruefung — der Teil, an dem der alte
+// Import scheiterte (Teildatei loeschte Bestand). Hier ohne Browser pruefbar.
+console.log('\n  Layout-Import: Merge loescht nie Bestand\n');
+const li = szenario('layout-import', { lang: 'en_US', is_super_admin: false }, `
+    const { overlayPositions, unionLinks } = await import(${JSON.stringify(MODULE('storage.js'))});
+    const { sanitizeLayout } = await import(${JSON.stringify(MODULE('layout-file.js'))});
+
+    // Overlay: importierte Knoten gewinnen, uebrige bleiben.
+    const ov = overlayPositions({ a: {x:1,y:1}, b: {x:2,y:2} }, { b: {x:9,y:9}, c: {x:3,y:3} });
+
+    // Union: Paar ungerichtet dedupliziert (existing gewinnt), neues kommt dazu.
+    const un = unionLinks([{s:'1',t:'2'}], [{s:'2',t:'1'}, {s:'3',t:'4'}], 10);
+    // Cap greift.
+    const cap = unionLinks([{s:'1',t:'2'},{s:'3',t:'4'}], [{s:'5',t:'6'},{s:'7',t:'8'}], 3);
+
+    // Teildatei: nur Positionen -> data traegt NUR positions, nicht links/pinned/notes.
+    const teil = sanitizeLayout({ format:'network-topology-layout', version:1,
+        data:{ positions:{ '10':{x:5,y:6} } } }).data;
+    // Minimaldatei ohne data -> nur posGrp, kein Abschnitt (nichts zu loeschen).
+    const minimal = sanitizeLayout({ format:'network-topology-layout', version:1 }).data;
+
+    // Falsches Format -> wirft.
+    let wirftFormat = false;
+    try { sanitizeLayout({ format:'fremd', version:1 }); } catch (e) { wirftFormat = true; }
+
+    console.log(JSON.stringify({
+        ovKeep:   ov.a && ov.a.x === 1 && ov.c && ov.c.x === 3,
+        ovWin:    ov.b.x === 9,
+        unLen:    un.length,
+        unDedup:  un.filter(l => (l.s==='1'&&l.t==='2')||(l.s==='2'&&l.t==='1')).length,
+        capLen:   cap.length,
+        teilHasPos:   Object.prototype.hasOwnProperty.call(teil, 'positions'),
+        teilNoLinks:  Object.prototype.hasOwnProperty.call(teil, 'links'),
+        teilNoPinned: Object.prototype.hasOwnProperty.call(teil, 'pinned'),
+        minimalNoPos: Object.prototype.hasOwnProperty.call(minimal, 'positions'),
+        wirftFormat
+    }));
+`);
+// ── Plan-Modus: Pixel<->LatLng-Geometrie + Positions-Speicher ──────────────
+console.log('\n  Plan-Modus: Geometrie und Positions-Speicher\n');
+const plan = szenario('plan', { lang: 'en_US', is_super_admin: false }, `
+    const G = await import(${JSON.stringify(MODULE('render-plan.js'))});
+    const S = await import(${JSON.stringify(MODULE('storage.js'))});
+
+    // CRS.Simple: lat waechst nach OBEN, Bild in Bounds [[0,0],[h,w]]. Ein
+    // Pixel (x,y) von oben links liegt bei lat=h-y, lng=x — und zurueck.
+    const ll   = G.planLatLngFromPixel({ x: 123, y: 456 }, 800);
+    const back = G.planPixelFromLatLng(ll, 800);
+    const geomOk = (ll.lat === 344 && ll.lng === 123 && back.x === 123 && back.y === 456);
+
+    // Plan-Positionen landen unter EIGENEM viewKey ("_plan"), nie bei den
+    // Technik-Positionen — sonst wuerden sich beide Anordnungen ueberschreiben.
+    S.savePlanPositions({ '10084': { x: 100, y: 50 }, '10085': { x: 200, y: 75 } });
+    const planPos = S.loadPlanPositions();
+    const techPos = S.loadPositions();
+    const planHasBoth = !!(planPos['10084'] && planPos['10085']
+        && planPos['10084'].x === 100 && planPos['10085'].y === 75);
+    const techEmpty = Object.keys(techPos).length === 0;
+
+    console.log(JSON.stringify({ geomOk, planHasBoth, techEmpty }));
+`);
+
+// ── Link Quality Score ─────────────────────────────────────────────────────
+console.log('\n  Link Quality Score\n');
+const lqs = szenario('link-quality', { lang: 'en_US' }, `
+    const { linkQualityScore } = await import(${JSON.stringify(MODULE('link-quality.js'))});
+    const base = { capBps: 1e9, trafficIn: 1e6, trafficOut: 1e6, perLink: true, portErr: 0, portDrop: 0,
+                   portDown: false, portSrcUptime: 100000, portTgtUptime: 100000 };
+    function mk(ov) { return Object.assign({}, base, ov); }
+    const healthy = linkQualityScore(mk({}));
+    const errored = linkQualityScore(mk({ portErr: 2 }));            // 2/s -> voller Error-Abzug 25
+    const down    = linkQualityScore(mk({ portDown: true }));        // 65 -> 35 Crit
+    const flap    = linkQualityScore(mk({ portSrcUptime: 300 }));    // 5min -> Flap-Abzug
+    const util    = linkQualityScore(mk({ trafficIn: 1e9, trafficOut: 1e9 })); // 100% -> Util-Abzug
+    const ghost   = linkQualityScore({ _isGhostEdge: true });
+    const nodata  = linkQualityScore(null);
+    console.log(JSON.stringify({
+        healthyScore: healthy.score, healthyGreen: healthy.color === '#16a34a',
+        erroredScore: errored.score, erroredTop: errored.parts[0].key,
+        downScore: down.score, downCrit: down.color === '#dc2626', downTop: down.parts[0].key,
+        flapHasFlap: flap.parts.some(function(p){return p.key==='flap';}), flapBelow100: flap.score < 100,
+        utilHasUtil: util.parts.some(function(p){return p.key==='util';}),
+        ghostNull: ghost === null, nodataNull: nodata === null
+    }));
+`);
+
+// ── Faceplate: PoE-Klasse (Tooltip) + Switch-Budget (Fusszeile) ────────────
+console.log('\n  Faceplate: PoE-Klasse und Switch-Budget\n');
+const fp = szenario('faceplate-poe', { lang: 'en_US' }, `
+    const dom = miniDom();
+    globalThis.document = dom.document;
+    const { buildFaceplateSvg } = await import(${JSON.stringify(MODULE('faceplate-svg.js'))});
+    // Port 1: Klasse-Rohwert 5 (class4), liefert Strom. Port 2: Rohwert 3
+    // (class2), liefert NICHT. Port 3: Rohwert 2 (class1), Liefer-Zustand
+    // UNBEKANNT (poe:null, kein Detection-Item) — darf weder "delivering" noch
+    // "not delivering" behaupten. Budget 37/195 W.
+    const wrap = buildFaceplateSvg({
+        host: 'sw', layout: '3+0', copper: 3, sfp: 0, extra: 0,
+        poe_budget: { used: 37, nominal: 195 },
+        ports: [
+            { n: 1, kind: 'rj45', oper: 1, admin: 1, problem: -1, poe: true,  poe_class: 5, speed: 1e9 },
+            { n: 2, kind: 'rj45', oper: 1, admin: 1, problem: -1, poe: false, poe_class: 3, speed: 1e9 },
+            { n: 3, kind: 'rj45', oper: 1, admin: 1, problem: -1, poe: null,  poe_class: 2, speed: 1e9 }
+        ]
+    }, false, '');
+    const txt = sicht(wrap);
+    // Gegenprobe: ohne poe_budget keine Watt-Zeile.
+    const wrap2 = buildFaceplateSvg({
+        host: 'sw', layout: '1+0', copper: 1, sfp: 0, extra: 0,
+        ports: [{ n: 1, kind: 'rj45', oper: 1, admin: 1, problem: -1, poe: null, poe_class: null, speed: 1e9 }]
+    }, false, '');
+    // Nahe am Limit: 90/95 W = 95 % -> Prozent + Warnglyph (ab 80 %).
+    const wrap3 = buildFaceplateSvg({
+        host: 'sw', layout: '24+2', copper: 24, sfp: 2, extra: 0,
+        poe_budget: { used: 90, nominal: 95 },
+        ports: [{ n: 1, kind: 'rj45', oper: 1, admin: 1, problem: -1, poe: true, poe_class: 4, speed: 1e9 }]
+    }, false, '');
+    const txt3 = sicht(wrap3);
+    // Verlauf: mit poe_history eine Sparkline (polyline), ohne keine.
+    const wrap4 = buildFaceplateSvg({
+        host: 'sw', layout: '24+2', copper: 24, sfp: 2, extra: 0,
+        poe_budget: { used: 60, nominal: 95 },
+        poe_history: [40, 45, 50, 55, 60, 58, 62, 60],
+        ports: [{ n: 1, kind: 'rj45', oper: 1, admin: 1, problem: -1, poe: true, poe_class: 4, speed: 1e9 }]
+    }, false, '');
+    console.log(JSON.stringify({
+        class4Deliver:  /Class 4, delivering power/.test(txt),
+        class2NotDeliver: /Class 2, not delivering/.test(txt),
+        class1Unknown:  /Class 1/.test(txt),
+        class1NoClaim:  !/Class 1, /.test(txt),
+        budget:         /37 \\/ 195 W/.test(txt),
+        noBudgetNoWatt: !/ W/.test(sicht(wrap2)),
+        // Alert: Prozent immer, Warnglyph erst ab 80 %.
+        loPct:          /\\(19%\\)/.test(txt),
+        loNoWarn:       txt.indexOf('\\u26a0') === -1,
+        hiPct:          /\\(95%\\)/.test(txt3),
+        hiWarn:         txt3.indexOf('\\u26a0') >= 0,
+        // Verlauf: Sparkline nur bei vorhandener History.
+        sparkWithHist:  wrap4.querySelectorAll('polyline').length,
+        noSparkNoHist:  wrap3.querySelectorAll('polyline').length
+    }));
+`);
+if (fp) {
+    pruefe('Tooltip: Class 4 + delivering',       fp.class4Deliver, true);
+    pruefe('Tooltip: Class 2 + not delivering',   fp.class2NotDeliver, true);
+    pruefe('Tooltip: Class 1 bei unbekanntem Strom gezeigt', fp.class1Unknown, true);
+    pruefe('Tooltip: unbekannter Strom OHNE deliver-Behauptung', fp.class1NoClaim, true);
+    pruefe('Fusszeile: Budget 37 / 195 W',        fp.budget, true);
+    pruefe('Ohne Budget keine Watt-Zeile',        fp.noBudgetNoWatt, true);
+    pruefe('Alert: Prozent bei 19%',              fp.loPct, true);
+    pruefe('Alert: kein Warnglyph unter 80%',     fp.loNoWarn, true);
+    pruefe('Alert: Prozent bei 95%',              fp.hiPct, true);
+    pruefe('Alert: Warnglyph ab 80%',             fp.hiWarn, true);
+    pruefe('Verlauf: Sparkline bei History',      fp.sparkWithHist, 1);
+    pruefe('Verlauf: keine Sparkline ohne History', fp.noSparkNoHist, 0);
+}
+
+// ── Undo/Redo der Anordnung (layout-history) ───────────────────────────────
+console.log('\n  Undo/Redo der Anordnung\n');
+const lh = szenario('layout-history', {}, `
+    const H = await import(${JSON.stringify(MODULE('layout-history.js'))});
+    function fakeCy(pos) {
+        const ns = Object.keys(pos).map(function(id){
+            return { _id:id, _p:{x:pos[id].x,y:pos[id].y},
+                id:function(){return this._id;},
+                position:function(p){ if(p){this._p={x:p.x,y:p.y};} return this._p; } };
+        });
+        return { nodes:function(){ return {
+            forEach:function(f){ns.forEach(f);}, map:function(f){return ns.map(f);} }; },
+            batch:function(f){f();} };
+    }
+    function posOf(cy, id){ let r=null; cy.nodes().forEach(function(n){ if(n.id()===id) r=n.position(); }); return r; }
+    let saved = 0;
+    H.configureLayoutHistory({ persist: function(){ saved++; } });
+    const cy = fakeCy({ a:{x:0,y:0}, b:{x:10,y:10} });
+    H.syncLayoutHistoryNodes(cy);
+    const canUndo0 = H.canUndo();
+    // Drag b von (10,10) nach (50,50)
+    H.markBeforeDrag(cy);
+    cy.nodes().forEach(function(n){ if(n.id()==='b') n.position({x:50,y:50}); });
+    H.commitDrag(cy);
+    const canUndo1 = H.canUndo();
+    H.undoLayout(cy);
+    const bUndo = posOf(cy,'b');
+    const canRedo1 = H.canRedo();
+    H.redoLayout(cy);
+    const bRedo = posOf(cy,'b');
+    // frische Historie: grab ohne Bewegung -> kein Schritt
+    const cy2 = fakeCy({ a:{x:0,y:0} });
+    H.syncLayoutHistoryNodes(cy2);           // andere Knotenmenge -> Reset
+    const afterViewChange = H.canUndo();
+    H.markBeforeDrag(cy2); H.commitDrag(cy2);
+    const noMoveNoStep = H.canUndo();
+    // Speichern ist entprellt (PERSIST_MS): auf den Timer warten, dann zaehlt es.
+    await new Promise(function(r){ setTimeout(r, 500); });
+    console.log(JSON.stringify({
+        canUndo0, canUndo1, canRedo1,
+        bUndoX: bUndo && bUndo.x, bUndoY: bUndo && bUndo.y,
+        bRedoX: bRedo && bRedo.x, bRedoY: bRedo && bRedo.y,
+        savedAtLeast1: saved >= 1,
+        afterViewChange, noMoveNoStep
+    }));
+`);
+if (lh) {
+    pruefe('leer: kein Undo',                 lh.canUndo0, false);
+    pruefe('nach Drag: Undo moeglich',        lh.canUndo1, true);
+    pruefe('Undo stellt Vor-Drag-Position her', [lh.bUndoX, lh.bUndoY], [10, 10]);
+    pruefe('nach Undo: Redo moeglich',        lh.canRedo1, true);
+    pruefe('Redo stellt gezogene Position her', [lh.bRedoX, lh.bRedoY], [50, 50]);
+    pruefe('Undo/Redo speichern (entprellt)', lh.savedAtLeast1, true);
+    pruefe('Ansichtswechsel setzt Historie zurueck', lh.afterViewChange, false);
+    pruefe('Drag ohne Bewegung = kein Schritt', lh.noMoveNoStep, false);
+}
+
+if (lqs) {
+    pruefe('LQS: gesunder Link = 100',            lqs.healthyScore, 100);
+    pruefe('LQS: gesunder Link gruen',            lqs.healthyGreen, true);
+    pruefe('LQS: 2 Errors/s -> Score 75',         lqs.erroredScore, 75);
+    pruefe('LQS: Errors ist groesster Abzug',     lqs.erroredTop, 'errors');
+    pruefe('LQS: Port down -> Score 35',          lqs.downScore, 35);
+    pruefe('LQS: Port down = Crit (rot)',         lqs.downCrit, true);
+    pruefe('LQS: down ist groesster Abzug',       lqs.downTop, 'down');
+    pruefe('LQS: frische Uptime -> Flap-Abzug',   lqs.flapHasFlap, true);
+    pruefe('LQS: Flap senkt den Score',           lqs.flapBelow100, true);
+    pruefe('LQS: 100% Auslastung -> Util-Abzug',  lqs.utilHasUtil, true);
+    pruefe('LQS: Ghost-Kante -> null',            lqs.ghostNull, true);
+    pruefe('LQS: keine Daten -> null',            lqs.nodataNull, true);
+}
+
+if (plan) {
+    pruefe('Plan-Geometrie: Pixel<->LatLng Identitaet',    plan.geomOk, true);
+    pruefe('Plan-Positionen gespeichert und geladen',      plan.planHasBoth, true);
+    pruefe('Plan kollidiert nicht mit Technik-Positionen', plan.techEmpty, true);
+}
+
+if (li) {
+    pruefe('Overlay: uebrige Knoten bleiben',           li.ovKeep, true);
+    pruefe('Overlay: importierter Knoten gewinnt',      li.ovWin, true);
+    pruefe('Union: dedupliziert + ergaenzt (2)',        li.unLen, 2);
+    pruefe('Union: Paar nur einmal',                    li.unDedup, 1);
+    pruefe('Union: Cap greift (3)',                     li.capLen, 3);
+    pruefe('Teildatei: traegt positions',               li.teilHasPos, true);
+    pruefe('Teildatei: KEIN links-Abschnitt',           li.teilNoLinks, false);
+    pruefe('Teildatei: KEIN pinned-Abschnitt',          li.teilNoPinned, false);
+    pruefe('Minimaldatei: KEIN positions-Abschnitt',    li.minimalNoPos, false);
+    pruefe('Falsches Format wirft',                     li.wirftFormat, true);
 }
 
 console.log('');

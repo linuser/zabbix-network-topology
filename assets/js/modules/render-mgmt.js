@@ -11,28 +11,72 @@ import { showDetail } from './detail-panel.js';
 import { hideMinimap } from './minimap.js';
 import { loadNotes } from './storage.js';
 import { t } from './i18n.js';
+import { TYPE_ICON } from './icons.js';
 
-// Ebenen-Reihenfolge: niedrige Zahl = oben (Firewall am Perimeter)
+// Kategorien fuer NICHT-ITler: Firewall/Router/Switch/Wireless sind fuer einen
+// Laien alles "Netzwerk" — darum EIN Bucket statt vier. Fuenf verstaendliche
+// Gruppen, niedrige Zahl = oben.
 const MGMT_LEVEL = {
-    firewall: 0, router: 1, switch: 2, wireless: 3,
-    hypervisor: 4, linux: 4, windows: 4, macos: 4,
-    webserver: 4, container: 4, mailserver: 4, server: 4,
-    storage: 5, homeauto: 6, monitoring: 6,
-    ups: 7, camera: 7, printer: 7
+    firewall: 0, router: 0, switch: 0, wireless: 0,
+    hypervisor: 1, linux: 1, windows: 1, macos: 1,
+    webserver: 1, container: 1, mailserver: 1, server: 1,
+    storage: 2, homeauto: 3, monitoring: 3,
+    ups: 4, camera: 4, printer: 4, client: 4
 };
 
-const MGMT_LEVEL_NAMES = {
-    0: 'Firewall / Gateway', 1: 'Router', 2: 'Switch', 3: 'Wireless',
-    4: t('mgmt.level.server'), 5: 'Storage / NAS',
-    6: t('mgmt.level.homeauto'), 7: t('mgmt.level.devices')
+// Alle Namen ueber t() — bei deutscher Zabbix-Sprache deutsch (frueher waren
+// fuenf davon fest Englisch, also fuer deutsche Laien eine gemischte Liste). Zur
+// RENDER-Zeit aufgeloest (nicht beim Modul-Load), damit die aktuelle Sprache gilt.
+function mgmtLevelName(lvl) {
+    const names = {
+        0: t('mgmt.level.network'), 1: t('mgmt.level.server'),
+        2: t('mgmt.level.storage'), 3: t('mgmt.level.homeauto'),
+        4: t('mgmt.level.devices')
+    };
+    return names[lvl] || t('mgmt.level.generic', { n: lvl });
+}
+
+// Repraesentatives Typ-Icon je Kategorie (TYPE_ICON-Schluessel, icons.js).
+const MGMT_LEVEL_ICON = {
+    0: 'switch', 1: 'server', 2: 'storage', 3: 'wireless', 4: 'printer'
 };
+
+// Fuer Laien drei verstaendliche Zustaende statt der Zabbix-Fuenf: OK/Info ->
+// "Laeuft", Warn/Avg -> "Warnung", High/Disaster -> "Kritisch". Ein Hinweis
+// (Info) ist fuer einen Nicht-ITler kein Problem, darum gruen bei "Laeuft".
+function mgmtBucket(sev) {
+    const s = sev || 0;
+    if (s >= 4) return 2;   // High, Disaster
+    if (s >= 2) return 1;   // Warning, Average
+    return 0;               // OK, Information
+}
+
+const MGMT_BUCKET_COLOR = ['#22c55e', '#f97316', '#ef4444'];
+const MGMT_BUCKET_KEY   = ['mgmt.status.ok', 'mgmt.status.warn', 'mgmt.status.crit'];
 
 function mgmtSevStyle(sev) {
-    const colors = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
-    const labels = ['OK', 'Info', 'Warn', 'Avg', 'High', t('mgmt.sev.crit')];
-    const c = colors[Math.min(sev || 0, colors.length - 1)];
-    const l = labels[Math.min(sev || 0, labels.length - 1)];
-    return { color: c, label: l };
+    const b = mgmtBucket(sev);
+    return { color: MGMT_BUCKET_COLOR[b], label: t(MGMT_BUCKET_KEY[b]) };
+}
+
+// Kleines Typ-Icon (dieselben Pfade wie auf der Karte, icons.js) als SVG-DOM —
+// bewusst KEIN innerHTML (no-unsanitized), per createElementNS gebaut.
+function mgmtTypeIcon(type, color) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '-16 -16 32 32');
+    svg.setAttribute('width', '20');
+    svg.setAttribute('height', '20');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', color);
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.style.flexShrink = '0';
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', TYPE_ICON[type] || TYPE_ICON.server);
+    svg.appendChild(path);
+    return svg;
 }
 
 export function renderManagement(wrap, nodes, edges) {
@@ -48,6 +92,13 @@ export function renderManagement(wrap, nodes, edges) {
 
     // Canvas-Children leeren (Loading-Spinner behalten)
     clearWrap(wrap);
+
+    // Die technische KPI-Zeile (Edges/Ghosts/Expected/STP-blocked) gehoert nicht
+    // in die Laiensicht und bliebe sonst mit veralteten Technik-Werten vom
+    // Technical-Tab stehen. Ausblenden; render-tech/updateKpi macht sie beim
+    // Zurueckwechseln wieder sichtbar.
+    const _kpiRow = document.getElementById('nt-kpi');
+    if (_kpiRow) _kpiRow.style.display = 'none';
 
     const dark = isDark();
     const bg   = dark ? '#0d1117' : '#f0f2f5';
@@ -81,20 +132,19 @@ export function renderManagement(wrap, nodes, edges) {
     });
 
     // Aggregat-Stats für den Header: pro Severity zählen, dazu Wartung + Acked.
-    const sevCounts = [0, 0, 0, 0, 0, 0];
+    const bucketCounts = [0, 0, 0];   // 0 = Laeuft, 1 = Warnung, 2 = Kritisch
     let maintCount = 0, ackCount = 0, offCount = 0;
     nodes.forEach(function(n) {
-        const s = n.severity || 0;
-        if (s >= 0 && s <= 5) sevCounts[s]++;
+        bucketCounts[mgmtBucket(n.severity)]++;
         if (n.maintenance)  maintCount++;
         if (n.acknowledged) ackCount++;
         if (n.unavailable)  offCount++;
     });
     const totalHosts = nodes.length;
-    const problemHosts = totalHosts - sevCounts[0];
 
-    // Stats-Header: kompakte Kachel-Reihe oben mit Total / Probleme / Severity-Pillen
-    // / Wartung / Acked. Dunkel-Mode-konform.
+    // Stats-Header fuer Laien: "N Geraete" + Klartext-Zaehler (Laeuft/Warnung/
+    // Kritisch). KEINE Edges/Ghosts/Expected/STP — das ist die technische
+    // KPI-Zeile (oben ausgeblendet), nicht die Laiensicht.
     const statsBar = document.createElement('div');
     statsBar.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;'
         + 'padding:10px 14px;margin-bottom:18px;background:' + card
@@ -121,9 +171,8 @@ export function renderManagement(wrap, nodes, edges) {
         _statBlocks.push(wrap);
     }
 
-    addStat('Hosts', totalHosts, text);
-    addStat(t('mgmt.stat.problems'), problemHosts, problemHosts > 0 ? '#dc2626' : text);
-    if (offCount > 0)   addStat('Offline', offCount, '#e53742');
+    addStat(t('mgmt.stat.devices'), totalHosts, text);
+    if (offCount > 0)   addStat(t('mgmt.status.off'), offCount, '#e53742');
     if (maintCount > 0) addStat(t('mgmt.stat.maintenance'), maintCount, '#92400e');
     if (ackCount > 0)   addStat(t('mgmt.stat.acked'), ackCount, '#16a34a');
 
@@ -132,25 +181,24 @@ export function renderManagement(wrap, nodes, edges) {
         _statBlocks[_statBlocks.length - 1].style.borderRight = 'none';
     }
 
-    // Severity-Pillen — nur die mit Treffern anzeigen, kritischste links.
-    // Normal (0) blenden wir aus, im "Mit Problem"-Counter ist das Komplement.
-    const sevColors = ['#22c55e', '#06b6d4', '#f59e0b', '#f97316', '#ef4444', '#991b1b'];
-    const sevLabels = ['OK', 'Info', 'Warn', 'Avg', 'High', t('mgmt.sev.crit')];
+    // Klartext-Pillen: Laeuft / Warnung / Kritisch. "Laeuft" immer zeigen (der
+    // gute Normalfall), Warnung/Kritisch nur wenn vorhanden.
     const pills = document.createElement('div');
     pills.style.cssText = 'display:flex;align-items:center;gap:6px;padding:0 8px;'
         + 'margin-left:auto;flex-wrap:wrap';
-    for (let s = 5; s >= 1; s--) {
-        if (!sevCounts[s]) continue;
+    for (let b = 0; b <= 2; b++) {
+        if (b > 0 && !bucketCounts[b]) continue;
+        const c = MGMT_BUCKET_COLOR[b];
         const pill = document.createElement('span');
         pill.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:3px 9px;'
-            + 'border-radius:11px;background:' + sevColors[s] + '22;color:' + sevColors[s]
+            + 'border-radius:11px;background:' + c + '22;color:' + c
             + ';font-size:11px;font-weight:700';
         pill.innerHTML = '<span style="display:inline-block;width:8px;height:8px;'
-            + 'border-radius:50%;background:' + sevColors[s] + '"></span>'
-            + sevLabels[s] + ' ' + sevCounts[s];
+            + 'border-radius:50%;background:' + c + '"></span>'
+            + bucketCounts[b] + ' ' + t(MGMT_BUCKET_KEY[b]);
         pills.appendChild(pill);
     }
-    if (pills.children.length > 0) statsBar.appendChild(pills);
+    statsBar.appendChild(pills);
 
     container.appendChild(statsBar);
 
@@ -160,15 +208,18 @@ export function renderManagement(wrap, nodes, edges) {
     sortedLevels.forEach(function(lvl) {
         const lvlNodes = levels[lvl];
 
-        // Ebenen-Header: Label + Count-Badge + Worst-Severity-Dot der Ebene
+        // Ebenen-Header: Icon + Label + Count-Badge + Worst-Status-Dot der Ebene
         const header = document.createElement('div');
         header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;'
             + 'padding-bottom:5px;border-bottom:1px solid ' + bdr
             + ';margin-top:' + (lvl === sortedLevels[0] ? '0' : '24px');
+        // Kategorie-Icon (repraesentativer Typ) — macht die Gruppe auf einen Blick
+        // erkennbar, auch fuer Nicht-ITler.
+        header.appendChild(mgmtTypeIcon(MGMT_LEVEL_ICON[lvl] || 'server', sub));
         const hLbl = document.createElement('span');
         hLbl.style.cssText = 'font-size:11px;font-weight:700;color:' + sub
             + ';text-transform:uppercase;letter-spacing:0.08em';
-        hLbl.textContent = MGMT_LEVEL_NAMES[lvl] || t('mgmt.level.generic', { n: lvl });
+        hLbl.textContent = mgmtLevelName(lvl);
         header.appendChild(hLbl);
         const hCount = document.createElement('span');
         hCount.style.cssText = 'font-size:10px;font-weight:700;color:' + sub
@@ -177,10 +228,11 @@ export function renderManagement(wrap, nodes, edges) {
         header.appendChild(hCount);
         const wsev = levelMaxSev[lvl] || 0;
         if (wsev > 0) {
+            const wst = mgmtSevStyle(wsev);
             const wdot = document.createElement('span');
             wdot.style.cssText = 'width:7px;height:7px;border-radius:50%;flex-shrink:0;background:'
-                + sevColors[wsev];
-            wdot.title = mgmtSevStyle(wsev).label;
+                + wst.color;
+            wdot.title = wst.label;
             header.appendChild(wdot);
         }
         container.appendChild(header);
@@ -227,15 +279,24 @@ export function renderManagement(wrap, nodes, edges) {
             // Severity-Header (oder Offline-Header bei unreachable)
             const topRow = document.createElement('div');
             topRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px';
-            // Severity als Pill (Punkt + Label) — konsistent mit den Header-Pillen.
-            const pillColor = isOff ? '#e53742' : sev.color;
+            // Geraetetyp-Icon (dieselben Pfade wie auf der Karte) — ein Laie
+            // erkennt "Server / Switch / Kamera" sofort, ohne ein Wort zu lesen.
+            // In der Status-Farbe getoent, damit es zum Streifen/zur Pille passt.
+            const pillColor = isOff ? '#9ca3af' : sev.color;
+            topRow.appendChild(mgmtTypeIcon(n.type, pillColor));
+            // Status als Pill (Punkt + Klartext-Label) — per DOM gebaut (kein
+            // innerHTML), Label als textContent.
             const sevPill = document.createElement('span');
             sevPill.style.cssText = 'display:inline-flex;align-items:center;gap:5px;'
                 + 'padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;'
                 + 'background:' + pillColor + '1a;color:' + pillColor;
-            sevPill.innerHTML = '<span style="width:7px;height:7px;border-radius:50%;'
-                + 'flex-shrink:0;background:' + pillColor + '"></span>'
-                + (isOff ? 'OFFLINE' : sev.label);
+            const sevDot = document.createElement('span');
+            sevDot.style.cssText = 'width:7px;height:7px;border-radius:50%;flex-shrink:0;background:'
+                + pillColor;
+            sevPill.appendChild(sevDot);
+            const sevLbl = document.createElement('span');
+            sevLbl.textContent = isOff ? t('mgmt.status.off') : sev.label;
+            sevPill.appendChild(sevLbl);
             topRow.appendChild(sevPill);
 
             // Status-Badges (Wartung, Acked) rechts neben Severity-Label

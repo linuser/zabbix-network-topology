@@ -17,8 +17,40 @@ An [issue](https://github.com/linuser/zabbix-network-topology/issues) with:
 - the **module version** (footer of the module page, or `manifest.json`)
 - your **Zabbix version** and **PHP version**
 - for missing edges: the **SNMP vendor** of the device → check the vendor matrix
-  in [LLDP-SETUP.md](LLDP-SETUP.md) first, many "no edges" cases are listed there
+  in [LLDP-SETUP.md](docs/LLDP-SETUP.md) first, many "no edges" cases are listed there
 - for JS problems: the message from the **browser console** (F12)
+
+### Hardware: what's tested, and testing yours
+
+The module turns SNMP into a map, so what it can draw depends on what your
+switches answer. **Which vendors are confirmed to produce edges is kept in one
+place** — the vendor matrix in
+[LLDP-SETUP.md](docs/LLDP-SETUP.md#vendor-matrix--what-produces-edges). A ✓
+there means someone ran it on that line; a gap means nobody has yet, not that
+it won't work.
+
+**Help us test your switch.** Any vendor not yet confirmed in the matrix helps —
+a **Dell** (PowerConnect, N-series, OS10/OS9), a **Huawei** line beyond the
+S5700 (CloudEngine, other VRP), or anything the matrix shows with a gap are just
+examples. A **negative** result ("✗ no queryable neighbour table") counts just
+as much — it saves the next person an afternoon.
+
+How to send a walk without sending your network:
+
+1. Run the probe for the feature in question — they live in `tools/`:
+   `nt-lldp-probe.sh` (neighbours/edges), `nt-stp-probe.sh`, `nt-poe-probe.sh`,
+   `nt-vlan-probe.sh`, `nt-fdb-probe.sh`, `nt-arp-probe.sh`. Each prints
+   **capability counts** ("LLDP neighbour table: 7 entries") — not host names,
+   not IPs, not MACs.
+2. **Read the output before you send it.** The probes are built to stay
+   generic, but you know your network; redact anything that slipped through.
+3. Open a [device report](https://github.com/linuser/zabbix-network-topology/issues/new?template=device_report.yml)
+   with the vendor, the model, the firmware line and that output.
+
+Fixing a vendor quirk in code? The LLDP matcher is tested against anonymised
+walks in [`tests/fixtures/lldp/`](tests/fixtures/lldp/) — add one for your
+device (see the README there). **Every value in a fixture is invented** — the
+same rule as the simulated devices below.
 
 ### Development setup
 
@@ -95,6 +127,13 @@ without it being clear why:
      prototype regexes, read from the template file itself, run against real
      walks with and without a TimeMark (issue #15 — TP-Link returned zero
      items, and no test had ever looked inside a template)
+   - every `type:` value is a real Zabbix export constant — item/LLD/macro types
+     against one enum, preprocessing-step types against another. The STP
+     template's new `nt.mac.flap` trapper shipped once as `type: TRAPPER`
+     instead of `TRAP`; Zabbix rejects that on import (*unexpected constant
+     "TRAPPER"*), but it is clean YAML, so no gate saw it and a user noticed
+     first. A self-test proves the check still flags a bogus item **and**
+     preprocessing type, rather than silently passing everything after a refactor
 
    Zabbix matches groups by `uuid`, not by name, and the values are identical on
    every installation. They live in the `hstgrp` table — look there instead of
@@ -293,8 +332,43 @@ Ein [Issue](https://github.com/linuser/zabbix-network-topology/issues) mit:
 - **Modul-Version** (Footer der Modul-Seite oder `manifest.json`)
 - **Zabbix-Version** und **PHP-Version**
 - bei fehlenden Kanten: **SNMP-Vendor** des Geräts → vorher die Vendor-Matrix in
-  [LLDP-SETUP.md](LLDP-SETUP.md) prüfen, viele „keine Kanten"-Fälle stehen dort
+  [LLDP-SETUP.md](docs/LLDP-SETUP.md) prüfen, viele „keine Kanten"-Fälle stehen dort
 - bei JS-Problemen: die Meldung aus der **Browser-Konsole** (F12)
+
+### Hardware: was getestet ist, und deine testen
+
+Das Modul macht aus SNMP eine Karte — was es zeichnen kann, hängt also davon
+ab, was deine Switche beantworten. **Welche Hersteller nachweislich Kanten
+liefern, steht an einer Stelle:** die Vendor-Matrix in
+[LLDP-SETUP.md](docs/LLDP-SETUP.md#vendor-matrix--what-produces-edges). Ein ✓
+dort heißt, jemand hat es auf dieser Linie gefahren; eine Lücke heißt, noch
+niemand — nicht, dass es nicht ginge.
+
+**Hilf uns, deinen Switch zu testen.** Jeder Hersteller, der noch nicht in der
+Matrix bestätigt ist, hilft — ein **Dell** (PowerConnect, N-Serie, OS10/OS9),
+eine **Huawei**-Linie jenseits der S5700 (CloudEngine, andere VRP) oder alles,
+was die Matrix als Lücke zeigt, sind nur Beispiele. Ein **negatives** Ergebnis
+(„✗ keine abfragbare Nachbartabelle") zählt genauso — es erspart dem Nächsten
+einen Nachmittag.
+
+Wie man einen Walk schickt, ohne sein Netz mitzuschicken:
+
+1. Das Probe-Skript zum fraglichen Feature laufen lassen — sie liegen in
+   `tools/`: `nt-lldp-probe.sh` (Nachbarn/Kanten), `nt-stp-probe.sh`,
+   `nt-poe-probe.sh`, `nt-vlan-probe.sh`, `nt-fdb-probe.sh`, `nt-arp-probe.sh`.
+   Jedes gibt **Fähigkeits-Zähler** aus („LLDP-Nachbartabelle: 7 Einträge") —
+   keine Hostnamen, keine IPs, keine MACs.
+2. **Vor dem Senden die Ausgabe lesen.** Die Skripte sind darauf gebaut,
+   generisch zu bleiben, aber du kennst dein Netz; schwärze, was durchgerutscht
+   ist.
+3. Einen [Geräte-Bericht](https://github.com/linuser/zabbix-network-topology/issues/new?template=device_report.yml)
+   mit Hersteller, Modell, Firmware-Linie und dieser Ausgabe öffnen.
+
+Du behebst eine Vendor-Eigenart im Code? Der LLDP-Matcher wird gegen
+anonymisierte Walks in [`tests/fixtures/lldp/`](tests/fixtures/lldp/) getestet —
+leg einen für dein Gerät an (siehe die README dort). **Jeder Wert in einer
+Fixture ist erfunden** — dieselbe Regel wie bei den simulierten Geräten weiter
+unten.
 
 ### Entwicklungs-Setup
 

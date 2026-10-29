@@ -9,7 +9,8 @@ import { esc, fmt } from './utils.js';
 import { t } from './i18n.js';
 import { SEV_COL, SEV_LBL, grpColor } from './severity.js';
 import { NT_LEGEND_COLLAPSED_KEY } from './storage.js';
-import { TRAFFIC_TIERS, UTIL_TIERS, IDLE_TIER, isWeathermapMode, hasCustomScales } from './traffic.js';
+import { TRAFFIC_TIERS, UTIL_TIERS, IDLE_TIER, isWeathermapMode, isLinkQualityMode, hasCustomScales } from './traffic.js';
+import { LINK_QUALITY_BANDS } from './link-quality.js';
 
 export function setupLegend(groupNames, nodes) {
     const leg = document.getElementById('nt-legend');
@@ -186,15 +187,27 @@ export function setupBottomLegend(wrap, dark) {
     // gradient, even with the mode off: a 1.9 Mb/s edge is orange on the
     // absolute scale, and the gradient made that read like ~50% utilization.
     const wm = isWeathermapMode();
-    let r2b = grpTitle(t(wm ? 'legend.guide.weathermap' : 'legend.guide.traffic'));
+    const lq = isLinkQualityMode();
+    // Titel des aktiven Modus. Als if/else-Kette statt verschachteltem Ternary
+    // (Link-Quality kam als dritter Fall dazu) — so will es der Hausstil.
+    let titleKey = 'legend.guide.traffic';
+    if (lq) titleKey = 'legend.guide.linkquality';
+    else if (wm) titleKey = 'legend.guide.weathermap';
+    let r2b = grpTitle(t(titleKey));
+    if (lq) {
+        LINK_QUALITY_BANDS.forEach(function(x, i) {
+            const rng = x.min === 0 ? '< ' + LINK_QUALITY_BANDS[i - 1].min : '≥ ' + x.min;
+            r2b += chip(line(x.col, false) + esc(t('legend.lq.' + x.key)) + ' ' + esc(rng));
+        });
+    }
     // Mark an admin-overridden scale — otherwise anyone who knows the
     // defaults from the docs wonders about the different colors.
-    if (hasCustomScales()) r2b += '<span style="opacity:0.55;margin-right:8px">(' + esc(t('scales.custom')) + ')</span>';
+    if (hasCustomScales() && !lq) r2b += '<span style="opacity:0.55;margin-right:8px">(' + esc(t('scales.custom')) + ')</span>';
     // Absolute: 0 b/s is its own tier ("idle", dashed grey). For utilization
     // the first tier (< 1%) is part of the scale itself.
-    if (!wm) r2b += chip(line(IDLE_TIER.col, true) + esc(t('legend.guide.idle')));
+    if (!wm && !lq) r2b += chip(line(IDLE_TIER.col, true) + esc(t('legend.guide.idle')));
     const tiers = wm ? UTIL_TIERS : TRAFFIC_TIERS;
-    tiers.forEach(function(x, i) {
+    if (!lq) tiers.forEach(function(x, i) {
         const isLast = !isFinite(x.max);
         const bound  = isLast ? tiers[i - 1].max : x.max;
         // "10.0 Kb/s" → "10 Kb/s": in a legend the tier matters, not the decimal

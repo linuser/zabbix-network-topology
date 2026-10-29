@@ -1,0 +1,24 @@
+{
+    "manifest_version": 2.0,
+    "id": "network_topology_plan_widget",
+    "type": "widget",
+    "name": "Network Topology for Zabbix — Plan Widget",
+    "namespace": "NetworkTopologyPlanWidget",
+    "version": "1.0.1",
+    "author": "PlaNet Fox | Alexander Fox",
+    "description": "Dashboard widget: your topology on a floor plan or aerial. Shows the Plan view's background image with each device placed at its real spot, coloured by severity/status — read-only. Set the background and the placement in the main module's Plan tab (for the same host-group selection). Requires the main module (network_topology).",
+    "actions": {
+        "widget.network.topology.plan.view": {
+            "class": "WidgetView"
+        }
+    },
+    "widget": {
+        "js_class": "WidgetNetworkTopologyPlan"
+    },
+    "assets": {
+        "js": [
+            "widget.class.js"
+        ],
+        "css": []
+    }
+}

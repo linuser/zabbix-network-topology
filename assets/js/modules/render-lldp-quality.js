@@ -193,6 +193,73 @@ function _topUnmatchedTable(perHost, theme) {
     return html;
 }
 
+// Eine Kopfzeile, die die Gesundheit der LLDP-Sicht in einem Satz zusammenfasst:
+// wie viele Nachbarschaften insgesamt, wie viele davon beidseitig bestaetigt vs.
+// nur einseitig gemeldet, wie viele im Konflikt (mehrdeutig) — und wie viele der
+// Switches ueberhaupt LLDP liefern. Alle Zahlen liegen vor: confirmed/one-sided
+// an jeder Kante (`e.confirmed`), conflict = ambiguous aus lldp_quality, die
+// Abdeckung aus Node-Typ + Melder-Menge. Reine Darstellung, keine neue Abfrage.
+function _healthLine(perHost, data, theme) {
+    const edges = Array.isArray(data.edges) ? data.edges : [];
+    const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+
+    // confirmed / one-sided NUR ueber LLDP/CDP-Kanten — manuelle und
+    // nt:parent-Kanten sind keine gemeldeten Nachbarschaften.
+    let confirmed = 0, oneSided = 0;
+    edges.forEach(function(e) {
+        const s = e.src || {};
+        const names = Array.isArray(s) ? s : Object.keys(s);
+        const isLldp = names.some(function(x) { return x === 'lldp' || x === 'cdp'; });
+        if (!isLldp) return;
+        if (e.confirmed === true) confirmed++; else oneSided++;
+    });
+
+    // conflict = mehrdeutig (Short-Name trifft mehrere Hosts), dazu die Menge
+    // der Hosts, die ueberhaupt einen Nachbarn melden (fuer die Abdeckung).
+    let conflict = 0;
+    const reporters = {};
+    perHost.forEach(function(h) {
+        conflict += (h.ambiguous || []).length;
+        const any = (h.matched || 0) + (h.unmatched || []).length + (h.ambiguous || []).length;
+        if (any > 0) reporters[String(h.id)] = true;
+    });
+    const neighbors = confirmed + oneSided + conflict;
+
+    // Abdeckung: wie viele der Switches/Router melden tatsaechlich LLDP.
+    const infraIds = nodes.filter(function(n) { return n.type === 'switch' || n.type === 'router'; })
+                          .map(function(n) { return String(n.id); });
+    let reporting = 0;
+    infraIds.forEach(function(id) { if (reporters[id]) reporting++; });
+    const hasInfra = infraIds.length > 0;
+    const coverage = hasInfra ? Math.round(100 * reporting / infraIds.length) : null;
+    const covCol = coverage === null ? theme.subSoft
+                 : coverage >= 90 ? COL_GOOD
+                 : coverage >= 70 ? COL_WARN : COL_BAD;
+
+    const num = function(v, col) {
+        return '<b style="font-family:monospace;color:' + (col || theme.text) + '">' + v + '</b>';
+    };
+    const sep = '<span style="color:' + theme.subSoft + ';margin:0 7px">·</span>';
+    const parts = [
+        num(neighbors) + ' ' + esc(t('lldpq.health.neighbors')),
+        num(confirmed, COL_GOOD) + ' ' + esc(t('lldpq.health.confirmed')),
+        num(oneSided, oneSided > 0 ? COL_WARN : theme.subSoft) + ' ' + esc(t('lldpq.health.onesided')),
+        num(conflict, conflict > 0 ? COL_BAD : theme.subSoft) + ' ' + esc(t('lldpq.health.conflict')),
+    ];
+    let line = '<div style="background:' + theme.surface + ';border:1px solid ' + theme.border
+        + ';border-radius:6px;padding:10px 16px;margin-bottom:14px;font-size:13px;'
+        + 'color:' + theme.text + ';display:flex;align-items:baseline;flex-wrap:wrap">'
+        + '<span style="font-size:10px;color:' + theme.sub + ';text-transform:uppercase;'
+        +   'letter-spacing:0.05em;margin-right:12px">' + esc(t('lldpq.health.title')) + '</span>'
+        + '<span>' + parts.join(sep) + '</span>';
+    if (hasInfra) {
+        line += sep + '<span style="color:' + covCol + '">'
+            + esc(t('lldpq.health.coverage', { pct: coverage })) + '</span>';
+    }
+    line += '</div>';
+    return line;
+}
+
 export function renderLldpQuality(wrap) {
     if (window._ntCy)       { try { window._ntCy.destroy(); } catch (e) {} window._ntCy = null; }
     if (window._ntEdgeAnim) { clearInterval(window._ntEdgeAnim); window._ntEdgeAnim = null; }
@@ -239,6 +306,7 @@ export function renderLldpQuality(wrap) {
         return;
     }
 
+    root.appendChild(_makeDiv(_healthLine(perHost, data, theme)));
     root.appendChild(_makeDiv(_aggregateBlock(perHost, theme)));
     root.appendChild(_makeDiv(_perHostTable(perHost, theme)));
     root.appendChild(_makeDiv(_topUnmatchedTable(perHost, theme)));

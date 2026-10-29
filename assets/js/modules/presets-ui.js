@@ -16,7 +16,7 @@ import {
     loadRelevantPresets, savePreset, deletePreset, applyPreset,
     collectCurrentState, loadActivePreset, saveActivePreset
 } from './storage.js';
-import { downloadLayout } from './layout-file.js';
+import { downloadLayout, readLayoutFile, importLayout } from './layout-file.js';
 import { toast } from './toast.js';
 import { t } from './i18n.js';
 
@@ -179,36 +179,15 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     delBtn.title = t('presets.del.tip');
     delBtn.textContent = '\u{1F5D1}';
 
-    // Datei-EXPORT. Bewusst NEBEN den Presets und nicht als weiterer
+    // Datei-EXPORT/-IMPORT. Bewusst NEBEN den Presets und nicht als weiterer
     // Preset-Eintrag: ein Preset lebt im localStorage dieses Browsers, eine
     // Datei geht auf ein anderes Geraet oder in ein anderes Zabbix.
     //
-    // KEIN Import-Knopf — bewusst, nicht vergessen.
-    //
-    // Der Import war gebaut und ist wieder ausgebaut worden, weil ein
-    // Code-Review drei Defekte fand, die alle dieselbe Wurzel haben: der
-    // Apply-Pfad (applyPreset/setPositions/setLinks) wurde fuer VOLLSTAENDIGE
-    // Zustaende aus der laufenden Karte geschrieben, eine importierte Datei ist
-    // aber ein beliebiger TEILzustand.
-    //
-    //   1. Der Re-Render nach dem Import speichert den live gerenderten Stand
-    //      zurueck (layoutstop -> savePositions). Im Cluster-Modus — dem
-    //      Standard ab zwei Hostgruppen — kommen die importierten Positionen
-    //      gar nicht erst an und werden ~1,4 s spaeter ueberschrieben.
-    //   2. Ein Super-Admin schreibt in die GETEILTE Ebene, und setPositions()
-    //      ersetzt sie komplett. Ein Import mit zwoelf Knoten loescht damit die
-    //      Positionen aller uebrigen Hosts fuer alle Nutzer.
-    //   3. loadLinks() liefert geteilte UND persoenliche Links gemischt, die
-    //      Datei traegt die Ebene nicht mit, und setLinks() schreibt alles in
-    //      defaultLinkScope(). Aus privaten Kanten werden geteilte oder
-    //      umgekehrt.
-    //
-    // Nichts davon ist im Import selbst zu reparieren; es braucht eine
-    // Entscheidung, was "importieren" bei einer geteilten Karte heissen soll —
-    // ersetzen oder zusammenfuehren. Siehe ROADMAP.md.
-    //
-    // Der Export bleibt: er liest nur und kann nichts kaputt machen. Und er
-    // loest bereits die Haelfte des Zwecks, naemlich sichern.
+    // Der Import war einmal ausgebaut (drei Apply-Pfad-Defekte mit derselben
+    // Wurzel: der Ersetzen-Pfad war fuer vollstaendige Zustaende gedacht, eine
+    // Datei ist ein Teilzustand). Er ist zurueck und ZUSAMMENFUEHREND statt
+    // ersetzend — Positionen pro Knoten, Links als Vereinigung, nie ein Verlust;
+    // die Logik und die Begruendung stehen in layout-file.js/storage.js.
     const dlBtn = document.createElement('button');
     dlBtn.className = 'btn-alt btn-small';
     dlBtn.style.margin = '0';
@@ -223,6 +202,68 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
         } catch (e) {
             toast(t('layoutfile.err.export', { err: (e && e.message) || '?' }), 'error', 8000);
         }
+    });
+
+    // Datei-IMPORT. Ueberlagert (merge), ersetzt nicht \u2014 Logik + Grund in
+    // layout-file.js/storage.js. Hier: Datei lesen+pruefen (readLayoutFile), bei
+    // einem Super-Admin VORHER bestaetigen lassen (er schreibt die GETEILTE
+    // Ebene, die alle sehen), dann anwenden (importLayout) und neu rendern.
+    const upBtn = document.createElement('button');
+    upBtn.className = 'btn-alt btn-small';
+    upBtn.style.margin = '0';
+    upBtn.title = t('layoutfile.import.tip');
+    upBtn.textContent = '\u2B06';
+
+    // Verstecktes Datei-Feld: ein <input type=file> laesst sich nicht sinnvoll
+    // als Toolbar-Knopf gestalten, also klickt der Knopf es an.
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/json,.json';
+    fileInput.style.display = 'none';
+
+    // Nach dem Anwenden: Preset-Auswahl auf "keins" (ein Import IST kein Preset)
+    // und neu rendern wie im Preset-Pfad oben.
+    function applyImportedLayout(clean) {
+        importLayout(clean.data);
+        _active = null;
+        ddBtn.textContent = ddLabel();
+        updateButtons();
+        const cwrap = document.getElementById('nt-canvas-wrap');
+        const ld    = window._ntLastData || {};
+        _renderFn(cwrap, (ld.nodes || []).slice(), (ld.edges || []).slice(), ld.url || '');
+        toast(t('layoutfile.imported', {
+            pos: String(clean.stats.positions), links: String(clean.stats.links)
+        }), 'info', 6000);
+        if (clean.stats.verworfen > 0) {
+            toast(t('layoutfile.discarded', { n: String(clean.stats.verworfen) }), 'warn', 8000);
+        }
+    }
+
+    upBtn.addEventListener('click', function() { fileInput.click(); });
+
+    fileInput.addEventListener('change', function() {
+        const f = fileInput.files && fileInput.files[0];
+        // Zuruecksetzen, damit dieselbe Datei zweimal hintereinander waehlbar
+        // bleibt \u2014 'change' feuert sonst beim zweiten Mal nicht.
+        fileInput.value = '';
+        readLayoutFile(f).then(function(clean) {
+            const cfg = window.NT_CONFIG || {};
+            if (cfg.is_super_admin) {
+                // Der einzige Schreibpfad hier, der ANDERE Nutzer betrifft:
+                // bestaetigen und den Umfang nennen.
+                const msg = t('layoutfile.import.confirm_shared', {
+                    pos:   String(clean.stats.positions),
+                    links: String(clean.stats.links)
+                });
+                if (!window.confirm(msg)) {
+                    toast(t('layoutfile.import.cancelled'), 'info', 4000);
+                    return;
+                }
+            }
+            applyImportedLayout(clean);
+        }).catch(function(err) {
+            toast((err && err.message) || t('layoutfile.err.read'), 'error', 8000);
+        });
     });
 
     function updateButtons() {
@@ -306,6 +347,8 @@ export function setupPresetsUI(bar, isFirstRun, cy) {
     wrap.appendChild(saveAsBtn);
     wrap.appendChild(delBtn);
     wrap.appendChild(dlBtn);
+    wrap.appendChild(upBtn);
+    wrap.appendChild(fileInput);
     bar.appendChild(wrap);
 
     updateButtons();

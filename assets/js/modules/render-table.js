@@ -47,6 +47,7 @@ const TYPE_LBL = {
     firewall: 'Firewall', router: 'Router', switch: 'Switch',
     wireless: 'WAP', server: 'Server', storage: 'Storage',
     hypervisor: 'Hypervisor', camera: t('table.type.camera'), printer: t('table.type.printer'),
+    client: t('table.type.client'),
     ups: t('table.type.ups'), homeauto: 'Smart Home', mailserver: 'Mail',
     webserver: 'Web', container: 'Container', monitoring: 'Monitoring',
     linux: 'Linux', windows: 'Windows', macos: 'macOS', internet: 'Internet',

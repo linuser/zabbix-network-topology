@@ -101,15 +101,25 @@ function compile(pcre, port, remidx) {
     return new RegExp(src, flags);
 }
 
-// Nachbau von SNMP_WALK_TO_JSON fuer die SysName-Spalte (.9) — so wie der
-// erste Schritt der Discovery-Regel es konfiguriert.
+// Nachbau von SNMP_WALK_TO_JSON fuer die drei Spalten, die die Discovery-Regel
+// zusammenfuehrt: .9 (SysName), .5 (ChassisId), .7 (PortId). Zeilen entstehen in
+// der Reihenfolge der .9-Spalte (die erste im SNMP_WALK_TO_JSON), .5/.7 reichern
+// an. Der Typ-Praefix ("STRING:" etc.) ist optional, damit auch ein leeres
+// Feld (= "") eine Zeile ergibt — Cisco SG200 sendet SysName/PortDesc leer.
 function walkToJson(walk) {
-    const rows = [];
-    for (const l of walk.split('\n')) {
-        const m = /^\.?1\.0\.8802\.1\.1\.2\.1\.4\.1\.1\.9\.([\d.]+) = [A-Za-z0-9-]+: "?(.*?)"?$/.exec(l);
-        if (m) rows.push({ '{#SNMPINDEX}': m[1], '{#NT_SYSNAME}': m[2] });
+    const COLS = [['9', '{#NT_SYSNAME}'], ['5', '{#NT_CHASSIS}'], ['7', '{#NT_REMPORT}']];
+    const by = new Map();
+    for (const [col, field] of COLS) {
+        const re = new RegExp('^\\.?1\\.0\\.8802\\.1\\.1\\.2\\.1\\.4\\.1\\.1\\.' + col
+            + '\\.([\\d.]+) = (?:[A-Za-z0-9-]+: )?"?(.*?)"?$');
+        for (const l of walk.split('\n')) {
+            const m = re.exec(l);
+            if (!m) continue;
+            if (!by.has(m[1])) by.set(m[1], { '{#SNMPINDEX}': m[1] });
+            by.get(m[1])[field] = m[2];
+        }
     }
-    return JSON.stringify(rows);
+    return JSON.stringify([...by.values()]);
 }
 
 console.log('\ncheck-template-logic: LLDP-Template gegen echte Walks\n');
@@ -118,8 +128,8 @@ const js = lldJavaScript();
 if (js === null) abort('Discovery-JavaScript von nt.lldp.rem.discovery nicht gefunden — Template umgebaut?');
 const regexes = prototypeRegexes();
 const cols = Object.keys(regexes).sort((a, b) => a - b);
-if (cols.join(',') !== '5,7,8,9,10,12') {
-    abort(`erwartet sechs Prototyp-Regexe fuer die Spalten 5,7,8,9,10,12, gefunden: ${cols.join(',') || 'keine'}`);
+if (cols.join(',') !== '4,5,7,8,9,10,12') {
+    abort(`erwartet sieben Prototyp-Regexe fuer die Spalten 4,5,7,8,9,10,12, gefunden: ${cols.join(',') || 'keine'}`);
 }
 
 // Beide Helfer fangen Fehler ab und melden sie als FAIL, statt abzustuerzen.
@@ -149,6 +159,7 @@ function extract(walk, col, port, remidx) {
 
 // ── TP-Link JetStream: zweiteiliger Index, aus Issue #15 ─────────────────
 const TPLINK = [
+    '.1.0.8802.1.1.2.1.4.1.1.4.25.1 = INTEGER: 4',
     '.1.0.8802.1.1.2.1.4.1.1.5.25.1 = Hex-STRING: 3C 52 A1 00 00 01',
     '.1.0.8802.1.1.2.1.4.1.1.7.25.1 = STRING: "Gi1/0/48"',
     '.1.0.8802.1.1.2.1.4.1.1.8.5.1 = STRING: "port-five"',
@@ -167,11 +178,50 @@ check('Index auf 0.Port.RemIndex normalisiert',
       d.map((r) => r['{#SNMPINDEX}']), ['0.5.1', '0.20.1', '0.25.1']);
 const row25 = d.find((r) => r['{#SNMPINDEX}'] === '0.25.1') || {};
 check('Port- und RemIndex-Makro', [row25['{#NT_PORT}'], row25['{#NT_REMIDX}']], ['25', '1']);
-check('alle sechs Spalten fuer Port 25', cols.map((c) => extract(TPLINK, c, '25', '1')), [
-    '3C 52 A1 00 00 01', 'Gi1/0/48', 'gigabitEthernet 1/0/25',
+check('alle sieben Spalten fuer Port 25', cols.map((c) => extract(TPLINK, c, '25', '1')), [
+    '4', '3C 52 A1 00 00 01', 'Gi1/0/48', 'gigabitEthernet 1/0/25',
     'Serwerownia_Lewa_Gora', 'JetStream 28-Port Gigabit L2+ Managed Switch', '28 00'
 ]);
 check('Port 5 greift nicht auf Port 25', extract(TPLINK, '8', '5', '1'), 'port-five');
+
+// ── lldpRemManAddr: die Mgmt-IP steckt IM OID-INDEX (5.5.97) ─────────────
+// Die getrennte lldpRemManAddrTable (1.0.8802.1.1.2.1.4.2.1) traegt die
+// Adresse nicht im Wert, sondern im Index:
+//   ...4.2.1.3.<TimeMark>.<LocalPort>.<RemIndex>.<AddrSubtype>.<AddrLen>.<octets>
+// Der Prototyp-Regex pint AddrSubtype=1, AddrLen=4 (IPv4) und setzt die vier
+// Oktette per \1.\2.\3.\4 wieder zusammen. Der Regex steht NICHT in der
+// 4.1.1.N-Spaltenliste oben, darum hier eigens geholt und geprueft.
+function manAddrRegex() {
+    for (const l of lines) {
+        const m = /^\s*- '(\(\?m\)\^\\\.\?1\\\.0\\\.8802\\\.1\\\.1\\\.2\\\.1\\\.4\\\.2\\\.1\\\.3\\\..*)'\s*$/.exec(l);
+        if (m) return m[1].replace(/''/g, "'");
+    }
+    return null;
+}
+function extractMan(walk, port, remidx) {
+    const pcre = manAddrRegex();
+    if (pcre === null) return '<kein lldpRemManAddr-Regex>';
+    try {
+        const m = compile(pcre, port, remidx).exec(walk);
+        return m ? m[1] + '.' + m[2] + '.' + m[3] + '.' + m[4] : null;
+    } catch (e) {
+        return `<Muster ungueltig: ${e.message}>`;
+    }
+}
+
+console.log('\n  lldpRemManAddr — IPv4 aus dem OID-Index');
+check('Prototyp-Regex vorhanden', manAddrRegex() !== null, true);
+// HPE-naher Fall: TimeMark gesetzt, IPv4 (Subtype 1, Len 4) auf Port 25.
+const MAN_V4_TM = '.1.0.8802.1.1.2.1.4.2.1.3.1234.25.1.1.4.192.0.2.9 = INTEGER: 1';
+check('IPv4 mit TimeMark', extractMan(MAN_V4_TM, '25', '1'), '192.0.2.9');
+// TP-Link-naher Fall: TimeMark fehlt (zweiteiliger Index davor), Port 26.
+const MAN_V4_NOTM = '.1.0.8802.1.1.2.1.4.2.1.3.26.1.1.4.192.0.2.10 = INTEGER: 1';
+check('IPv4 ohne TimeMark', extractMan(MAN_V4_NOTM, '26', '1'), '192.0.2.10');
+// IPv6 (Subtype 2, Len 16) wird bewusst NICHT getroffen.
+const MAN_V6 = '.1.0.8802.1.1.2.1.4.2.1.3.1234.25.1.2.16.32.1.13.184.0.0.0.0.0.0.0.0.0.0.0.1 = INTEGER: 1';
+check('IPv6 wird uebergangen', extractMan(MAN_V6, '25', '1'), null);
+// Anderer Port -> kein Treffer.
+check('anderer Port: kein Treffer', extractMan(MAN_V4_TM, '26', '1'), null);
 
 // ── FortiGate: dreiteilig, TimeMark wechselt — darf sich nicht aendern ───
 const FORTI = [
@@ -202,6 +252,33 @@ d = discover('.1.0.8802.1.1.2.1.4.1.1.9.10.25.1 = STRING: "old"\n'
            + '.1.0.8802.1.1.2.1.4.1.1.9.99.25.1 = STRING: "new"');
 check('dieselbe Zeile unter zwei TimeMarks: die hoechste gewinnt',
       d.map((r) => r['{#NT_SYSNAME}']), ['new']);
+
+// ── Cisco SG200: RemIndex wechselt beim Relearn, Identitaet bleibt stabil ──
+// Aus Issue #25 (Beispieldaten erfunden). LocalPort 67, ChassisId + RemPortId unveraendert,
+// RemIndex 12967 -> 12982. SysName/PortDesc werden leer gesendet (= "").
+console.log('\n  Cisco SG200 — RemIndex-Wechsel beim Relearn (#25)');
+const SG200_BEFORE = [
+    '.1.0.8802.1.1.2.1.4.1.1.5.0.67.12967 = STRING: "EXAMPLE-NB-01"',
+    '.1.0.8802.1.1.2.1.4.1.1.7.0.67.12967 = Hex-STRING: 00 11 22 33 44 55',
+    '.1.0.8802.1.1.2.1.4.1.1.8.0.67.12967 = ""',
+    '.1.0.8802.1.1.2.1.4.1.1.9.0.67.12967 = ""'
+].join('\n');
+const SG200_AFTER = SG200_BEFORE.split('12967').join('12982');
+const b25 = discover(SG200_BEFORE);
+const a25 = discover(SG200_AFTER);
+check('ein Nachbar vor und nach dem Relearn', [b25.length, a25.length], [1, 1]);
+check('NT_NBR-Identitaet bleibt ueber den Relearn stabil',
+      (b25[0] || {})['{#NT_NBR}'], (a25[0] || {})['{#NT_NBR}']);
+check('NT_NBR ist ein 3-teiliger numerischer Index (0.Port.hash)',
+      /^0\.67\.\d+$/.test((b25[0] || {})['{#NT_NBR}'] || ''), true);
+check('RemIndex-Makro folgt dem aktuellen Walk',
+      [(b25[0] || {})['{#NT_REMIDX}'], (a25[0] || {})['{#NT_REMIDX}']], ['12967', '12982']);
+check('LocalPort stabil 67',
+      [(b25[0] || {})['{#NT_PORT}'], (a25[0] || {})['{#NT_PORT}']], ['67', '67']);
+check('ChassisId mit aktuellem RemIndex extrahierbar',
+      extract(SG200_AFTER, '5', '67', '12982'), 'EXAMPLE-NB-01');
+check('PortId mit aktuellem RemIndex extrahierbar',
+      extract(SG200_AFTER, '7', '67', '12982'), '00 11 22 33 44 55');
 
 if (failures > 0) {
     console.log(`\ncheck-template-logic: ${failures} Fehler.`);

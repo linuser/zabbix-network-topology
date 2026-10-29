@@ -70,7 +70,26 @@ final class NtCache {
             $tail = 'h' . md5($tail);   // z.B. 500 itemids
         }
 
-        return 'nt:' . self::SCHEMA . ':' . $namespace . ':' . $userid . ':' . $tail;
+        return 'nt:' . self::SCHEMA . ':' . self::permSig() . ':'
+             . $namespace . ':' . $userid . ':' . $tail;
+    }
+
+    /**
+     * Grober Berechtigungs-Fingerabdruck im Key: Rolle + Benutzertyp.
+     *
+     * WARUM NUR GROB. Ein PRAEZISER Abdruck muesste die effektiven
+     * Hostgruppen-Rechte des Benutzers kennen — und genau die zu ermitteln ist
+     * der teure, berechtigungsgefilterte Fetch, den dieser Cache einspart. Ein
+     * Rollen- oder Typwechsel aendert den Abdruck und invalidiert sofort; ein
+     * Entzug von Hostgruppen-Rechten INNERHALB derselben Rolle wirkt dagegen
+     * erst nach TTL-Ablauf (Daten: 60 s). Das ist ein bewusst begrenztes
+     * Zeitfenster fuer DENSELBEN Benutzer — kein Cross-User-Leak, denn die
+     * userid steht ohnehin im Key (Security-Review F09). Ein SCHEMA-Bump oder
+     * Neustart raeumt alles schlagartig.
+     */
+    private static function permSig(): string {
+        return 'r' . (int) (\CWebUser::$data['roleid'] ?? 0)
+             . 't' . (int) (\CWebUser::$data['type'] ?? 0);
     }
 
     /** Aktuelle User-ID; 0 = kein eingeloggter User → nicht cachen. */
