@@ -117,10 +117,16 @@ function _hostTable(hosts, theme) {
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
         + '<th style="padding:6px 12px;text-align:left;color:' + theme.sub + ';font-weight:600">Host</th>';
     CHECKS.forEach(function(c) {
+        // Rotation gehoert in einen inline-block-Span, NICHT aufs <th>: mit
+        // writing-mode direkt am th wirkt text-align:center auf die vertikale
+        // Achse, der gedrehte Text steht dann nicht horizontal ueber der Spalte
+        // und die (zentrierten) Markierungen darunter laufen sichtbar weg. So
+        // zentriert text-align:center den Span horizontal, Kopf und Zelle fluchten.
         html += '<th title="' + esc(c.lbl) + '" style="padding:6px 8px;text-align:center;'
-            + 'color:' + theme.sub + ';font-weight:600;writing-mode:vertical-rl;'
+            + 'vertical-align:bottom;color:' + theme.sub + ';font-weight:600">'
+            + '<span style="display:inline-block;writing-mode:vertical-rl;'
             + 'transform:rotate(180deg);white-space:nowrap;font-size:10px">'
-            + esc(c.short) + '</th>';
+            + esc(c.short) + '</span></th>';
     });
     html += '</tr></thead><tbody>';
     hosts.forEach(function(h) {

@@ -696,7 +696,7 @@ export default {
 
     // Host resource forecast (render-stats.js)
     'rf.title':       'Host resource forecast',
-    'rf.caveat':      'Linear projection of CPU%/memory% trends (Zabbix trends, same period as above). Only hosts with % items (system.cpu.util, vm.memory…pused). CPU trends are volatile — memory trends catch leaks/growth more reliably. Thresholds: memory 90%, CPU 85%.',
+    'rf.caveat':      'Linear projection of CPU%/memory% trends (Zabbix trends, same period as above). Only hosts with % items (system.cpu.util, vm.memory…pused). CPU trends are volatile — memory trends catch leaks/growth more reliably. Thresholds: memory 90%, CPU 85%. The "→ 1 yr" columns extrapolate the trend 12 months out for year-over-year planning — dimmed when the fit is weak, so treat them as a guesstimate.',
     'rf.nogroups':    'No host groups selected.',
     'rf.nodata':      'No CPU/memory % trends found (trends enabled? % items present?).',
     'rf.summary':     '{hosts} hosts with resource trends · based on {days} days · thresholds: mem 90%, CPU 85%',
@@ -706,6 +706,9 @@ export default {
     'rf.col.mem_eta': 'Mem → 90%',
     'rf.col.cpu':     'CPU',
     'rf.col.cpu_eta': 'CPU → 85%',
+    'rf.col.mem_1yr': 'Mem → 1 yr',
+    'rf.col.cpu_1yr': 'CPU → 1 yr',
+    'rf.proj.tip':    'Linear projection 12 months out, from {days} days of trends (fit R²={r2}). A rough guide — dimmed, and marked ~, when the trend is noisy.',
     'rf.more':        '+{n} more hosts (due later or stable)',
     'rf.eta.now':     'threshold reached',
 

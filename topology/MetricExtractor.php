@@ -108,6 +108,13 @@ final class MetricExtractor {
         // echter Mittelwert steht und nicht eine Kette von Halbierungen.
         $hr_cpu_sum     = [];
         $hr_cpu_cnt     = [];
+        // system.cpu.util[<n>] (reine CPU-Index-Form, z.B. TrueNAS-SNMP): echte
+        // Gesamtlast dieses Prozessors, aber nur als FALLBACK — ein direkter
+        // Gesamtwert (bare key / idle / perf_counter) gewinnt. Summe/Anzahl, am
+        // Ende gemittelt (ein oder mehrere Indizes -> ein %), aufgeloest nach
+        // dem Item-Loop, damit die Reihenfolge der Items nichts entscheidet.
+        $cpu_idx_sum    = [];
+        $cpu_idx_cnt    = [];
         $host_mem_used  = [];   // bytes (used)
         $host_mem_total = [];   // bytes (total)
         $host_mem_avail = [];   // bytes (available/free) \u2014 wenn used fehlt
@@ -737,8 +744,27 @@ final class MetricExtractor {
                 // system.cpu.util[,user] (z.B. 7 %) vor dem echten Gesamtwert
                 // (80 %). Review #5. Den Gesamtwert liefert bare system.cpu.util
                 // (oben) bzw. 100 - idle hier.
-                if (strpos($key, 'idle') !== false && !isset($host_cpu[$hid])) {
-                    $host_cpu[$hid] = round(max(0.0, 100.0 - $val), 1);
+                //
+                // AUSNAHME: die reine Index-Form system.cpu.util[0]/[1] (nur eine
+                // CPU-Nummer, KEIN Typ, kein Komma) ist die Gesamtlast genau
+                // dieses Prozessors. SNMP-Templates wie "TrueNAS CORE by SNMP"
+                // keyen ihren (aus 100-idle berechneten) Aggregatwert so und
+                // zeigten sonst „not collected". Nur als FALLBACK sammeln, damit
+                // ein echter Gesamt-/idle-Wert weiter zuerst gewinnt.
+                // Der Key allein unterscheidet Auslastung nicht von Leerlauf,
+                // wenn ein Template idle faelschlich als system.cpu.util[n]
+                // keyed (Wert 95 bei Leerlauf -> saehe aus wie 95 % Last). Der
+                // Item-NAME ist das einzige Zusatzsignal: nennt er "idle", wird
+                // die Index-Form NICHT als Last genommen (lieber kein Wert als
+                // ein invertierter).
+                if (strpos($key, 'idle') !== false) {
+                    if (!isset($host_cpu[$hid])) {
+                        $host_cpu[$hid] = round(max(0.0, 100.0 - $val), 1);
+                    }
+                } elseif (preg_match('/^system\.cpu\.util\[\s*\d+\s*\]$/', $key)
+                          && stripos((string) ($item['name'] ?? ''), 'idle') === false) {
+                    $cpu_idx_sum[$hid] = ($cpu_idx_sum[$hid] ?? 0.0) + $val;
+                    $cpu_idx_cnt[$hid] = ($cpu_idx_cnt[$hid] ?? 0) + 1;
                 }
             } elseif (preg_match('/proxmox\.[^.]*\.?cpu\.usage/', $key)) {
                 // Proxmox liefert CPU als 0..1 Float (z.B. 0.42 = 42%)
@@ -907,6 +933,16 @@ final class MetricExtractor {
             if ($total > 0.0 && $avail >= 0.0) {
                 $host_mem_used[$hid] = max(0.0, $total - $avail);
             }
+        }
+
+        // ── CPU Fallback: reine Index-Form system.cpu.util[<n>] ───────────
+        // Erst jetzt, nach dem Item-Loop: ein echter Gesamt-/idle-/perf_counter-
+        // Wert hat Vorrang und steht schon in $host_cpu. Fehlt er, mittelt der
+        // gesammelte Index-Wert (ein oder mehrere Kerne) zu einem %.
+        foreach ($cpu_idx_sum as $hid => $sum) {
+            if (isset($host_cpu[$hid])) continue;
+            $n = $cpu_idx_cnt[$hid] ?? 1;
+            $host_cpu[$hid] = round(max(0.0, min(100.0, $sum / max(1, $n))), 1);
         }
 
         // ── Memory % \u2014 Prio: direkter pct > used/total ────────────────────

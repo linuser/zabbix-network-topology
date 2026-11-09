@@ -62,6 +62,36 @@ $items = [
     ['hostid' => 'h1', 'key_' => 'icmppingsec',           'name' => 'ICMP response time',            'lastvalue' => '0.0053'],
     ['hostid' => 'h1', 'key_' => 'net.if.in[eth0]',       'name' => 'Interface eth0: Bits received', 'lastvalue' => '1000000'],
 
+    // h3 — Windows-Agent-Host: "CPU utilization" ist in der Zabbix-Windows-
+    // Vorlage ein perf_counter auf \Processor(_Total)\% Processor Time, NICHT
+    // system.cpu.util. Panel/Forecast zeigten dafuer "nicht erhoben", weil die
+    // Item-Suche den Key nicht traf — der Extractor kennt ihn.
+    ['hostid' => 'h3', 'key_' => 'perf_counter_en["\Processor Information(_Total)\% Processor Time", 60]', 'name' => 'CPU utilization', 'lastvalue' => '18.6'],
+
+    // h4 — TrueNAS-artiger SNMP-Host: die CPU-Discovery keyt die (aus 100-idle
+    // berechnete) Gesamtlast als system.cpu.util[0] — reine Index-Form ohne Typ.
+    // Fruehere Heuristik (nur idle zaehlt) warf das raus -> "not collected".
+    ['hostid' => 'h4', 'key_' => 'system.cpu.util[0]',    'name' => 'CPU utilization',               'lastvalue' => '23.4'],
+    ['hostid' => 'h4', 'key_' => 'vm.memory.utilization', 'name' => 'Memory utilization',            'lastvalue' => '61.0'],
+
+    // h5 — hat BEIDES: echten Gesamtwert (bare key) und die Index-Form. Der
+    // Gesamtwert muss gewinnen, die Index-Form ist nur Fallback.
+    ['hostid' => 'h5', 'key_' => 'system.cpu.util',       'name' => 'CPU utilization',               'lastvalue' => '80.0'],
+    ['hostid' => 'h5', 'key_' => 'system.cpu.util[0]',    'name' => 'CPU core 0',                    'lastvalue' => '5.0'],
+
+    // h6 — NUR eine Teilkategorie (user-Zeit). Kein Gesamtwert -> bleibt leer,
+    // die Index-mit-Typ/Komma-Form darf nicht faelschlich als CPU% durchgehen.
+    ['hostid' => 'h6', 'key_' => 'system.cpu.util[,user]', 'name' => 'CPU user time',                'lastvalue' => '7.0'],
+
+    // h7 — Index-Form, aber der NAME sagt "idle": 95 waere Leerlauf, nicht Last.
+    // Der Key allein traegt die Semantik nicht -> lieber KEIN Wert als 95 % Last.
+    ['hostid' => 'h7', 'key_' => 'system.cpu.util[0]',    'name' => 'CPU idle time',                 'lastvalue' => '95.0'],
+
+    // h8 — hat echten per-Kern-Wert (hrProcessorLoad) UND die Index-Form. Der
+    // Kern-Wert muss gewinnen, die Index-Form ist nur Fallback (keine Mischung).
+    ['hostid' => 'h8', 'key_' => 'hrProcessorLoad[1]',    'name' => 'CPU core 1 load',               'lastvalue' => '80.0'],
+    ['hostid' => 'h8', 'key_' => 'system.cpu.util[0]',    'name' => 'CPU utilization',               'lastvalue' => '5.0'],
+
     // h2 — SNMP-Switch
     ['hostid' => 'h2', 'key_' => 'ifHCInOctets[1]',       'name' => 'Interface 1: Octets in',        'lastvalue' => '1000'],
     ['hostid' => 'h2', 'key_' => 'ifHighSpeed[1]',        'name' => 'Interface 1: Speed',            'lastvalue' => '1000'],
@@ -105,6 +135,12 @@ $m = MetricExtractor::extract($items);
 
 echo "\nCPU / Memory / Ping (Agent-Host)\n";
 check('cpu: system.cpu.util',                  $m['cpu']['h1']           ?? null, 42.3);
+check('cpu: Windows perf_counter Processor Time', $m['cpu']['h3']        ?? null, 18.6);
+check('cpu: system.cpu.util[0] (TrueNAS-SNMP)',   $m['cpu']['h4']        ?? null, 23.4);
+check('cpu: bare total schlaegt Index-Fallback',  $m['cpu']['h5']        ?? null, 80.0);
+check('cpu: Teilkategorie [,user] bleibt leer',   $m['cpu']['h6']        ?? null, null);
+check('cpu: Index-Form mit Name "idle" bleibt leer', $m['cpu']['h7']     ?? null, null);
+check('cpu: hrProcessorLoad schlaegt Index-Form', $m['cpu']['h8']        ?? null, 80.0);
 check('memory: vm.memory.utilization -> %',    $m['memory']['h1']        ?? null, 76);
 check('ping: icmppingsec (s) -> ms',           $m['ping']['h1']          ?? null, 5.3);
 

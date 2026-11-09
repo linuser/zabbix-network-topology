@@ -163,10 +163,20 @@ function buildTopTable(rows, theme, headers, cellsFn) {
     if (rows.length === 0) {
         return '<div style="color:' + theme.subSoft + ';font-style:italic">' + esc(t('stats.no_data')) + '</div>';
     }
+    // Spaltenausrichtung aus der ersten Datenzeile ableiten, damit der Header
+    // UEBER seiner Zahlenspalte sitzt: rechtsbuendige Zellen -> rechtsbuendiger
+    // Header. Vorher waren alle Header links, Zahlen rechts -> sichtbar versetzt.
+    const firstCells = cellsFn(rows[0]);
+    const aligns = headers.map(function(h, i) {
+        const c = firstCells[i];
+        const st = (c && typeof c === 'object' && c.style) ? c.style : '';
+        const m = /text-align:\s*(right|center|left)/.exec(st);
+        return m ? m[1] : 'left';
+    });
     return '<table style="border-collapse:collapse;font-size:12px;width:100%">'
         + '<thead><tr style="border-bottom:1px solid ' + theme.border + '">'
-        + headers.map(function(h) {
-            return '<th style="padding:6px 10px;text-align:left;color:' + theme.sub + ';font-weight:600">' + h + '</th>';
+        + headers.map(function(h, i) {
+            return '<th style="padding:6px 10px;text-align:' + aligns[i] + ';color:' + theme.sub + ';font-weight:600">' + h + '</th>';
         }).join('')
         + '</tr></thead><tbody>'
         + rows.map(function(r) {
@@ -651,14 +661,33 @@ export function renderStats(wrap, nodes) {
             return { text: '<b style="color:' + _utilColor(m.now) + '">' + m.now.toFixed(0) + '%</b>',
                      style: 'text-align:right;font-family:monospace' };
         }
+        // Lineare Projektion 12 Monate voraus: now + slope·1 Jahr, geclampt auf
+        // 0..100 %. R² steuert die Konfidenz — verrauschte Trends (oft CPU)
+        // werden gedimmt und mit "~" markiert, weil eine Jahresprojektion aus
+        // ~einem Monat Daten dann Raten ist. "+" = liefe ueber 100 % (Saettigung).
+        const YEAR_S = 365 * 86400;
+        function proj1yr(m) {
+            if (!m) return { text: dash, style: 'text-align:right' };
+            const raw = m.now + m.slope * YEAR_S;
+            const v = Math.max(0, Math.min(100, raw));
+            const r2 = (m.r2 == null) ? 0 : m.r2;
+            const noisy = r2 < 0.3;
+            const color = r2 >= 0.6 ? _utilColor(v) : (r2 >= 0.3 ? theme.sub : theme.subSoft);
+            const txt = (noisy ? '~' : '') + v.toFixed(0) + '%' + (raw > 100 ? '+' : '');
+            return { text: '<span title="' + esc(t('rf.proj.tip', { r2: r2.toFixed(2), days: _fcDays }))
+                         + '" style="color:' + color + '">' + txt + '</span>',
+                     style: 'text-align:right;font-family:monospace' };
+        }
         const shown = rows.slice(0, 20);
         rfSlot.innerHTML = buildTopTable(shown, theme,
-            [esc(t('rf.col.host')), esc(t('rf.col.mem')), esc(t('rf.col.mem_week')),
-             esc(t('rf.col.mem_eta')), esc(t('rf.col.cpu')), esc(t('rf.col.cpu_eta'))],
+            [esc(t('rf.col.host')), esc(t('rf.col.mem')), esc(t('rf.col.mem_1yr')),
+             esc(t('rf.col.mem_week')), esc(t('rf.col.mem_eta')),
+             esc(t('rf.col.cpu')), esc(t('rf.col.cpu_1yr')), esc(t('rf.col.cpu_eta'))],
             function(r) {
                 return [
                     esc(r.label),
                     pct(r.mem),
+                    proj1yr(r.mem),
                     (r.memWeek === null
                         ? { text: dash, style: 'text-align:right' }
                         : { text: (r.memWeek >= 0 ? '+' : '') + r.memWeek.toFixed(2) + ' pp',
@@ -666,6 +695,7 @@ export function renderStats(wrap, nodes) {
                                 + (r.memWeek > 0.3 ? '#f97316' : theme.sub) }),
                     _rfEtaCell(r.memEta),
                     pct(r.cpu),
+                    proj1yr(r.cpu),
                     _rfEtaCell(r.cpuEta),
                 ];
             })

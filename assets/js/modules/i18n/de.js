@@ -701,7 +701,7 @@ export default {
 
     // Host-Ressourcen-Forecast (render-stats.js)
     'rf.title':       'Host-Ressourcen-Forecast',
-    'rf.caveat':      'Lineare Prognose der CPU-%/Memory-%-Trends (Zabbix-Trends, gleicher Zeitraum wie oben). Nur Hosts mit %-Items (system.cpu.util, vm.memory…pused). CPU-Trends sind volatil — Memory-Trends fangen Leaks/Wachstum zuverlässiger. Schwellen: Memory 90 %, CPU 85 %.',
+    'rf.caveat':      'Lineare Prognose der CPU-%/Memory-%-Trends (Zabbix-Trends, gleicher Zeitraum wie oben). Nur Hosts mit %-Items (system.cpu.util, vm.memory…pused). CPU-Trends sind volatil — Memory-Trends fangen Leaks/Wachstum zuverlässiger. Schwellen: Memory 90 %, CPU 85 %. Die „→ 1 J."-Spalten rechnen den Trend 12 Monate voraus (für die Jahr-über-Jahr-Planung) — bei schwacher Güte gedimmt, also als Richtwert verstehen.',
     'rf.nogroups':    'Keine Hostgruppen ausgewählt.',
     'rf.nodata':      'Keine CPU-/Memory-%-Trends gefunden (Trends aktiviert? %-Items vorhanden?).',
     'rf.summary':     '{hosts} Hosts mit Ressourcen-Trends · Basis: {days} Tage · Schwellen: Mem 90 %, CPU 85 %',
@@ -711,6 +711,9 @@ export default {
     'rf.col.mem_eta': 'Mem → 90 %',
     'rf.col.cpu':     'CPU',
     'rf.col.cpu_eta': 'CPU → 85 %',
+    'rf.col.mem_1yr': 'Mem → 1 J.',
+    'rf.col.cpu_1yr': 'CPU → 1 J.',
+    'rf.proj.tip':    'Lineare Projektion 12 Monate voraus, aus {days} Tagen Trend (Güte R²={r2}). Nur ein Richtwert — bei verrauschtem Trend gedimmt und mit ~ markiert.',
     'rf.more':        '+{n} weitere Hosts (später fällig oder stabil)',
     'rf.eta.now':     'Schwelle erreicht',
 

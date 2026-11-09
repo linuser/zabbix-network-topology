@@ -672,6 +672,14 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // CPU — Agent + SNMP variants, plus UniFi (cpu.utilization)
                     'system.cpu.util', 'hrProcessorLoad', 'ssCpuUser', 'ssCpuSystem',
                     'synoSystem.ssCpuIdle', 'cpu.utilization',
+                    // Windows: die Zabbix-Vorlage liefert "CPU utilization" als
+                    // perf_counter auf \Processor(_Total)\% Processor Time — KEIN
+                    // system.cpu.util. MetricExtractor klassifiziert den Key
+                    // laengst, nur die Suche holte ihn nicht, also stand CPU auf
+                    // "nicht erhoben" waehrend Memory (vm.memory.size) durchkam.
+                    // "Processor Time" ist eng: trifft nicht Queue Length / User /
+                    // Privileged Time.
+                    'Processor Time',
                     // Memory — Agent + SNMP HOST-RESOURCES-MIB, plus UniFi
                     'vm.memory.size', 'hrStorageUsed', 'hrStorageSize', 'hrStorageType',
                     'memory.utilization',

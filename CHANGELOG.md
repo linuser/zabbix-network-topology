@@ -2,6 +2,89 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.5 — 2026-11-03
+
+### Fixes (code-review follow-up to 5.6.4)
+
+- **Forecast no longer mixes a whole-system CPU aggregate with per-core values.**
+  The `system.cpu.util[<n>]` index form now classifies as its own subtype
+  `cpu:idx`, ranked below `cpu:core`. A host that exposes both `hrProcessorLoad`
+  per core and `system.cpu.util[0]` now uses the per-core source (as the map
+  panel already did), instead of averaging the aggregate together with the
+  cores into a skewed series.
+- **An idle metric mis-keyed as `system.cpu.util[<n>]` is no longer read as
+  utilization.** Both CPU paths now skip the index form when the item *name*
+  says "idle" (e.g. a value of 95 meaning 95 % idle would otherwise have shown
+  as 95 % busy). The item name is the only extra signal; when it is ambiguous,
+  no value is preferred over an inverted one.
+- **Readability:** the panel's CPU index-form fallback now sits with the other
+  post-loop resolve steps, not under the "Memory %" section header.
+
+## v5.6.4 — 2026-11-03
+
+### Fixes
+
+- **SNMP CPU utilization keyed as `system.cpu.util[0]` is now collected.** Some
+  SNMP templates — e.g. *TrueNAS CORE by SNMP* — expose whole-system CPU load
+  (derived from `100 − idle`) under the discovered key `system.cpu.util[0]`, a
+  bare CPU index with no type. Both the map/quick-info panel and the Stats
+  resource forecast rejected that form (only the explicit `idle` variant counted),
+  so such hosts showed CPU "not collected". They now accept the pure index form
+  `system.cpu.util[<n>]` (one or more indices, averaged to a single %) as a CPU
+  source — as a fallback, so a real total (bare `system.cpu.util`, `idle`,
+  Windows `Processor Time`) still wins. Partial categories with a type/comma
+  (`system.cpu.util[,user]`) stay excluded, as before. The two code paths
+  (`MetricExtractor`, `NetworkTopologyResourceForecast::classify`) were fixed
+  together.
+
+## v5.6.3 — 2026-11-02
+
+### Stats → Host resource forecast: one-year outlook
+
+- **New "→ 1 yr" columns for memory and CPU.** Each projects the trend twelve
+  months ahead (current value + slope × one year, clamped to 0–100 %), so admins
+  can guesstimate year-over-year growth at a glance. `100 %+` marks a host that
+  saturates within the year.
+- **Confidence-graded, honestly.** The projection is coloured by the regression's
+  fit (R²): a clean linear trend shows in full colour, a shaky one is greyed, and
+  a noisy trend (CPU often is) is dimmed and prefixed `~` — because extrapolating
+  twelve months from ~one month of data is a guesstimate, and the view says so.
+  `regress()` now also returns R²; the caveat text explains the columns.
+
+## v5.6.2 — 2026-11-02
+
+### Fixes
+
+- **Stats tables: headers now sit over their columns.** In the Stats tab the
+  numeric columns (Utilization, Trend/week, Memory, trend, …) are right-aligned,
+  but their headers were always left-aligned, so the header text stood well to
+  the left of its values. `buildTopTable` now derives each header's alignment
+  from the first data row's cell, so right-aligned columns get right-aligned
+  headers. Covers the link-capacity and host-resource forecast tables and the
+  top-problem tables.
+- **Compliance matrix: rotated column headers line up with their marks.** The
+  vertical column headers set `writing-mode`/`transform` directly on the `<th>`,
+  which made `text-align:center` act on the vertical axis — the rotated label
+  did not centre over its column and the ✓/✗/i marks below drifted off. The
+  rotation now lives in an inline-block `<span>`, so the header centres
+  horizontally over the column.
+
+## v5.6.1 — 2026-11-02
+
+### Fixes
+
+- **Windows hosts now show CPU utilization.** The Zabbix Windows template exposes
+  "CPU utilization" as a perf_counter on `\Processor(_Total)\% Processor Time`,
+  not `system.cpu.util`. The item search for the map data and the resource
+  forecast did not include that key, so the CPU metric ring (host detail panel)
+  and **Stats → Host resource forecast** showed "not collected" for Windows agent
+  hosts even though the value was being collected — memory came through because it
+  uses `vm.memory.size`. The search now also matches `% Processor Time` (narrow:
+  not Queue Length / User / Privileged Time). `MetricExtractor` already classified
+  the key; the resource-forecast classifier gained the matching perf_counter
+  branch (`_Total` → total CPU, cores → core). Covered by a `MetricExtractorTest`
+  case.
+
 ## v5.6.0 — 2026-10-29
 
 ### Undo / redo for the layout

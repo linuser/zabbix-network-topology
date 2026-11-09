@@ -91,11 +91,15 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
         }
 
         $items = API::Item()->get([
-            'output'      => ['itemid', 'hostid', 'key_'],
+            'output'      => ['itemid', 'hostid', 'key_', 'name'],
             'hostids'     => array_keys($hosts),
             'search'      => ['key_' => [
                 'system.cpu.util', 'hrProcessorLoad',
                 'vm.memory.utilization', 'vm.memory.size', 'memory.util',
+                // Windows: "CPU utilization" ist ein perf_counter auf
+                // \Processor(_Total)\% Processor Time (kein system.cpu.util).
+                // "Processor Time" ist eng genug (nicht Queue/User/Privileged).
+                'Processor Time',
             ]],
             'searchByAny' => true,
             'monitored'   => true,
@@ -103,9 +107,13 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
         ]);
 
         // Pro CPU-Subtyp eine Rangfolge: Gesamtauslastung schlaegt idle schlaegt
-        // Einzelkerne. Pro Host wird genau EINE Quelle genommen (unten), damit
-        // der Forecast nicht Gesamt, idle und Teilkategorien mittelt (Review #6).
-        static $CPU_PRIO = ['cpu:total' => 3, 'cpu:idle' => 2, 'cpu:core' => 1];
+        // Einzelkerne schlaegt die reine Index-Form. Pro Host wird genau EINE
+        // Quelle genommen (unten), damit der Forecast nicht Gesamt, idle und
+        // Teilkategorien mittelt (Review #6). cpu:idx steht UNTER cpu:core,
+        // damit ein Host mit echtem per-Kern-Wert (hrProcessorLoad) nicht sein
+        // Aggregat system.cpu.util[0] mit den Kernen mischt — dieselbe Vorrang-
+        // folge wie im Panel (MetricExtractor nimmt die Index-Form als Fallback).
+        static $CPU_PRIO = ['cpu:total' => 4, 'cpu:idle' => 3, 'cpu:core' => 2, 'cpu:idx' => 1];
         $meta = [];           // itemid => [hostid, metric('cpu'|'mem'), subtype|null]
         $host_cpu_sub = [];   // hid => gewaehlter cpu-subtype (hoechste Prio)
         foreach ($items as $it) {
@@ -116,7 +124,13 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
                 $meta[(string) $it['itemid']] = [$hid, 'mem', null];
                 continue;
             }
-            // cpu:total | cpu:idle | cpu:core
+            // Die reine Index-Form unterscheidet Auslastung nicht von Leerlauf;
+            // nennt der Item-NAME "idle", NICHT als Last nehmen (wie im Panel).
+            if ($c === 'cpu:idx'
+                    && stripos((string) ($it['name'] ?? ''), 'idle') !== false) {
+                continue;
+            }
+            // cpu:total | cpu:idle | cpu:core | cpu:idx
             $meta[(string) $it['itemid']] = [$hid, 'cpu', $c];
             if (!isset($host_cpu_sub[$hid])
                     || ($CPU_PRIO[$c] ?? 0) > ($CPU_PRIO[$host_cpu_sub[$hid]] ?? 0)) {
@@ -193,7 +207,8 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
 
     /**
      * Nur %-Items zulassen. Rueckgabe 'mem' | 'cpu:total' | 'cpu:idle' |
-     * 'cpu:core' | null — der CPU-Subtyp steuert die Quellenwahl pro Host.
+     * 'cpu:core' | 'cpu:idx' | null — der CPU-Subtyp steuert die Quellenwahl
+     * pro Host (cpu:idx = reine Index-Form, niedrigste CPU-Prio, s. $CPU_PRIO).
      * vm.memory.size wird nur bei pused (Prozent) akzeptiert — die absolute
      * Byte-Variante (available/total/used) wandert NICHT in den Forecast.
      */
@@ -219,7 +234,27 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
             return 'cpu:total';
         }
         if (preg_match('/^system\.cpu\.util\[/', $key)) {
-            return strpos($key, 'idle') !== false ? 'cpu:idle' : null;
+            if (strpos($key, 'idle') !== false) return 'cpu:idle';
+            // Reine Index-Form system.cpu.util[0]/[1] (nur eine CPU-Nummer, KEIN
+            // Typ, kein Komma) ist die Gesamtlast genau dieses Prozessors —
+            // SNMP-Templates wie "TrueNAS CORE by SNMP" keyen ihren aus 100-idle
+            // berechneten Aggregatwert so. Als cpu:idx werten (niedrigste CPU-
+            // Prio): die Quellenwahl mittelt einen oder mehrere Indizes zu einem
+            // %, aber ein echter cpu:total/idle/core gewinnt vorher — sonst
+            // mischte ein Host mit hrProcessorLoad (core) sein Aggregat mit den
+            // Kernen. Teilkategorien (system.cpu.util[,user]) mit Komma/Typ
+            // bleiben draussen.
+            if (preg_match('/^system\.cpu\.util\[\s*\d+\s*\]$/', $key)) {
+                return 'cpu:idx';
+            }
+            return null;
+        }
+        // Windows: perf_counter auf "% Processor Time". Die _Total-Instanz ist
+        // die Gesamtauslastung, Einzelkerne zaehlen als core (die Quellenwahl
+        // pro Host nimmt dann Total). Spiegel des perf_counter-Zweigs in
+        // MetricExtractor::extract() — beide zusammen pflegen.
+        if (strpos($key, 'perf_counter') === 0 && stripos($key, 'Processor Time') !== false) {
+            return stripos($key, '_Total') !== false ? 'cpu:total' : 'cpu:core';
         }
         return null;
     }
@@ -233,20 +268,27 @@ class NetworkTopologyResourceForecast extends NetworkTopologyController {
         if ($n < self::MIN_POINTS) return null;
         ksort($points);
         $t0 = array_key_first($points);
-        $sx = $sy = $sxx = $sxy = 0.0;
+        $sx = $sy = $sxx = $sxy = $syy = 0.0;
         foreach ($points as $clk => $v) {
             $x = (float) ($clk - $t0);
-            $sx  += $x; $sy += $v; $sxx += $x * $x; $sxy += $x * $v;
+            $sx  += $x; $sy += $v; $sxx += $x * $x; $sxy += $x * $v; $syy += $v * $v;
         }
         $den = $n * $sxx - $sx * $sx;
         if ($den == 0.0) return null;
         $slope = ($n * $sxy - $sx * $sy) / $den;
         $icept = ($sy - $slope * $sx) / $n;
+        // Bestimmtheitsmass R^2 der Geraden: 1 = die Punkte liegen sauber auf
+        // einer Geraden, ~0 = Rauschen. Ein verrauschter Trend (typisch CPU)
+        // macht eine Jahresprojektion zum Raten — das Frontend dimmt sie dann.
+        $ssTot = $syy - $sy * $sy / $n;
+        $ssRes = $syy - $icept * $sy - $slope * $sxy;
+        $r2 = $ssTot > 1e-9 ? max(0.0, min(1.0, 1.0 - $ssRes / $ssTot)) : 1.0;
         $nowVal = $icept + $slope * ($now - $t0);
         return [
             'slope' => $slope,
             'now'   => max(0.0, min(100.0, $nowVal)),
             'n'     => $n,
+            'r2'    => round($r2, 3),
         ];
     }
 
