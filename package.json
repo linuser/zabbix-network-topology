@@ -32,5 +32,8 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.7.0",
     "eslint-plugin-no-unsanitized": "^4.1.5"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
   }
 }
