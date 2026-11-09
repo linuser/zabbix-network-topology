@@ -1,0 +1,49 @@
+# Haengt die Release-ZIPs automatisch an einen veroeffentlichten GitHub-Release.
+#
+# ANLASS
+# ------
+# Issue #28. Die Release-Assets wurden von Hand per 'gh release upload'
+# nachgereicht — und bei v5.6.0 und v5.5.27 schlicht vergessen. Der in README
+# und Issues verlinkte Pfad 'releases/latest/download/network_topology.zip' lief
+# damit auf 404, und wer das Modul darueber installieren wollte, bekam eine
+# HTML-Fehlerseite als ZIP. deploy.sh baute die Pakete laengst — nur lud sie
+# beim Release niemand hoch.
+#
+# Dieselbe EINE Bau-Logik wie der Deploy: 'deploy.sh package <dir>' erzeugt die
+# neun ZIPs mit denselben Excludes (kein tests/, kein tools/, kein CLAUDE.md
+# unter dem Web-Root). Kein zweiter, von Hand gepflegter Bau-Block, der driften
+# kann — siehe build_release_zips() in deploy.sh.
+#
+# Dies ist KEIN Gate: ci:pipeline (tools/check-ci.mjs) prueft nur gates.yml und
+# verlangt deshalb keine Entsprechung in .gitlab-ci.yml. Der Release liegt auf
+# GitHub; die GitLab-Releases werden getrennt gepflegt.
+
+name: release-assets
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write   # fuer 'gh release upload'
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Baut alle neun ZIPs nach dist-release/ — kein SSH, kein Server noetig.
+      - name: Build release ZIPs
+        run: ./deploy.sh package dist-release
+      # --clobber: ein schon (von Hand) hochgeladenes Asset wird ersetzt statt
+      # den Lauf scheitern zu lassen; der Schritt ist damit idempotent.
+      - name: Attach ZIPs to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist-release/*.zip --clobber

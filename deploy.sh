@@ -39,6 +39,128 @@ set -euo pipefail
 # ── Config ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly SCRIPT_DIR
+
+# ── Release-ZIPs bauen — EINE Quelle fuer Deploy UND GitHub-Release ─────────
+# Baut die neun ZIPs in das uebergebene Verzeichnis. Zwei Aufrufer teilen sich
+# diese eine Funktion: der normale Deploy (out = $LOCAL_TMP, Versand per scp)
+# und der 'package'-Modus, den der GitHub-Release-Workflow fuer die Release-
+# Assets aufruft. EINE Exclude-Liste, EIN zip-Aufruf — sonst laufen das
+# ausgelieferte und das zum Download angebotene Paket auseinander. Genau das
+# war die Luecke hinter Issue #28: deploy.sh baute die Pakete laengst, nur lud
+# sie beim Release niemand hoch, und ein zweiter, von Hand gepflegter Bau-Block
+# haette dieselbe Falle nur verschoben.
+#
+# $1 = Zielverzeichnis, $2 = main|widgets|all
+build_release_zips() {
+    local out="$1" bmode="$2"
+    local z_main="$out/network_topology.zip"
+    local z_widget="$out/network_topology_widget.zip"
+    local z_health="$out/network_topology_health_widget.zip"
+    local z_table="$out/network_topology_table_widget.zip"
+    local z_kpi="$out/network_topology_kpi_widget.zip"
+    local z_items="$out/network_topology_items_widget.zip"
+    local z_face="$out/network_topology_faceplate_widget.zip"
+    local z_plan="$out/network_topology_plan_widget.zip"
+    local z_wlan="$out/network_topology_wlan_widget.zip"
+
+    # ── JS-Bundle bauen (esbuild) ──────────────────────────────────────────
+    # Das Frontend laedt EIN gebundeltes assets/js/dist/nt-bundle.js (kein Blob-
+    # Loader mehr). Vor dem Packen frisch aus den Quellmodulen bauen, damit das
+    # deployte Bundle garantiert dem Source entspricht. Braucht node + esbuild
+    # (npm install). Fehlt die Toolchain, brechen wir mit klarer Meldung ab —
+    # ein veraltetes/fehlendes Bundle wuerde sonst still ausgeliefert.
+    #
+    # "npm run build" erzeugt bewusst KEINE Source-Map (Release-Build) — vorher
+    # landete eine ~1 MB grosse nt-bundle.js.map oeffentlich abrufbar auf den
+    # Servern. Wer sie zum Debuggen braucht: "npm run build:debug" (die .map ist
+    # gitignored). Der '*.map'-rsync-Ausschluss unten faengt zusaetzlich eine
+    # stehengebliebene Debug-Map ab, damit sie nie ins Zip rutscht.
+    if [[ "$bmode" == "main" || "$bmode" == "all" ]]; then
+        echo "→ Baue JS-Bundle (esbuild)"
+        if [[ ! -x "$SCRIPT_DIR/node_modules/.bin/esbuild" ]]; then
+            echo "❌ esbuild fehlt — einmalig 'npm install' im Projekt ausführen." >&2
+            exit 1
+        fi
+        ( cd "$SCRIPT_DIR" && npm run build ) || { echo "❌ Bundle-Build fehlgeschlagen." >&2; exit 1; }
+    fi
+
+    # ── Zips bauen ─────────────────────────────────────────────────────────
+    echo "→ Baue Zips"
+    if [[ "$bmode" == "main" || "$bmode" == "all" ]]; then
+        local STAGE
+        STAGE=$(mktemp -d)
+        # 'nt-*.sh' steht als Muster da, nicht namentlich: nt-uninstall.sh kam
+        # spaeter dazu und rutschte prompt ins Paket, weil die Liste nur
+        # nt-install.sh kannte. Ein Shell-Skript unter dem Web-Root gehoert da
+        # nicht hin — gleiche Begruendung wie bei 'tools' unten.
+        #
+        # 'tools' und 'templates' bleiben absichtlich draussen. Das Zielverzeichnis
+        # liegt unter dem Web-Root und ist oeffentlich abrufbar — siehe die
+        # Source-Map-Notiz oben. Sender-Skript und Template-YAMLs werden zur
+        # Laufzeit nicht gebraucht, also gehoeren sie da nicht hin. docs/INSTALL.md
+        # Schritt 4 verweist dafuer auf das Repository; wer hier einen Ausschluss
+        # loest, muss dort nachziehen.
+        rsync -a \
+            --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
+            --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
+            --exclude 'widget_kpi' --exclude 'widget_items' --exclude 'widget_faceplate' \
+            --exclude 'widget_plan' --exclude 'widget_wlan' \
+            --exclude '.github' --exclude 'screenshots' --exclude 'dashboards' \
+            --exclude 'tools' --exclude 'templates' \
+            --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
+            --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
+            --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-*.sh' \
+            --exclude 'tests' --exclude '.gitlab-ci.yml' \
+            --exclude 'CLAUDE.md' --exclude 'ROADMAP.md' \
+            --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
+            "$SCRIPT_DIR/" "$STAGE/network_topology/"
+        rm -f "$z_main"
+        (cd "$STAGE" && zip -rq "$z_main" network_topology)
+        rm -rf "$STAGE"
+        echo "  → $z_main ($(du -h "$z_main" | cut -f1))"
+    fi
+    if [[ "$bmode" == "widgets" || "$bmode" == "all" ]]; then
+        rm -f "$z_widget" "$z_health" "$z_table" "$z_kpi" "$z_items" "$z_face" "$z_plan" "$z_wlan"
+        (cd "$SCRIPT_DIR/widget"        && zip -rq "$z_widget" .)
+        (cd "$SCRIPT_DIR/widget_health" && zip -rq "$z_health" .)
+        (cd "$SCRIPT_DIR/widget_table"  && zip -rq "$z_table" .)
+        (cd "$SCRIPT_DIR/widget_kpi"    && zip -rq "$z_kpi" .)
+        (cd "$SCRIPT_DIR/widget_items"  && zip -rq "$z_items" .)
+        (cd "$SCRIPT_DIR/widget_faceplate" && zip -rq "$z_face" .)
+        (cd "$SCRIPT_DIR/widget_plan"   && zip -rq "$z_plan" .)
+        (cd "$SCRIPT_DIR/widget_wlan"   && zip -rq "$z_wlan" .)
+        echo "  → $z_widget ($(du -h "$z_widget" | cut -f1))"
+        echo "  → $z_health ($(du -h "$z_health" | cut -f1))"
+        echo "  → $z_table ($(du -h "$z_table" | cut -f1))"
+        echo "  → $z_kpi ($(du -h "$z_kpi" | cut -f1))"
+        echo "  → $z_items ($(du -h "$z_items" | cut -f1))"
+        echo "  → $z_face ($(du -h "$z_face" | cut -f1))"
+        echo "  → $z_plan ($(du -h "$z_plan" | cut -f1))"
+        echo "  → $z_wlan ($(du -h "$z_wlan" | cut -f1))"
+    fi
+}
+
+# ── 'package'-Modus: nur die Release-ZIPs bauen, kein SSH ───────────────────
+# Baut alle neun ZIPs in ein Zielverzeichnis und beendet sich. Fuer den
+# GitHub-Release-Workflow (.github/workflows/release.yml), der die Assets an
+# einen veroeffentlichten Release haengt, und fuer den lokalen Gebrauch vor
+# 'gh release create ... <dir>/*.zip'. Bewusst VOR der SSH-Maschinerie unten,
+# damit hier weder ein Server-Argument noch eine Verbindung noetig ist.
+# (Ein Zielserver mit dem Namen "package" liesse sich so nicht ansprechen —
+# den gibt es nicht, und die Alternative waere ein '-'-Flag, das der
+# Argument-Guard unten ohnehin ablehnt.)
+if [[ "${1:-}" == "package" ]]; then
+    PKG_DIR="${2:-}"
+    if [[ -z "$PKG_DIR" ]]; then
+        echo "Usage: $0 package <out-dir>" >&2
+        exit 1
+    fi
+    mkdir -p "$PKG_DIR"
+    build_release_zips "$PKG_DIR" all
+    echo "✓ Release-ZIPs in $PKG_DIR"
+    exit 0
+fi
+
 # Arbeitsverzeichnisse: mktemp -d (0700) statt fester /tmp-Pfade.
 #
 # Feste Namen in einem world-writable /tmp sind angreifbar: ein beliebiger
@@ -210,80 +332,11 @@ echo "  php-fpm:    $FPM_SERVICE"
 echo "  UI-Pfad:    $UI_PATH"
 echo "  Modules:    $REMOTE_MODULES"
 
-# ── JS-Bundle bauen (esbuild) ──────────────────────────────────────────────
-# Das Frontend laedt EIN gebundeltes assets/js/dist/nt-bundle.js (kein Blob-
-# Loader mehr). Vor dem Packen frisch aus den Quellmodulen bauen, damit das
-# deployte Bundle garantiert dem Source entspricht. Braucht node + esbuild
-# (npm install). Fehlt die Toolchain, brechen wir mit klarer Meldung ab —
-# ein veraltetes/fehlendes Bundle wuerde sonst still ausgeliefert.
-#
-# "npm run build" erzeugt bewusst KEINE Source-Map (Release-Build) — vorher
-# landete eine ~1 MB grosse nt-bundle.js.map oeffentlich abrufbar auf den
-# Servern. Wer sie zum Debuggen braucht: "npm run build:debug" (die .map ist
-# gitignored). Der '*.map'-rsync-Ausschluss unten faengt zusaetzlich eine
-# stehengebliebene Debug-Map ab, damit sie nie ins Zip rutscht.
-if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
-    echo "→ Baue JS-Bundle (esbuild)"
-    if [[ ! -x "$SCRIPT_DIR/node_modules/.bin/esbuild" ]]; then
-        echo "❌ esbuild fehlt — einmalig 'npm install' im Projekt ausführen." >&2
-        exit 1
-    fi
-    ( cd "$SCRIPT_DIR" && npm run build ) || { echo "❌ Bundle-Build fehlgeschlagen." >&2; exit 1; }
-fi
-
-# ── Zips lokal bauen ───────────────────────────────────────────────────────
-echo "→ Baue Zips lokal"
-if [[ "$MODE" == "main" || "$MODE" == "all" ]]; then
-    STAGE=$(mktemp -d)
-    # 'nt-*.sh' steht als Muster da, nicht namentlich: nt-uninstall.sh kam
-    # spaeter dazu und rutschte prompt ins Paket, weil die Liste nur
-    # nt-install.sh kannte. Ein Shell-Skript unter dem Web-Root gehoert da
-    # nicht hin — gleiche Begruendung wie bei 'tools' unten.
-    #
-    # 'tools' und 'templates' bleiben absichtlich draussen. Das Zielverzeichnis
-    # liegt unter dem Web-Root und ist oeffentlich abrufbar — siehe die
-    # Source-Map-Notiz oben. Sender-Skript und Template-YAMLs werden zur
-    # Laufzeit nicht gebraucht, also gehoeren sie da nicht hin. docs/INSTALL.md
-    # Schritt 4 verweist dafuer auf das Repository; wer hier einen Ausschluss
-    # loest, muss dort nachziehen.
-    rsync -a \
-        --exclude '.git' --exclude '.claude' --exclude '.vscode' --exclude '.idea' \
-        --exclude 'widget' --exclude 'widget_health' --exclude 'widget_table' \
-        --exclude 'widget_kpi' --exclude 'widget_items' --exclude 'widget_faceplate' \
-        --exclude 'widget_plan' --exclude 'widget_wlan' \
-        --exclude '.github' --exclude 'screenshots' --exclude 'dashboards' \
-        --exclude 'tools' --exclude 'templates' \
-        --exclude 'node_modules' --exclude 'package.json' --exclude 'package-lock.json' \
-        --exclude '.DS_Store' --exclude '*.zip' --exclude '*.map' \
-        --exclude 'nt_smtp_password' --exclude '.gitignore' --exclude 'deploy.sh' --exclude 'nt-*.sh' \
-        --exclude 'tests' --exclude '.gitlab-ci.yml' \
-        --exclude 'CLAUDE.md' --exclude 'ROADMAP.md' \
-        --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
-        "$SCRIPT_DIR/" "$STAGE/network_topology/"
-    rm -f "$TMP_MAIN"
-    (cd "$STAGE" && zip -rq "$TMP_MAIN" network_topology)
-    rm -rf "$STAGE"
-    echo "  → $TMP_MAIN ($(du -h "$TMP_MAIN" | cut -f1))"
-fi
-if [[ "$MODE" == "widgets" || "$MODE" == "all" ]]; then
-    rm -f "$TMP_WIDGET" "$TMP_HEALTH" "$TMP_TABLE" "$TMP_KPI" "$TMP_ITEMS" "$TMP_FACE" "$TMP_PLAN" "$TMP_WLAN"
-    (cd "$SCRIPT_DIR/widget"        && zip -rq "$TMP_WIDGET" .)
-    (cd "$SCRIPT_DIR/widget_health" && zip -rq "$TMP_HEALTH" .)
-    (cd "$SCRIPT_DIR/widget_table"  && zip -rq "$TMP_TABLE" .)
-    (cd "$SCRIPT_DIR/widget_kpi"    && zip -rq "$TMP_KPI" .)
-    (cd "$SCRIPT_DIR/widget_items"  && zip -rq "$TMP_ITEMS" .)
-    (cd "$SCRIPT_DIR/widget_faceplate" && zip -rq "$TMP_FACE" .)
-    (cd "$SCRIPT_DIR/widget_plan"   && zip -rq "$TMP_PLAN" .)
-    (cd "$SCRIPT_DIR/widget_wlan"   && zip -rq "$TMP_WLAN" .)
-    echo "  → $TMP_WIDGET ($(du -h "$TMP_WIDGET" | cut -f1))"
-    echo "  → $TMP_HEALTH ($(du -h "$TMP_HEALTH" | cut -f1))"
-    echo "  → $TMP_TABLE ($(du -h "$TMP_TABLE" | cut -f1))"
-    echo "  → $TMP_KPI ($(du -h "$TMP_KPI" | cut -f1))"
-    echo "  → $TMP_ITEMS ($(du -h "$TMP_ITEMS" | cut -f1))"
-    echo "  → $TMP_FACE ($(du -h "$TMP_FACE" | cut -f1))"
-    echo "  → $TMP_PLAN ($(du -h "$TMP_PLAN" | cut -f1))"
-    echo "  → $TMP_WLAN ($(du -h "$TMP_WLAN" | cut -f1))"
-fi
+# ── JS-Bundle + Zips lokal bauen ───────────────────────────────────────────
+# Dieselbe Funktion, die auch der 'package'-Modus (und darueber der GitHub-
+# Release-Workflow) nutzt — Ausgabe hier nach $LOCAL_TMP, von wo aus die
+# $TMP_*-Pfade weiter unten per scp verschickt werden.
+build_release_zips "$LOCAL_TMP" "$MODE"
 
 # ── SCP zum Server ─────────────────────────────────────────────────────────
 echo "→ SCP zum Server"
