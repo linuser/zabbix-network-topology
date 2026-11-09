@@ -53,6 +53,26 @@ readonly SCRIPT_DIR
 # $1 = Zielverzeichnis, $2 = main|widgets|all
 build_release_zips() {
     local out="$1" bmode="$2"
+    # Ausgabe-Verzeichnis ABSOLUT machen. Die zip-Aufrufe unten laufen in
+    # Subshells, die vorher nach $STAGE bzw. in die Widget-Ordner cd'en — ein
+    # RELATIVER $out (z.B. 'dist-release', wie es der Release-Workflow uebergibt)
+    # zeigte dort ins Leere: »zip: Could not create output file«, Abbruch unter
+    # set -e, und die Release-Automation baute LAUTLOS keine Assets. Der normale
+    # Deploy fiel nicht auf, weil $LOCAL_TMP schon absolut ist; erst der
+    # package-Modus mit relativem Ziel brachte den Bug. Das Verzeichnis existiert
+    # hier bereits (deploy legt $LOCAL_TMP an, package macht mkdir -p).
+    out="$(cd "$out" && pwd)"
+    # Liegt das Ausgabe-Verzeichnis INNERHALB des Repos (der Release-Workflow
+    # legt 'dist-release' im Checkout an), muss es aus dem Modul-rsync heraus:
+    # sonst kopiert »rsync "$SCRIPT_DIR/"« das eben angelegte Verzeichnis als
+    # leeres network_topology/<dir>/ ins Paket, und das Asset weicht vom Deploy
+    # ab. Beim normalen Deploy ist $LOCAL_TMP ausserhalb des Repos, deshalb fiel
+    # es nie auf. Ein Sentinel-Pfad, der nie existiert, haelt den Ausschluss
+    # harmlos, wenn das Ziel ausserhalb liegt (kein Bash-Array wegen 3.2).
+    local out_excl="/.__nt_pkg_out_sentinel__"
+    case "$out" in
+        "$SCRIPT_DIR"/*) out_excl="/${out#"$SCRIPT_DIR"/}" ;;
+    esac
     local z_main="$out/network_topology.zip"
     local z_widget="$out/network_topology_widget.zip"
     local z_health="$out/network_topology_health_widget.zip"
@@ -113,9 +133,14 @@ build_release_zips() {
             --exclude 'tests' --exclude '.gitlab-ci.yml' \
             --exclude 'CLAUDE.md' --exclude 'ROADMAP.md' \
             --exclude 'eslint.config.mjs' --exclude 'eslint-suppressions.json' \
-            "$SCRIPT_DIR/" "$STAGE/network_topology/"
+            --exclude "$out_excl" \
+            "$SCRIPT_DIR/" "$STAGE/network_topology/" || { rm -rf "$STAGE"; exit 1; }
         rm -f "$z_main"
-        (cd "$STAGE" && zip -rq "$z_main" network_topology)
+        # STAGE bei Fehler selbst wegraeumen: im package-Modus laeuft diese
+        # Funktion VOR dem EXIT-Trap, und der raeumt ohnehin nur $LOCAL_TMP, nicht
+        # dieses separate mktemp -d. Ohne das || bliebe bei jedem fehlgeschlagenen
+        # (Re-)Lauf ein Stage-Verzeichnis liegen.
+        (cd "$STAGE" && zip -rq "$z_main" network_topology) || { rm -rf "$STAGE"; exit 1; }
         rm -rf "$STAGE"
         echo "  → $z_main ($(du -h "$z_main" | cut -f1))"
     fi
