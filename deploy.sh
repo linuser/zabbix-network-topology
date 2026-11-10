@@ -6,6 +6,8 @@
 #   ./deploy.sh <server>              # nur Hauptmodul
 #   ./deploy.sh <server> all          # Hauptmodul + alle Widgets
 #   ./deploy.sh <server> widgets      # nur die Widgets (Hauptmodul schon da)
+#   ./deploy.sh package <dir>         # nur die Release-ZIPs bauen, kein SSH
+#                                     # (nutzt der GitHub-Release-Workflow)
 #
 # Voraussetzungen auf dem Ziel:
 #   - Zabbix 7.4+
@@ -212,10 +214,11 @@ REMOTE_DIR=""
 # ── Arg-Parsing ────────────────────────────────────────────────────────────
 if [[ $# -lt 1 ]]; then
     cat >&2 <<EOF
-Usage: $0 <server> [main|widgets|all]
+Usage: $0 <server> [main|widgets|all]   |   $0 package <out-dir>
   main    (Default) — nur das Hauptmodul
   widgets           — nur die Widget-Module
   all               — Hauptmodul + Widgets
+  package <dir>     — nur die Release-ZIPs in <dir> bauen (kein SSH)
 EOF
     exit 1
 fi
