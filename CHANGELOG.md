@@ -2,6 +2,22 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.7 — unreleased
+
+### Fixes
+
+- **Parallel cables seen over different protocols are no longer merged.**
+  Between two switches where some cables are reported only by CDP and others
+  only by LLDP, the edge builder assigned the first LLDP report to an existing
+  CDP link ("this reporter has not reported the pair over LLDP yet") without
+  comparing ports. The map showed too few parallel links, and one of them paired
+  the local port of one cable with the remote port of another (issue #29).
+  `findMember()` now skips a link when it already carries a different *proven*
+  ifIndex at either end — CDP's local `cdpCacheIfIndex`, or a far-end port
+  resolved against the neighbour's own port names. LLDP's local port number is
+  deliberately not used for this, so the existing "LLDP and CDP number the same
+  port differently" case stays one link.
+
 ## v5.6.6 — 2026-11-10
 
 ### New

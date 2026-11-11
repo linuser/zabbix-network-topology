@@ -432,6 +432,15 @@ you:
   known member over the same protocol on other ports. The **number** of lines
   is therefore exact even with incomparable labels; what can be off is which
   far-end port is paired with which near-end port.
+- **Mixed protocols need port evidence.** When some cables are seen only by CDP
+  and others only by LLDP, "every known member over the same protocol" counts
+  per protocol, not per cable. Since v5.6.7 a report is kept apart from a link
+  when both carry a *proven* ifIndex at the same end and the two differ. Proven
+  means CDP's local port (`cdpCacheIfIndex` is an ifIndex) or a far-end port
+  matched against the neighbour's own port names (`ifName[<ifIndex>]` items).
+  LLDP's local port number alone is not proof, because some devices number LLDP
+  ports differently from their ifIndex. So for an exact count on mixed bundles,
+  give both switches port names.
 
 Per-member counters follow the same rule as the weathermap above: they exist
 where the LLDP local port matches the `ifIndex` the switch counts under. Where

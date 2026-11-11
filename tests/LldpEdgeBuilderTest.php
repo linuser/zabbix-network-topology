@@ -1408,6 +1408,66 @@ check('ohne Portbezug: kein remote_port',
     array_key_exists('remote_port', $nachRaw['drucker-og'] ?? []), false);
 check('und keine Kante aus beiden',          count($rGeist['edges']), 0);
 
+// ── Parallele Kabel, gemischt CDP und LLDP ───────────────────────────────
+//
+// Fuenf Kabel zwischen zwei Switches; drei meldet CDP, zwei LLDP, auf beiden
+// Seiten. Alle Remote-Ports loesen eindeutig auf, jede Meldung traegt also
+// i:-Schluessel an beiden Enden. Regel 3 darf eine Meldung nicht einem
+// Mitglied zuordnen, das an einem Ende schon an einem ANDEREN ifIndex haengt.
+echo "\n  Parallele Kabel: CDP und LLDP gemischt\n\n";
+
+$hMix5 = ['swa' => ['host' => 'sw-a', 'name' => 'sw-a'], 'swb' => ['host' => 'sw-b', 'name' => 'sw-b']];
+$namesMix5 = [
+    'swa' => ['10111' => 'Gi1/0/11', '10125' => 'Gi1/1/1', '10126' => 'Gi1/1/2',
+              '10127' => 'Gi1/1/3', '10128' => 'Gi1/1/4'],
+    'swb' => ['10110' => 'Gi1/0/10', '10624' => 'Gi2/0/24', '10127' => 'Gi1/1/3',
+              '10121' => 'Gi1/0/21', '10627' => 'Gi2/1/3'],
+];
+// [Kabel => [A-ifIndex, B-ifIndex, Protokoll]]
+$cables5 = [[10111, 10110, 'cdp'], [10125, 10624, 'cdp'], [10126, 10127, 'lldp'],
+            [10127, 10121, 'cdp'], [10128, 10627, 'lldp']];
+$rawA = $rawB = [];
+$portsMix5 = ['swa' => [], 'swb' => []];
+foreach ($cables5 as $n => [$ia, $ib, $p]) {
+    foreach ([['swa', $ia, 'swb', $ib, 'sw-b', &$rawA], ['swb', $ib, 'swa', $ia, 'sw-a', &$rawB]]
+             as [$me, $mi, $peer, $pi, $pname, &$rows]) {
+        $suffix = $p === 'cdp' ? "{$mi}." . (500 + $n) : "0.{$mi}." . (700 + $n);
+        $key    = $p === 'cdp' ? "cdpCacheDeviceId[$suffix]" : "lldpRemSysName[$suffix]";
+        $rows[] = ['hostid' => $me, 'key_' => $key, 'lastvalue' => $pname, 'src' => $p];
+        $portsMix5[$me][$suffix] = ['desc' => $namesMix5[$peer][(string) $pi]];
+    }
+    unset($rows);
+}
+$expectMix5 = ['Gi1/0/11|Gi1/0/10', 'Gi1/1/1|Gi2/0/24', 'Gi1/1/2|Gi1/1/3',
+               'Gi1/1/3|Gi1/0/21', 'Gi1/1/4|Gi2/1/3'];
+foreach (['A zuerst' => array_merge($rawA, $rawB), 'B zuerst' => array_merge($rawB, $rawA),
+          'CDP zuerst' => array_merge(
+              array_values(array_filter(array_merge($rawA, $rawB), fn($r) => $r['src'] === 'cdp')),
+              array_values(array_filter(array_merge($rawA, $rawB), fn($r) => $r['src'] === 'lldp')))]
+         as $order => $raw5) {
+    $r5 = LldpEdgeBuilder::build($hMix5, $raw5, $portsMix5, [], [], [], [], [], $namesMix5);
+    $pairs = array_map(static fn($e) => ($e['ports']['swa'] ?? '?') . '|' . ($e['ports']['swb'] ?? '?'),
+                       $r5['edges']);
+    sort($pairs);
+    $want = $expectMix5;
+    sort($want);
+    check("CDP+LLDP gemischt ($order): 5 Kanten", count($r5['edges']), 5);
+    check("CDP+LLDP gemischt ($order): Paare stimmen", $pairs, $want);
+    $both = count(array_filter($r5['edges'], static fn($e) => count($e['reporters']) === 2));
+    check("CDP+LLDP gemischt ($order): jede beidseitig", $both, 5);
+}
+
+// Gegenprobe: EIN Kabel, LLDP (PortNum 1) und CDP (ifIndex 10101) mit
+// aufgeloestem Fernport — bleibt eine Kante, keine falsche Aufspaltung.
+$rOneMix = LldpEdgeBuilder::build($hMix5, [
+    ['hostid' => 'swa', 'key_' => 'lldpRemSysName[0.1.9]',     'lastvalue' => 'sw-b', 'src' => 'lldp'],
+    ['hostid' => 'swa', 'key_' => 'cdpCacheDeviceId[10101.9]', 'lastvalue' => 'sw-b', 'src' => 'cdp'],
+    ['hostid' => 'swb', 'key_' => 'cdpCacheDeviceId[10110.9]', 'lastvalue' => 'sw-a', 'src' => 'cdp'],
+], ['swa' => ['0.1.9' => ['id' => 'Gi1/0/10'], '10101.9' => ['desc' => 'GigabitEthernet1/0/10']],
+    'swb' => ['10110.9' => ['desc' => 'Gi1/0/1']]],
+   [], [], [], [], [], ['swa' => ['10101' => 'Gi1/0/1'], 'swb' => ['10110' => 'Gi1/0/10']]);
+check('ein Kabel, LLDP+CDP, Fernport aufgeloest: eine Kante', count($rOneMix['edges']), 1);
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

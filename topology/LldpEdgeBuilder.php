@@ -717,8 +717,12 @@ final class LldpEdgeBuilder {
             // die Kanten, die wir behalten, VOLLSTAENDIGER. Hier
             // abzubrechen wuerde also nichts sparen und stattdessen
             // halbfertige Kanten hinterlassen.
-            $lkeys = self::portKeys($port, $port_idx);
-            $rkeys = self::portKeys($remote_port, $fidx);
+            // CDP keys its rows by cdpCacheIfIndex, a real ifIndex. LLDP keys
+            // them by lldpRemLocalPortNum, which on many devices is not. The
+            // far end is resolved against the neighbour's own ifName, so a
+            // resolved $fidx is a real ifIndex whichever protocol reported it.
+            $lkeys = self::portKeys($port, $port_idx, $src === 'cdp');
+            $rkeys = self::portKeys($remote_port, $fidx, true);
             $eidx  = self::findMember($seen_edges[$edge_key] ?? [], $member_keys, $member_rep,
                                       (string) $rid, (string) $rhid, $src, $lkeys, $rkeys);
             if ($eidx === null && count($edges) >= self::MAX_EDGES) {
@@ -1659,10 +1663,15 @@ final class LldpEdgeBuilder {
      * normalised label otherwise (both, when both are known). Two reports
      * name the same cable end if they share any key.
      */
-    private static function portKeys(string $label, string $ifidx): array {
+    private static function portKeys(string $label, string $ifidx, bool $proven = false): array {
         $k = [];
         if ($ifidx !== '') {
             $k['i:' . $ifidx] = true;
+            // p: = an index that IS the host's ifIndex, not merely a number the
+            // protocol uses for the port. See idxConflict().
+            if ($proven) {
+                $k['p:' . $ifidx] = true;
+            }
         }
         if ($label !== '') {
             $k['n:' . self::normPort($label)] = true;
@@ -1715,6 +1724,9 @@ final class LldpEdgeBuilder {
             return $members[0];
         }
         foreach ($members as $m) {
+            if (self::idxConflict($keys[$m] ?? [], $rid, $rhid, $lkeys, $rkeys)) {
+                continue;
+            }
             if (!isset($rep[$m][$rid . '|' . $src])) {
                 return $m;
             }
@@ -1738,11 +1750,45 @@ final class LldpEdgeBuilder {
         // nimmt so die ERSTE geportete auf; eine zweite mit anderem Port
         // spaltet dann korrekt wieder ab.
         foreach ($members as $m) {
-            if (empty($keys[$m][$rid])) {
+            if (empty($keys[$m][$rid])
+                    && !self::idxConflict($keys[$m] ?? [], $rid, $rhid, $lkeys, $rkeys)) {
                 return $m;
             }
         }
         return null;
+    }
+
+    /**
+     * Is this member provably a DIFFERENT cable than the report?
+     *
+     * Rules 3 and 4 pair reports whose ports cannot be compared: the far end's
+     * label ("10101") against our own ("GigabitEthernet1/0/1"), or CDP against
+     * LLDP. That guess is only safe while nothing contradicts it. A ifIndex
+     * contradicts it: when the member already carries a PROVEN ifIndex (p:) at
+     * one end and the report carries a DIFFERENT proven ifIndex at the same
+     * end, they are two ports and therefore two cables.
+     *
+     * Only proven indices count. Labels legitimately differ between the two
+     * ends of one cable, and lldpRemLocalPortNum (i: on an LLDP report) may be
+     * numbered differently from cdpCacheIfIndex for the same port — that is
+     * exactly what rule 3 exists for. A p: key is the CDP ifIndex or a far
+     * port resolved against the neighbour's own ifName.
+     *
+     * Without this, a host pair with some cables on CDP and others on LLDP had
+     * its first LLDP report merged into a CDP member (the reporter had not yet
+     * reported the pair over LLDP), overwriting that member's far-end port and
+     * swallowing the cable.
+     */
+    private static function idxConflict(array $mkeys, string $rid, string $rhid,
+            array $lkeys, array $rkeys): bool {
+        foreach ([[$mkeys[$rid] ?? [], $lkeys], [$mkeys[$rhid] ?? [], $rkeys]] as [$have, $want]) {
+            $hi = array_filter($have, static fn($k) => strncmp((string) $k, 'p:', 2) === 0, ARRAY_FILTER_USE_KEY);
+            $wi = array_filter($want, static fn($k) => strncmp((string) $k, 'p:', 2) === 0, ARRAY_FILTER_USE_KEY);
+            if ($hi && $wi && !array_intersect_key($hi, $wi)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
