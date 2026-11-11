@@ -98,6 +98,8 @@ final class MetricExtractor {
         // vor ifAlias (frei vergebene Beschreibung). ifAlias ist zuletzt, weil
         // er oft leer ist oder etwas ganz anderes sagt ("Uplink Rechenzentrum")
         // — als Portbezeichnung taugt er nur, wenn nichts anderes da ist.
+        $lldp_local = [];        // hid => [lldpLocPortNum => Identitaet]
+        $interface_names = [];   // hid => [ifIndex => [ifName, ifDescr]]
         $port_names     = [];   // hid => [ifIndex => name]
         $port_name_rank = [];   // hid => [ifIndex => Rang der Quelle]
         $lldp_ports     = [];   // hid => [snmpindex => ['id'=>?, 'desc'=>?]]
@@ -363,6 +365,13 @@ final class MetricExtractor {
                 }
             }
 
+            // LLDP-lokale Portnummer und IF-MIB-Index haben eigene Namensraeume.
+            if (strpos($key, 'lldpLocPort') !== false
+                    && preg_match('/(?:^|\[)lldpLocPort(IdSubtype|Id|Desc)[.\[](\d+)\]$/', $key, $local)
+                    && trim((string) $val) !== '') {
+                $lldp_local[$hid][$local[2]][$local[1]] = trim((string) $val);
+            }
+
             // Interface-Namen einsammeln. Eigener Block VOR den Health-Branches,
             // weil ifAlias/ifName/ifDescr sonst im generischen net.if-Zweig
             // haengenblieben.
@@ -373,6 +382,9 @@ final class MetricExtractor {
                 if (preg_match('/if(?:Name|Descr|Alias)[.\[](\d+)/', $key, $nm)) {
                     $ifx  = $nm[1];
                     $name = trim((string) $val);
+                    if ($name !== '' && $rang < 3) {
+                        $interface_names[$hid][$ifx][] = $name;
+                    }
                     // Leere Werte nicht uebernehmen: ein leerer ifAlias wuerde
                     // sonst einen vorhandenen ifName verdraengen.
                     if ($name !== ''
@@ -994,6 +1006,8 @@ final class MetricExtractor {
             'port_errors'   => $port_errors,
             'port_discards' => $port_discards,
             'port_names'    => $port_names,
+            'lldp_local'    => $lldp_local,
+            'interface_names' => array_intersect_key($interface_names, $lldp_local),
             'port_status'   => $port_status,
             'port_uptime'   => $port_uptime,
             'port_stp'      => $port_stp,

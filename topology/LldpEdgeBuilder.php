@@ -120,9 +120,11 @@ final class LldpEdgeBuilder {
             array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
             array $port_names = [], array $rtt = [], array $port_status = [],
             array $port_uptime = [], array $port_stp = [],
-            array $host_self_mac = [], array $uplink_rate = []): array {
+            array $host_self_mac = [], array $uplink_rate = [],
+            array $lldp_local = [], array $interface_names = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         self::$truncated = 0;
+        $local_indices = self::localIfIndices($lldp_local, $interface_names);
 
         $name_map = [];
         $ip_map   = [];
@@ -465,7 +467,7 @@ final class LldpEdgeBuilder {
                     'raw'       => $neighbor_raw,
                     'mac'       => $mac !== null,
                     'ambiguous' => $ambiguous_candidates,
-                    'ctx'       => self::portContext($item, (string) $rid, $lldp_ports, $port_names),
+                    'ctx'       => self::portContext($item, (string) $rid, $lldp_ports, $port_names, $local_indices),
                 ];
             }
         }
@@ -581,9 +583,9 @@ final class LldpEdgeBuilder {
                 }
             }
 
-            // §3b Per-Link-Traffic am lokalen Port des Reporters. Setzt
-            // lldpRemLocalPortNum == ifIndex voraus (auf Aruba/ProCurve 1:1);
-            // passt es nicht, gibt es schlicht keinen Treffer → keine Metrik.
+            // §3b Per-Link-Traffic am IF-MIB-Port des Reporters. Bei fehlender
+            // lokaler LLDP-Identitaet bleibt die bisherige direkte Zuordnung.
+            // Nicht aufloesbare lokale Identitaeten liefern keine Messwerte.
             // Nicht mehr nur an $port_traffic gebunden: Errors und Discards
             // koennen vorliegen, wo kein Traffic-Item existiert, und
             // umgekehrt. Frueher fiel dann alles weg, weil der Traffic den
@@ -717,7 +719,7 @@ final class LldpEdgeBuilder {
             // die Kanten, die wir behalten, VOLLSTAENDIGER. Hier
             // abzubrechen wuerde also nichts sparen und stattdessen
             // halbfertige Kanten hinterlassen.
-            // $local_proven: lokaler ifIndex nur bei CDP bewiesen. $fidx stammt
+            // $local_proven: CDP oder eindeutig aufgeloeste lokale LLDP-Identitaet. $fidx stammt
             // aus resolveRemotePort und ist damit immer ein bewiesener ifIndex
             // des Nachbarn — beide fuettern den p:-Key (siehe portKeys/findMember).
             $lkeys = self::portKeys($port, $port_idx, $local_proven);
@@ -1182,12 +1184,38 @@ final class LldpEdgeBuilder {
     }
 
     /**
+     * LLDP-lokale Portnummer auf einen eindeutigen IF-MIB-Index abbilden.
+     * Ein leerer Wert bedeutet, dass vorhandene Identitaeten nicht ausreichen.
+     */
+    private static function localIfIndices(array $lldp_local, array $interface_names): array {
+        $indices = [];
+        foreach ($lldp_local as $hid => $ports) {
+            $by_name = [];
+            foreach ($interface_names[$hid] ?? [] as $ifx => $names) {
+                foreach ($names as $name) {
+                    $by_name[self::normPort($name)][$ifx] = true;
+                }
+            }
+            foreach ($ports as $local => $identity) {
+                $matches = $by_name[self::normPort($identity['Desc'] ?? '')] ?? [];
+                // Interface name (5) oder locally assigned (7); keine MAC/IP.
+                if (in_array((int) ($identity['IdSubtype'] ?? 0), [5, 7], true)) {
+                    $matches += $by_name[self::normPort($identity['Id'] ?? '')] ?? [];
+                }
+                $indices[$hid][$local] = count($matches) === 1 ? (string) array_key_first($matches) : '';
+            }
+        }
+        return $indices;
+    }
+
+    /**
      * Portangaben einer Nachbarzeile: [SNMP-Index, lokales Port-Label,
      * lokaler ifIndex, Port-Label am Nachbar-Ende]. Haengt nur an der Zeile
      * selbst, nicht an der Zuordnung — deshalb schon im ersten Durchgang,
      * wo die Port-Zuordnung (resolveByPort) sie braucht.
      */
-    private static function portContext(array $item, string $rid, array $lldp_ports, array $port_names): array {
+    private static function portContext(array $item, string $rid, array $lldp_ports, array $port_names,
+            array $local_indices): array {
         // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
         // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
         // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
@@ -1203,31 +1231,24 @@ final class LldpEdgeBuilder {
         $idx      = '';
         $port     = '';
         $port_idx = '';
-        // Ist der lokale Index ein BEWIESENER ifIndex? Nur CDP (cdpCacheIfIndex,
-        // erster Teil des 2-teiligen Index). LLDPs lldpRemLocalPortNum (Mitte des
-        // 3-teiligen Index) kann vom ifIndex abweichen und ist deshalb unbewiesen
-        // — er darf kein Kabel aufspalten. Der Remote-Index aus
-        // resolveRemotePort() ist dagegen immer bewiesen (gegen die Portnamen des
-        // Nachbarn aufgeloest). findMember() nutzt das, um ein BEWEISBAR anderes
-        // Kabel nicht faelschlich zu vereinen (Issue #29).
+        // CDP und eindeutig zugeordnete lokale LLDP-Ports liefern einen
+        // bewiesenen ifIndex. Eine nackte LLDP-Portnummer bleibt unbewiesen.
         $local_proven = false;
         if (strpos($item['key_'], '[') !== false) {
-            $idx  = HostMetadata::ifaceParam($item['key_']);
-            $port = $idx;
+            $idx = HostMetadata::ifaceParam($item['key_']);
+            $port = $port_idx = $idx;
             if (preg_match('/^\d+\.(\d+)\.\d+$/', $idx, $pm)) {
-                $port = $pm[1];            // LLDP: Mitte = lokaler Port (unbewiesen)
+                $port = $port_idx = $pm[1];
+                if (($item['src'] ?? 'lldp') === 'lldp' && isset($local_indices[$rid][$port])) {
+                    $port_idx = $local_indices[$rid][$port];
+                    $local_proven = $port_idx !== '';
+                }
             } elseif (preg_match('/^(\d+)\.\d+$/', $idx, $pm)) {
-                $port = $pm[1];            // CDP: erster Teil = ifIndex (bewiesen)
+                $port = $port_idx = $pm[1];  // CDP: cdpCacheIfIndex
                 $local_proven = true;
             }
-            // Der ifIndex ist die Korrelationsgroesse — als ANZEIGE
-            // taugt eine nackte "9" nichts, waehrend das Nachbar-Ende
-            // "Gi1/0/8" zeigt. Liefert das Template einen
-            // Interface-Namen, gewinnt der; sonst bleibt es beim Index.
-            // $port_idx behaelt den Index fuer die Metrik-Zuordnung.
-            $port_idx = $port;
-            if ($port !== '' && isset($port_names[$rid][$port]) && $port_names[$rid][$port] !== '') {
-                $port = $port_names[$rid][$port];
+            if ($port_idx !== '' && ($port_names[$rid][$port_idx] ?? '') !== '') {
+                $port = $port_names[$rid][$port_idx];
             }
             $port = self::capLabel($port);
         }
@@ -1745,14 +1766,16 @@ final class LldpEdgeBuilder {
      * carries a DIFFERENT port at this end — merging two cables into one and
      * pairing one cable's local port with another's remote port. A key is
      * "proven" (p:) only when it is a real ifIndex: CDP's cdpCacheIfIndex
-     * locally, and a far port resolved against the neighbour's own port names.
+     * locally, an LLDP local identity matched to IF-MIB, and a far port
+     * resolved against the neighbour's own port names.
      * LLDP's local port number and bare labels are not — they may legitimately
      * differ between the two ends of one cable. idxConflict() denies rules 3
      * and 4 any member whose proven index at one end contradicts the report's.
      *
      * This needs the ports to RESOLVE. A CDP report always proves its local
-     * end; an LLDP report proves only its far end, and only when the neighbour's
-     * port names are known. ifName/ifDescr/ifAlias items supply them directly;
+     * end. LLDP can prove its local end with local identities, and its far
+     * end when the neighbour's port names are known. ifName/ifDescr/ifAlias
+     * items supply them directly;
      * where a host lacks those (e.g. Cisco's stock IOS template, which keys
      * interfaces as net.if.status[ifOperStatus.<idx>] and carries the name only
      * in the item name), PortNameParser reads the port name from the interface

@@ -118,6 +118,16 @@ $leer = PortNameParser::build([
 check('Host ohne SNMP-Ports fehlt ganz', isset($leer['swB']), false);
 
 echo "\n";
+// Netgear Fastpath uses the same interface LLD item-name format as Cisco.
+$netgear = PortNameParser::build([
+    ['hostid' => 'lab', 'key_' => 'net.if.status[ifOperStatus.1]',
+     'name' => 'Interface 1/0/1(Uplink): Operational status'],
+    ['hostid' => 'lab', 'key_' => 'net.if.in[ifHCInOctets.2]',
+     'name' => 'Interface 1/0/2(): Bits received'],
+]);
+check('Netgear: LLD names retain their numeric metric indices',
+    $netgear, ['lab' => [1 => '1/0/1', 2 => '1/0/2']]);
+
 if ($failures > 0) {
     printf("FAIL: %d Pruefung(en) fehlgeschlagen\n", $failures);
     exit(1);

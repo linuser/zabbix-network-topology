@@ -83,6 +83,23 @@ with the full address instead of two digits.
 
 ## Which items the module reads
 
+### Switches with a separate LLDP port index
+
+Some switches, including Arista EOS, use a different number for the local LLDP
+port and the IF-MIB interface. A neighbour reported as `lldpRemSysName[0.13.1]`
+can be on `Ethernet3/1` at ifIndex `3001`. The map needs that ifIndex to find
+the interface's status and traffic.
+
+Link [NT LLDP Local Ports by SNMP](../templates/nt_lldp_local_ports_snmp_template.yaml)
+alongside the neighbour template on affected hosts. A host that already
+collects `lldpLocPortId`, `lldpLocPortIdSubtype`, and `lldpLocPortDesc` under
+the corresponding item keys can use those items directly. The module compares
+local identities with `ifName` and `ifDescr`, or the interface names discovered
+by the stock template. It binds metrics only when the available identities
+point to one ifIndex. Hosts without local identities keep the existing
+direct-index fallback.
+
+
 An item is recognised when its **key** contains one of these (value = neighbour
 SysName; a comma-, newline- or pipe-separated list of several neighbours is fine):
 

@@ -646,6 +646,7 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // Der Zweig war also erreichbar, aber die Items kamen nie
                     // an: eine dokumentierte Funktion, die nie laufen konnte.
                     'ifName', 'ifDescr', 'ifAlias',
+                    'lldpLocPort',
                     // Alle Schluessel, die einen Nachbarn BENENNEN — geteilt
                     // mit hopScope(), damit beide nicht wieder auseinander-
                     // laufen. Darin auch uplink.id und mndp.
@@ -799,6 +800,9 @@ class NetworkTopologyData extends NetworkTopologyController {
                     foreach ($map as $ifx => $nm) {
                         if (!isset($metrics['port_names'][$hid][$ifx])) {
                             $metrics['port_names'][$hid][$ifx] = $nm;
+                            if (isset($metrics['lldp_local'][$hid])) {
+                                $metrics['interface_names'][$hid][$ifx][] = $nm;
+                            }
                         }
                     }
                 }
@@ -840,7 +844,8 @@ class NetworkTopologyData extends NetworkTopologyController {
                               $metrics['host_self_mac'] ?? [],
                               // UniFi geraeteweiter Uplink-Durchsatz (uplink.rx/tx):
                               // haengt an die uplink.id-Kante, die keinen Port hat.
-                              $metrics['uplink_rate'] ?? []);
+                              $metrics['uplink_rate'] ?? [],
+                              $metrics['lldp_local'] ?? [], $metrics['interface_names'] ?? []);
         $edges          = $lldp['edges'];
         // ── 5a0. ERKLAERTE UPLINKS (nt:uplink-Tag) ────────────────────────
         // Geraete ohne Nachbarprotokoll — USV, PDU, Drucker — haengen an einem

@@ -1,0 +1,49 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 2b202fdd00f542d8ae9ff03f597d1c09
+      name: Templates/Network topology
+  templates:
+    - uuid: 448cf9ad6cdd4604800c03b84d504c27
+      template: 'NT LLDP Local Ports by SNMP'
+      name: 'NT LLDP Local Ports by SNMP'
+      description: |
+        Optional local port identities for switches whose LLDP local port
+        numbers differ from IF-MIB ifIndex. Link alongside the LLDP neighbour
+        template and a template that supplies IF-MIB interface names.
+      groups:
+        - name: Templates/Network topology
+      macros:
+        - macro: '{$NT.LLDP.LOCAL.INTERVAL}'
+          value: 1h
+          description: 'Polling interval for LLDP local port identities.'
+      discovery_rules:
+        - uuid: 1e63a2f075344ce698e6da3cd60db51c
+          name: 'LLDP local port discovery'
+          type: SNMP_AGENT
+          key: nt.lldp.local.discovery
+          snmp_oid: 'discovery[{#LLDPPORTID},1.0.8802.1.1.2.1.3.7.1.3]'
+          delay: '{$NT.LLDP.LOCAL.INTERVAL}'
+          item_prototypes:
+            - uuid: 720a7d4758384b0dadf4cf2284e1fde6
+              name: 'LLDP local port {#SNMPINDEX}: ID'
+              type: SNMP_AGENT
+              key: 'nt.lldp.local.id[lldpLocPortId.{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.3.7.1.3.{#SNMPINDEX}'
+              delay: '{$NT.LLDP.LOCAL.INTERVAL}'
+              value_type: CHAR
+              trends: '0'
+            - uuid: 2fa62647ba4640a6b832830a8a484c42
+              name: 'LLDP local port {#SNMPINDEX}: ID subtype'
+              type: SNMP_AGENT
+              key: 'nt.lldp.local.subtype[lldpLocPortIdSubtype.{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.3.7.1.2.{#SNMPINDEX}'
+              delay: '{$NT.LLDP.LOCAL.INTERVAL}'
+            - uuid: 94271dfd1b24464695a5bf4219edfdbb
+              name: 'LLDP local port {#SNMPINDEX}: Description'
+              type: SNMP_AGENT
+              key: 'nt.lldp.local.description[lldpLocPortDesc.{#SNMPINDEX}]'
+              snmp_oid: '1.0.8802.1.1.2.1.3.7.1.4.{#SNMPINDEX}'
+              delay: '{$NT.LLDP.LOCAL.INTERVAL}'
+              value_type: CHAR
+              trends: '0'
