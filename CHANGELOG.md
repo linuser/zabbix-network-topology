@@ -2,6 +2,22 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.6 — 2026-11-10
+
+### New
+
+- **`nt:uplink` now accepts several tags per host — parallel links for devices
+  that can't speak LLDP/CDP.** A host with multiple `nt:uplink` tags, each with
+  its own `:port`, now draws one edge per cable instead of keeping only the
+  first tag and silently dropping the rest. Because edge identity is the port
+  pair, the extra cables render as parallel links, each carrying its own port's
+  traffic, error and speed counters (measured at the switch end). Exact
+  duplicates (same neighbour and port) collapse to one, and a tag whose port a
+  reported LLDP/CDP edge already covers completes that edge instead of drawing a
+  second line — so you can let LLDP draw what it sees and add `nt:uplink` only
+  for the cable it misses. Reported by a user monitoring SNMP-only hosts with
+  several links between them.
+
 ## v5.6.5 — 2026-11-03
 
 ### Fixes (code-review follow-up to 5.6.4)

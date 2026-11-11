@@ -1266,7 +1266,8 @@ final class LldpEdgeBuilder {
      * ist dieselbe, und zwei Linien zwischen denselben Knoten waeren eine
      * Aussage ueber das Netz, die niemand gemacht hat.
      *
-     * @param array $uplinks hostid => ['host' => <Name>, 'port' => <Port|''>]
+     * @param array $uplinks hostid => Liste von ['host' => <Name>, 'port' => <Port|''>]
+     *                       (altes Einzel-Assoc wird rueckwaertskompatibel akzeptiert)
      */
     public static function uplinkEdges(array $hosts, array $uplinks, array $edges,
             array $port_traffic = [], array $port_speed = [], array $port_errors = [],
@@ -1296,114 +1297,145 @@ final class LldpEdgeBuilder {
             $vorhanden[implode('-', $paar)][] = $i;
         }
 
-        foreach ($uplinks as $hid => $angabe) {
-            $ziel = $name_to_id[strtolower((string) $angabe['host'])] ?? null;
-            if ($ziel === null || (string) $ziel === (string) $hid) {
+        foreach ($uplinks as $hid => $angaben) {
+            // Rueckwaertskompatibel: altes Einzel-Assoc ['host'=>..,'port'=>..]
+            // ODER die neue Liste [ ['host'=>..], ... ]. Mehrere nt:uplink je
+            // Host sind mehrere (parallele) Kabel zu einem stummen Geraet, jede
+            // mit eigenem Port. Weil die Kanten-Identitaet ohnehin das Port-Paar
+            // ist, rendert parallel-links.js sie als getrennte Linien.
+            $liste = isset($angaben['host']) ? [$angaben] : $angaben;
+            if (!is_array($liste)) {
                 continue;
             }
+            foreach ($liste as $angabe) {
+                if (!is_array($angabe)) {
+                    continue;
+                }
+                $ziel = $name_to_id[strtolower((string) ($angabe['host'] ?? ''))] ?? null;
+                if ($ziel === null || (string) $ziel === (string) $hid) {
+                    continue;
+                }
 
-            // Port auf einen ifIndex des ZIELS bringen.
-            $port  = trim((string) ($angabe['port'] ?? ''));
-            $ifidx = '';
-            $label = '';
-            if ($port !== '') {
-                if (preg_match('/^\d+$/', $port)) {
-                    $ifidx = $port;
-                    $label = $port_names[(string) $ziel][$port] ?? $port;
-                } else {
-                    $auf = self::resolveRemotePort($port, $port_names[(string) $ziel] ?? []);
-                    $ifidx = $auf !== null ? $auf[0] : '';
-                    $label = $port;
+                // Port auf einen ifIndex des ZIELS bringen.
+                $port  = trim((string) ($angabe['port'] ?? ''));
+                $ifidx = '';
+                $label = '';
+                if ($port !== '') {
+                    if (preg_match('/^\d+$/', $port)) {
+                        $ifidx = $port;
+                        $label = $port_names[(string) $ziel][$port] ?? $port;
+                    } else {
+                        $auf = self::resolveRemotePort($port, $port_names[(string) $ziel] ?? []);
+                        $ifidx = $auf !== null ? $auf[0] : '';
+                        $label = $port;
+                    }
+                    $label = self::capLabel($label);
                 }
-                $label = self::capLabel($label);
-            }
 
-            $metrik = null;
-            if ($ifidx !== '') {
-                if (isset($port_traffic[(string) $ziel][$ifidx])) {
-                    $pt = $port_traffic[(string) $ziel][$ifidx];
-                    $metrik = ['in' => round($pt['in']), 'out' => round($pt['out'])];
-                }
-                if (isset($port_speed[(string) $ziel][$ifidx]) && $port_speed[(string) $ziel][$ifidx] > 0) {
-                    $metrik ??= [];
-                    $metrik['speed'] = round($port_speed[(string) $ziel][$ifidx]);
-                }
-                if (isset($port_errors[(string) $ziel][$ifidx])) {
-                    $metrik ??= [];
-                    $metrik['errors'] = round((float) $port_errors[(string) $ziel][$ifidx], 3);
-                }
-                if (isset($port_discards[(string) $ziel][$ifidx])) {
-                    $metrik ??= [];
-                    $metrik['discards'] = round((float) $port_discards[(string) $ziel][$ifidx], 3);
-                }
-            }
-
-            $paar = [(string) $ziel, (string) $hid];
-            sort($paar);
-            $key = implode('-', $paar);
-
-            if (isset($vorhanden[$key])) {
-                // Schon gemeldet — nur ergaenzen, was fehlt.
-                // src ist HIER schon eine sortierte LISTE: build() hat die Map
-                // am Ende umgewandelt. Mit ['tag'] => true entstuende daraus
-                // ein gemischtes Array, und json_encode macht daraus ein
-                // Objekt statt einer Liste — die Quellen-Pille im Panel, der
-                // Tooltip, der GraphML-Export und der Geraetebericht pruefen
-                // alle auf eine Liste und schweigen dann einfach.
-                // Between parallel links: the one on the declared port, else
-                // the first. Adding the tag to every member would claim a
-                // port on each of them that only one of them has.
-                // Das Label wird dabei normalisiert verglichen, der ifIndex
-                // nicht: "Gi1/0/8" im Tag und "GigabitEthernet1/0/8" auf der
-                // Kante sind derselbe Port, und byteweise vergleichen hiesse,
-                // beim ersten Member zu landen — also womoeglich am falschen
-                // Kabel des Buendels.
-                $idx  = $vorhanden[$key][0];
-                $norm = $label !== '' ? self::normPort($label) : '';
-                foreach ($vorhanden[$key] as $cand) {
-                    $kidx = (string) ($edges[$cand]['port_idx'][(string) $ziel] ?? '');
-                    $klab = (string) ($edges[$cand]['ports'][(string) $ziel] ?? '');
-                    if (($ifidx !== '' && $kidx === $ifidx)
-                            || ($norm !== '' && $klab !== '' && self::normPort($klab) === $norm)) {
-                        $idx = $cand;
-                        break;
+                $metrik = null;
+                if ($ifidx !== '') {
+                    if (isset($port_traffic[(string) $ziel][$ifidx])) {
+                        $pt = $port_traffic[(string) $ziel][$ifidx];
+                        $metrik = ['in' => round($pt['in']), 'out' => round($pt['out'])];
+                    }
+                    if (isset($port_speed[(string) $ziel][$ifidx]) && $port_speed[(string) $ziel][$ifidx] > 0) {
+                        $metrik ??= [];
+                        $metrik['speed'] = round($port_speed[(string) $ziel][$ifidx]);
+                    }
+                    if (isset($port_errors[(string) $ziel][$ifidx])) {
+                        $metrik ??= [];
+                        $metrik['errors'] = round((float) $port_errors[(string) $ziel][$ifidx], 3);
+                    }
+                    if (isset($port_discards[(string) $ziel][$ifidx])) {
+                        $metrik ??= [];
+                        $metrik['discards'] = round((float) $port_discards[(string) $ziel][$ifidx], 3);
                     }
                 }
-                if (is_array($edges[$idx]['src']) && !in_array('tag', $edges[$idx]['src'], true)) {
-                    $edges[$idx]['src'][] = 'tag';
-                    sort($edges[$idx]['src']);
-                }
-                if ($label !== '' && !isset($edges[$idx]['ports'][(string) $ziel])) {
-                    $edges[$idx]['ports'][(string) $ziel] = $label;
-                }
-                if ($ifidx !== '' && !isset($edges[$idx]['port_idx'][(string) $ziel])) {
-                    $edges[$idx]['port_idx'][(string) $ziel] = $ifidx;
-                }
-                if ($metrik !== null && !isset($edges[$idx]['port_metrics'][(string) $ziel])) {
-                    $edges[$idx]['port_metrics'][(string) $ziel] = $metrik;
-                }
-                continue;
-            }
 
-            $kante = [
-                'id'    => 'u' . count($edges),
-                'from'  => $ziel,
-                'to'    => $hid,
-                'iface' => 'nt:uplink',
-                'src'   => ['tag'],
-                // Kein Melder: niemand hat diese Kante gesehen, jemand hat sie
-                // erklaert. 'reporters' leer zu lassen haelt 'confirmed' falsch.
-                'reporters'    => [],
-                'confirmed'    => false,
-                'match'        => 'tag',
-                'port_match'   => '',
-                'ports'        => $label !== '' ? [(string) $ziel => $label] : [],
-                'port_idx'     => $ifidx !== '' ? [(string) $ziel => $ifidx] : [],
-                'port_metrics' => $metrik !== null ? [(string) $ziel => $metrik] : [],
-            ];
-            $kante['confidence'] = self::confidence($kante, $hosts);
-            $edges[] = $kante;
-            $vorhanden[$key][] = count($edges) - 1;
+                $paar = [(string) $ziel, (string) $hid];
+                sort($paar);
+                $key = implode('-', $paar);
+
+                if (isset($vorhanden[$key])) {
+                    // Auf diesem Paar gibt es schon Kante(n). Drei Faelle — und
+                    // der teure Fehler ist die FALSCHE AUFSPALTUNG (CLAUDE.md):
+                    // dasselbe Kabel darf nicht als zwei Linien erscheinen.
+                    //  (a) Ein Member traegt am ziel-Ende GENAU diesen Port:
+                    //      dieselbe Leitung — ergaenzen. Label normalisiert
+                    //      verglichen, ifIndex nicht ("Gi1/0/8" == "Gigabit…1/0/8").
+                    //  (b) Ein Member hat am ziel-Ende NOCH KEINEN Port: das ist
+                    //      die von der Gegenseite beschriebene Haelfte desselben
+                    //      Kabels — beidseitiges nt:uplink (A->B und B->A), oder
+                    //      eine gemeldete Kante, die den ziel-Port nicht kennt.
+                    //      Den Port nachtragen statt eine zweite Linie zu ziehen.
+                    //  (c) ALLE Member haben am ziel-Ende schon einen ANDEREN
+                    //      Port: erst DANN ist es ein weiteres Kabel (paralleler
+                    //      Link) und unten entsteht eine eigene Kante.
+                    // src ist eine sortierte LISTE (build() wandelt die Map um);
+                    // mit ['tag']=>true entstuende ein Objekt, und Panel, Tooltip,
+                    // Export und Bericht pruefen alle auf eine Liste.
+                    $norm     = $label !== '' ? self::normPort($label) : '';
+                    $match    = null;   // Member mit genau diesem ziel-Port
+                    $unported = null;   // Member ohne ziel-Port (andere Kabelhaelfte)
+                    foreach ($vorhanden[$key] as $cand) {
+                        $kidx = (string) ($edges[$cand]['port_idx'][(string) $ziel] ?? '');
+                        $klab = (string) ($edges[$cand]['ports'][(string) $ziel] ?? '');
+                        if (($ifidx !== '' && $kidx === $ifidx)
+                                || ($norm !== '' && $klab !== '' && self::normPort($klab) === $norm)) {
+                            $match = $cand;
+                            break;
+                        }
+                        if ($kidx === '' && $klab === '' && $unported === null) {
+                            $unported = $cand;
+                        }
+                    }
+                    // Eine eigene Kante nur fuer ein WIRKLICH neues Kabel: diese
+                    // Angabe nennt einen Port (sonst nicht unterscheidbar) UND
+                    // kein Member ist am ziel-Ende noch offen (Fall b). Sonst
+                    // ergaenzen — den Treffer, die offene Haelfte, oder den ersten.
+                    $neuesKabel = $match === null
+                        && ($ifidx !== '' || $norm !== '')
+                        && $unported === null;
+                    if (!$neuesKabel) {
+                        $idx = $match ?? $unported ?? $vorhanden[$key][0];
+                        if (is_array($edges[$idx]['src']) && !in_array('tag', $edges[$idx]['src'], true)) {
+                            $edges[$idx]['src'][] = 'tag';
+                            sort($edges[$idx]['src']);
+                        }
+                        if ($label !== '' && !isset($edges[$idx]['ports'][(string) $ziel])) {
+                            $edges[$idx]['ports'][(string) $ziel] = $label;
+                        }
+                        if ($ifidx !== '' && !isset($edges[$idx]['port_idx'][(string) $ziel])) {
+                            $edges[$idx]['port_idx'][(string) $ziel] = $ifidx;
+                        }
+                        if ($metrik !== null && !isset($edges[$idx]['port_metrics'][(string) $ziel])) {
+                            $edges[$idx]['port_metrics'][(string) $ziel] = $metrik;
+                        }
+                        continue;
+                    }
+                }
+
+                $kante = [
+                    'id'    => 'u' . count($edges),
+                    'from'  => $ziel,
+                    'to'    => $hid,
+                    'iface' => 'nt:uplink',
+                    'src'   => ['tag'],
+                    // Kein Melder: niemand hat diese Kante gesehen, jemand hat
+                    // sie erklaert. 'reporters' leer zu lassen haelt 'confirmed'
+                    // falsch.
+                    'reporters'    => [],
+                    'confirmed'    => false,
+                    'match'        => 'tag',
+                    'port_match'   => '',
+                    'ports'        => $label !== '' ? [(string) $ziel => $label] : [],
+                    'port_idx'     => $ifidx !== '' ? [(string) $ziel => $ifidx] : [],
+                    'port_metrics' => $metrik !== null ? [(string) $ziel => $metrik] : [],
+                ];
+                $kante['confidence'] = self::confidence($kante, $hosts);
+                $edges[] = $kante;
+                $vorhanden[$key][] = count($edges) - 1;
+            }
         }
 
         return $edges;

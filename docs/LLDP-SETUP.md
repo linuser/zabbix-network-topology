@@ -529,6 +529,20 @@ on it: traffic, errors, discards and link speed, exactly as on an LLDP edge, bec
 the module keeps interface counters per ifIndex anyway. Measured at the switch end —
 the silent device has nothing to offer.
 
+**Several cables between the same two devices?** Add one `nt:uplink` tag per cable,
+each with its own port — they render as parallel links, each carrying its own port's
+counters:
+
+```
+nt:uplink = dell-sw-01:Gi1/0/8
+nt:uplink = dell-sw-01:Gi1/0/9
+```
+
+Two tags to the same neighbour on the *same* port are kept once; a tag whose port a
+reported LLDP/CDP edge already covers completes that edge instead of drawing a second
+line. So you can mix: let LLDP draw what it sees and add an `nt:uplink` only for the
+cable it misses.
+
 The port may be the ifIndex (`8`) or its name (`Gi1/0/8`, `GigabitEthernet1/0/8`);
 spellings are normalised the same way as a reported neighbour port. The edge names
 its origin in the detail panel and carries a lower confidence than a reported one:

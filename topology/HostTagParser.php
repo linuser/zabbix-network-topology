@@ -46,7 +46,7 @@ final class HostTagParser {
         $host_show_keys     = [];   // hid => ['system.cpu.util', 'vfs.fs.size[/,pused]', ...]
         $host_links         = [];   // hid => [{label, url}, ...]
         $host_parent        = [];   // hid => 'ParentHostname' (nt:parent-Tag → hosts-Kante)
-        $host_uplink        = [];   // hid => ['host' => 'sw-01', 'port' => 'Gi1/0/8']
+        $host_uplink        = [];   // hid => [ ['host' => 'sw-01', 'port' => 'Gi1/0/8'], ... ]
         $host_expect        = [];   // hid => [{host, port}, ...] (nt:expect → Soll/Ist)
         $host_lldp_names    = [];   // hid => ['sw-core-01', 'SW-CORE-01.lan'] (nt:lldp)
         // Whitelist für nt:icon: nur bekannte Typen, sonst wird ignoriert
@@ -153,15 +153,32 @@ final class HostTagParser {
                     //
                     // Getrennt wird am LETZTEN Doppelpunkt: Portnamen tragen
                     // keinen, Hostnamen theoretisch schon (IPv6 als Name).
-                    if (!isset($host_uplink[$hid])) {
-                        $uv = trim($value);
-                        if ($uv !== '' && strlen($uv) <= 256
-                                && !preg_match('/[\x00-\x1F\x7F]/', $uv)) {
-                            $pos = strrpos($uv, ':');
-                            $ziel = $pos === false ? $uv : trim(substr($uv, 0, $pos));
-                            $port = $pos === false ? '' : trim(substr($uv, $pos + 1));
-                            if ($ziel !== '' && strlen($ziel) <= 128 && strlen($port) <= 64) {
-                                $host_uplink[$hid] = ['host' => $ziel, 'port' => $port];
+                    $uv = trim($value);
+                    if ($uv !== '' && strlen($uv) <= 256
+                            && !preg_match('/[\x00-\x1F\x7F]/', $uv)) {
+                        $pos = strrpos($uv, ':');
+                        $ziel = $pos === false ? $uv : trim(substr($uv, 0, $pos));
+                        $port = $pos === false ? '' : trim(substr($uv, $pos + 1));
+                        if ($ziel !== '' && strlen($ziel) <= 128 && strlen($port) <= 64) {
+                            // MEHRERE nt:uplink je Host sind erlaubt: parallele
+                            // Kabel zu einem stummen Geraet, jede mit eigenem
+                            // Port (#18-Folgewunsch). Deshalb eine LISTE statt
+                            // eines Einzelwerts — frueher gewann die erste Tag
+                            // und der Rest fiel still weg. Exakte Doppel
+                            // (gleiches Ziel + Port) einmal; je Host gekappt,
+                            // damit ein Tag-Wust nicht Dutzende Kanten erzeugt.
+                            $cur = $host_uplink[$hid] ?? [];
+                            $dup = false;
+                            foreach ($cur as $u) {
+                                if (strcasecmp((string) $u['host'], $ziel) === 0
+                                        && (string) $u['port'] === $port) {
+                                    $dup = true;
+                                    break;
+                                }
+                            }
+                            if (!$dup && count($cur) < 32) {
+                                $cur[] = ['host' => $ziel, 'port' => $port];
+                                $host_uplink[$hid] = $cur;
                             }
                         }
                     }

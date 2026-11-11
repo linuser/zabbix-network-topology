@@ -994,6 +994,65 @@ $eMix2 = LldpEdgeBuilder::uplinkEdges($hUp, ['ups' => ['host' => 'lab-sw-01', 'p
     $eMix, $trafficUp, [], $fehlerUp, [], $namenUp);
 check('zweimal angewandt: keine doppelte Quelle', $eMix2[0]['src'] ?? null, ['lldp', 'tag']);
 
+// MEHRERE nt:uplink je Host = parallele Kabel. Jede mit EIGENEM Port wird eine
+// eigene Kante, nicht in die erste geschluckt — genau der gemeldete Fehler, bei
+// dem von drei Tags nur eines zog. Listenform (neu); das Einzel-Assoc oben
+// laeuft rueckwaertskompatibel weiter.
+$ePar = LldpEdgeBuilder::uplinkEdges($hUp,
+    ['ups' => [['host' => 'lab-sw-01', 'port' => 'Gi1/0/8'], ['host' => 'lab-sw-01', 'port' => 'Gi1/0/9']]],
+    [], $trafficUp, [], $fehlerUp, [], $namenUp);
+check('parallele Uplinks: zwei Kanten', count($ePar), 2);
+$pPorts = [$ePar[0]['ports']['sw'] ?? null, $ePar[1]['ports']['sw'] ?? null];
+sort($pPorts);
+check('parallele Uplinks: beide Ports getrennt', $pPorts, ['Gi1/0/8', 'Gi1/0/9']);
+check('parallele Uplinks: Metrik am Port 8', $ePar[0]['port_metrics']['sw']['in'] ?? null, 120000.0);
+
+// Zweimal exakt derselbe Port (falls der Parser-Dedup umgangen wird): EINE
+// Kante, nicht zwei — die zweite trifft den Member am Port und ergaenzt nur.
+$eDup = LldpEdgeBuilder::uplinkEdges($hUp,
+    ['ups' => [['host' => 'lab-sw-01', 'port' => 'Gi1/0/8'], ['host' => 'lab-sw-01', 'port' => '8']]],
+    [], $trafficUp, [], $fehlerUp, [], $namenUp);
+check('selber Port zweimal: eine Kante', count($eDup), 1);
+
+// Zwei Uplinks zu VERSCHIEDENEN Zielen = zwei Kanten.
+$eTwo = LldpEdgeBuilder::uplinkEdges($hUp,
+    ['ups' => [['host' => 'lab-sw-01', 'port' => '8'], ['host' => 'lab-pdu-01', 'port' => '']]],
+    [], [], [], [], [], $namenUp);
+check('zwei Ziele: zwei Kanten', count($eTwo), 2);
+
+// Gemeldete Kante auf Port 8 + erklaerter zweiter Uplink auf Port 9: die
+// gemeldete bleibt, die zweite Leitung kommt als EIGENE Kante dazu statt in die
+// gemeldete geschluckt zu werden. Der Admin hat den anderen Port ausdruecklich
+// genannt — das ist kein false split, sondern das zweite Kabel.
+$eAlong = LldpEdgeBuilder::uplinkEdges($hUp,
+    ['ups' => [['host' => 'lab-sw-01', 'port' => 'Gi1/0/9']]],
+    $rMix['edges'], $trafficUp, [], $fehlerUp, [], $namenUp);
+check('zweiter Port neben gemeldeter: zwei Kanten', count($eAlong), 2);
+
+// Review-Fund: dasselbe Kabel von BEIDEN Enden mit nt:uplink beschrieben
+// (A->B UND B->A) ist EINE Kante, nicht zwei. Die zweite Angabe traegt die
+// fehlende Port-Seite nach, statt eine parallele Linie zu ziehen — false split
+// waere hier der teure Fehler, weil es nur ein Kabel ist.
+$eBi = LldpEdgeBuilder::uplinkEdges($hUp, [
+        'ups' => [['host' => 'lab-sw-01',  'port' => 'Gi1/0/8']],
+        'sw'  => [['host' => 'lab-ups-01', 'port' => '2']],
+    ], [], $trafficUp, [], $fehlerUp, [], $namenUp);
+check('beidseitig beschriebenes Kabel: eine Kante', count($eBi), 1);
+check('beidseitig: Port an beiden Enden nachgetragen',
+    [isset($eBi[0]['port_idx']['sw']), isset($eBi[0]['port_idx']['ups'])], [true, true]);
+
+// Review-Fund: port-lose + port-tragende Uplink zum selben Ziel = EINE Kante,
+// unabhaengig von der Tag-Reihenfolge. Die port-lose beschreibt dieselbe
+// Leitung ohne Portangabe, darf also keine zweite Linie erzeugen.
+$eOrd1 = LldpEdgeBuilder::uplinkEdges($hUp,
+    ['ups' => [['host' => 'lab-sw-01', 'port' => ''], ['host' => 'lab-sw-01', 'port' => 'Gi1/0/9']]],
+    [], $trafficUp, [], [], [], $namenUp);
+$eOrd2 = LldpEdgeBuilder::uplinkEdges($hUp,
+    ['ups' => [['host' => 'lab-sw-01', 'port' => 'Gi1/0/9'], ['host' => 'lab-sw-01', 'port' => '']]],
+    [], $trafficUp, [], [], [], $namenUp);
+check('port-los + port, Reihenfolge A: eine Kante', count($eOrd1), 1);
+check('port-los + port, Reihenfolge B: eine Kante', count($eOrd2), 1);
+
 // ── nt:lldp — der Host erklaert seinen Namen auf dem Draht (#14) ───────────
 //
 // Der Name in Zabbix und der ausgesendete Name muessen nicht zusammenpassen.

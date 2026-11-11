@@ -114,22 +114,40 @@ $tagUp = static function (string $wert): array {
     return HostTagParser::parse(['h1' => ['tags' => [['tag' => 'nt:uplink', 'value' => $wert]]]])['uplink'];
 };
 
+// Ein Uplink ist jetzt eine LISTE je Host (mehrere parallele Kabel moeglich).
 check('Host und Port getrennt',
-    $tagUp('lab-sw-01:Gi1/0/8')['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']);
+    $tagUp('lab-sw-01:Gi1/0/8')['h1'] ?? null, [['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']]);
 check('Leerzeichen werden gekappt',
-    $tagUp('  lab-sw-01 : Gi1/0/8 ')['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']);
+    $tagUp('  lab-sw-01 : Gi1/0/8 ')['h1'] ?? null, [['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']]);
 check('ohne Port bleibt der Port leer',
-    $tagUp('lab-sw-01')['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => '']);
+    $tagUp('lab-sw-01')['h1'] ?? null, [['host' => 'lab-sw-01', 'port' => '']]);
 // Getrennt wird am LETZTEN Doppelpunkt — ein Name mit Doppelpunkten bleibt heil.
 check('letzter Doppelpunkt trennt',
-    $tagUp('fd00::1:8')['h1'] ?? null, ['host' => 'fd00::1', 'port' => '8']);
+    $tagUp('fd00::1:8')['h1'] ?? null, [['host' => 'fd00::1', 'port' => '8']]);
 check('Steuerzeichen werden verworfen', $tagUp("lab-sw-01:\x07Gi1"), []);
 check('zu lang wird verworfen',         $tagUp(str_repeat('x', 300)), []);
-check('erste Angabe gewinnt',
+// MEHRERE nt:uplink je Host bleiben ALLE, in Tag-Reihenfolge (parallele Kabel).
+// Frueher gewann die erste und der Rest fiel still weg — das war der Melder-Bug.
+check('mehrere Uplinks bleiben alle',
     HostTagParser::parse(['h1' => ['tags' => [
         ['tag' => 'nt:uplink', 'value' => 'lab-sw-01:1'],
         ['tag' => 'nt:uplink', 'value' => 'lab-sw-02:2'],
-    ]]])['uplink']['h1'] ?? null, ['host' => 'lab-sw-01', 'port' => '1']);
+    ]]])['uplink']['h1'] ?? null,
+    [['host' => 'lab-sw-01', 'port' => '1'], ['host' => 'lab-sw-02', 'port' => '2']]);
+// Exaktes Doppel (gleiches Ziel + Port, Gross/Klein egal) nur einmal.
+check('exaktes Doppel nur einmal',
+    HostTagParser::parse(['h1' => ['tags' => [
+        ['tag' => 'nt:uplink', 'value' => 'lab-sw-01:Gi1/0/8'],
+        ['tag' => 'nt:uplink', 'value' => 'LAB-SW-01:Gi1/0/8'],
+    ]]])['uplink']['h1'] ?? null,
+    [['host' => 'lab-sw-01', 'port' => 'Gi1/0/8']]);
+// Gleicher Switch, ANDERER Port = zweites Kabel, beide bleiben.
+check('selber Switch, zwei Ports',
+    HostTagParser::parse(['h1' => ['tags' => [
+        ['tag' => 'nt:uplink', 'value' => 'lab-sw-01:Gi1/0/9'],
+        ['tag' => 'nt:uplink', 'value' => 'lab-sw-01:Gi1/0/10'],
+    ]]])['uplink']['h1'] ?? null,
+    [['host' => 'lab-sw-01', 'port' => 'Gi1/0/9'], ['host' => 'lab-sw-01', 'port' => 'Gi1/0/10']]);
 
 // ── nt:lldp: unter welchem Namen der Host auf dem Draht auftritt (#14) ─────
 echo "\n  HostTagParser — nt:lldp\n\n";
