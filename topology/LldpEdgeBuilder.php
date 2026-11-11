@@ -120,7 +120,15 @@ final class LldpEdgeBuilder {
             array $lldp_meta = [], array $port_errors = [], array $port_discards = [],
             array $port_names = [], array $rtt = [], array $port_status = [],
             array $port_uptime = [], array $port_stp = [],
-            array $host_self_mac = [], array $uplink_rate = []): array {
+            array $host_self_mac = [], array $uplink_rate = [],
+            // #31: lldpLocPortTable je Host — [localPort => {id, subtype, desc}].
+            // Optional. Loest den ECHTEN ifIndex des lokalen Ports auf, wo
+            // lldpRemLocalPortNum (Mitte des 3-teiligen LLDP-Index) NICHT der
+            // IF-MIB-ifIndex ist (Arista EOS / Mellanox Onyx / Cumulus) — sonst
+            // bindet die Kante den SVI (Vlan13) statt des physischen Ports
+            // (Ethernet3/1@3001). Fehlt die Tabelle, bleibt es beim Legacy-
+            // Direktindex (rueckwaertskompatibel).
+            array $lldp_local = []): array {
         // ── 5. LLDP EDGES ─────────────────────────────────────────────────
         self::$truncated = 0;
 
@@ -465,7 +473,7 @@ final class LldpEdgeBuilder {
                     'raw'       => $neighbor_raw,
                     'mac'       => $mac !== null,
                     'ambiguous' => $ambiguous_candidates,
-                    'ctx'       => self::portContext($item, (string) $rid, $lldp_ports, $port_names),
+                    'ctx'       => self::portContext($item, (string) $rid, $lldp_ports, $port_names, $lldp_local),
                 ];
             }
         }
@@ -1187,7 +1195,7 @@ final class LldpEdgeBuilder {
      * selbst, nicht an der Zuordnung — deshalb schon im ersten Durchgang,
      * wo die Port-Zuordnung (resolveByPort) sie braucht.
      */
-    private static function portContext(array $item, string $rid, array $lldp_ports, array $port_names): array {
+    private static function portContext(array $item, string $rid, array $lldp_ports, array $port_names, array $lldp_local = []): array {
         // Port-Label (Best-Effort): Bracket-Param des Reporter-Keys.
         // LLD-Keys wie lldpRemSysName[0.24.1] tragen den LLDP-MIB-
         // Index lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex —
@@ -1226,6 +1234,24 @@ final class LldpEdgeBuilder {
             // Interface-Namen, gewinnt der; sonst bleibt es beim Index.
             // $port_idx behaelt den Index fuer die Metrik-Zuordnung.
             $port_idx = $port;
+            // #31: Auf Arista EOS / Mellanox Onyx / Cumulus ist diese Zahl
+            // (lldpRemLocalPortNum) NICHT der IF-MIB-ifIndex — sie direkt als
+            // Index zu nehmen bindet den SVI (Vlan13) statt des physischen Ports
+            // (Ethernet3/1@3001): die Karte zeigt die SVI-Zaehler und verpasst
+            // den Down-State des Kabels. Liegt die optionale lldpLocPortTable vor,
+            // den echten ifIndex ueber die EIGENEN Interface-Namen des Hosts
+            // aufloesen (typisierte Port-ID zuerst, Desc nur als eindeutiger
+            // Rueckfall — localIfIndex()). Gelingt es, ist der lokale Index
+            // ebenso BEWIESEN wie CDPs cdpCacheIfIndex und speist den #29-p:-Guard.
+            // Nur solange nicht schon bewiesen (CDP) und die Tabelle den Port kennt.
+            if (!$local_proven && $port !== '' && isset($lldp_local[$rid][$port])) {
+                $real = self::localIfIndex($lldp_local[$rid][$port], $port_names[$rid] ?? []);
+                if ($real !== null) {
+                    $port_idx     = $real;                   // echter ifIndex fuer die Metrik
+                    $port         = (string) $port_names[$rid][$real];  // der physische Portname
+                    $local_proven = true;
+                }
+            }
             if ($port !== '' && isset($port_names[$rid][$port]) && $port_names[$rid][$port] !== '') {
                 $port = $port_names[$rid][$port];
             }
@@ -1247,6 +1273,47 @@ final class LldpEdgeBuilder {
         }
 
         return [$idx, $port, $port_idx, $remote_port, $local_proven];
+    }
+
+    /**
+     * #31: den echten IF-MIB-ifIndex eines lokalen LLDP-Ports aus den EIGENEN
+     * Interface-Namen des Hosts aufloesen. Noetig auf Arista EOS / Mellanox
+     * Onyx / Cumulus, wo lldpRemLocalPortNum nicht der ifIndex ist.
+     *
+     * Praezedenz (am echten Walk zweier Hersteller festgemacht, 2026-11-11):
+     * die TYPISIERTE Port-ID gewinnt, die Beschreibung ist nur ein eindeutiger
+     * Rueckfall, und zeigen beide auf VERSCHIEDENE Interfaces, bleibt es
+     * unaufgeloest. Auf EOS und Onyx traegt die Port-ID (Subtype 5) den IF-MIB-
+     * Namen ("Ethernet3/1" / "Eth1/2"), waehrend lldpLocPortDesc ein frei
+     * konfigurierter Alias ist ("Uplink to peer") — die naive Vereinigung von
+     * Desc+ID geht auf echter Hardware nur gut, weil der Alias zufaellig nichts
+     * matcht. Die Port-ID wird NUR verwendet, wenn der Subtype sie als
+     * Interface-Namen ausweist (5 = interfaceName, 7 = local) — nie eine MAC
+     * oder Netzadresse.
+     *
+     * Der Abgleich laeuft ueber resolveRemotePort() (exakt, sonst normalisiert
+     * und nur bei Eindeutigkeit) — dieselbe Regel wie fuer den Nachbar-Port:
+     * mehrdeutig heisst nichts zuordnen.
+     *
+     * @param array{id?:string,subtype?:int|string,desc?:string} $local
+     * @param array<string,string> $ifnames  [ifIndex => Portname] DIESES Hosts
+     * @return string|null  der ifIndex, oder null wenn nicht eindeutig aufloesbar
+     */
+    private static function localIfIndex(array $local, array $ifnames): ?string {
+        if (!$ifnames) {
+            return null;
+        }
+        $subtype = isset($local['subtype']) ? (int) $local['subtype'] : 0;
+        $idHit   = ($subtype === 5 || $subtype === 7)
+            ? self::resolveRemotePort(trim((string) ($local['id'] ?? '')), $ifnames)
+            : null;
+        $descHit = self::resolveRemotePort(trim((string) ($local['desc'] ?? '')), $ifnames);
+        $byId    = $idHit[0]   ?? null;
+        $byDesc  = $descHit[0] ?? null;
+        if ($byId !== null && $byDesc !== null && $byId !== $byDesc) {
+            return null;              // ID und Desc widersprechen sich -> unaufgeloest
+        }
+        return $byId ?? $byDesc;      // typisierte ID zuerst, Desc als Rueckfall
     }
 
     /**

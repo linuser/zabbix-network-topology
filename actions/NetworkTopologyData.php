@@ -616,6 +616,12 @@ class NetworkTopologyData extends NetworkTopologyController {
                     // MetricExtractor per VlanParser in die VLAN-Mitgliedschaft
                     // je Host zerlegt (VLAN-Filter: Knoten + Kanten, 3.5b).
                     'nt.vlan.walk',
+                    // #31 lokale LLDP-Port-Tabelle (NT LLDP Local Ports by SNMP):
+                    // EIN Walk-Text (lldpLocPortId/-Subtype/-Desc), den
+                    // MetricExtractor per LldpLocalPortParser zerlegt. Loest den
+                    // echten ifIndex des lokalen Ports auf, wo lldpRemLocalPortNum
+                    // != ifIndex ist (Arista EOS / Mellanox Onyx / Cumulus).
+                    'nt.lldp.locports',
                     // EIGEN-MAC des Hosts (lldpLocChassisId / dot1dBaseBridgeAddress,
                     // NT LLDP Neighbors by SNMP): nt.self.chassis / nt.self.basemac.
                     // Loest einen Nachbarn auf, der den Host nur per MAC nennt
@@ -840,7 +846,10 @@ class NetworkTopologyData extends NetworkTopologyController {
                               $metrics['host_self_mac'] ?? [],
                               // UniFi geraeteweiter Uplink-Durchsatz (uplink.rx/tx):
                               // haengt an die uplink.id-Kante, die keinen Port hat.
-                              $metrics['uplink_rate'] ?? []);
+                              $metrics['uplink_rate'] ?? [],
+                              // #31 lokale LLDP-Port-Tabelle: echter ifIndex, wo
+                              // lldpRemLocalPortNum != ifIndex (Arista/Mellanox).
+                              $metrics['lldp_local'] ?? []);
         $edges          = $lldp['edges'];
         // ── 5a0. ERKLAERTE UPLINKS (nt:uplink-Tag) ────────────────────────
         // Geraete ohne Nachbarprotokoll — USV, PDU, Drucker — haengen an einem

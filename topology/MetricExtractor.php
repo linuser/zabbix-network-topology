@@ -142,6 +142,11 @@ final class MetricExtractor {
         // VLAN-Mitgliedschaft je Host (hid => {vlans, byIfIndex, access}), aus
         // dem nt.vlan.walk-Text (NT VLAN by SNMP). Fuer Knoten + Kanten (3.5b).
         $host_vlan = [];
+        // #31: lokale LLDP-Port-Tabelle je Host (hid => [localPort => {id,subtype,
+        // desc}]), aus dem nt.lldp.locports-Walk (NT LLDP Local Ports by SNMP).
+        // LldpEdgeBuilder loest damit den echten ifIndex auf, wo
+        // lldpRemLocalPortNum != ifIndex ist (Arista/Mellanox/Cumulus).
+        $lldp_local = [];
 
         foreach ($items_a as $item) {
             $hid = $item['hostid'];
@@ -154,6 +159,16 @@ final class MetricExtractor {
             if ($key === 'nt.vlan.walk') {
                 if ((string) $val !== '') {
                     $host_vlan[$hid] = VlanParser::vlansForHost((string) $val);
+                }
+                continue;
+            }
+
+            // #31: lokale LLDP-Port-Tabelle — EIN Walk-Text, vom
+            // LldpLocalPortParser in [localPort => {id,subtype,desc}] zerlegt.
+            // Exakter Key, kein Substring; danach ist nichts weiter zu tun.
+            if ($key === 'nt.lldp.locports') {
+                if ((string) $val !== '') {
+                    $lldp_local[$hid] = LldpLocalPortParser::parseWalk((string) $val);
                 }
                 continue;
             }
@@ -1015,6 +1030,9 @@ final class MetricExtractor {
             'wlan_satisfaction' => $wlan_sat,
             // VLAN-Mitgliedschaft je Host (hid => {vlans, byIfIndex, access}).
             'vlan'              => $host_vlan,
+            // #31: lokale LLDP-Port-Tabelle je Host (hid => [localPort => {id,
+            // subtype, desc}]) fuer die ifIndex-Aufloesung in LldpEdgeBuilder.
+            'lldp_local'        => $lldp_local,
         ];
     }
 

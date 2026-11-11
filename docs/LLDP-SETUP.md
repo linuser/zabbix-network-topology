@@ -219,6 +219,23 @@ where they exist; this only fills in for hosts that have none.
   preferred — PortId may be a MAC). More under
   [port-to-port](#port-to-port--per-link-weathermap).
 
+> **Arista EOS / Mellanox Onyx / Cumulus: the local port number is not the
+> ifIndex (since 5.6.10, #31).** On most switches the middle number of the
+> neighbour index equals the IF-MIB ifIndex, so the module keys the port's
+> counters and status straight off it. These three NOS families do **not**: the
+> LLDP agent assigns its own `lldpLocPortNum`, so e.g. local port `13` is not
+> ifIndex `13` — and if `Vlan13` happens to exist, the link binds that SVI
+> instead of the physical `Ethernet3/1`, showing the SVI's counters and missing
+> the port's down state. Fix: link the optional
+> [`nt_lldp_local_ports_snmp.yaml`](https://raw.githubusercontent.com/linuser/zabbix-network-topology/main/templates/nt_lldp_local_ports_snmp.yaml)
+> (*NT LLDP Local Ports by SNMP*) on the affected hosts. It walks the
+> `lldpLocPortTable`; the module then resolves each local port to its real
+> ifIndex via the host's own interface names (typed Port ID first, description
+> as a unique fallback, unresolved if they disagree). It needs the interface
+> names too (ifName/ifDescr, or the `{#IFNAME}` fallback above). On switches
+> where the number already equals the ifIndex you need none of this — link the
+> template only where the two differ.
+
 ---
 
 ## Vendor matrix — what produces edges?

@@ -1522,6 +1522,82 @@ check('ohne Portbezug: kein remote_port',
     array_key_exists('remote_port', $nachRaw['drucker-og'] ?? []), false);
 check('und keine Kante aus beiden',          count($rGeist['edges']), 0);
 
+// ── #31: lokaler LLDP-Port != ifIndex (Arista EOS / Mellanox Onyx) ──────────
+//
+// lldpRemLocalPortNum (Mitte des 3-teiligen Index) ist auf diesen Geraeten
+// NICHT der IF-MIB-ifIndex. Hier kollidiert die rohe Zahl sogar mit einem SVI
+// (ifIndex 13 = "Vlan13"), waehrend der physische Port "Ethernet3/1" auf 3001
+// liegt. Ohne lokale Port-Tabelle bindet die Kante den SVI (der Bug); mit ihr
+// den echten Port. Quelle der Praezedenz: die echten OID-Walks aus #31
+// (Subtype 5 = IF-MIB-Name, Desc = konfigurierter Alias).
+echo "\n  #31: lokaler LLDP-Port auf den echten ifIndex aufloesen\n\n";
+$h31  = ['ar' => ['host' => 'ar-leaf', 'name' => 'Arista Leaf'],
+         'pr' => ['host' => 'peer-sw', 'name' => 'Peer Switch']];
+// Arista meldet den Nachbarn auf lokalem LLDP-Port 13; ifIndex 13 ist aber der
+// SVI Vlan13, der physische Port Ethernet3/1 liegt auf 3001.
+$raw31   = [['hostid' => 'ar', 'key_' => 'lldpRemSysName[0.13.1]', 'lastvalue' => 'peer-sw', 'src' => 'lldp']];
+$names31 = ['ar' => ['3001' => 'Ethernet3/1', '13' => 'Vlan13']];
+
+// (a) MIT lokaler Tabelle: typisierte Port-ID (Subtype 5) traegt den IF-MIB-
+//     Namen, Desc ist ein Alias -> auf 3001 / Ethernet3/1 aufgeloest.
+$loc31 = ['ar' => ['13' => ['subtype' => 5, 'id' => 'Ethernet3/1', 'desc' => 'Uplink to peer']]];
+$eAr = findEdge(LldpEdgeBuilder::build($h31, $raw31, port_names: $names31, lldp_local: $loc31)['edges'], 'ar', 'pr');
+check('Arista: Port-ID loest auf den echten ifIndex (3001)',  $eAr['port_idx']['ar'] ?? null, '3001');
+check('Arista: Label ist der physische Port, nicht der SVI',  $eAr['ports']['ar']    ?? null, 'Ethernet3/1');
+
+// (a2) Subtype 7 (local) wird genauso als Interface-Name akzeptiert wie 5.
+$loc31s7 = ['ar' => ['13' => ['subtype' => 7, 'id' => 'Ethernet3/1', 'desc' => 'Uplink to peer']]];
+$eAr7 = findEdge(LldpEdgeBuilder::build($h31, $raw31, port_names: $names31, lldp_local: $loc31s7)['edges'], 'ar', 'pr');
+check('Subtype 7 (local): Port-ID loest ebenso auf (3001)',   $eAr7['port_idx']['ar'] ?? null, '3001');
+
+// (b) OHNE lokale Tabelle: rueckwaertskompatibel -> rohe Portnummer, SVI-Label.
+//     (genau der Zustand, den #31 behebt — hier als Regression festgenagelt.)
+$eLeg = findEdge(LldpEdgeBuilder::build($h31, $raw31, port_names: $names31)['edges'], 'ar', 'pr');
+check('Legacy ohne Tabelle: rohe LLDP-Portnummer bleibt',     $eLeg['port_idx']['ar'] ?? null, '13');
+check('Legacy ohne Tabelle: SVI-Label bleibt (der Bug)',      $eLeg['ports']['ar']    ?? null, 'Vlan13');
+
+// (c) Mellanox Onyx: Port 9, Name "Eth1/2" (ifName "Eth1/2" auf 110) — Abgleich
+//     ueber normPort (exakt hier; die Kurzform-Expansion deckt Langformen ab).
+$h31b   = ['mx' => ['host' => 'mx-leaf', 'name' => 'Mellanox Leaf'], 'pr' => ['host' => 'peer-sw', 'name' => 'Peer']];
+$raw31b = [['hostid' => 'mx', 'key_' => 'lldpRemSysName[0.9.1]', 'lastvalue' => 'peer-sw', 'src' => 'lldp']];
+$loc31b = ['mx' => ['9' => ['subtype' => 5, 'id' => 'Eth1/2', 'desc' => 'Uplink to peer']]];
+$eMx = findEdge(LldpEdgeBuilder::build($h31b, $raw31b,
+                   port_names: ['mx' => ['110' => 'Eth1/2', '9' => 'Vlan9']], lldp_local: $loc31b)['edges'], 'mx', 'pr');
+check('Mellanox: Port-ID loest auf ifIndex 110',              $eMx['port_idx']['mx'] ?? null, '110');
+
+// (d) Widerspruch: Port-ID zeigt auf 3001, Desc auf 9001 -> UNAUFGELOeST
+//     (bleibt bei der rohen Nummer). "unresolved if they disagree".
+$loc31c = ['ar' => ['13' => ['subtype' => 5, 'id' => 'Ethernet3/1', 'desc' => 'Ethernet9/1']]];
+$eDis = findEdge(LldpEdgeBuilder::build($h31, $raw31,
+                   port_names: ['ar' => ['3001' => 'Ethernet3/1', '9001' => 'Ethernet9/1', '13' => 'Vlan13']],
+                   lldp_local: $loc31c)['edges'], 'ar', 'pr');
+check('Widerspruch ID vs Desc: unaufgeloest -> rohe Nummer',  $eDis['port_idx']['ar'] ?? null, '13');
+
+// (e) Falscher Subtype (3 = MAC): die Port-ID wird NICHT als Name benutzt, die
+//     eindeutige Desc traegt den Namen -> ueber den Rueckfall aufgeloest.
+$loc31d = ['ar' => ['13' => ['subtype' => 3, 'id' => '00 11 22 33 44 55', 'desc' => 'Ethernet3/1']]];
+$eDesc = findEdge(LldpEdgeBuilder::build($h31, $raw31, port_names: $names31, lldp_local: $loc31d)['edges'], 'ar', 'pr');
+check('Subtype 3 (MAC): Desc-Rueckfall loest auf 3001',       $eDesc['port_idx']['ar'] ?? null, '3001');
+
+// (f) Falscher Subtype UND Desc ist nur ein Alias -> nichts matcht -> Legacy.
+$loc31e = ['ar' => ['13' => ['subtype' => 3, 'id' => '00 11 22 33 44 55', 'desc' => 'Uplink to peer']]];
+$eNone = findEdge(LldpEdgeBuilder::build($h31, $raw31, port_names: $names31, lldp_local: $loc31e)['edges'], 'ar', 'pr');
+check('MAC-Subtype + Alias-Desc: nichts matcht -> rohe Nummer', $eNone['port_idx']['ar'] ?? null, '13');
+
+// (g) Parser: Walk-Text in [localPort => {id,subtype,desc}] zerlegen.
+$walk31 = implode("\n", [
+    '1.0.8802.1.1.2.1.3.7.1.2.13 = INTEGER: 5',
+    '1.0.8802.1.1.2.1.3.7.1.3.13 = STRING: "Ethernet3/1"',
+    '1.0.8802.1.1.2.1.3.7.1.4.13 = STRING: "Uplink to peer"',
+    '1.0.8802.1.1.2.1.3.7.1.2.9 = INTEGER: 5',
+    '1.0.8802.1.1.2.1.3.7.1.3.9 = STRING: "Eth1/2"',
+]);
+$pw = \Modules\NetworkTopology\Topology\LldpLocalPortParser::parseWalk($walk31);
+check('Parser: Port 13 Subtype',  $pw['13']['subtype'] ?? null, 5);
+check('Parser: Port 13 Id',       $pw['13']['id']      ?? null, 'Ethernet3/1');
+check('Parser: Port 13 Desc',     $pw['13']['desc']    ?? null, 'Uplink to peer');
+check('Parser: Port 9 Id',        $pw['9']['id']       ?? null, 'Eth1/2');
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";

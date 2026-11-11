@@ -1,0 +1,84 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates/Network devices
+  templates:
+    - uuid: a448cf78b3b841a682f54a26e95f4aca
+      template: 'NT LLDP Local Ports by SNMP'
+      name: 'NT LLDP Local Ports by SNMP'
+      description: |
+        Collects the LLDP local-port table (lldpLocPortTable) over SNMP for the
+        "Network Topology for Zabbix" frontend module. The module uses it to bind
+        each LLDP neighbour to the CORRECT local interface on switches where the
+        LLDP local port number is not the IF-MIB ifIndex.
+
+        Why it is needed: a neighbour row is indexed
+        lldpRemTimeMark.lldpRemLocalPortNum.lldpRemIndex -- the middle part is the
+        local port the neighbour was seen on. On Aruba/ProCurve/Cisco that number
+        happens to equal the ifIndex, but on Arista EOS, Mellanox Onyx and Cumulus
+        it does NOT: the LLDP agent assigns its own lldpLocPortNum. Used directly
+        as an ifIndex it binds the link to the wrong interface -- e.g. local port
+        13 maps to the SVI "Vlan13" instead of the physical "Ethernet3/1" at
+        ifIndex 3001, so the map shows the SVI's counters and misses the physical
+        port's down state.
+
+        What it collects (one bulk walk; the module reads the walk text and parses
+        it, the same approach as the VLAN/STP templates):
+          lldpLocPortIdSubtype  1.0.8802.1.1.2.1.3.7.1.2  local port -> ID subtype
+          lldpLocPortId         1.0.8802.1.1.2.1.3.7.1.3  local port -> port ID
+          lldpLocPortDesc       1.0.8802.1.1.2.1.3.7.1.4  local port -> description
+
+        How the module resolves it (topology/LldpLocalPortParser +
+        LldpEdgeBuilder::localIfIndex): the typed Port ID wins when the subtype
+        says it IS an interface name (5 = interfaceName, 7 = local) -- never a MAC
+        or network address -- and lldpLocPortDesc is a unique fallback only. If the
+        two point at different interfaces the binding is left unresolved. The
+        resolved name is matched against the host's own interface names (ifName /
+        ifDescr, and the {#IFNAME} LLD fallback) through the module's port-name
+        normalisation, and only a UNIQUE match counts.
+
+        Usage:
+          - OPTIONAL add-on: link it only to hosts whose LLDP local port number
+            differs from the ifIndex (Arista EOS, Mellanox Onyx, Cumulus). On
+            hosts where the two already agree, the module needs nothing extra and
+            this template changes nothing.
+          - needs the host's interface names too (ifName/ifDescr, standard Zabbix
+            SNMP interface template, or the module's {#IFNAME} fallback) so the
+            local port name can be resolved to an ifIndex.
+          - when the table is absent the module keeps the existing direct-index
+            lookup, so linking this template is always safe and backward
+            compatible.
+
+        The port descriptions (lldpLocPortDesc) are configured free text and may
+        carry site or customer names ("Uplink to core-DC1"); they stay on the
+        Zabbix server and are never sent anywhere by the module.
+
+        Standards-based (IEEE 802.1AB, LLDP-MIB); no external collector needed.
+      groups:
+        - name: Templates/Network devices
+      macros:
+        - macro: '{$NT.LLDP.LOCPORT.INTERVAL}'
+          value: 1h
+          description: 'Polling interval of the LLDP local-port table walk. The local port -> name mapping changes only on a config/hardware change, so a slow interval is plenty and keeps the per-switch load low.'
+      items:
+        - uuid: 704f5c191c4e4a848a5bdc172e24a7aa
+          name: 'LLDP: local port table (SNMP walk)'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[1.0.8802.1.1.2.1.3.7.1.2,1.0.8802.1.1.2.1.3.7.1.3,1.0.8802.1.1.2.1.3.7.1.4]'
+          key: nt.lldp.locports
+          delay: '{$NT.LLDP.LOCPORT.INTERVAL}'
+          history: 1h
+          value_type: TEXT
+          description: |
+            One bulk walk over the LLDP local-port table, indexed by
+            lldpLocPortNum (the same number that is the middle component of a
+            neighbour row's LLDP index):
+              lldpLocPortIdSubtype  1.0.8802.1.1.2.1.3.7.1.2  (5 = interfaceName, 7 = local, 3 = macAddress, ...)
+              lldpLocPortId         1.0.8802.1.1.2.1.3.7.1.3  (the port ID; an IF-MIB name when the subtype says so)
+              lldpLocPortDesc       1.0.8802.1.1.2.1.3.7.1.4  (free-text description / configured alias)
+
+            The module reads this item directly and parses the walk text
+            (LldpLocalPortParser), then resolves each local port to its real
+            ifIndex (LldpEdgeBuilder::localIfIndex). No preprocessing here -- the
+            walk text is the interface.

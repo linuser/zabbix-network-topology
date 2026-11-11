@@ -1252,6 +1252,32 @@ Community) — derselbe Schritt wie beim Spanning-Tree oben.
 
 ---
 
+### Wurzelverzeichnis aufräumen — Struktur ist mit dem Projekt gewachsen
+
+Die Repo-Wurzel trägt inzwischen viel nebeneinander: `actions/` (21 Controller),
+`topology/` (15+ Klassen), `templates/`, `tools/`, `docs/`, `tests/` **und** die
+acht `widget*/`-Verzeichnisse, dazu die losen Top-Level-Dateien (`manifest.json`,
+`deploy.sh`, `nt-install.sh`, Build-/CI-Skripte). Das ist keine Fehlfunktion,
+aber es liest sich nicht mehr auf einen Blick, und die acht gleichrangigen
+Widget-Ordner dominieren die Ansicht.
+
+**Idee:** die acht `widget*/` unter einen gemeinsamen Ordner fassen (z. B.
+`widgets/`), evtl. die losen Skripte unter `scripts/` o. Ä. bündeln — rein
+organisatorisch, kein Code-Verhalten.
+
+**Warum NICHT nebenbei und nicht in einem Feature-Commit:** der Modul-Ordnername
+ist **tragend** — ein falscher Pfad ist ein 404, und die Karte lädt gar nicht
+(siehe `v5-rename-drop-v6`). Jede Umbenennung muss durch **alle** Stellen, die
+Pfade fest verdrahten: `deploy.sh` (fünf Stellen je Widget), `nt-install.sh`/
+`nt-uninstall.sh`, `tools/sync-widget-shared.mjs`, `tools/check-parity.mjs`,
+`package.json` (`ci:eslint`-Pfade), die Release-ZIP-Schritte und die
+`.github`/`.gitlab`-CI. Zabbix' jsLoader und die Modul-Registrierung in der DB
+hängen zusätzlich an den Namen. Darum ein **eigener, geprüfter Schritt** mit
+voller Gate-Kette und einer echten Deploy-/Load-Abnahme auf einer Instanz, nicht
+zwischen zwei Features. Reihenfolge und Blast-Radius vor dem Anfassen abklopfen.
+
+---
+
 ## Geprueft und verworfen
 
 Vorschlaege, die einzeln geprueft und **nicht** weiterverfolgt werden. Sie

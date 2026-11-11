@@ -2,6 +2,30 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.10 — 2026-11-12
+
+### New
+
+- **Bind LLDP links to the right local interface on Arista EOS, Mellanox Onyx
+  and Cumulus (#31).** On these switches the LLDP *local* port number
+  (`lldpRemLocalPortNum`, the middle of the LLDP MIB index) is not the IF-MIB
+  ifIndex — the LLDP agent assigns its own numbering. Used directly it bound a
+  link to the wrong interface: local port 13 resolved to the SVI `Vlan13`
+  instead of the physical `Ethernet3/1` at ifIndex 3001, so the map showed the
+  SVI's counters and missed the physical port's down state. A new optional
+  template, **NT LLDP Local Ports by SNMP**, walks the `lldpLocPortTable`
+  (`lldpLocPortId`/`IdSubtype`/`Desc`), and the module now resolves each local
+  port to its real ifIndex: the typed Port ID wins when its subtype says it is
+  an interface name (5/7, never a MAC), the description is a unique fallback
+  only, and the binding is left unresolved when the two point at different
+  interfaces. The resolved name is matched against the host's own interface
+  names (ifName/ifDescr and the `{#IFNAME}` fallback) and only a unique match
+  counts; a uniquely resolved local identity is treated as proven and feeds the
+  #29 parallel-cable guard. When the table is absent the existing direct-index
+  lookup is kept, so linking the template is always safe and backward
+  compatible. Reported with real OID walks by rhysjoseph (PR #31); reimplemented
+  on our side with tests built from those walks.
+
 ## v5.6.9 — 2026-11-11
 
 ### Fixed
