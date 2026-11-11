@@ -482,7 +482,7 @@ final class LldpEdgeBuilder {
             $match_kind           = $row['match'];
             $neighbor_raw         = $row['raw'];
             $ambiguous_candidates = $row['ambiguous'];
-            [$idx, $port, $port_idx, $remote_port] = $row['ctx'];
+            [$idx, $port, $port_idx, $remote_port, $local_proven] = $row['ctx'];
             $src = $item['src'] ?? 'other';
             $ensureQ($rid);
             if (!$rhid) {
@@ -717,8 +717,11 @@ final class LldpEdgeBuilder {
             // die Kanten, die wir behalten, VOLLSTAENDIGER. Hier
             // abzubrechen wuerde also nichts sparen und stattdessen
             // halbfertige Kanten hinterlassen.
-            $lkeys = self::portKeys($port, $port_idx);
-            $rkeys = self::portKeys($remote_port, $fidx);
+            // $local_proven: lokaler ifIndex nur bei CDP bewiesen. $fidx stammt
+            // aus resolveRemotePort und ist damit immer ein bewiesener ifIndex
+            // des Nachbarn — beide fuettern den p:-Key (siehe portKeys/findMember).
+            $lkeys = self::portKeys($port, $port_idx, $local_proven);
+            $rkeys = self::portKeys($remote_port, $fidx, $fidx !== '');
             $eidx  = self::findMember($seen_edges[$edge_key] ?? [], $member_keys, $member_rep,
                                       (string) $rid, (string) $rhid, $src, $lkeys, $rkeys);
             if ($eidx === null && count($edges) >= self::MAX_EDGES) {
@@ -1200,13 +1203,22 @@ final class LldpEdgeBuilder {
         $idx      = '';
         $port     = '';
         $port_idx = '';
+        // Ist der lokale Index ein BEWIESENER ifIndex? Nur CDP (cdpCacheIfIndex,
+        // erster Teil des 2-teiligen Index). LLDPs lldpRemLocalPortNum (Mitte des
+        // 3-teiligen Index) kann vom ifIndex abweichen und ist deshalb unbewiesen
+        // — er darf kein Kabel aufspalten. Der Remote-Index aus
+        // resolveRemotePort() ist dagegen immer bewiesen (gegen die Portnamen des
+        // Nachbarn aufgeloest). findMember() nutzt das, um ein BEWEISBAR anderes
+        // Kabel nicht faelschlich zu vereinen (Issue #29).
+        $local_proven = false;
         if (strpos($item['key_'], '[') !== false) {
             $idx  = HostMetadata::ifaceParam($item['key_']);
             $port = $idx;
             if (preg_match('/^\d+\.(\d+)\.\d+$/', $idx, $pm)) {
-                $port = $pm[1];            // LLDP: Mitte = lokaler Port
+                $port = $pm[1];            // LLDP: Mitte = lokaler Port (unbewiesen)
             } elseif (preg_match('/^(\d+)\.\d+$/', $idx, $pm)) {
-                $port = $pm[1];            // CDP: erster Teil = ifIndex
+                $port = $pm[1];            // CDP: erster Teil = ifIndex (bewiesen)
+                $local_proven = true;
             }
             // Der ifIndex ist die Korrelationsgroesse — als ANZEIGE
             // taugt eine nackte "9" nichts, waehrend das Nachbar-Ende
@@ -1234,7 +1246,7 @@ final class LldpEdgeBuilder {
             $remote_port = self::capLabel($desc !== '' ? $desc : trim((string) ($rp['id'] ?? '')));
         }
 
-        return [$idx, $port, $port_idx, $remote_port];
+        return [$idx, $port, $port_idx, $remote_port, $local_proven];
     }
 
     /**
@@ -1659,15 +1671,45 @@ final class LldpEdgeBuilder {
      * normalised label otherwise (both, when both are known). Two reports
      * name the same cable end if they share any key.
      */
-    private static function portKeys(string $label, string $ifidx): array {
+    private static function portKeys(string $label, string $ifidx, bool $proven = false): array {
         $k = [];
         if ($ifidx !== '') {
             $k['i:' . $ifidx] = true;
+            // BEWIESENER ifIndex (CDP-cdpCacheIfIndex lokal, resolveRemotePort
+            // remote). Nur diese duerfen zwei Berichte als VERSCHIEDENE Kabel
+            // auseinanderhalten (idxConflict); 'i:' allein nicht, denn LLDPs
+            // lokale Portnummer steht auch unter 'i:' und kann vom ifIndex
+            // abweichen. Siehe findMember(), Issue #29.
+            if ($proven) {
+                $k['p:' . $ifidx] = true;
+            }
         }
         if ($label !== '') {
             $k['n:' . self::normPort($label)] = true;
         }
         return $k;
+    }
+
+    /**
+     * Widersprechen sich zwei Portschluessel-Saetze AM SELBEN Ende beweisbar?
+     * Nur wenn BEIDE einen bewiesenen ifIndex (p:) tragen und keiner davon
+     * uebereinstimmt. Labels (n:) und unbewiesene Indizes (i: ohne p:) zaehlen
+     * NICHT — die duerfen sich an den zwei Enden eines Kabels legitim
+     * unterscheiden. So trennt der Vergleich ein beweisbar anderes Kabel ab,
+     * ohne dasselbe Kabel, von beiden Enden verschieden benannt, zu spalten.
+     */
+    private static function idxConflict(array $a, array $b): bool {
+        $pa = [];
+        foreach ($a as $key => $_) {
+            if (strncmp($key, 'p:', 2) === 0) { $pa[$key] = true; }
+        }
+        if (!$pa) { return false; }
+        $pb = [];
+        foreach ($b as $key => $_) {
+            if (strncmp($key, 'p:', 2) === 0) { $pb[$key] = true; }
+        }
+        if (!$pb) { return false; }
+        return !array_intersect_key($pa, $pb);
     }
 
     /**
@@ -1690,15 +1732,35 @@ final class LldpEdgeBuilder {
      *
      *   1. a shared port key at either end -> same link
      *   2. the report carries no local port at all -> old behaviour, merge
-     *   3. an edge this reporter has NOT yet reported with this protocol
-     *      -> same link (the other end's view, or the other protocol's)
-     *   4. only when this reporter already reported every existing edge with
-     *      this protocol, on other ports, is it really a further cable.
+     *   3. an edge this reporter has NOT yet reported with this protocol,
+     *      UNLESS a proven ifIndex shows it is another cable -> same link
+     *   4. an edge the reporter reported port-less (same proven-index guard)
+     *      -> same link; otherwise it is a further cable.
      *
-     * The count is therefore exact: it is the number of distinct local
-     * ports one device reports for the neighbour over one protocol. What
-     * can go wrong in (3) is the PAIRING of member ends when labels are
-     * incomparable — never the number of lines drawn.
+     * THE PROVEN-INDEX GUARD (Issue #29)
+     * ----------------------------------
+     * Rule 3 is for "the same cable seen from the other end, or by the other
+     * protocol". But between two switches with several cables, some reported
+     * over CDP and some over LLDP, it fired even for a member that provably
+     * carries a DIFFERENT port at this end — merging two cables into one and
+     * pairing one cable's local port with another's remote port. A key is
+     * "proven" (p:) only when it is a real ifIndex: CDP's cdpCacheIfIndex
+     * locally, and a far port resolved against the neighbour's own port names.
+     * LLDP's local port number and bare labels are not — they may legitimately
+     * differ between the two ends of one cable. idxConflict() denies rules 3
+     * and 4 any member whose proven index at one end contradicts the report's.
+     *
+     * This needs the ports to RESOLVE. A CDP report always proves its local
+     * end; an LLDP report proves only its far end, and only when the neighbour's
+     * port names are known. ifName/ifDescr/ifAlias items supply them directly;
+     * where a host lacks those (e.g. Cisco's stock IOS template, which keys
+     * interfaces as net.if.status[ifOperStatus.<idx>] and carries the name only
+     * in the item name), PortNameParser reads the port name from the interface
+     * LLD's {#IFNAME} in the item name, so the far ports resolve there too. Only
+     * where neither source names the port does nothing resolve, no proven key
+     * exists, and a mixed CDP/LLDP pair falls back to the old merge of rules
+     * 3/4: fewer lines than cables, never a false split. So: exact where the
+     * ports resolve, conservatively merged where they do not.
      */
     private static function findMember(array $members, array $keys, array $rep,
             string $rid, string $rhid, string $src, array $lkeys, array $rkeys): ?int {
@@ -1715,7 +1777,14 @@ final class LldpEdgeBuilder {
             return $members[0];
         }
         foreach ($members as $m) {
-            if (!isset($rep[$m][$rid . '|' . $src])) {
+            // Regel 3, aber NICHT fuer ein beweisbar anderes Kabel: traegt das
+            // Mitglied am selben Ende einen bewiesenen ifIndex, der dem dieses
+            // Berichts widerspricht, ist es nicht "dieselbe Kante von der anderen
+            // Seite", sondern eine eigene Leitung (Issue #29: CDP- und
+            // LLDP-Kabel desselben Paars wurden sonst zusammengezogen).
+            if (!isset($rep[$m][$rid . '|' . $src])
+                    && !self::idxConflict($keys[$m][$rid] ?? [], $lkeys)
+                    && !self::idxConflict($keys[$m][$rhid] ?? [], $rkeys)) {
                 return $m;
             }
         }
@@ -1738,7 +1807,8 @@ final class LldpEdgeBuilder {
         // nimmt so die ERSTE geportete auf; eine zweite mit anderem Port
         // spaltet dann korrekt wieder ab.
         foreach ($members as $m) {
-            if (empty($keys[$m][$rid])) {
+            if (empty($keys[$m][$rid])
+                    && !self::idxConflict($keys[$m][$rhid] ?? [], $rkeys)) {
                 return $m;
             }
         }

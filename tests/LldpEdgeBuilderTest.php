@@ -31,6 +31,7 @@ spl_autoload_register(static function (string $class): void {
 });
 
 use Modules\NetworkTopology\Topology\LldpEdgeBuilder;
+use Modules\NetworkTopology\Topology\PortNameParser;
 
 $failures = 0;
 
@@ -1290,6 +1291,119 @@ $rSame = LldpEdgeBuilder::build($hLag, [
     ['hostid' => 'core', 'key_' => 'lldpRemSysName[0.1.2]', 'lastvalue' => 'acc', 'src' => 'lldp'],
 ]);
 check('gleicher Port, neuer RemIndex: eine Kante', count($rSame['edges']), 1);
+
+// ── Issue #29: parallele Kabel teils CDP, teils LLDP — nicht falsch vereinen ─
+// Zwischen zwei Switches fuenf Kabel; drei per CDP, zwei per LLDP gemeldet, an
+// beiden Enden. Jeder gemeldete Remote-Port loest auf genau ein ifName des
+// Nachbarn auf. Vor dem Fix zog Regel 3 das erste LLDP-Kabel in ein CDP-Kabel:
+// 3 statt 5 Links, einer mit Local-Port von Kabel 1 und Remote-Port von Kabel 3.
+// Der Proven-Index-Guard (CDP-ifIndex + aufgeloester Remote) trennt sie korrekt.
+// Muss in JEDER Report-Reihenfolge stimmen. Hostnamen erfunden.
+echo "\n  LldpEdgeBuilder — Issue #29 (CDP+LLDP gemischt)\n\n";
+$h29 = ['sw-a' => ['host' => 'sw-a', 'name' => 'sw-a'],
+        'sw-b' => ['host' => 'sw-b', 'name' => 'sw-b']];
+$names29 = [
+    'sw-a' => ['10111' => 'Gi1/0/11', '10125' => 'Gi1/1/1', '10126' => 'Gi1/1/2',
+               '10127' => 'Gi1/1/3', '10128' => 'Gi1/1/4'],
+    'sw-b' => ['10110' => 'Gi1/0/10', '10624' => 'Gi2/0/24', '10121' => 'Gi1/0/21',
+               '10127' => 'Gi1/1/3', '10627' => 'Gi2/1/3'],
+];
+$ports29 = [
+    'sw-a' => ['10111.1' => ['desc' => 'Gi1/0/10'], '10125.1' => ['desc' => 'Gi2/0/24'],
+               '10127.1' => ['desc' => 'Gi1/0/21'], '0.10126.1' => ['desc' => 'Gi1/1/3'],
+               '0.10128.1' => ['desc' => 'Gi2/1/3']],
+    'sw-b' => ['10110.1' => ['desc' => 'Gi1/0/11'], '10624.1' => ['desc' => 'Gi1/1/1'],
+               '10121.1' => ['desc' => 'Gi1/1/3'], '0.10127.1' => ['desc' => 'Gi1/1/2'],
+               '0.10627.1' => ['desc' => 'Gi1/1/4']],
+];
+$raw29A = [
+    ['hostid' => 'sw-a', 'key_' => 'cdpCacheDeviceId[10111.1]', 'lastvalue' => 'sw-b', 'src' => 'cdp'],
+    ['hostid' => 'sw-a', 'key_' => 'cdpCacheDeviceId[10125.1]', 'lastvalue' => 'sw-b', 'src' => 'cdp'],
+    ['hostid' => 'sw-a', 'key_' => 'cdpCacheDeviceId[10127.1]', 'lastvalue' => 'sw-b', 'src' => 'cdp'],
+    ['hostid' => 'sw-a', 'key_' => 'lldpRemSysName[0.10126.1]', 'lastvalue' => 'sw-b', 'src' => 'lldp'],
+    ['hostid' => 'sw-a', 'key_' => 'lldpRemSysName[0.10128.1]', 'lastvalue' => 'sw-b', 'src' => 'lldp'],
+    ['hostid' => 'sw-b', 'key_' => 'cdpCacheDeviceId[10110.1]', 'lastvalue' => 'sw-a', 'src' => 'cdp'],
+    ['hostid' => 'sw-b', 'key_' => 'cdpCacheDeviceId[10624.1]', 'lastvalue' => 'sw-a', 'src' => 'cdp'],
+    ['hostid' => 'sw-b', 'key_' => 'cdpCacheDeviceId[10121.1]', 'lastvalue' => 'sw-a', 'src' => 'cdp'],
+    ['hostid' => 'sw-b', 'key_' => 'lldpRemSysName[0.10127.1]', 'lastvalue' => 'sw-a', 'src' => 'lldp'],
+    ['hostid' => 'sw-b', 'key_' => 'lldpRemSysName[0.10627.1]', 'lastvalue' => 'sw-a', 'src' => 'lldp'],
+];
+$expect29 = ['Gi1/0/11' => 'Gi1/0/10', 'Gi1/1/1' => 'Gi2/0/24', 'Gi1/1/2' => 'Gi1/1/3',
+             'Gi1/1/3' => 'Gi1/0/21', 'Gi1/1/4' => 'Gi2/1/3'];
+$run29 = static function (string $order, array $raw, ?array $pnames = null) use ($h29, $ports29, $names29, $expect29) {
+    $r = LldpEdgeBuilder::build($h29, $raw, $ports29, [], [], [], [], [], $pnames ?? $names29);
+    check("#29 $order: fuenf Links", count($r['edges']), 5);
+    $pairs = [];
+    foreach ($r['edges'] as $e) {
+        $pairs[$e['ports']['sw-a'] ?? '?'] = $e['ports']['sw-b'] ?? '?';
+    }
+    ksort($pairs);
+    check("#29 $order: Paare korrekt (kein Kabel-Mix)", $pairs, $expect29);
+};
+$run29('A-zuerst', $raw29A);
+$run29('B-zuerst', array_merge(array_slice($raw29A, 5), array_slice($raw29A, 0, 5)));
+$run29('CDP-zuerst', array_merge(
+    array_values(array_filter($raw29A, static fn($x) => $x['src'] === 'cdp')),
+    array_values(array_filter($raw29A, static fn($x) => $x['src'] === 'lldp'))));
+// Auch kabelweise verschraenkt (sw-a/sw-b abwechselnd).
+$raw29I = [];
+for ($i = 0; $i < 5; $i++) { $raw29I[] = $raw29A[$i]; $raw29I[] = $raw29A[$i + 5]; }
+$run29('verschraenkt', $raw29I);
+
+// Finding #2 (Review): DASSELBE Kabel per CDP UND LLDP, Remote an beiden auf
+// denselben Port aufloesbar -> EINE Kante. Regel 1 teilt den aufgeloesten
+// Remote-ifIndex und vereint, bevor idxConflict ueberhaupt drankommt — kein
+// false split.
+$rBoth29 = LldpEdgeBuilder::build($h29, [
+    ['hostid' => 'sw-a', 'key_' => 'cdpCacheDeviceId[10111.1]', 'lastvalue' => 'sw-b', 'src' => 'cdp'],
+    ['hostid' => 'sw-a', 'key_' => 'lldpRemSysName[0.111.1]',   'lastvalue' => 'sw-b', 'src' => 'lldp'],
+], ['sw-a' => ['10111.1' => ['desc' => 'Gi1/0/10'], '0.111.1' => ['desc' => 'Gi1/0/10']]],
+   [], [], [], [], [], $names29);
+check('#29 dasselbe Kabel CDP+LLDP (aufloesbar): eine Kante', count($rBoth29['edges']), 1);
+
+// Finding #1 (Review) — BEKANNTE GRENZE, festgenagelt: loest der Nachbar-Port
+// NICHT auf (unueberwachter Nachbar, keine ifName-Items) und ist der LLDP-Local
+// unbewiesen, hat der Report keinen p:-Key. Der Guard kann dann nicht trennen
+// und faellt konservativ auf Merge zurueck (weniger Linien, NIE ein false
+// split). {#IFNAME} aus der Interface-LLD wuerde das heben. Dieser Test haelt
+// die Grenze sichtbar, statt sie still mitlaufen zu lassen.
+$rUnres29 = LldpEdgeBuilder::build($h29, [
+    ['hostid' => 'sw-a', 'key_' => 'cdpCacheDeviceId[10111.1]', 'lastvalue' => 'sw-b', 'src' => 'cdp'],
+    ['hostid' => 'sw-a', 'key_' => 'lldpRemSysName[0.10126.1]', 'lastvalue' => 'sw-b', 'src' => 'lldp'],
+], ['sw-a' => ['10111.1' => ['desc' => 'Gi1/0/10'], '0.10126.1' => ['desc' => 'Gi1/1/3']]]);
+check('#29 unaufloesbar: konservativer Merge (bekannte Grenze, kein Split)', count($rUnres29['edges']), 1);
+
+// Dieselbe Grenze, jetzt GEHOBEN per {#IFNAME} (Issue #29, Nebenbefund):
+// der Nachbar laeuft auf Zabbix' Stock-Cisco-Template, hat also KEINE
+// ifName-Items — der Portname steckt nur im Item-NAMEN. PortNameParser liest
+// ihn daraus, und mit den so gewonnenen Portnamen loest derselbe Report auf
+// und spaltet korrekt in ZWEI Kabel. End-to-End-Beleg, dass der Rueckfall den
+// #29-Guard auch auf Stock-Hosts greifen laesst. (Der Haupt-Item-Abruf holt
+// kein 'name'; diese Namen kommen in der Action aus einem Zweitabruf.)
+$stockRows29 = [];
+foreach ($names29 as $hid => $map) {
+    foreach ($map as $ifx => $pname) {
+        // So heissen die Interface-Items des Stock-Templates ({#IFNAME} im
+        // Namen), gekeyt per {#SNMPINDEX} == ifIndex.
+        $stockRows29[] = ['hostid' => $hid, 'key_' => "net.if.status[ifOperStatus.$ifx]",
+                          'name' => "Interface $pname(): Operational status"];
+        $stockRows29[] = ['hostid' => $hid, 'key_' => "net.if.in[ifHCInOctets.$ifx]",
+                          'name' => "Interface $pname(): Bits received"];
+    }
+}
+$names29fromItems = PortNameParser::build($stockRows29);
+check('#29 PortNameParser rekonstruiert die ifName-Karte', $names29fromItems, $names29);
+$run29('Stock-Cisco ({#IFNAME})', $raw29A, $names29fromItems);
+
+// Und der unaufloesbare Fall von oben, jetzt MIT den aus dem Item-Namen
+// gewonnenen Nachbar-Portnamen: beide Remote-Ports loesen auf (Gi1/0/10 ->
+// 10110, Gi1/1/3 -> 10127), die p:-Keys widersprechen -> zwei Kabel.
+$rLifted29 = LldpEdgeBuilder::build($h29, [
+    ['hostid' => 'sw-a', 'key_' => 'cdpCacheDeviceId[10111.1]', 'lastvalue' => 'sw-b', 'src' => 'cdp'],
+    ['hostid' => 'sw-a', 'key_' => 'lldpRemSysName[0.10126.1]', 'lastvalue' => 'sw-b', 'src' => 'lldp'],
+], ['sw-a' => ['10111.1' => ['desc' => 'Gi1/0/10'], '0.10126.1' => ['desc' => 'Gi1/1/3']]],
+   [], [], [], [], [], $names29fromItems);
+check('#29 Grenze gehoben: {#IFNAME} loest auf -> zwei Kabel', count($rLifted29['edges']), 2);
 
 // Ohne Port-Bezug (Comma-Liste, kein Bracket): altes Verhalten, eine Kante.
 $rNoPort = LldpEdgeBuilder::build($hLag, [

@@ -2,6 +2,41 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.8 — 2026-11-11
+
+### New
+
+- **Port names from the stock Cisco IOS template, no extra items needed.**
+  Zabbix's official *Cisco IOS by SNMP* template doesn't create
+  `ifName`/`ifDescr`/`ifAlias` items — it keys interfaces as
+  `net.if.status[ifOperStatus.<ifIndex>]` and carries the port name only in the
+  item name (`Interface Gi1/0/24(...): ...`, from the interface LLD's
+  `{#IFNAME}`). The module now reads the name from there as a fallback, so such
+  hosts get real port names and the far-end port resolution they enable. This
+  closes the limitation noted alongside #29: parallel links between two Cisco
+  switches on the stock template now separate correctly instead of falling back
+  to a conservative merge. The named sources still win where they exist; the
+  fallback only fills in for hosts that have none, and the main item fetch is
+  unchanged (the names come from a targeted secondary query, only for hosts
+  without port names and only when neighbour data is present).
+
+## v5.6.7 — 2026-11-11
+
+### Fixes
+
+- **Parallel links between two switches no longer mis-pair when some cables are
+  reported over CDP and others over LLDP.** `findMember()` merged a report into
+  the wrong member when the reporter had not yet described the pair over that
+  protocol — even when the member provably carried a different port at that end
+  — so the map showed fewer parallel links than exist, one of them pairing one
+  cable's local port with another cable's remote port. Reports now carry a
+  *proven* ifIndex key (CDP's `cdpCacheIfIndex`, and a far port resolved against
+  the neighbour's own port names), and a member whose proven index contradicts
+  the report is never treated as "the same cable from the other end". LLDP's
+  local port number and bare labels stay out of this, so a single cable
+  described differently from both ends still collapses to one line. Reported in
+  #29 with a reproduction and a cross-protocol regression check.
+
 ## v5.6.6 — 2026-11-10
 
 ### New

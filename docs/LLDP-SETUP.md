@@ -140,6 +140,15 @@ they do buy you:
 Note that `ifAlias` is free text from the device — it is truncated for display
 and, like every neighbour string, never trusted.
 
+**Stock Cisco IOS template, no `ifName` items?** Zabbix's official *Cisco IOS by
+SNMP* template doesn't create `ifName`/`ifDescr`/`ifAlias` items — it keys
+interfaces as `net.if.status[ifOperStatus.<ifIndex>]` and carries the port name
+only in the **item name** (`Interface Gi1/0/24(...): ...`, from the interface
+LLD's `{#IFNAME}`). The module reads the name from there as a fallback, so such
+hosts get port names — and the far-end port resolution they enable — without you
+having to add extra `ifName[<ifIndex>]` items. The named sources above still win
+where they exist; this only fills in for hosts that have none.
+
 ---
 
 ## What you have to do

@@ -13,6 +13,7 @@ use Modules\NetworkTopology\Topology\ExpectedLinks;
 use Modules\NetworkTopology\Topology\HopScope;
 use Modules\NetworkTopology\Topology\ManualLinks;
 use Modules\NetworkTopology\Topology\NodeBuilder;
+use Modules\NetworkTopology\Topology\PortNameParser;
 use Modules\NetworkTopology\Topology\ProblemLoader;
 use Modules\NetworkTopology\Topology\SlaResolver;
 use Modules\NetworkTopology\Topology\VlanParser;
@@ -753,6 +754,55 @@ class NetworkTopologyData extends NetworkTopologyController {
                 }
             }
             unset($item, $lv_show);
+        }
+
+        // ── 4b. PORT-NAMEN-RUECKFALL aus dem Interface-Item-NAMEN ({#IFNAME}) ─
+        // Hosts auf Zabbix' offiziellem „Cisco IOS by SNMP"-Template tragen
+        // KEINE ifName/ifDescr/ifAlias-Items — den Portnamen kennt dort nur der
+        // Item-NAME („Interface Gi1/0/9: …"). Ohne ihn loest
+        // resolveRemotePort() den Gegenport nicht auf, der #29-Proven-Index-
+        // Guard bleibt wirkungslos, und mehrere Kabel zwischen zwei solchen
+        // Switches fallen auf den konservativen Merge zurueck (Issue #29,
+        // Nebenbefund). Der Haupt-Item-Abruf holt bewusst kein 'name'-Feld
+        // (halbe Nutzlast, eigene Test-Zusicherung) — deshalb ein GEZIELTER
+        // Zweitabruf, und zwar nur:
+        //   • wenn es ueberhaupt Nachbardaten gibt (sonst ist die
+        //     Portaufloesung gegenstandslos), und
+        //   • nur fuer Hosts OHNE bereits bekannten Portnamen — ein Host mit
+        //     ifName-Items (der Normalfall) wird gar nicht erst abgefragt, die
+        //     Kosten sind dort also null.
+        if (!empty($metrics['lldp_raw'])) {
+            $named_hosts = array_map('strval', array_keys($metrics['port_names'] ?? []));
+            $missing     = array_values(array_diff(array_map('strval', $hostids), $named_hosts));
+            if ($missing) {
+                $fb_rows = [];
+                foreach (array_chunk($missing, self::HOSTS_PER_ITEM_CHUNK) as $mchunk) {
+                    // startSearch => LIKE 'net.if.%' (Praefix, nicht Substring):
+                    // holt die Interface-Items des Stock-Templates, nicht
+                    // nt.if.stp u. ae. 'name' ist hier der ganze Zweck.
+                    $teil = API::Item()->get([
+                        'output'      => ['hostid', 'key_', 'name'],
+                        'hostids'     => $mchunk,
+                        'search'      => ['key_' => 'net.if.'],
+                        'startSearch' => true,
+                        'monitored'   => true,
+                    ]);
+                    foreach ($teil as $it) {
+                        $fb_rows[] = $it;
+                    }
+                    $this->item_zahl += count($teil);
+                }
+                // Nur fuellen, nie ueberschreiben: ifName/ifDescr/ifAlias
+                // bleiben die erste Wahl (dieser Zweig sieht ohnehin nur Hosts
+                // ganz ohne Portnamen).
+                foreach (PortNameParser::build($fb_rows) as $hid => $map) {
+                    foreach ($map as $ifx => $nm) {
+                        if (!isset($metrics['port_names'][$hid][$ifx])) {
+                            $metrics['port_names'][$hid][$ifx] = $nm;
+                        }
+                    }
+                }
+            }
         }
 
         $lldp_raw     = $metrics['lldp_raw'];
