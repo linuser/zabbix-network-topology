@@ -2,6 +2,23 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.9 — 2026-11-11
+
+### Fixed
+
+- **Technical map: a link that goes down between automatic refreshes now
+  repaints without a reload (#32).** The 30-second refresh updated node data and
+  re-ran the traffic heatmap, but never re-derived the per-link port status on
+  the edges already in the graph — the heatmap reads `portDown` from the edge,
+  and that value was frozen at first render. A port flipping up/down (or its
+  measured traffic, errors, discards, uptime and STP state) therefore stayed on
+  the old styling until a full re-render. The refresh handler now re-derives
+  those measured fields from the fresh response with the **same** edge-building
+  logic the initial render uses, keyed to each existing edge by host pair and
+  port index, so green → red dashed → green happens live on the open map.
+  Cables that actually appear or disappear still arrive with the next full
+  render, as before. Reported by rhysjoseph with a clean repro.
+
 ## v5.6.8 — 2026-11-11
 
 ### New

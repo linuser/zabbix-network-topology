@@ -572,6 +572,56 @@ if (wlan) {
     pruefe('Nicht-UniFi-Kante ist nie WLAN',    wlan.e3Wireless, false);
 }
 
+// #32: Auto-Refresh frischte den Portzustand auf der BESTEHENDEN Kante nicht
+// auf — ein zwischenzeitlich ausgefallener Port blieb gruen bis zum Voll-
+// Render, weil die Heatmap portDown von der Kante liest und niemand ihn nachzog.
+// measuredEdgeStatus baut den frischen Stand mit DERSELBEN Logik wie der
+// Erstaufbau und liefert ihn je richtungsunabhaengigem edgeStatusKey, sodass
+// der Refresh ihn auf genau die schon gezeichnete Kante uebertragen kann.
+console.log('\n  #32: Refresh zieht Portzustand auf bestehende Kante nach\n');
+const rep = szenario('refresh-repaint', { lang: 'en_US' }, `
+    const B = await import(${JSON.stringify(MODULE('build-elements.js'))});
+    const nodes = [{ id: 'a', label: 'sw-a' }, { id: 'b', label: 'sw-b' }];
+    // Gemessene LLDP-Kante mit Portindizes je Seite (Arista 3001 <-> Mellanox 110).
+    // stp: dot1dStpPortState an Seite a (2=blocking) -> abgeleitetes _isStpBlocked.
+    const mk = (down, stp) => [{ source: 'a', target: 'b', src: ['lldp'],
+        ports: { a: 'Ethernet3/1', b: 'Eth1/2' }, port_idx: { a: '3001', b: '110' },
+        port_metrics: { a: { in: 10, out: 20, down: down, stp: stp }, b: { in: 20, out: 10, stp: 5 } } }];
+    // Bestehende Kante (alter Stand: Port up, STP forwarding), wie sie schon im Graphen steht.
+    const alt = B.buildEdgeElements(mk(false, 5), nodes)[0].data;
+    const key = B.edgeStatusKey(alt);
+    const frischDown = B.measuredEdgeStatus(mk(true,  5), nodes);  // neuer Stand: Port down
+    const frischUp   = B.measuredEdgeStatus(mk(false, 5), nodes);  // Erholung
+    const frischBlk  = B.measuredEdgeStatus(mk(false, 2), nodes);  // Redundanzlink blockt jetzt
+    console.log(JSON.stringify({
+        altPortDown:    alt.portDown,                             // false: Ausgangslage up
+        altBlocked:     alt._isStpBlocked,                        // false: forwarding
+        count:          Object.keys(frischDown).length,           // nur die eine LLDP-Kante
+        keyMatcht:      Object.prototype.hasOwnProperty.call(frischDown, key),
+        frischDown:     frischDown[key] ? frischDown[key].portDown : 'NOKEY',  // true
+        frischUp:       frischUp[key]   ? frischUp[key].portDown   : 'NOKEY',  // false
+        // _isStpBlocked ist ABGELEITET (nicht stpSrc/stpTgt) und muss mit
+        // uebertragen werden, sonst bleibt ein frisch geblockter Link aktiv gezeichnet.
+        frischBlkFlag:  frischBlk[key] ? frischBlk[key]._isStpBlocked : 'NOKEY',  // true
+        frischUpFlag:   frischUp[key]  ? frischUp[key]._isStpBlocked  : 'NOKEY',  // false
+        traegtTraffic:  !!(frischDown[key] && frischDown[key].trafficIn !== undefined),
+        richtungsEgal:  B.edgeStatusKey({ source: 'a', target: 'b', portSrcIdx: '3001', portTgtIdx: '110' })
+                     === B.edgeStatusKey({ source: 'b', target: 'a', portSrcIdx: '110', portTgtIdx: '3001' }),
+    }));
+`);
+if (rep) {
+    pruefe('Ausgangslage: Port ist up (portDown false)', rep.altPortDown, false);
+    pruefe('Ausgangslage: Link forwardet (nicht geblockt)', rep.altBlocked, false);
+    pruefe('genau eine LLDP-Kante im frischen Stand',    rep.count, 1);
+    pruefe('frischer Stand traegt denselben Kantenschluessel', rep.keyMatcht, true);
+    pruefe('Port down -> frischer portDown ist true',    rep.frischDown, true);
+    pruefe('Erholung -> frischer portDown ist false',    rep.frischUp, false);
+    pruefe('STP-Block -> frisches _isStpBlocked ist true', rep.frischBlkFlag, true);
+    pruefe('STP forwarding -> frisches _isStpBlocked ist false', rep.frischUpFlag, false);
+    pruefe('frischer Stand traegt auch den Traffic mit',  rep.traegtTraffic, true);
+    pruefe('Schluessel ist richtungsunabhaengig',         rep.richtungsEgal, true);
+}
+
 console.log('\n  VLAN-Filter: nur das gewaehlte VLAN hell\n');
 const vf = szenario('vlan-filter', { lang: 'en_US' }, `
     const V = await import(${JSON.stringify(MODULE('vlan-filter.js'))});

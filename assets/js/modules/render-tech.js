@@ -51,7 +51,7 @@ import { collapseLeaves, bindCollapse, leafCandidates, collapsePref,
          COLLAPSE_SCHWELLE } from './collapse-leaves.js';
 import { buildLayoutConfig, letzterLayoutGrund } from './layouts.js';
 import { buildCytoscapeStyle } from './render-tech-style.js';
-import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements, tagWlanAp } from './build-elements.js';
+import { injectInternetCloud, injectGhostNodes, buildNodeElements, buildEdgeElements, tagWlanAp, measuredEdgeStatus, edgeStatusKey } from './build-elements.js';
 import { isFocusActive, filterToFocus, dropFocus, renderFocusBanner } from './focus-mode.js';
 import { initClientFocus, revealClientsOf, hideAllClients, isClientNode } from './client-focus.js';
 import { toast, toastTruncatedOnce } from './toast.js';
@@ -956,6 +956,21 @@ export function render(wrap, nodes, edges, dataUrl) {
                 updateKpi(_kpiNodes, window._ntCy);
                 window._ntCy && window._ntCy.edges('[id^="ml_"]').forEach(function(e) {
                     e.data('tLabel', edgeLabel(window._ntCy, e.source().id(), e.target().id()));
+                });
+                // #32: gemessenen Portzustand auf die BESTEHENDEN LLDP-Kanten
+                // nachziehen, BEVOR die Heatmap neu rechnet. Der In-Place-Update
+                // oben fasst nur Knoten an; die Heatmap liest portDown/Traffic
+                // aber von der Kante, und die stand sonst auf dem Stand des
+                // Erstaufbaus — ein zwischenzeitlich ausgefallener Port blieb
+                // gruen bis zum naechsten Voll-Render. measuredEdgeStatus baut
+                // die frischen Werte mit DERSELBEN Logik wie der Erstaufbau, je
+                // richtungsunabhaengigem edgeStatusKey; strukturell Neues/
+                // Entferntes kommt wie bisher erst mit dem Voll-Render.
+                const _freshStatus = measuredEdgeStatus(data.edges || [], data.nodes || []);
+                window._ntCy.edges('[?isLLDP]').forEach(function(edge) {
+                    const _f = _freshStatus[edgeStatusKey(edge.data())];
+                    if (!_f) return;
+                    Object.keys(_f).forEach(function(k) { edge.data(k, _f[k]); });
                 });
                 applyTrafficHeatmap(window._ntCy);
                 // Laufende Ausfall-Simulation neu rechnen — der In-Place-

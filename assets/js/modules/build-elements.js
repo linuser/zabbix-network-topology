@@ -638,3 +638,49 @@ export function buildEdgeElements(edges, nodes) {
     });
     return annotateBundles(elements);
 }
+
+// Stabiler Schluessel einer Kante aus Hostpaar + Portindex-Paar,
+// richtungsunabhaengig (beide Paare sortiert). Der Auto-Refresh braucht ihn,
+// um gemessene Portwerte auf die SCHON GEZEICHNETE Cytoscape-Kante zu
+// uebertragen, ohne neu zu layouten — die Kanten-id ('e'+i) ist dafuer
+// unbrauchbar, weil i an der Array-Reihenfolge haengt. Parallele Member
+// desselben Hostpaars trennt das Portindex-Paar; Member ganz ohne Portindex
+// tragen auch keine Port-Metrik, ihre Kollision ist damit folgenlos.
+export function edgeStatusKey(d) {
+    const pair = [String(d.source), String(d.target)].sort().join('\u0001');
+    const idx  = [String(d.portSrcIdx || ''), String(d.portTgtIdx || '')].sort().join('\u0001');
+    return pair + '\u0002' + idx;
+}
+
+// Nur die GEMESSENEN/abgeleiteten Felder einer Kante: alles, was zwischen zwei
+// Refreshes kippen kann und was applyTrafficHeatmap()/link-quality.js liest.
+// Strukturelles (Buendel-Geometrie bundleIdx/cpd/portShift, Ghost-/Stale-
+// Flags, Portlabels) bleibt bewusst aussen vor — das aendert sich nur beim
+// Voll-Render, und es zu ueberschreiben wuerde ein collapstes Buendel zerlegen.
+// ABGELEITETE Felder (_isStpBlocked, _unifiWireless) gehoeren MIT in die Liste,
+// nicht nur ihre Rohwerte: applyTrafficHeatmap liest den BOOLEAN _isStpBlocked
+// (nicht stpSrc/stpTgt direkt) und _unifiWireless. stpSrc/stpTgt allein zu
+// uebertragen faerbte einen frisch geblockten Redundanzlink erst beim
+// Voll-Render gedimmt — genau die #32-Luecke, nur fuer STP statt portDown.
+export const MEASURED_EDGE_FIELDS = ['trafficIn', 'trafficOut', 'tLabel', 'portDown',
+    'ifaceDown', 'ifaceErr', 'ifaceDrop', 'ifaceDownRatio', 'capBps', 'perLink',
+    'portErr', 'portDrop', 'portSrcUptime', 'portTgtUptime', 'stpSrc', 'stpTgt',
+    '_isStpBlocked', '_unifiWireless', 'confirmed', 'reporters', 'confidence'];
+
+// Aus frischen Backend-Kanten den gemessenen Stand je edgeStatusKey. Baut die
+// Kanten mit DERSELBEN Logik wie der Erstaufbau (buildEdgeElements), damit
+// Refresh und Render den Portzustand nie verschieden ableiten — genau die
+// Luecke aus #32: der Refresh liess portDown auf der bestehenden Kante stehen,
+// weil die Heatmap ihn von dort las und niemand ihn nachzog. Reine Funktion
+// (kein Cytoscape) -> ci:frontend kann sie pruefen.
+export function measuredEdgeStatus(edges, nodes) {
+    const out = {};
+    buildEdgeElements(edges || [], nodes || []).forEach(function(el) {
+        const d = el.data;
+        if (!d || !d.isLLDP) return;
+        const m = {};
+        MEASURED_EDGE_FIELDS.forEach(function(k) { m[k] = d[k]; });
+        out[edgeStatusKey(d)] = m;
+    });
+    return out;
+}
