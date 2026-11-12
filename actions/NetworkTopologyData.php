@@ -136,6 +136,35 @@ class NetworkTopologyData extends NetworkTopologyController {
     private const CACHE_TTL = 60;
 
     /**
+     * #35 Kaltaufbau-Schutz — drei zusammengehoerige Groessen.
+     *
+     * Der 60-s-Response-Cache (CACHE_TTL) deckt nur TREFFER ab. Ein MISS —
+     * abgelaufen, erster Aufruf, Tab nach Pause — baut den ganzen Graphen teuer
+     * neu, und der items:last-Rueckfall kann auf partitioniertem MariaDB-History
+     * so lange ueber alte Partitionen scannen, dass das Gateway (nginx-504) vorher
+     * abbricht. Parallele Kalt-Requests desselben Users taten das bisher ALLE
+     * zugleich (Thundering Herd). #35 aus dem Feld, mit Zahlen: 104 Mio Zeilen,
+     * 33 Tagespartitionen, 30-s-Timeout -> 504; mit Single-Flight + letztem
+     * gutem Stand 1,8-2 s.
+     *
+     *   REBUILD_LOCK_TTL — Lebensdauer der Single-Flight-Sperre. Selbstheilung,
+     *     falls der Builder nicht freigibt; in der Groessenordnung der
+     *     Gateway-Frist.
+     *   SNAPSHOT_TTL     — der "letzte gute Stand", den wartende Requests
+     *     bekommen, waehrend einer baut. Grosszuegig, damit der Normalfall
+     *     (Snapshot da) fast immer greift und nur der allererste Aufruf wirklich
+     *     kalt ist.
+     *   REBUILD_WAIT_*   — ganz kalt (noch kein Snapshot): so lange auf den
+     *     frischen Cache des Builders warten, bevor man doch selbst baut. Kurz
+     *     gehalten, um keinen FPM-Worker lange zu binden; der Erst-Herd ist ein
+     *     einmaliger Preis, danach existiert immer ein Snapshot.
+     */
+    private const REBUILD_LOCK_TTL   = 30;
+    private const SNAPSHOT_TTL       = 600;
+    private const REBUILD_WAIT_TRIES = 10;
+    private const REBUILD_WAIT_US    = 300000;   // 0,3 s × 10 = bis 3 s
+
+    /**
      * Zeitfenster fuer den schnellen Weg in fetchLastValues(), in Sekunden.
      *
      * Eine Stunde, und die Zahl ist gemessen, nicht gewaehlt: 15 Minuten
@@ -389,6 +418,49 @@ class NetworkTopologyData extends NetworkTopologyController {
             return;
         }
 
+        // #35 Kaltaufbau-Schutz (Single-Flight + Stale-While-Rebuild).
+        // Cache-Miss: GENAU EINER baut neu. Die Sperre ist pro User+Map (NtCache
+        // keyt die uid und die cache_parts mit). Fail-open ohne APCu -> lock()
+        // gibt true, jeder baut wie bisher.
+        $rebuild_lock = NtCache::lock('data_rebuild', $cache_parts, self::REBUILD_LOCK_TTL);
+        if (!$rebuild_lock) {
+            // Ein anderer Request baut gerade. Statt eines zweiten teuren Baus:
+            $snapshot = NtCache::get('data_snapshot', $cache_parts);
+            if (is_array($snapshot)) {
+                // Letzter guter Stand (hoechstens SNAPSHOT_TTL alt). respondData
+                // behandelt ihn wie einen Cache-Treffer — derselbe Pfad, den der
+                // 60-s-Cache oben nimmt, inklusive topo_changes-Diff.
+                $this->respondData($snapshot, $cache_parts, $requested_groups, count($groupids), $_t0, true, $scope_info);
+                return;
+            }
+            // Ganz kalt, noch kein Snapshot: kurz auf den frischen Cache des
+            // Builders warten, dann ausliefern. Das ist der einmalige Erst-Aufruf.
+            for ($_w = 0; $_w < self::REBUILD_WAIT_TRIES; $_w++) {
+                usleep(self::REBUILD_WAIT_US);
+                $fresh = NtCache::get('data_payload', $cache_parts);
+                if (is_array($fresh)) {
+                    $this->respondData($fresh, $cache_parts, $requested_groups, count($groupids), $_t0, true, $scope_info);
+                    return;
+                }
+            }
+            // Wartefenster erschoepft (der Builder braucht laenger als wir warten):
+            // lieber selbst bauen als eine leere Karte zeigen. Ohne Sperre — die
+            // bleibt beim Erstbauer, unser unlock() unten laeuft deshalb ins Leere
+            // (ist durch $rebuild_lock=false gegen das Freigeben fremder Sperren
+            // geschuetzt).
+        } else {
+            // Double-checked: zwischen dem Miss oben und dieser Sperre kann ein
+            // anderer Builder fertig geworden und den frischen Cache gesetzt
+            // haben. Dann seinen Stand ausliefern statt ein zweites Mal teuer zu
+            // bauen — und die eben genommene Sperre gleich wieder freigeben.
+            $fresh = NtCache::get('data_payload', $cache_parts);
+            if (is_array($fresh)) {
+                NtCache::unlock('data_rebuild', $cache_parts);
+                $this->respondData($fresh, $cache_parts, $requested_groups, count($groupids), $_t0, true, $scope_info);
+                return;
+            }
+        }
+
         // ── 1. HOSTS ──────────────────────────────────────────────────────
         // proxyid + proxy_groupid sind seit Zabbix 7.0 verfügbar (in 6.x hieß
         // proxyid noch "proxy_hostid"). Bei Verwendung in älteren Versionen
@@ -427,6 +499,12 @@ class NetworkTopologyData extends NetworkTopologyController {
         $hosts = API::Host()->get($host_query);
 
         if (!$hosts) {
+            // #35: die Single-Flight-Sperre vor dem Verlassen freigeben, sonst
+            // laeuft sie erst nach REBUILD_LOCK_TTL ab und wartende Requests
+            // bekaemen bis dahin nur den (hier leeren) Stand.
+            if ($rebuild_lock) {
+                NtCache::unlock('data_rebuild', $cache_parts);
+            }
             $this->jsonResponse(['nodes' => [], 'edges' => []]);
             return;
         }
@@ -1085,6 +1163,15 @@ class NetworkTopologyData extends NetworkTopologyController {
             'edges_truncated' => LldpEdgeBuilder::lastTruncated(),
         ];
         NtCache::set('data_payload', $cache_parts, $core, self::CACHE_TTL);
+        // #35: denselben Stand zusaetzlich als "letzter guter Snapshot" ablegen
+        // (laenger als der 60-s-Cache), damit wartende Requests ihn waehrend des
+        // naechsten Kaltaufbaus bekommen, statt selbst teuer zu bauen. Danach die
+        // Single-Flight-Sperre freigeben — nur wenn wir sie halten (ein
+        // Wartefenster-Ueberlauf baut ohne Sperre, siehe oben).
+        NtCache::set('data_snapshot', $cache_parts, $core, self::SNAPSHOT_TTL);
+        if ($rebuild_lock) {
+            NtCache::unlock('data_rebuild', $cache_parts);
+        }
 
         $this->respondData($core, $cache_parts, $requested_groups, count($groupids), $_t0, false, $scope_info);
     }

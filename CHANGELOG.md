@@ -2,6 +2,28 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.11 — 2026-11-12
+
+### Fixed
+
+- **Concurrent cold rebuilds no longer pile up — simultaneous refreshes share
+  one rebuild and get the last good snapshot meanwhile (#35, part 1).** The
+  `network.topology.data` request caches its expensive payload for 60 s, but a
+  *miss* (expired, first open, a tab returning after a pause) rebuilt the whole
+  graph, and several of those at once each ran the full build. On a large,
+  partitioned MariaDB history the `items:last` fallback can scan old partitions
+  long enough to hit the gateway's read timeout (HTTP 504), and the pile-up made
+  it worse. Now, per user and map selection, a single-flight lock lets exactly
+  one request rebuild; concurrent requests serve the last good snapshot (a
+  longer-lived copy of the last successful build) instead of launching their own
+  rebuild, and a genuinely cold request with no snapshot yet waits briefly for
+  the in-flight build rather than duplicating it. The lock self-heals via a TTL,
+  and without APCu everything is fail-open — every request builds exactly as
+  before. This addresses the "simultaneous refreshes should share the rebuild"
+  half of #35; shortening the single cold build itself (prepared history from
+  closed partitions) is tracked separately. Reported with detailed measurements
+  by rhysjoseph.
+
 ## v5.6.10 — 2026-11-12
 
 ### New

@@ -121,4 +121,39 @@ final class NtCache {
         }
         apcu_store(self::key($namespace, $uid, $parts), $value, $ttl);
     }
+
+    /**
+     * Single-Flight-Sperre (#35). Atomar: liefert true, wenn der Aufrufer die
+     * Sperre bekommt (und damit als Einziger neu bauen soll), false, wenn sie
+     * schon jemand haelt. `apcu_add` schreibt nur, wenn der Schluessel NICHT
+     * existiert — das ist die ganze Atomizitaet, kein eigenes Locking noetig.
+     *
+     * FAIL-OPEN wie der ganze Cache: ohne APCu/User gibt es kein Single-Flight,
+     * dann baut jeder Request selbst — exakt das bisherige Verhalten. Deshalb
+     * `true` (= "du haelst die Sperre, bau"), nicht `false`.
+     *
+     * Die TTL ist eine SELBSTHEILUNG, kein Korrektheitsmittel: stuerzt der
+     * Builder ab oder kehrt er auf einem frueh-return zurueck, ohne freizugeben,
+     * laeuft die Sperre nach $ttl von selbst ab. Sie gehoert deshalb in die
+     * Groessenordnung der Gateway-Frist, nicht laenger.
+     */
+    public static function lock(string $namespace, array $parts, int $ttl): bool {
+        $uid = self::uid();
+        if ($uid <= 0 || !function_exists('apcu_add')) {
+            return true;
+        }
+        return apcu_add(self::key($namespace, $uid, $parts), 1, $ttl);
+    }
+
+    /**
+     * Single-Flight-Sperre freigeben. No-Op ohne APCu/User. Nur der Halter ruft
+     * das — ein fremdes Delete wuerde die Sperre eines anderen Builders loeschen.
+     */
+    public static function unlock(string $namespace, array $parts): void {
+        $uid = self::uid();
+        if ($uid <= 0 || !function_exists('apcu_delete')) {
+            return;
+        }
+        apcu_delete(self::key($namespace, $uid, $parts));
+    }
 }
