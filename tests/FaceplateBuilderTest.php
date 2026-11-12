@@ -266,6 +266,43 @@ $items = [
 $r = FaceplateBuilder::build($items);
 check('net.if.speed 10G bleibt 1e10', $r['ports'][0]['speed'], 1.0e10);
 
+// C1200: separate copper and SFP+ labels; neither ifIndex nor the last digit
+// is the faceplate slot. Unpolled uplink identities still describe the bank.
+$items = [];
+$labels = array_combine(range(1, 24), array_map(static function (int $n): string {
+    return 'GigabitEthernet' . $n;
+}, range(1, 24))) + [49 => 'Te1', 50 => 'Te2', 51 => 'Te3', 52 => 'Te4'];
+foreach ($labels as $ix => $name) {
+    $items[] = ['key_' => 'nt.if.name[ifName.' . $ix . ']', 'lastvalue' => $name];
+    if ($ix !== 50 && $ix !== 52) {
+        $items[] = ['key_' => 'net.if.status[ifOperStatus.' . $ix . ']',
+                    'name' => 'Interface ' . $name . '(): Operational status', 'lastvalue' => $ix === 51 ? '2' : '1'];
+    }
+}
+$items[] = ['key_' => 'lldpRemSysName[0.49.1]', 'lastvalue' => 'lab-peer'];
+$r = FaceplateBuilder::build($items);
+$ports = array_column($r['ports'], null, 'n');
+check('C1200 24 copper plus four SFP+ slots', [$r['copper'], $r['sfp']], [24, 4]);
+check('C1200 Gi24 is copper', [$ports[24]['name'], $ports[24]['kind']], ['GigabitEthernet24', 'rj45']);
+check('C1200 Te1 stays bound to ifIndex 49 and its LLDP neighbour',
+    [$ports[25]['ifindex'] ?? null, $ports[25]['kind'] ?? null, $ports[25]['nb']['host'] ?? null], ['49', 'sfp', 'lab-peer']);
+check('C1200 Te3 stays in slot 27 when Te2 is unpolled', [$ports[27]['ifindex'] ?? null, $ports[27]['oper'] ?? null], ['51', 2]);
+check('C1200 unpolled Te2 is an empty slot', isset($ports[26]), false);
+
+$cbs350Items = array_map(static function (array $item): array {
+    if (strpos($item['key_'], 'ifName.') !== false) {
+        $item['lastvalue'] = preg_replace('/(\d+)$/', '1/0/$1', $item['lastvalue']);
+    }
+    return $item;
+}, $items);
+$r = FaceplateBuilder::build($cbs350Items);
+check('CBS350 24-port renders its monitored ports in a 24+4 chassis', [$r['layout'], count($r['ports'])], ['24+4', 26]);
+$cbs350Items[] = ['key_' => 'net.if.status[ifOperStatus.101]',
+                   'name' => 'Interface Gi2/0/1(): Operational status', 'lastvalue' => '1'];
+$ports = array_column(FaceplateBuilder::build($cbs350Items)['ports'], 'n', 'ifindex');
+check('Cisco multi-member stack uses the general numbering rules',
+    $ports[101] ?? null, 27);
+
 // Port 5 ohne Wert, Port 7 ganz weg: keine Umnummerierung.
 $items = array_values(array_filter(genericSwitch(26), static function (array $it): bool {
     return strpos($it['key_'], 'ifHighSpeed.7]') === false && strpos($it['key_'], 'ifOperStatus.7]') === false
