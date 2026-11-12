@@ -121,7 +121,11 @@ final class FaceplateBuilder {
         // Ein Host ist entweder SNMP ODER UniFi (andere Vorlage), nie beides.
         $ifs += self::collectUniFi($items, $problems);
         $phys = self::physical($ifs);
-        $nums = self::portNumbers($phys);
+        $cisco = self::cisco24PortNumbers($ifs, $phys);
+        $nums = $cisco ?? self::portNumbers($phys);
+        if ($cisco !== null && $layout === 'auto') {
+            $layout = '24+4';
+        }
 
         [$name, $copper, $sfp] = self::pickLayout($nums ? max($nums) : 0, $layout);
         $slots = $copper + $sfp;
@@ -486,6 +490,54 @@ final class FaceplateBuilder {
             $out[$ifx] = $if;
         }
         return $out;
+    }
+
+    /**
+     * Cisco C1200 and CBS350 24-port switches can number copper and uplink
+     * ports separately, with or without a 1/0/ prefix. The uplink ifIndexes
+     * can be 49..52, so neither trailing digits nor an offset locates them.
+     * Include name-only metadata when identifying the banks so an empty SFP
+     * cage still gets a slot, but render only the monitored ports.
+     *
+     * @return array<string|int, int>|null
+     */
+    private static function cisco24PortNumbers(array $ifs, array $phys): ?array {
+        $numbers = [];
+        $prefix = null;
+        $hasCopperBank = false;
+        $hasUplink = false;
+        foreach ($ifs as $ifx => $if) {
+            $name = trim($if['name'] ?? '');
+            if (!preg_match('/^(Gi(?:gabitEthernet)?|Te(?:nGigabitEthernet)?)(1\/0\/)?([1-9][0-9]?)$/i', $name, $m)) {
+                if (isset($phys[$ifx])) {
+                    return null;
+                }
+                continue;
+            }
+            $prefix ??= $m[2];
+            if ($prefix !== $m[2]) {
+                return null;
+            }
+            $n = (int) $m[3];
+            if (strncasecmp($m[1], 'Gi', 2) === 0) {
+                if ($n > 24) {
+                    return null;
+                }
+                $hasCopperBank = $hasCopperBank || $n > 16;
+            } elseif ($n <= 4) {
+                $n += 24;
+                $hasUplink = true;
+            } else {
+                return null;
+            }
+            $numbers[$ifx] = $n;
+        }
+        if (!$hasCopperBank || !$hasUplink || count(array_unique($numbers)) !== count($numbers)) {
+            return null;
+        }
+        $numbers = array_intersect_key($numbers, $phys);
+        asort($numbers, SORT_NUMERIC);
+        return $numbers;
     }
 
     /**

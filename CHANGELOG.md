@@ -2,6 +2,16 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.11 — Unreleased
+
+### Fixed
+
+- **Cisco 24-port Front Panel.** Catalyst 1200 and CBS350 switches that number
+  copper ports `Gi1`–`Gi24` and uplinks `Te1`–`Te4` now show a 24+4 panel,
+  including the `Gi1/0/…` and `Te1/0/…` naming form. Uplink ifIndexes such as
+  49–52 retain their status and counters while being drawn in the four uplink
+  slots. An undiscovered uplink leaves its slot empty.
+
 ## v5.6.10 — 2026-11-12
 
 ### New
