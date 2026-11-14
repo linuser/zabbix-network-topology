@@ -2,6 +2,25 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.12 — 2026-11-14
+
+### Fixed
+
+- **Stale-while-rebuild snapshot now rechecks host visibility before it is served
+  (#35 review).** v5.6.11 added a longer-lived (was 600 s) "last good snapshot"
+  so concurrent requests get an instant map while one request rebuilds. The map
+  cache key carries only role and user type, not effective host-group rights
+  (computing those is the expensive fetch) — so a user who loses access to a host
+  group while keeping the same role and user type could be served that snapshot,
+  showing hosts they may no longer see, for the life of the snapshot. That
+  widened the permission-staleness window the 60 s response cache already has.
+  The snapshot is now gated by a cheap `host.get` on just the snapshot's node
+  host IDs, as the current user: it is served only when all of them are still
+  visible, otherwise the request falls through to a fresh, correctly
+  permission-filtered build. The snapshot lifetime is also reduced to 5 minutes.
+  The 60 s response-cache behaviour is unchanged. Thanks to rhysjoseph for
+  catching this in review of #35 part 1.
+
 ## v5.6.11 — 2026-11-12
 
 ### Fixed

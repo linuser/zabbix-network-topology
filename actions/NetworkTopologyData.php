@@ -151,16 +151,19 @@ class NetworkTopologyData extends NetworkTopologyController {
      *     falls der Builder nicht freigibt; in der Groessenordnung der
      *     Gateway-Frist.
      *   SNAPSHOT_TTL     — der "letzte gute Stand", den wartende Requests
-     *     bekommen, waehrend einer baut. Grosszuegig, damit der Normalfall
-     *     (Snapshot da) fast immer greift und nur der allererste Aufruf wirklich
-     *     kalt ist.
+     *     bekommen, waehrend einer baut. Muss den 60-s-Response-Cache ueberleben,
+     *     sonst ist er beim Miss schon weg und der Stale-Pfad greift nie; 5 min
+     *     decken auch einen langen (pathologischen) Kaltbau ab. Das RECHTE-
+     *     Veraltungsfenster, das ein laengerer Snapshot gegenueber dem 60-s-Cache
+     *     aufrisse, schliesst die host.get-Nachpruefung in snapshotHostsStillVisible()
+     *     beim Ausliefern — nicht die TTL (#35-Review).
      *   REBUILD_WAIT_*   — ganz kalt (noch kein Snapshot): so lange auf den
      *     frischen Cache des Builders warten, bevor man doch selbst baut. Kurz
      *     gehalten, um keinen FPM-Worker lange zu binden; der Erst-Herd ist ein
      *     einmaliger Preis, danach existiert immer ein Snapshot.
      */
     private const REBUILD_LOCK_TTL   = 30;
-    private const SNAPSHOT_TTL       = 600;
+    private const SNAPSHOT_TTL       = 300;
     private const REBUILD_WAIT_TRIES = 10;
     private const REBUILD_WAIT_US    = 300000;   // 0,3 s × 10 = bis 3 s
 
@@ -426,7 +429,19 @@ class NetworkTopologyData extends NetworkTopologyController {
         if (!$rebuild_lock) {
             // Ein anderer Request baut gerade. Statt eines zweiten teuren Baus:
             $snapshot = NtCache::get('data_snapshot', $cache_parts);
-            if (is_array($snapshot)) {
+            // RECHTE-NACHPRUEFUNG vor dem Ausliefern (#35-Review, rhysjoseph):
+            // Der Cache-Key traegt nur Rolle + Benutzertyp (permSig), nicht die
+            // effektiven Hostgruppen-Rechte — die zu ermitteln IST der teure
+            // Fetch. Verliert ein User Gruppenzugriff bei gleicher Rolle/Typ,
+            // bliebe der Key gleich und der laenger lebende Snapshot zeigte ihm
+            // bis SNAPSHOT_TTL eine Karte mit jetzt unsichtbaren Hosts. Darum
+            // billig gegenpruefen (ein host.get nur auf die Knoten-Hostids, als
+            // AKTUELLER User), und den Snapshot nur ausliefern, wenn ALLE seine
+            // Hosts noch sichtbar sind — sonst durchfallen auf Warten/Neubau, der
+            // korrekt rechtegefiltert baut. Schliesst das Fenster, das der
+            // laenger lebende Snapshot sonst gegenueber dem 60-s-Response-Cache
+            // aufriss.
+            if (is_array($snapshot) && $this->snapshotHostsStillVisible($snapshot)) {
                 // Letzter guter Stand (hoechstens SNAPSHOT_TTL alt). respondData
                 // behandelt ihn wie einen Cache-Treffer — derselbe Pfad, den der
                 // 60-s-Cache oben nimmt, inklusive topo_changes-Diff.
@@ -1199,6 +1214,54 @@ class NetworkTopologyData extends NetworkTopologyController {
      *                                call, not cached — the cached core only
      *                                holds the capped result.
      */
+    /**
+     * #35-Review: sind ALLE echten Hosts eines gecachten Snapshots dem aktuellen
+     * User noch sichtbar? Ein billiger host.get nur auf die Knoten-Hostids (als
+     * dieser User) — viel guenstiger als ein Neubau, laeuft nur auf dem seltenen
+     * Stale-Pfad (paralleler Request waehrend eines Neubaus), nicht auf dem
+     * 60-s-Cache-Treffer. Geister-/Internet-Knoten tragen nicht-numerische IDs
+     * und zaehlen nicht.
+     *
+     * Nur ein POSITIV festgestellter Verlust haelt den Snapshot zurueck (host.get
+     * lieferte erfolgreich, ein Host fehlt). Ein API-FEHLER dagegen ist KEIN
+     * Rechteentzug: gerade unter Last — der Fall, den der Stale-Serve abdeckt —
+     * liesse ein Durchfall JEDEN wartenden Request selbst bauen, also genau der
+     * #35-Herd/504, den die Single-Flight verhindern soll. Darum bei Fehler/
+     * Anomalie den Snapshot ZULASSEN: nicht schlechter als der 60-s-Response-
+     * Cache, der dieselben user+rollen-gebundenen Daten ohne Pruefung ausliefert.
+     */
+    private function snapshotHostsStillVisible(array $core): bool {
+        $ids = [];
+        foreach (($core['nodes'] ?? []) as $n) {
+            $id = (string) ($n['id'] ?? '');
+            if ($id !== '' && ctype_digit($id)) {
+                $ids[$id] = true;
+            }
+        }
+        if (!$ids) {
+            return true;   // nur Geister/Internet — keine echten Hosts zu pruefen
+        }
+        try {
+            $vis = API::Host()->get([
+                'output'       => ['hostid'],
+                'hostids'      => array_keys($ids),
+                'preservekeys' => true,
+            ]);
+        }
+        catch (\Throwable $e) {
+            return true;    // transienter Fehler != Rechteentzug (s. Docblock)
+        }
+        if (!is_array($vis)) {
+            return true;
+        }
+        foreach ($ids as $id => $_) {
+            if (!isset($vis[$id])) {
+                return false;   // ein Host ist dem User NACHWEISLICH nicht mehr sichtbar
+            }
+        }
+        return true;
+    }
+
     private function respondData(array $core, array $cache_parts, int $requested_groups,
             int $processed_groups, float $t0, bool $cache_hit, ?array $scope_info = null): void {
 
