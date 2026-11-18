@@ -121,7 +121,22 @@ final class FaceplateBuilder {
         // Ein Host ist entweder SNMP ODER UniFi (andere Vorlage), nie beides.
         $ifs += self::collectUniFi($items, $problems);
         $phys = self::physical($ifs);
-        $nums = self::portNumbers($phys);
+        // #33: Cisco-SMB-24er nummerieren Kupfer und Uplink getrennt (Gi1..24,
+        // Te1..4) — erst namensbasiert pruefen und die vier Te-Uplinks fest auf
+        // die Slots 25..28 legen; sonst faellt portNumbers() auf den ifIndex-
+        // Abstand zurueck und zeichnet sie als 48+4-Chassis. Nicht-Cisco: null.
+        //
+        // Die 25..28=SFP-Zuordnung gilt NUR unter 24+4. Darum die Cisco-Nummern
+        // nur ziehen, wenn das Layout 24+4 ist oder wird (auto): bei einem
+        // explizit anderen Zuschnitt (z.B. 48+4) laege die Kupfer/SFP-Grenze
+        // woanders und die vier Uplinks landeten als RJ45 oder fielen als
+        // ueberzaehlig weg. Auto erzwingt dann 24+4.
+        $cisco = ($layout === 'auto' || $layout === '24+4')
+            ? self::cisco24PortNumbers($ifs, $phys) : null;
+        $nums  = $cisco ?? self::portNumbers($phys);
+        if ($cisco !== null && $layout === 'auto') {
+            $layout = '24+4';
+        }
 
         [$name, $copper, $sfp] = self::pickLayout($nums ? max($nums) : 0, $layout);
         $slots = $copper + $sfp;
@@ -258,6 +273,12 @@ final class FaceplateBuilder {
      */
     private static function collect(array $items, array $problems): array {
         $ifs = [];
+        // Netgear & Co.: Portname aus einem interface-Tag am Status-Item (z.B.
+        // "1/0/1"), wo ifName/ifDescr fehlen und der Item-Name nur eine nackte
+        // Zahl hergibt. Erst sammeln, NACH der Schleife als niedrigste Stufe
+        // fuellen (ifName/ifDescr/Item-Name gewinnen, unabhaengig von der
+        // Item-Reihenfolge). Front Panel braucht trotzdem die IF-MIB-Items.
+        $tag_name = [];
         foreach ($items as $it) {
             $key = (string) ($it['key_'] ?? '');
             $val = $it['lastvalue'] ?? null;
@@ -267,6 +288,18 @@ final class FaceplateBuilder {
             }
             [$what, $ifx] = $hit;
             $iid = (string) ($it['itemid'] ?? '');
+
+            if (!isset($tag_name[$ifx]) && isset($it['tags']) && is_array($it['tags'])) {
+                foreach ($it['tags'] as $t) {
+                    if (strcasecmp((string) ($t['tag'] ?? ''), 'interface') === 0) {
+                        $v = trim((string) ($t['value'] ?? ''));
+                        if ($v !== '') {
+                            $tag_name[$ifx] = MetricExtractor::capName($v);
+                            break;
+                        }
+                    }
+                }
+            }
 
             // Ein Status- oder Speed-ITEM macht das Interface zu einem
             // ueberwachten — auch ohne Wert (neu, unsupported, nodata).
@@ -345,6 +378,21 @@ final class FaceplateBuilder {
                 case 'alias':
                     $ifs[$ifx]['alias'] = MetricExtractor::capName(trim((string) $val));
                     break;
+            }
+        }
+        // interface-Tag als Namens-Rueckfall (niedrigste Stufe, s.o.). Greift,
+        // wenn gar kein Name da ist ODER der Name nur eine NACKTE ZAHL ist — denn
+        // genau das ist der Netgear-Fall: der Item-Name liefert ueber NAME_RE nur
+        // den Index ("5"), und der Tag "1/0/5" ist strikt aussagekraeftiger. Ein
+        // echter Name (ifName/ifDescr/"Gi1/0/5") ist nicht rein numerisch und
+        // gewinnt weiter.
+        foreach ($tag_name as $ifx => $nm) {
+            if (!isset($ifs[$ifx])) {
+                continue;
+            }
+            $cur = (string) ($ifs[$ifx]['name'] ?? '');
+            if ($cur === '' || ctype_digit($cur)) {
+                $ifs[$ifx]['name'] = $nm;
             }
         }
         return $ifs;
@@ -486,6 +534,77 @@ final class FaceplateBuilder {
             $out[$ifx] = $if;
         }
         return $out;
+    }
+
+    /**
+     * #33: Cisco-SMB-24er (Catalyst 1200 / CBS350) nummerieren Kupfer und Uplink
+     * GETRENNT — Gi1..Gi24 fuer die Kupferbank, Te1..Te4 fuer die SFP+-Uplinks,
+     * mit oder ohne 1/0/-Praefix. Die Uplink-ifIndexe liegen oft bei 49..52, also
+     * findet sie weder die Endziffer (Te1 kollidiert mit Gi1, Eindeutigkeit faellt)
+     * noch ein Index-Offset: portNumbers() landet auf dem ifIndex-Abstand und
+     * zeichnet die vier Uplinks als Slot 49..52 — ein 48+4-Chassis statt 24+4.
+     *
+     * Darum die Baenke NAMENSBASIERT erkennen und die vier Te-Uplinks fest auf die
+     * Slots 25..28 legen. Bewusst konservativ: nur wenn WIRKLICH eine 24er-Kupfer-
+     * bank (eine Gi-Nummer > 16) UND Uplinks da sind, alle Namen eindeutig dem
+     * Muster folgen und das Praefix einheitlich ist — sonst null, und der normale
+     * portNumbers()-Pfad bleibt fuer alles Nicht-Cisco unveraendert. Zum ERKENNEN
+     * zaehlen alle Interfaces (auch nur dem Namen nach bekannte), GEZEICHNET werden
+     * nur die ueberwachten ($phys): so bekommt eine leere SFP-Buchse ihren Slot,
+     * ohne eine Messung vorzutaeuschen.
+     *
+     * @return array<string|int, int>|null  [ifIndex => Frontnummer 1..28], sortiert
+     */
+    private static function cisco24PortNumbers(array $ifs, array $phys): ?array {
+        $nums       = [];
+        $prefix     = null;    // null = noch keins gesehen; sonst '' oder '1/0/'
+        $kupferbank = false;   // eine Gi-Nummer > 16 belegt die echte 24er-Bank
+        $uplink     = false;
+        foreach ($ifs as $ifx => $if) {
+            $name = trim((string) ($if['name'] ?? ''));
+            if (!preg_match('#^(Gi(?:gabitEthernet)?|Te(?:nGigabitEthernet)?)(1/0/)?([1-9][0-9]?)$#i', $name, $m)) {
+                // Ein UEBERWACHTER Port, der nicht ins Muster passt, verwirft die
+                // Cisco-Annahme ganz; nur namentlich bekannte Fremdeintraege
+                // (ohne eigene Messung) werden uebergangen.
+                if (isset($phys[$ifx])) {
+                    return null;
+                }
+                continue;
+            }
+            $pfx = $m[2] ?? '';
+            $prefix ??= $pfx;
+            if ($prefix !== $pfx) {
+                return null;       // 1/0/-Praefix uneinheitlich
+            }
+            $n = (int) $m[3];
+            if (strncasecmp($m[1], 'Gi', 2) === 0) {
+                if ($n > 24) {
+                    return null;
+                }
+                $kupferbank = $kupferbank || $n > 16;
+            }
+            elseif ($n <= 4) {
+                $n += 24;          // Te1..Te4 -> Slot 25..28
+                $uplink = true;
+            }
+            else {
+                return null;       // Te > 4 passt nicht in die vier Uplink-Slots
+            }
+            $nums[$ifx] = $n;
+        }
+        if (!$kupferbank || !$uplink || count(array_unique($nums)) !== count($nums)) {
+            return null;
+        }
+        $nums = array_intersect_key($nums, $phys);   // nur ueberwachte Ports zeichnen
+        if (!$nums) {
+            // Erkannt, aber KEIN Port ueberwacht (alle nur namentlich bekannt,
+            // Status-Items aus dem MAX_ITEMS-Limit gefallen): null statt [] —
+            // ein leeres Array wuerde als "Cisco erkannt" ein leeres 24+4-Chassis
+            // erzwingen statt des 0+0 aus dem portNumbers()-Pfad.
+            return null;
+        }
+        asort($nums, SORT_NUMERIC);
+        return $nums;
     }
 
     /**

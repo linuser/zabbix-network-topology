@@ -85,6 +85,9 @@ class NetworkTopologyFaceplate extends NetworkTopologyController {
         // Items fuer VLANs, Sensoren und Module.
         $items = API::Item()->get([
             'output'    => ['itemid', 'key_', 'name', 'lastvalue', 'value_type'],
+            // interface-Tag als Portnamen-Rueckfall (Netgear u.a.): FaceplateBuilder
+            // liest ihn, wo ifName/ifDescr fehlen. Nur tag+value, nichts weiter.
+            'selectTags' => ['tag', 'value'],
             'hostids'   => [$hostid],
             'monitored' => true,
             'search'    => ['key_' => [
@@ -121,6 +124,9 @@ class NetworkTopologyFaceplate extends NetworkTopologyController {
         // eigenes kleines Limit).
         $protectedItems = API::Item()->get([
             'output'    => ['itemid', 'key_', 'name', 'lastvalue', 'value_type'],
+            // interface-Tag als Portnamen-Rueckfall (Netgear u.a.): FaceplateBuilder
+            // liest ihn, wo ifName/ifDescr fehlen. Nur tag+value, nichts weiter.
+            'selectTags' => ['tag', 'value'],
             'hostids'   => [$hostid],
             'monitored' => true,
             'search'    => ['key_' => [

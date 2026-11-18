@@ -2,6 +2,38 @@
 
 Changes since the first public release. Versioning: MAJOR.MINOR.PATCH.
 
+## v5.6.13 — 2026-11-17
+
+### New
+
+- **Cisco 24-port front panel.** Catalyst 1200 / CBS350 switches that number
+  copper ports `Gi1`–`Gi24` and uplinks `Te1`–`Te4` (with or without the
+  `1/0/…` form) now draw as a 24+4 faceplate. The uplinks' ifIndexes are often
+  49–52, so the generic numbering fell back to the ifIndex spacing and drew them
+  as a 48+4 chassis; they are now placed in the four uplink slots by name while
+  keeping their real ifIndex for status and counters. An undiscovered uplink
+  leaves its slot empty. Detection is conservative — it only triggers on a real
+  24-port copper bank plus uplinks with consistent naming, otherwise the
+  existing numbering is unchanged.
+- **Port names from an `interface` item tag.** Where `ifName`/`ifDescr` are
+  absent and the item name carries only a bare index, a unique `interface` tag
+  on the interface item (e.g. `1/0/1`) now supplies the faceplate port name —
+  retaining Netgear-style labels instead of a numeric index. Lowest priority:
+  `ifName`/`ifDescr` and the item name still win.
+
+### Fixed
+
+- **Recovery from an empty Technical view.** A severity filter saved in a
+  previous session could match none of the nodes shown now (a different host
+  group, the problem cleared), leaving the map blank on startup — which looks
+  like a fault, not a filter. When a restored filter would hide every visible
+  node, it is now cleared and the full map is shown. A deliberate filter click
+  that hides everything is unchanged, and a map with no nodes keeps the saved
+  filter.
+
+Ideas and reproductions shared by rhysjoseph (PR #33 and the #35 thread);
+reimplemented with our own tests.
+
 ## v5.6.12 — 2026-11-14
 
 ### Fixed

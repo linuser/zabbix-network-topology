@@ -1216,6 +1216,13 @@ const sevg = szenario('sev-ghost', { lang: 'en_US' }, `
         konst:    S.SEV_GHOST,
         // Der Schluessel darf mit keiner echten Severity kollidieren.
         kollision: [0,1,2,3,4,5].indexOf(S.SEV_GHOST),
+        // Recovery aus leerer Technical-Ansicht: ein gespeicherter Filter, der
+        // auf KEINEN sichtbaren Knoten passt, wird beim Start verworfen.
+        verstecktKeiner:     S.filterVerstecktAlles(new Set([3]), [0, 0, 1]),
+        verstecktEiner:      S.filterVerstecktAlles(new Set([3]), [0, 3, 1]),
+        verstecktLeererF:    S.filterVerstecktAlles(new Set(),    [0, 0]),
+        verstecktKeineKnoten:S.filterVerstecktAlles(new Set([3]), []),
+        verstecktGeist:      S.filterVerstecktAlles(new Set([S.SEV_GHOST]), [0, 0]),
     }));
 `);
 if (sevg) {
@@ -1225,6 +1232,11 @@ if (sevg) {
     pruefe('Host mit severity 3 bleibt 3',       sevg.warn, 3);
     pruefe('fehlende Severity zaehlt als 0',     sevg.ohneSev, 0);
     pruefe('Geist schlaegt eine gesetzte Severity', sevg.geistSev, sevg.konst);
+    pruefe('Filter passt auf keinen Knoten -> verwerfen', sevg.verstecktKeiner, true);
+    pruefe('ein passender Knoten -> Filter behalten',     sevg.verstecktEiner, false);
+    pruefe('leerer Filter -> nichts verwerfen',           sevg.verstecktLeererF, false);
+    pruefe('keine Knoten -> Filter behalten',             sevg.verstecktKeineKnoten, false);
+    pruefe('Geist-Filter ohne Geister -> verwerfen',      sevg.verstecktGeist, true);
 }
 
 // GEISTER IN DER TABELLE. Der eigentliche Fall hinter "an welchem Port haengt

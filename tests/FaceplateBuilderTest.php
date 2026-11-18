@@ -446,6 +446,110 @@ check('UniFi Port 2 ohne rx/tx: out null', $r['ports'][1]['out'], null);
 check('UniFi keine RFC-PoE-Klasse -> poe_class null', $r['ports'][0]['poe_class'], null);
 check('UniFi ohne pethMainPse -> kein Budget', $r['poe_budget'], null);
 
+// ── #33: Cisco-SMB-24er (Catalyst 1200 / CBS350) ───────────────────────────
+// Gi1..Gi24 (ifIndex 1..24) + Te1..Te4 (ifIndex 49..52). Die Uplinks muessen
+// per NAME auf Slot 25..28, nicht per ifIndex-Abstand auf 49..52 (-> 48+4).
+function cisco24(bool $long, bool $prefix, int $uplinks = 4): array {
+    $items = [];
+    $id = 7000;
+    $gi = $long ? 'GigabitEthernet' : 'Gi';
+    $te = $long ? 'TenGigabitEthernet' : 'Te';
+    $px = $prefix ? '1/0/' : '';
+    for ($n = 1; $n <= 24; $n++) {
+        $nm = 'Interface ' . $gi . $px . $n . '(): ';
+        $items[] = ['itemid' => (string) $id++, 'key_' => "net.if.status[ifOperStatus.$n]", 'name' => $nm . 'Operational status', 'lastvalue' => '1'];
+        $items[] = ['itemid' => (string) $id++, 'key_' => "net.if.type[ifType.$n]",         'name' => $nm . 'Interface type',      'lastvalue' => '6'];
+    }
+    for ($u = 1; $u <= $uplinks; $u++) {
+        $ix = 48 + $u;                    // Uplinks liegen auf ifIndex 49..52
+        $nm = 'Interface ' . $te . $px . $u . '(): ';
+        $items[] = ['itemid' => (string) $id++, 'key_' => "net.if.status[ifOperStatus.$ix]", 'name' => $nm . 'Operational status', 'lastvalue' => '1'];
+        $items[] = ['itemid' => (string) $id++, 'key_' => "net.if.type[ifType.$ix]",         'name' => $nm . 'Interface type',      'lastvalue' => '6'];
+    }
+    return $items;
+}
+
+echo "\n#33 Cisco 24-Port Front Panel (Gi1-24 + Te1-4)\n";
+// Langform mit 1/0/-Praefix (GigabitEthernet1/0/1 / TenGigabitEthernet1/0/1)
+$r = FaceplateBuilder::build(cisco24(true, true));
+check('Cisco 24+4: Layout auto (NICHT 48+4)',       $r['layout'], '24+4');
+check('Cisco 24+4: 28 Ports gezeichnet',            count($r['ports']), 28);
+check('Uplink Te1 (ifIndex 49) -> Slot 25',         $r['ports'][24]['n'], 25);
+check('Slot 25 traegt ifIndex 49, nicht 49er-Slot', $r['ports'][24]['ifindex'], '49');
+check('Slot 25 ist SFP',                            $r['ports'][24]['kind'], 'sfp');
+check('Uplink Te4 (ifIndex 52) -> Slot 28',         $r['ports'][27]['n'], 28);
+check('Gi24 (ifIndex 24) -> Slot 24, Kupfer',       $r['ports'][23]['kind'], 'rj45');
+check('keine Ueberzaehligen',                       $r['extra'], 0);
+
+// Kurzform ohne Praefix (Gi1..Gi24 / Te1..Te4)
+$r = FaceplateBuilder::build(cisco24(false, false));
+check('Kurzform Gi/Te: Layout auto 24+4',           $r['layout'], '24+4');
+check('Kurzform: Uplink Te1 (ifIndex 49) -> Slot 25', $r['ports'][24]['n'], 25);
+
+// Unentdeckter Uplink (nur Te1..3): Slot 28 bleibt leer, Layout trotzdem 24+4.
+$r = FaceplateBuilder::build(cisco24(true, true, 3));
+check('Unentdeckter Uplink: Layout 24+4',           $r['layout'], '24+4');
+check('Unentdeckter Uplink: 27 Ports gezeichnet',   count($r['ports']), 27);
+
+// Negativ: kleiner Switch (Gi1..Gi8, keine 24er-Bank, kein Uplink) ist KEIN 24+4.
+$klein = [];
+$kid = 8000;
+for ($n = 1; $n <= 8; $n++) {
+    $nm = 'Interface Gi' . $n . '(): ';
+    $klein[] = ['itemid' => (string) $kid++, 'key_' => "net.if.status[ifOperStatus.$n]", 'name' => $nm . 'Operational status', 'lastvalue' => '1'];
+    $klein[] = ['itemid' => (string) $kid++, 'key_' => "net.if.type[ifType.$n]",         'name' => $nm . 'Interface type',      'lastvalue' => '6'];
+}
+$r = FaceplateBuilder::build($klein);
+check('Gi1-8 ohne 24er-Bank: NICHT als 24+4 erkannt', $r['layout'] === '24+4', false);
+
+// Expliziter 24+4-Zuschnitt: Cisco-Nummern greifen, Te1 -> Slot 25.
+$r = FaceplateBuilder::build(cisco24(true, true), '24+4');
+check('expliziter 24+4: Uplink Te1 -> Slot 25',  $r['ports'][24]['n'], 25);
+// Expliziter ANDERER Zuschnitt (48+4): Cisco-Nummern NICHT ziehen (sonst laegen
+// die Uplinks als RJ45 falsch) -> portNumbers-Pfad, Layout bleibt 48+4.
+$r = FaceplateBuilder::build(cisco24(true, true), '48+4');
+check('explizit 48+4: Cisco-Mapping aus, Layout 48+4', $r['layout'], '48+4');
+
+// Erkannt, aber KEIN Port ueberwacht (nur Counter-Items, kein Status/Speed):
+// darf KEIN leeres 24+4-Chassis erzwingen.
+$nurCounter = [];
+$cid = 8500;
+for ($n = 1; $n <= 24; $n++) {
+    $nurCounter[] = ['itemid' => (string) $cid++, 'key_' => "net.if.in[ifHCInOctets.$n]", 'name' => "Interface Gi$n(): Bits received", 'lastvalue' => '1000'];
+}
+for ($u = 1; $u <= 4; $u++) {
+    $nurCounter[] = ['itemid' => (string) $cid++, 'key_' => 'net.if.in[ifHCInOctets.' . (48 + $u) . ']', 'name' => "Interface Te$u(): Bits received", 'lastvalue' => '1000'];
+}
+$r = FaceplateBuilder::build($nurCounter);
+check('erkannt aber unueberwacht: kein leeres 24+4', $r['layout'] === '24+4', false);
+
+// ── interface-Tag als Portnamen-Rueckfall (Netgear u.a.) ───────────────────
+// Realistischer Netgear-Fall: der Item-Name liefert ueber NAME_RE nur die
+// nackte Portnummer ("5"), kein ifName/ifDescr — der interface-Tag "1/0/5"
+// muss diese nackte Zahl UEBERSCHREIBEN (sonst bliebe der Index stehen).
+echo "\ninterface-Tag als Portnamen-Rueckfall\n";
+$tagItems = [
+    ['itemid' => '9001', 'key_' => 'net.if.status[ifOperStatus.5]', 'name' => 'Interface 5(): Operational status',
+     'lastvalue' => '1', 'tags' => [['tag' => 'Application', 'value' => 'Interfaces'], ['tag' => 'interface', 'value' => '1/0/5']]],
+    ['itemid' => '9002', 'key_' => 'net.if.type[ifType.5]', 'name' => 'Interface 5(): Interface type', 'lastvalue' => '6'],
+];
+$r = FaceplateBuilder::build($tagItems);
+check('interface-Tag schlaegt die nackte Portnummer', $r['ports'][0]['name'], '1/0/5');
+
+// ifName (ein echter, nicht-numerischer Name) gewinnt ueber den Tag.
+$tagItems2 = $tagItems;
+$tagItems2[] = ['itemid' => '9003', 'key_' => 'ifName[5]', 'name' => 'Interface name', 'lastvalue' => 'GigabitEthernet5'];
+$r = FaceplateBuilder::build($tagItems2);
+check('ifName schlaegt den interface-Tag',       $r['ports'][0]['name'], 'GigabitEthernet5');
+
+// Ohne Tag bleibt es beim bisherigen Verhalten: die nackte Nummer aus NAME_RE.
+$noTag = [
+    ['itemid' => '9101', 'key_' => 'net.if.status[ifOperStatus.5]', 'name' => 'Interface 5(): Operational status', 'lastvalue' => '1'],
+    ['itemid' => '9102', 'key_' => 'net.if.type[ifType.5]', 'name' => 'Interface 5(): Interface type', 'lastvalue' => '6'],
+];
+$r = FaceplateBuilder::build($noTag);
+check('ohne Tag: nackte Nummer bleibt',          $r['ports'][0]['name'], '5');
+
 echo "\n", $failures === 0
     ? "=== ALLE TESTS PASS ===\n"
     : "=== {$failures} TEST(S) FEHLGESCHLAGEN ===\n";
